@@ -32,6 +32,9 @@ jobs:
 
       - uses: dtolnay/rust-toolchain@stable
 
+      - name: Setup MSVC environment
+        uses: ilammy/msvc-dev-cmd@v1
+
       - run: npm ci
 
       - name: Extract changelog
@@ -44,19 +47,27 @@ jobs:
           echo "$BODY" > release-notes.md
 
       - name: Build Tauri app
-        uses: tauri-apps/tauri-action@v0.6
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          tagName: ${{ steps.tag.outputs.tag }}
-          releaseName: 'DartForge ${{ steps.tag.outputs.tag }}'
-          releaseBody: ''
-          releaseDraft: false
-          prerelease: false
+        shell: cmd
+        run: npm run tauri build
 
-      - name: Update release notes
+      - name: Create release and upload artifacts
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ steps.tag.outputs.tag }}
         shell: bash
         run: |
-          gh release edit "${{ steps.tag.outputs.tag }}" --notes-file release-notes.md
+          # Create release if it doesn't exist
+          gh release view "$TAG" > /dev/null 2>&1 || \
+            gh release create "$TAG" --title "DartForge $TAG" --notes-file release-notes.md
+
+          # Upload all installer artifacts
+          for f in src-tauri/target/release/bundle/msi/*.msi \
+                   src-tauri/target/release/bundle/nsis/*.exe; do
+            if [ -f "$f" ]; then
+              echo "Uploading: $f"
+              gh release upload "$TAG" "$f" --clobber
+            fi
+          done
+
+          # Update release notes
+          gh release edit "$TAG" --notes-file release-notes.md
