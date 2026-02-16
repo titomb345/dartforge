@@ -135,22 +135,9 @@ export function Terminal({ terminalRef, inputRef, theme, display, onUpdateDispla
     <div
       ref={outerRef}
       onClick={handleClick}
-      style={{
-        flex: 1,
-        background: '#000000',
-        padding: '12px 16px',
-        overflow: 'hidden',
-        cursor: 'default',
-      }}
+      className="flex-1 bg-black px-4 py-3 overflow-hidden cursor-default"
     >
-      <div
-        ref={innerRef}
-        style={{
-          width: '100%',
-          height: '100%',
-          overflow: 'hidden',
-        }}
-      />
+      <div ref={innerRef} className="w-full h-full overflow-hidden" />
     </div>
   );
 }

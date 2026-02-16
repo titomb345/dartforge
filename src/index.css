@@ -1,29 +1,56 @@
 @import "tailwindcss";
 
-:root {
-  --bg-primary: #0d0d0d;
-  --bg-secondary: #1a1a1a;
-  --text-primary: #e0e0e0;
-  --text-muted: #888;
-  --border: #333;
-  --accent-mage: #a78bfa;
-  --accent-fighter: #f59e0b;
-  --accent-multi: #10b981;
+@theme {
+  --color-bg-primary: #0d0d0d;
+  --color-bg-secondary: #1a1a1a;
+  --color-bg-input: #111111;
+  --color-text-primary: #e0e0e0;
+  --color-text-muted: #888888;
+  --color-text-dim: #666666;
+  --color-text-label: #aaaaaa;
+  --color-text-heading: #cccccc;
+  --color-text-disabled: #333333;
+  --color-border: #333333;
+  --color-border-subtle: #1a1a1a;
+  --color-border-dim: #1e1e1e;
+  --color-border-faint: #2a2a2a;
+  --color-green: #50fa7b;
+  --color-connected: #22c55e;
+  --color-disconnected: #ef4444;
+  --color-cyan: #8be9fd;
+  --color-purple: #a78bfa;
+  --color-comment: #6272a4;
+  --color-amber: #f59e0b;
 }
 
-* {
-  margin: 0;
-  padding: 0;
-  box-sizing: border-box;
+@layer base {
+  html,
+  body,
+  #root {
+    height: 100%;
+    width: 100%;
+    overflow: hidden;
+    background: var(--color-bg-primary);
+    color: var(--color-text-primary);
+    font-family: 'Cascadia Code', 'Fira Code', 'Consolas', monospace;
+  }
 }
 
-html,
-body,
-#root {
-  height: 100%;
-  width: 100%;
-  overflow: hidden;
-  background: var(--bg-primary);
-  color: var(--text-primary);
-  font-family: 'Cascadia Code', 'Fira Code', 'Consolas', monospace;
+/* Password mode (no Tailwind equivalent) */
+.password-mask {
+  -webkit-text-security: disc;
+}
+
+/* IconButton accent states via CSS custom property */
+.icon-btn:not(:disabled):not(.icon-btn-on):hover {
+  background: color-mix(in srgb, var(--btn-accent) 7%, transparent);
+  color: var(--btn-accent);
+  border-color: color-mix(in srgb, var(--btn-accent) 25%, transparent);
+  filter: drop-shadow(0 0 3px color-mix(in srgb, var(--btn-accent) 25%, transparent));
+}
+.icon-btn-on {
+  background: color-mix(in srgb, var(--btn-accent) 10%, transparent);
+  color: var(--btn-accent);
+  border-color: color-mix(in srgb, var(--btn-accent) 25%, transparent);
+  filter: drop-shadow(0 0 4px color-mix(in srgb, var(--btn-accent) 50%, transparent));
 }

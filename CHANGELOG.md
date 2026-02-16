@@ -22,6 +22,8 @@ The `[Unreleased]` header controls automatic version bumping on merge:
 - Font family selector with auto-detection of installed monospace fonts
 - Font size control with +/- stepper (synced with Ctrl+/- keyboard shortcuts)
 - Display settings persisted to settings store with individual reset buttons
+- Tailwind CSS v4 with design token system for consistent theming
+- README with project overview, setup instructions, and architecture docs
 
 ### Changed
 - Color panel slides in from right as overlay, toggled from toolbar
@@ -30,10 +32,16 @@ The `[Unreleased]` header controls automatic version bumping on merge:
 - Default terminal font changed to Courier New
 - Disconnect screen uses block-letter "DISCONNECTED" art
 - Terminal font and size now driven by persisted display settings
+- Migrated all inline styles to Tailwind CSS utility classes
+- Power button now shows connection status (green=connected, red=disconnected)
+- "Connected" splash text now bright green for better visibility
+- "Press enter to reconnect" text brighter (removed dim)
 
 ### Fixed
 - Server prompt no longer jams next output onto same line
 - Clippy warnings in Rust backend (inlined format args)
+- Color picker handles no longer clipped at panel edges
+- Enter key no longer triggers reconnect when typing at Name: prompt
 
 ## [0.1.0] - 2026-02-15
 

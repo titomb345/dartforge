@@ -1,5 +1,6 @@
 import { ClassMode } from '../types';
 import { ClassModeToggle } from './ClassModeToggle';
+import { cn } from '../lib/cn';
 
 interface StatusBarProps {
   connected: boolean;
@@ -10,33 +11,14 @@ interface StatusBarProps {
 
 export function StatusBar({ connected, statusMessage, classMode, onClassModeChange }: StatusBarProps) {
   return (
-    <div
-      style={{
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'space-between',
-        padding: '6px 12px',
-        background: '#1a1a1a',
-        borderBottom: '1px solid #333',
-        fontSize: '13px',
-        userSelect: 'none',
-      }}
-    >
-      <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-        <span
-          style={{
-            display: 'inline-block',
-            width: '8px',
-            height: '8px',
-            borderRadius: '50%',
-            background: connected ? '#22c55e' : '#ef4444',
-          }}
-        />
-        <span style={{ color: '#ccc' }}>{statusMessage}</span>
+    <div className="flex items-center justify-between px-3 py-1.5 bg-bg-secondary border-b border-border text-[13px] select-none">
+      <div className="flex items-center gap-2">
+        <span className={cn('inline-block w-2 h-2 rounded-full', connected ? 'bg-connected' : 'bg-disconnected')} />
+        <span className="text-text-heading">{statusMessage}</span>
       </div>
-      <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+      <div className="flex items-center gap-3">
         <ClassModeToggle classMode={classMode} onClassModeChange={onClassModeChange} />
-        <span style={{ color: '#555', fontSize: '11px' }}>v0.1.0</span>
+        <span className="text-text-dim text-[11px]">v0.1.0</span>
       </div>
     </div>
   );
