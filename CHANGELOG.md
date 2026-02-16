@@ -19,11 +19,17 @@ The `[Unreleased]` header controls automatic version bumping on merge:
 - Connection/disconnection splash screens with block-letter art
 - Version displayed in window title bar
 - Automated versioning via CHANGELOG bump hints
+- Font family selector with auto-detection of installed monospace fonts
+- Font size control with +/- stepper (synced with Ctrl+/- keyboard shortcuts)
+- Display settings persisted to settings store with individual reset buttons
 
 ### Changed
 - Color panel slides in from right as overlay, toggled from toolbar
+- Renamed color panel to "Appearance" panel
 - Default theme colors updated to classic MUD palette
+- Default terminal font changed to Courier New
 - Disconnect screen uses block-letter "DISCONNECTED" art
+- Terminal font and size now driven by persisted display settings
 
 ### Fixed
 - Server prompt no longer jams next output onto same line

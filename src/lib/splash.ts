@@ -1,6 +1,6 @@
 import { ANSI } from './ansi';
 
-const { RESET, DIM, CYAN, GREEN } = ANSI;
+const { RESET, DIM, GREEN } = ANSI;
 
 // 256-color ANSI: \x1b[38;5;Nm
 const color = (n: number) => `\x1b[1;38;5;${n}m`;
@@ -152,7 +152,7 @@ export function getStartupSplash(cols: number): string {
     '',
     ...center([bar], cols),
     '',
-    ...center([`${DIM}${CYAN}A custom client purposely built for DartMUD${RESET}`], cols),
+    ...center([`\x1b[1;36mA custom client purposely built for DartMUD${RESET}`], cols),
     '',
     ...center([`${DIM}Connecting...${RESET}`], cols),
     '',
@@ -173,7 +173,7 @@ export function getConnectedSplash(cols: number): string {
     '',
     ...center([bar], cols),
     '',
-    ...center([`${DIM}${CYAN}A custom client purposely built for DartMUD${RESET}`], cols),
+    ...center([`\x1b[1;36mA custom client purposely built for DartMUD${RESET}`], cols),
     '',
     ...center([`${GREEN}Connected${RESET}`], cols),
     '',

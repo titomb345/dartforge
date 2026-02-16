@@ -16,7 +16,7 @@ function App() {
   const inputRef = useRef<HTMLTextAreaElement | null>(null);
   const debugModeRef = useRef(false);
   const [debugMode, setDebugMode] = useState(false);
-  const [showColors, setShowColors] = useState(false);
+  const [showAppearance, setShowColors] = useState(false);
 
   // Set window title with version
   useEffect(() => {
@@ -25,7 +25,7 @@ function App() {
     }).catch(console.error);
   }, []);
 
-  const { theme, updateColor, resetColor, resetColors } = useThemeColors();
+  const { theme, updateColor, resetColor, display, updateDisplay, resetDisplay, resetAll } = useThemeColors();
   const xtermTheme = buildXtermTheme(theme);
 
   const { connected, passwordMode, skipHistory, sendCommand, reconnect, disconnect } =
@@ -54,18 +54,18 @@ function App() {
         connected={connected}
         onReconnect={reconnect}
         onDisconnect={disconnect}
-        showColors={showColors}
-        onToggleColors={() => setShowColors((v) => !v)}
+        showAppearance={showAppearance}
+        onToggleAppearance={() => setShowColors((v) => !v)}
       />
       <div style={{ flex: 1, position: 'relative', overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
-        <Terminal terminalRef={terminalRef} inputRef={inputRef} theme={xtermTheme} />
+        <Terminal terminalRef={terminalRef} inputRef={inputRef} theme={xtermTheme} display={display} onUpdateDisplay={updateDisplay} />
         <div
           style={{
             position: 'absolute',
             top: 0,
             right: 0,
             bottom: 0,
-            transform: showColors ? 'translateX(0)' : 'translateX(100%)',
+            transform: showAppearance ? 'translateX(0)' : 'translateX(100%)',
             transition: 'transform 0.3s ease',
             zIndex: 100,
           }}
@@ -74,7 +74,10 @@ function App() {
             theme={theme}
             onUpdateColor={updateColor}
             onResetColor={resetColor}
-            onReset={resetColors}
+            onReset={resetAll}
+            display={display}
+            onUpdateDisplay={updateDisplay}
+            onResetDisplay={resetDisplay}
             debugMode={debugMode}
             onToggleDebug={toggleDebug}
           />

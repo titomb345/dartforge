@@ -5,16 +5,16 @@ interface ToolbarProps {
   connected: boolean;
   onReconnect: () => void;
   onDisconnect: () => void;
-  showColors: boolean;
-  onToggleColors: () => void;
+  showAppearance: boolean;
+  onToggleAppearance: () => void;
 }
 
 export function Toolbar({
   connected,
   onReconnect,
   onDisconnect,
-  showColors,
-  onToggleColors,
+  showAppearance,
+  onToggleAppearance,
 }: ToolbarProps) {
 
   return (
@@ -53,10 +53,10 @@ export function Toolbar({
       >
         <IconButton
           icon={<PaletteIcon />}
-          title="Color settings"
+          title="Appearance"
           accent="#8be9fd"
-          toggled={showColors}
-          onClick={onToggleColors}
+          toggled={showAppearance}
+          onClick={onToggleAppearance}
         />
       </div>
     </div>

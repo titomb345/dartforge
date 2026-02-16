@@ -4,14 +4,17 @@ import { FitAddon } from '@xterm/addon-fit';
 import { WebLinksAddon } from '@xterm/addon-web-links';
 import '@xterm/xterm/css/xterm.css';
 import { getStartupSplash } from '../lib/splash';
+import type { DisplaySettings } from '../hooks/useThemeColors';
 
 interface TerminalProps {
   terminalRef: React.MutableRefObject<XTerm | null>;
   inputRef: React.RefObject<HTMLTextAreaElement | null>;
   theme: ITheme;
+  display: DisplaySettings;
+  onUpdateDisplay: <K extends keyof DisplaySettings>(key: K, value: DisplaySettings[K]) => void;
 }
 
-export function Terminal({ terminalRef, inputRef, theme }: TerminalProps) {
+export function Terminal({ terminalRef, inputRef, theme, display, onUpdateDisplay }: TerminalProps) {
   const outerRef = useRef<HTMLDivElement>(null);
   const innerRef = useRef<HTMLDivElement>(null);
   const fitAddonRef = useRef<FitAddon | null>(null);
@@ -21,8 +24,8 @@ export function Terminal({ terminalRef, inputRef, theme }: TerminalProps) {
 
     const term = new XTerm({
       theme,
-      fontFamily: "'Courier New', monospace",
-      fontSize: 14,
+      fontFamily: `'${display.fontFamily}', monospace`,
+      fontSize: display.fontSize,
       scrollback: 10000,
       disableStdin: true,
       cursorBlink: false,
@@ -68,15 +71,20 @@ export function Terminal({ terminalRef, inputRef, theme }: TerminalProps) {
       }
       if (e.ctrlKey && (e.key === '=' || e.key === '+')) {
         e.preventDefault();
-        term.options.fontSize = Math.min((term.options.fontSize || 14) + 1, 28);
+        const next = Math.min((term.options.fontSize || 14) + 1, 28);
+        term.options.fontSize = next;
+        onUpdateDisplay('fontSize', next);
         fitAddon.fit();
       } else if (e.ctrlKey && e.key === '-') {
         e.preventDefault();
-        term.options.fontSize = Math.max((term.options.fontSize || 14) - 1, 8);
+        const next = Math.max((term.options.fontSize || 14) - 1, 8);
+        term.options.fontSize = next;
+        onUpdateDisplay('fontSize', next);
         fitAddon.fit();
       } else if (e.ctrlKey && e.key === '0') {
         e.preventDefault();
         term.options.fontSize = 14;
+        onUpdateDisplay('fontSize', 14);
         fitAddon.fit();
       }
     };
@@ -106,6 +114,15 @@ export function Terminal({ terminalRef, inputRef, theme }: TerminalProps) {
       terminalRef.current.options.theme = theme;
     }
   }, [theme, terminalRef]);
+
+  // Apply display setting changes live
+  useEffect(() => {
+    const term = terminalRef.current;
+    if (!term) return;
+    term.options.fontFamily = `'${display.fontFamily}', monospace`;
+    term.options.fontSize = display.fontSize;
+    fitAddonRef.current?.fit();
+  }, [display.fontFamily, display.fontSize, terminalRef]);
 
   // Click terminal → focus command input (but not if selecting text)
   const handleClick = () => {

@@ -6,12 +6,20 @@ import {
   type TerminalTheme,
   type ThemeColorKey,
 } from '../lib/defaultTheme';
+import {
+  FONT_OPTIONS,
+  DEFAULT_DISPLAY,
+  type DisplaySettings,
+} from '../hooks/useThemeColors';
 
 interface ColorSettingsProps {
   theme: TerminalTheme;
   onUpdateColor: (key: ThemeColorKey, value: string) => void;
   onResetColor: (key: ThemeColorKey) => void;
   onReset: () => void;
+  display: DisplaySettings;
+  onUpdateDisplay: <K extends keyof DisplaySettings>(key: K, value: DisplaySettings[K]) => void;
+  onResetDisplay: (key: keyof DisplaySettings) => void;
   debugMode: boolean;
   onToggleDebug: () => void;
 }
@@ -232,7 +240,7 @@ function ColorSwatch({
   );
 }
 
-export function ColorSettings({ theme, onUpdateColor, onResetColor, onReset, debugMode, onToggleDebug }: ColorSettingsProps) {
+export function ColorSettings({ theme, onUpdateColor, onResetColor, onReset, display, onUpdateDisplay, onResetDisplay, debugMode, onToggleDebug }: ColorSettingsProps) {
   const base = THEME_COLOR_META.filter((m) => m.group === 'base');
   const normal = THEME_COLOR_META.filter((m) => m.group === 'normal');
   const bright = THEME_COLOR_META.filter((m) => m.group === 'bright');
@@ -279,7 +287,7 @@ export function ColorSettings({ theme, onUpdateColor, onResetColor, onReset, deb
           borderBottom: '1px solid #1a1a1a',
         }}
       >
-        <span style={{ fontSize: '13px', fontWeight: 600, color: '#ccc' }}>Colors</span>
+        <span style={{ fontSize: '13px', fontWeight: 600, color: '#ccc' }}>Appearance</span>
         <button
           onClick={onToggleDebug}
           title="Show ANSI color names in terminal output"
@@ -302,8 +310,86 @@ export function ColorSettings({ theme, onUpdateColor, onResetColor, onReset, deb
         </button>
       </div>
 
-      {/* Color list */}
+      {/* Settings list */}
       <div ref={scrollRef} style={{ flex: 1, overflowY: 'auto', padding: '12px 4px' }}>
+        {/* Display section */}
+        <div style={section}>
+          <div style={sectionLabel}>Display</div>
+
+          {/* Font family */}
+          <div style={{ padding: '4px 8px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <span style={{ fontSize: '12px', color: '#aaa', flex: 1 }}>Font</span>
+            {display.fontFamily !== DEFAULT_DISPLAY.fontFamily && (
+              <button
+                onClick={() => onResetDisplay('fontFamily')}
+                style={{ background: 'none', border: 'none', color: '#555', fontSize: '14px', cursor: 'pointer', padding: '0 2px', lineHeight: 1 }}
+                title="Reset to default"
+                onMouseEnter={(e) => (e.currentTarget.style.color = '#aaa')}
+                onMouseLeave={(e) => (e.currentTarget.style.color = '#555')}
+              >↺</button>
+            )}
+            <select
+              value={display.fontFamily}
+              onChange={(e) => onUpdateDisplay('fontFamily', e.target.value)}
+              style={{
+                background: '#111',
+                border: '1px solid #333',
+                borderRadius: '4px',
+                color: '#ccc',
+                fontSize: '11px',
+                padding: '3px 6px',
+                outline: 'none',
+                cursor: 'pointer',
+                fontFamily: display.fontFamily,
+              }}
+            >
+              {FONT_OPTIONS.map((f) => (
+                <option key={f} value={f} style={{ fontFamily: f }}>{f}</option>
+              ))}
+            </select>
+          </div>
+
+          {/* Font size */}
+          <div style={{ padding: '4px 8px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <span style={{ fontSize: '12px', color: '#aaa', flex: 1 }}>Size</span>
+            {display.fontSize !== DEFAULT_DISPLAY.fontSize && (
+              <button
+                onClick={() => onResetDisplay('fontSize')}
+                style={{ background: 'none', border: 'none', color: '#555', fontSize: '14px', cursor: 'pointer', padding: '0 2px', lineHeight: 1 }}
+                title="Reset to default"
+                onMouseEnter={(e) => (e.currentTarget.style.color = '#aaa')}
+                onMouseLeave={(e) => (e.currentTarget.style.color = '#555')}
+              >↺</button>
+            )}
+            <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+              <button
+                onClick={() => onUpdateDisplay('fontSize', Math.max(8, display.fontSize - 1))}
+                style={{
+                  width: '22px', height: '22px',
+                  background: '#111', border: '1px solid #333', borderRadius: '4px',
+                  color: '#aaa', fontSize: '14px', cursor: 'pointer',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  lineHeight: 1, padding: 0,
+                }}
+              >−</button>
+              <span style={{
+                fontSize: '12px', fontFamily: 'monospace', color: '#ccc',
+                minWidth: '28px', textAlign: 'center',
+              }}>{display.fontSize}px</span>
+              <button
+                onClick={() => onUpdateDisplay('fontSize', Math.min(28, display.fontSize + 1))}
+                style={{
+                  width: '22px', height: '22px',
+                  background: '#111', border: '1px solid #333', borderRadius: '4px',
+                  color: '#aaa', fontSize: '14px', cursor: 'pointer',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  lineHeight: 1, padding: 0,
+                }}
+              >+</button>
+            </div>
+          </div>
+        </div>
+
         <div style={section}>
           <div style={sectionLabel}>Base</div>
           {base.map((m) => (
