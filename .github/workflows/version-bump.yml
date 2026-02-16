@@ -36,6 +36,9 @@ jobs:
 
       - name: Create version bump PR
         if: steps.check.outputs.has_unreleased == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
         run: |
           VERSION=$(node -p "require('./package.json').version")
           BRANCH="chore/bump-v${VERSION}"
@@ -49,13 +52,5 @@ jobs:
             --base staging \
             --head "$BRANCH" \
             --title "chore: bump version to v${VERSION}" \
-            --body "Automated version bump triggered by PR #${{ github.event.pull_request.number }} merge.
-
-Updated:
-- \`package.json\`
-- \`src-tauri/tauri.conf.json\`
-- \`src-tauri/Cargo.toml\`
-- \`CHANGELOG.md\` stamped with v${VERSION} and today's date")
+            --body "Automated version bump triggered by PR #${PR_NUMBER} merge.")
           gh pr merge "$PR_URL" --auto --squash
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
