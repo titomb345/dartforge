@@ -11,6 +11,7 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: write
+      pull-requests: write
     steps:
       - uses: actions/checkout@v4
         with:
@@ -33,13 +34,28 @@ jobs:
         if: steps.check.outputs.has_unreleased == 'true'
         run: bash scripts/bump-version.sh
 
-      - name: Commit and tag
+      - name: Read new version
         if: steps.check.outputs.has_unreleased == 'true'
+        id: version
+        run: echo "version=$(node -p "require('./package.json').version")" >> "$GITHUB_OUTPUT"
+
+      - name: Push tag and version PR
+        if: steps.check.outputs.has_unreleased == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          VERSION: ${{ steps.version.outputs.version }}
         run: |
-          VERSION=$(node -p "require('./package.json').version")
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
+
+          BRANCH="chore/bump-v${VERSION}"
+          git checkout -b "$BRANCH"
           git add -A
           git commit -m "chore: bump version to v${VERSION}"
           git tag "v${VERSION}"
-          git push origin main --tags
+
+          git push origin "$BRANCH" --tags
+          gh pr create --base main --head "$BRANCH" \
+            --title "chore: bump version to v${VERSION}" \
+            --body "Automated version bump to v${VERSION}. Merge to update main."
+          gh pr merge "$BRANCH" --squash --auto --delete-branch
