@@ -32,9 +32,6 @@ jobs:
 
       - uses: dtolnay/rust-toolchain@stable
 
-      - name: Setup MSVC
-        uses: ilammy/msvc-dev-cmd@v1
-
       - run: npm ci
 
       - name: Extract changelog
@@ -47,7 +44,7 @@ jobs:
           echo "$BODY" > release-notes.md
 
       - name: Build Tauri app
-        uses: tauri-apps/tauri-action@v0
+        uses: tauri-apps/tauri-action@v2
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:

@@ -5,6 +5,21 @@ on:
     branches: [main]
 
 jobs:
+  changelog:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check CHANGELOG has unreleased section
+        run: |
+          if grep -qE '^\## \[Unreleased-(major|minor|patch)\]' CHANGELOG.md; then
+            TYPE=$(grep -oE 'Unreleased-(major|minor|patch)' CHANGELOG.md | head -1)
+            echo "Found [$TYPE] section"
+          else
+            echo "::error::CHANGELOG.md must contain an [Unreleased-major], [Unreleased-minor], or [Unreleased-patch] section."
+            exit 1
+          fi
+
   ci:
     runs-on: ubuntu-latest
     steps:
