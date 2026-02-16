@@ -97,5 +97,10 @@ Versioning is automated via CHANGELOG.md bump hints and GitHub Actions.
 - Hex-based map system
 - Permadeath mechanics
 
+## Git Workflow
+- **NEVER commit directly to `main`.** Always create a new feature branch.
+- When asked to commit, check the current branch first. If on `main`, create a contextual branch (e.g., `feature/skill-tracker`, `fix/connection-bug`) before committing.
+- PRs go to `staging` (the main branch for PRs).
+
 ## GitHub
 - Repo: `titomb345/dartforge`
