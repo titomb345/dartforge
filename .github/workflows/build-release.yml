@@ -4,6 +4,11 @@ on:
   push:
     tags:
       - 'v*'
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Tag to build and release (e.g. v0.2.0)'
+        required: true
 
 jobs:
   build:
@@ -11,7 +16,14 @@ jobs:
     permissions:
       contents: write
     steps:
+      - name: Resolve tag
+        id: tag
+        shell: bash
+        run: echo "tag=${{ github.event.inputs.tag || github.ref_name }}" >> "$GITHUB_OUTPUT"
+
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ steps.tag.outputs.tag }}
 
       - uses: actions/setup-node@v4
         with:
@@ -20,14 +32,17 @@ jobs:
 
       - uses: dtolnay/rust-toolchain@stable
 
+      - name: Setup MSVC
+        uses: ilammy/msvc-dev-cmd@v1
+
       - run: npm ci
 
       - name: Extract changelog
         id: changelog
         shell: bash
         run: |
-          TAG="${GITHUB_REF_NAME}"
-          VERSION="${TAG#v}"
+          VERSION="${{ steps.tag.outputs.tag }}"
+          VERSION="${VERSION#v}"
           BODY=$(sed -n "/^## \[${VERSION}\]/,/^## \[/{/^## \[${VERSION}\]/d;/^## \[/d;p}" CHANGELOG.md)
           echo "$BODY" > release-notes.md
 
@@ -36,8 +51,8 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
-          tagName: ${{ github.ref_name }}
-          releaseName: 'DartForge ${{ github.ref_name }}'
+          tagName: ${{ steps.tag.outputs.tag }}
+          releaseName: 'DartForge ${{ steps.tag.outputs.tag }}'
           releaseBody: ''
           releaseDraft: false
           prerelease: false
@@ -47,4 +62,4 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         shell: bash
         run: |
-          gh release edit "${{ github.ref_name }}" --notes-file release-notes.md
+          gh release edit "${{ steps.tag.outputs.tag }}" --notes-file release-notes.md
