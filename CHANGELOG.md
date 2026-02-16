@@ -9,7 +9,7 @@ The `[Unreleased]` header controls automatic version bumping on merge:
 - `[Unreleased-minor]` → 0.1.0 → 0.2.0
 - `[Unreleased-major]` → 0.1.0 → 1.0.0
 
-## [Unreleased-minor]
+## [0.2.0] - 2026-02-16
 
 ### Added
 - Customizable terminal colors with persistent settings (react-colorful picker)
