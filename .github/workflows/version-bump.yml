@@ -1,4 +1,4 @@
-name: Version Bump & Release
+name: Version Bump
 
 on:
   pull_request:
@@ -6,12 +6,11 @@ on:
     branches: [main]
 
 jobs:
-  bump-and-release:
+  bump:
     if: github.event.pull_request.merged == true
     runs-on: ubuntu-latest
     permissions:
       contents: write
-      pull-requests: write
     steps:
       - uses: actions/checkout@v4
         with:
@@ -44,16 +43,3 @@ jobs:
           git commit -m "chore: bump version to v${VERSION}"
           git tag "v${VERSION}"
           git push origin main --tags
-
-      - name: Create GitHub release
-        if: steps.check.outputs.has_unreleased == 'true'
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          VERSION=$(node -p "require('./package.json').version")
-          # Extract changelog section for this version
-          BODY=$(sed -n "/^## \[${VERSION}\]/,/^## \[/{/^## \[${VERSION}\]/d;/^## \[/d;p}" CHANGELOG.md)
-          echo "$BODY" > /tmp/release-notes.md
-          gh release create "v${VERSION}" \
-            --title "DartForge v${VERSION}" \
-            --notes-file /tmp/release-notes.md
