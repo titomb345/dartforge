@@ -7,6 +7,7 @@ import { CommandInput } from './components/CommandInput';
 import { Toolbar } from './components/Toolbar';
 import { ColorSettings } from './components/ColorSettings';
 import { SkillPanel } from './components/SkillPanel';
+import { GameClock } from './components/GameClock';
 import { useMudConnection } from './hooks/useMudConnection';
 import { useClassMode } from './hooks/useClassMode';
 import { useThemeColors } from './hooks/useThemeColors';
@@ -125,6 +126,10 @@ function App() {
             onToggleInlineImproves={toggleInlineImproves}
           />
         </div>
+      </div>
+      {/* Game status bar — clock right-aligned, left side reserved for concentration/aura */}
+      <div className="flex items-center justify-end px-1.5 py-0.5 bg-bg-secondary border-t border-border-subtle">
+        <GameClock />
       </div>
       <CommandInput
         ref={inputRef}

@@ -21,6 +21,8 @@
   --color-purple: #a78bfa;
   --color-comment: #6272a4;
   --color-amber: #f59e0b;
+  --color-reckoning-common: #f59e0b;
+  --color-reckoning-adachian: #f472b6;
 }
 
 @layer base {
@@ -78,4 +80,22 @@
   color: var(--btn-accent);
   border-color: color-mix(in srgb, var(--btn-accent) 25%, transparent);
   filter: drop-shadow(0 0 4px color-mix(in srgb, var(--btn-accent) 50%, transparent));
+}
+
+/* Game clock — instrument readout styling */
+.game-clock:hover {
+  background: color-mix(in srgb, var(--gc-accent) 4%, transparent);
+  border-color: color-mix(in srgb, var(--gc-accent) 10%, transparent);
+  border-left-color: var(--gc-accent);
+  filter: drop-shadow(0 0 4px color-mix(in srgb, var(--gc-accent) 12%, transparent));
+}
+
+/* Holiday badge slow pulse */
+.game-clock-holiday {
+  animation: holiday-glow 3s ease-in-out infinite;
+}
+
+@keyframes holiday-glow {
+  0%, 100% { opacity: 0.85; }
+  50% { opacity: 1; }
 }
