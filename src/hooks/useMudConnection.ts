@@ -5,6 +5,7 @@ import type { Terminal } from '@xterm/xterm';
 import { MUD_OUTPUT_EVENT, CONNECTION_STATUS_EVENT } from '../lib/tauriEvents';
 import { MudOutputPayload, ConnectionStatusPayload } from '../types';
 import { getConnectedSplash, getDisconnectSplash } from '../lib/splash';
+import { smartWrite } from '../lib/terminalUtils';
 
 /** End marker for the DartMUD ASCII banner */
 const BANNER_END_MARKER = 'Ferdarchi';
@@ -20,25 +21,6 @@ function endsWithPrompt(data: string): boolean {
   // Strip ANSI escape sequences to check the visible text
   const stripped = data.replace(/\x1b\[[0-9;]*[A-Za-z]/g, '');
   return stripped.endsWith('\n> ') || stripped.endsWith('\r\n> ') || stripped === '> ';
-}
-
-/**
- * Write data to terminal with smart auto-scroll.
- * If user has scrolled up to read history, new output won't yank them back.
- * If user is at the bottom, it scrolls normally.
- */
-function smartWrite(term: Terminal, data: string) {
-  const buffer = term.buffer.active;
-  const scrolledUp = buffer.baseY - buffer.viewportY;
-
-  if (scrolledUp <= 0) {
-    term.write(data);
-  } else {
-    term.write(data, () => {
-      const newBase = term.buffer.active.baseY;
-      term.scrollToLine(newBase - scrolledUp);
-    });
-  }
 }
 
 /** Map a single ANSI SGR code to a human-readable name */
@@ -92,6 +74,8 @@ function annotateAnsi(data: string): string {
 export function useMudConnection(
   terminalRef: React.MutableRefObject<Terminal | null>,
   debugModeRef: React.RefObject<boolean>,
+  onOutputChunk?: (data: string) => void,
+  onCharacterName?: (name: string) => void,
 ) {
   const [connected, setConnected] = useState(false);
   const [statusMessage, setStatusMessage] = useState('Connecting...');
@@ -101,6 +85,13 @@ export function useMudConnection(
   const wasConnectedRef = useRef(false);
   const passwordModeRef = useRef(false);
   const skipHistoryRef = useRef(false);
+  const captureNameRef = useRef(false);
+
+  // Store latest callback refs to avoid re-subscribing on every change
+  const onOutputChunkRef = useRef(onOutputChunk);
+  onOutputChunkRef.current = onOutputChunk;
+  const onCharacterNameRef = useRef(onCharacterName);
+  onCharacterNameRef.current = onCharacterName;
 
   // Banner filtering state
   const filteringBannerRef = useRef(false);
@@ -121,6 +112,7 @@ export function useMudConnection(
             setPasswordMode(true);
             setSkipHistory(true);
           } else if (/name:/i.test(data)) {
+            captureNameRef.current = true;
             skipHistoryRef.current = true;
             setSkipHistory(true);
           }
@@ -140,6 +132,7 @@ export function useMudConnection(
             bannerBufferRef.current = '';
             if (afterBanner.length > 0) {
               detectPrompts(afterBanner);
+              onOutputChunkRef.current?.(afterBanner);
               let afterOutput = debugModeRef.current ? annotateAnsi(afterBanner) : afterBanner;
               if (endsWithPrompt(afterBanner)) {
                 afterOutput += '\n';
@@ -150,6 +143,7 @@ export function useMudConnection(
             // Safety: too much data without finding banner, flush it all
             filteringBannerRef.current = false;
             detectPrompts(bannerBufferRef.current);
+            onOutputChunkRef.current?.(bannerBufferRef.current);
             let flushOutput = debugModeRef.current ? annotateAnsi(bannerBufferRef.current) : bannerBufferRef.current;
             if (endsWithPrompt(bannerBufferRef.current)) {
               flushOutput += '\n';
@@ -160,11 +154,12 @@ export function useMudConnection(
           return;
         }
 
+        detectPrompts(event.payload.data);
+        onOutputChunkRef.current?.(event.payload.data);
         let output = debugModeRef.current ? annotateAnsi(event.payload.data) : event.payload.data;
         if (endsWithPrompt(event.payload.data)) {
           output += '\n';
         }
-        detectPrompts(event.payload.data);
         smartWrite(term, output);
       });
 
@@ -207,6 +202,11 @@ export function useMudConnection(
 
   const sendCommand = useCallback(async (command: string) => {
     try {
+      // Capture character name if we just saw a "name:" prompt
+      if (captureNameRef.current) {
+        captureNameRef.current = false;
+        onCharacterNameRef.current?.(command.trim());
+      }
       if (passwordModeRef.current) {
         passwordModeRef.current = false;
         setPasswordMode(false);

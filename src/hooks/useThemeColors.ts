@@ -1,6 +1,7 @@
 import { useState, useCallback, useEffect } from 'react';
 import { load } from '@tauri-apps/plugin-store';
 import { DEFAULT_THEME, type TerminalTheme, type ThemeColorKey } from '../lib/defaultTheme';
+import { migrateSettings } from '../lib/settingsMigrations';
 
 const STORE_FILE = 'settings.json';
 const STORE_KEY = 'theme';
@@ -48,6 +49,7 @@ export function useThemeColors() {
     (async () => {
       try {
         const store = await load(STORE_FILE);
+        await migrateSettings(store);
         const savedTheme = await store.get<Partial<TerminalTheme>>(STORE_KEY);
         if (savedTheme) {
           setTheme({ ...DEFAULT_THEME, ...savedTheme });
