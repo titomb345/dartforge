@@ -1,5 +1,6 @@
 import { ClassMode } from '../types';
 import { CLASS_MODES, CLASS_COLORS } from '../lib/constants';
+import { cn } from '../lib/cn';
 
 interface ClassModeToggleProps {
   classMode: ClassMode;
@@ -8,7 +9,7 @@ interface ClassModeToggleProps {
 
 export function ClassModeToggle({ classMode, onClassModeChange }: ClassModeToggleProps) {
   return (
-    <div style={{ display: 'flex', gap: '2px' }}>
+    <div className="flex gap-0.5">
       {CLASS_MODES.map((mode) => {
         const isActive = classMode === mode.key;
         const color = CLASS_COLORS[mode.key];
@@ -17,17 +18,13 @@ export function ClassModeToggle({ classMode, onClassModeChange }: ClassModeToggl
             key={mode.key}
             onClick={() => onClassModeChange(mode.key)}
             title={mode.label}
-            style={{
-              padding: '2px 8px',
-              fontSize: '12px',
-              fontWeight: 600,
-              border: `1px solid ${isActive ? color : '#333'}`,
-              borderRadius: '3px',
-              background: isActive ? color : 'transparent',
-              color: isActive ? '#0d0d0d' : '#888',
-              cursor: 'pointer',
-              transition: 'all 0.15s ease',
-            }}
+            className={cn(
+              'px-2 py-0.5 text-xs font-semibold rounded-[3px] cursor-pointer transition-all duration-150 ease-in-out border',
+              isActive
+                ? 'text-bg-primary'
+                : 'bg-transparent text-text-muted border-border'
+            )}
+            style={isActive ? { background: color, borderColor: color } : { '--class-color': color } as React.CSSProperties}
           >
             {mode.shortLabel}
           </button>

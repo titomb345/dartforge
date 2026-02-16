@@ -7,6 +7,7 @@ import {
   KeyboardEvent,
   forwardRef,
 } from 'react';
+import { cn } from '../lib/cn';
 
 interface CommandInputProps {
   onSend: (command: string) => void;
@@ -76,7 +77,7 @@ export const CommandInput = forwardRef<HTMLTextAreaElement, CommandInputProps>(
       (e: KeyboardEvent<HTMLTextAreaElement>) => {
         if (e.key === 'Enter' && !e.shiftKey) {
           e.preventDefault();
-          if (!connected) {
+          if (!connected && value.trim() === '') {
             onReconnect();
             return;
           }
@@ -122,34 +123,18 @@ export const CommandInput = forwardRef<HTMLTextAreaElement, CommandInputProps>(
       [submit, history, value]
     );
 
-    const dotColor = connected ? '#22c55e' : '#ef4444';
-
     return (
-      <div
-        style={{
-          display: 'flex',
-          alignItems: 'flex-start',
-          padding: '6px 10px',
-          background: '#0d0d0d',
-          borderTop: '1px solid #1a1a1a',
-          transition: 'border-color 0.3s ease',
-        }}
-      >
+      <div className="flex items-start px-2.5 py-1.5 bg-bg-primary border-t border-border-subtle transition-[border-color] duration-300 ease-in-out">
         {/* Prompt / line count */}
         <span
-          style={{
-            color: disabled ? '#2a2a2a' : '#50fa7b',
-            fontFamily: "'Cascadia Code', 'Fira Code', 'Consolas', monospace",
-            fontSize: '13px',
-            padding: '5px 8px 0 4px',
-            lineHeight: `${LINE_HEIGHT}px`,
-            transition: 'color 0.3s ease',
-            minWidth: isMultiLine ? '28px' : 'auto',
-            textAlign: 'right',
-          }}
+          className={cn(
+            'font-mono text-[13px] pt-[5px] pr-2 pl-1 leading-[20px] transition-colors duration-300 ease-in-out text-right',
+            disabled ? 'text-text-disabled' : 'text-green',
+            isMultiLine ? 'min-w-[28px]' : 'min-w-0'
+          )}
         >
-          {isMultiLine && <span style={{ color: '#6272a4' }}>{lineCount}</span>}
-        {'>'}
+          {isMultiLine && <span className="text-comment">{lineCount}</span>}
+          {'>'}
         </span>
 
         <textarea
@@ -162,54 +147,13 @@ export const CommandInput = forwardRef<HTMLTextAreaElement, CommandInputProps>(
           rows={1}
           placeholder={disabled ? 'disconnected' : ''}
           spellCheck={false}
-          style={{
-            flex: 1,
-            background: 'transparent',
-            border: 'none',
-            padding: '5px 0',
-            color: '#e0e0e0',
-            fontFamily: "'Cascadia Code', 'Fira Code', 'Consolas', monospace",
-            fontSize: '14px',
-            lineHeight: `${LINE_HEIGHT}px`,
-            outline: 'none',
-            caretColor: passwordMode ? '#a78bfa' : '#8be9fd',
-            ...(passwordMode ? { WebkitTextSecurity: 'disc' } : {}),
-            resize: 'none',
-            overflow: 'hidden',
-            minHeight: `${LINE_HEIGHT}px`,
-            maxHeight: `${MAX_HEIGHT}px`,
-          }}
+          className={cn(
+            'flex-1 bg-transparent border-none py-[5px] px-0 text-text-primary font-mono text-sm',
+            'leading-[20px] outline-none resize-none overflow-hidden',
+            'min-h-[20px] max-h-[160px]',
+            passwordMode ? 'caret-purple password-mask' : 'caret-cyan'
+          )}
         />
-
-        {/* Separator + connection dot */}
-        <div
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: '10px',
-            paddingTop: '7px',
-            flexShrink: 0,
-          }}
-        >
-          <div
-            style={{
-              width: '1px',
-              height: '16px',
-              background: '#1e1e1e',
-            }}
-          />
-          <div
-            title={connected ? 'Connected to DartMUD' : 'Disconnected'}
-            style={{
-              width: '8px',
-              height: '8px',
-              borderRadius: '50%',
-              background: dotColor,
-              boxShadow: `0 0 4px ${dotColor}88, 0 0 10px ${dotColor}44`,
-              transition: 'background 0.4s ease, box-shadow 0.4s ease',
-            }}
-          />
-        </div>
       </div>
     );
   }

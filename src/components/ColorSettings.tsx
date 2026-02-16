@@ -1,4 +1,4 @@
-import { type CSSProperties, useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { HexColorPicker } from 'react-colorful';
 import {
   THEME_COLOR_META,
@@ -11,6 +11,7 @@ import {
   DEFAULT_DISPLAY,
   type DisplaySettings,
 } from '../hooks/useThemeColors';
+import { cn } from '../lib/cn';
 
 interface ColorSettingsProps {
   theme: TerminalTheme;
@@ -87,99 +88,47 @@ function ColorSwatch({
     }
   };
 
-  const container: CSSProperties = {
-    display: 'flex',
-    alignItems: 'center',
-    gap: '8px',
-    padding: '4px 8px',
-    borderRadius: '4px',
-    cursor: 'pointer',
-    transition: 'background 0.15s',
-    background: expanded ? '#1a1a1a' : 'transparent',
-  };
-
-  const swatch: CSSProperties = {
-    width: '24px',
-    height: '24px',
-    borderRadius: '4px',
-    border: '1px solid #444',
-    background: value,
-    flexShrink: 0,
-  };
-
-  const labelStyle: CSSProperties = {
-    fontSize: '12px',
-    color: '#aaa',
-    flex: 1,
-    whiteSpace: 'nowrap',
-  };
-
-  const hexStyle: CSSProperties = {
-    fontSize: '11px',
-    fontFamily: 'monospace',
-    color: isDefault ? '#666' : '#8be9fd',
-  };
-
-  const resetStyle: CSSProperties = {
-    background: 'none',
-    border: 'none',
-    color: '#555',
-    fontSize: '14px',
-    cursor: 'pointer',
-    padding: '0 2px',
-    lineHeight: 1,
-    visibility: isDefault ? 'hidden' : 'visible',
-    flexShrink: 0,
-  };
-
   return (
     <div>
       <div
-        style={container}
+        className={cn(
+          'flex items-center gap-2 px-2 py-1 rounded cursor-pointer transition-[background] duration-150',
+          expanded ? 'bg-bg-secondary' : 'bg-transparent hover:bg-bg-secondary'
+        )}
         onClick={() => {
           if (expanded) editingRef.current = false;
           onToggle(colorKey);
         }}
-        onMouseEnter={(e) => {
-          if (!expanded) e.currentTarget.style.background = '#1a1a1a';
-        }}
-        onMouseLeave={(e) => {
-          if (!expanded) e.currentTarget.style.background = 'transparent';
-        }}
       >
-        <div style={swatch} />
-        <span style={labelStyle}>{label}</span>
-        <span style={hexStyle}>{value}</span>
+        <div
+          className="w-6 h-6 rounded border border-[#444] shrink-0"
+          style={{ background: value }}
+        />
+        <span className="text-xs text-text-label flex-1 whitespace-nowrap">{label}</span>
+        <span className={cn('text-[11px] font-mono', isDefault ? 'text-text-dim' : 'text-cyan')}>
+          {value}
+        </span>
         <button
-          style={resetStyle}
+          className={cn(
+            'bg-transparent border-none text-[#555] hover:text-text-label text-sm cursor-pointer px-0.5 leading-none shrink-0',
+            isDefault ? 'invisible' : 'visible'
+          )}
           title="Reset to default"
           onClick={(e) => {
             e.stopPropagation();
             onReset(colorKey);
           }}
-          onMouseEnter={(e) => (e.currentTarget.style.color = '#aaa')}
-          onMouseLeave={(e) => (e.currentTarget.style.color = '#555')}
         >
           ↺
         </button>
       </div>
       <div
-        style={{
-          maxHeight: expanded ? '220px' : '0px',
-          opacity: expanded ? 1 : 0,
-          overflow: 'hidden',
-          transition: 'max-height 0.25s ease, opacity 0.2s ease',
-        }}
+        className={cn(
+          'overflow-hidden transition-[max-height,opacity] ease-in-out',
+          expanded ? 'max-h-[220px] opacity-100 duration-250' : 'max-h-0 opacity-0 duration-200'
+        )}
       >
-        <div
-          style={{
-            padding: '8px 8px 12px',
-            display: 'flex',
-            flexDirection: 'column',
-            alignItems: 'center',
-            gap: '8px',
-          }}
-        >
+        <div className="px-4 pb-3 pt-2 flex flex-col items-center gap-2">
           <HexColorPicker
             color={previewColor}
             onChange={(c) => {
@@ -188,26 +137,8 @@ function ColorSwatch({
             }}
             style={{ width: '100%', height: '140px' }}
           />
-          <div
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              width: '100%',
-              background: '#111',
-              border: '1px solid #333',
-              borderRadius: '4px',
-              overflow: 'hidden',
-            }}
-          >
-            <span
-              style={{
-                padding: '4px 0 4px 10px',
-                color: '#555',
-                fontSize: '12px',
-                fontFamily: 'monospace',
-                userSelect: 'none',
-              }}
-            >
+          <div className="flex items-center w-full bg-bg-input border border-border rounded overflow-hidden">
+            <span className="pl-2.5 py-1 text-[#555] text-xs font-mono select-none">
               #
             </span>
             <input
@@ -221,17 +152,7 @@ function ColorSwatch({
               onClick={(e) => e.stopPropagation()}
               spellCheck={false}
               maxLength={6}
-              style={{
-                flex: 1,
-                padding: '4px 10px 4px 2px',
-                background: 'transparent',
-                border: 'none',
-                color: '#ccc',
-                fontSize: '12px',
-                fontFamily: 'monospace',
-                textAlign: 'center',
-                outline: 'none',
-              }}
+              className="flex-1 py-1 pr-2.5 pl-0.5 bg-transparent border-none text-text-heading text-xs font-mono text-center outline-none"
             />
           </div>
         </div>
@@ -251,97 +172,47 @@ export function ColorSettings({ theme, onUpdateColor, onResetColor, onReset, dis
     setExpandedKey((prev) => (prev === key ? null : key));
   };
 
-  const section: CSSProperties = {
-    marginBottom: '16px',
-  };
-
-  const sectionLabel: CSSProperties = {
-    fontSize: '10px',
-    fontWeight: 600,
-    textTransform: 'uppercase',
-    letterSpacing: '0.08em',
-    color: '#555',
-    marginBottom: '6px',
-    padding: '0 8px',
-  };
-
   return (
-    <div
-      style={{
-        width: '280px',
-        height: '100%',
-        background: '#0d0d0d',
-        borderLeft: '1px solid #1a1a1a',
-        display: 'flex',
-        flexDirection: 'column',
-        overflow: 'hidden',
-      }}
-    >
+    <div className="w-[280px] h-full bg-bg-primary border-l border-border-subtle flex flex-col overflow-hidden">
       {/* Header */}
-      <div
-        style={{
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'space-between',
-          padding: '10px 12px',
-          borderBottom: '1px solid #1a1a1a',
-        }}
-      >
-        <span style={{ fontSize: '13px', fontWeight: 600, color: '#ccc' }}>Appearance</span>
+      <div className="flex items-center justify-between px-3 py-2.5 border-b border-border-subtle">
+        <span className="text-[13px] font-semibold text-text-heading">Appearance</span>
         <button
           onClick={onToggleDebug}
           title="Show ANSI color names in terminal output"
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: '5px',
-            background: debugMode ? '#f59e0b18' : 'transparent',
-            border: `1px solid ${debugMode ? '#f59e0b44' : '#2a2a2a'}`,
-            borderRadius: '4px',
-            color: debugMode ? '#f59e0b' : '#666',
-            fontSize: '11px',
-            cursor: 'pointer',
-            padding: '3px 8px',
-            transition: 'all 0.2s ease',
-          }}
+          className={cn(
+            'flex items-center gap-[5px] rounded text-[11px] cursor-pointer px-2 py-[3px] transition-all duration-200 ease-in-out border',
+            debugMode
+              ? 'bg-[#f59e0b18] border-[#f59e0b44] text-amber'
+              : 'bg-transparent border-border-faint text-text-dim'
+          )}
         >
-          <span style={{ fontSize: '13px', lineHeight: 1 }}>{'</>'}</span>
+          <span className="text-[13px] leading-none">{'</>'}</span>
           Debug
         </button>
       </div>
 
       {/* Settings list */}
-      <div ref={scrollRef} style={{ flex: 1, overflowY: 'auto', padding: '12px 4px' }}>
+      <div ref={scrollRef} className="flex-1 overflow-y-auto px-1 py-3">
         {/* Display section */}
-        <div style={section}>
-          <div style={sectionLabel}>Display</div>
+        <div className="mb-4">
+          <div className="text-[10px] font-semibold uppercase tracking-[0.08em] text-[#555] mb-1.5 px-2">Display</div>
 
           {/* Font family */}
-          <div style={{ padding: '4px 8px', display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <span style={{ fontSize: '12px', color: '#aaa', flex: 1 }}>Font</span>
+          <div className="px-2 py-1 flex items-center gap-2">
+            <span className="text-xs text-text-label flex-1">Font</span>
             {display.fontFamily !== DEFAULT_DISPLAY.fontFamily && (
               <button
                 onClick={() => onResetDisplay('fontFamily')}
-                style={{ background: 'none', border: 'none', color: '#555', fontSize: '14px', cursor: 'pointer', padding: '0 2px', lineHeight: 1 }}
+                className="bg-transparent border-none text-[#555] hover:text-text-label text-sm cursor-pointer px-0.5 leading-none"
                 title="Reset to default"
-                onMouseEnter={(e) => (e.currentTarget.style.color = '#aaa')}
-                onMouseLeave={(e) => (e.currentTarget.style.color = '#555')}
               >↺</button>
             )}
             <select
               value={display.fontFamily}
               onChange={(e) => onUpdateDisplay('fontFamily', e.target.value)}
-              style={{
-                background: '#111',
-                border: '1px solid #333',
-                borderRadius: '4px',
-                color: '#ccc',
-                fontSize: '11px',
-                padding: '3px 6px',
-                outline: 'none',
-                cursor: 'pointer',
-                fontFamily: display.fontFamily,
-              }}
+              className="bg-bg-input border border-border rounded text-text-heading text-[11px] px-1.5 py-[3px] outline-none cursor-pointer"
+              style={{ fontFamily: display.fontFamily }}
             >
               {FONT_OPTIONS.map((f) => (
                 <option key={f} value={f} style={{ fontFamily: f }}>{f}</option>
@@ -350,48 +221,33 @@ export function ColorSettings({ theme, onUpdateColor, onResetColor, onReset, dis
           </div>
 
           {/* Font size */}
-          <div style={{ padding: '4px 8px', display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <span style={{ fontSize: '12px', color: '#aaa', flex: 1 }}>Size</span>
+          <div className="px-2 py-1 flex items-center gap-2">
+            <span className="text-xs text-text-label flex-1">Size</span>
             {display.fontSize !== DEFAULT_DISPLAY.fontSize && (
               <button
                 onClick={() => onResetDisplay('fontSize')}
-                style={{ background: 'none', border: 'none', color: '#555', fontSize: '14px', cursor: 'pointer', padding: '0 2px', lineHeight: 1 }}
+                className="bg-transparent border-none text-[#555] hover:text-text-label text-sm cursor-pointer px-0.5 leading-none"
                 title="Reset to default"
-                onMouseEnter={(e) => (e.currentTarget.style.color = '#aaa')}
-                onMouseLeave={(e) => (e.currentTarget.style.color = '#555')}
               >↺</button>
             )}
-            <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+            <div className="flex items-center gap-1">
               <button
                 onClick={() => onUpdateDisplay('fontSize', Math.max(8, display.fontSize - 1))}
-                style={{
-                  width: '22px', height: '22px',
-                  background: '#111', border: '1px solid #333', borderRadius: '4px',
-                  color: '#aaa', fontSize: '14px', cursor: 'pointer',
-                  display: 'flex', alignItems: 'center', justifyContent: 'center',
-                  lineHeight: 1, padding: 0,
-                }}
+                className="w-[22px] h-[22px] bg-bg-input border border-border rounded text-text-label text-sm cursor-pointer flex items-center justify-center leading-none p-0"
               >−</button>
-              <span style={{
-                fontSize: '12px', fontFamily: 'monospace', color: '#ccc',
-                minWidth: '28px', textAlign: 'center',
-              }}>{display.fontSize}px</span>
+              <span className="text-xs font-mono text-text-heading min-w-[28px] text-center">
+                {display.fontSize}px
+              </span>
               <button
                 onClick={() => onUpdateDisplay('fontSize', Math.min(28, display.fontSize + 1))}
-                style={{
-                  width: '22px', height: '22px',
-                  background: '#111', border: '1px solid #333', borderRadius: '4px',
-                  color: '#aaa', fontSize: '14px', cursor: 'pointer',
-                  display: 'flex', alignItems: 'center', justifyContent: 'center',
-                  lineHeight: 1, padding: 0,
-                }}
+                className="w-[22px] h-[22px] bg-bg-input border border-border rounded text-text-label text-sm cursor-pointer flex items-center justify-center leading-none p-0"
               >+</button>
             </div>
           </div>
         </div>
 
-        <div style={section}>
-          <div style={sectionLabel}>Base</div>
+        <div className="mb-4">
+          <div className="text-[10px] font-semibold uppercase tracking-[0.08em] text-[#555] mb-1.5 px-2">Base</div>
           {base.map((m) => (
             <ColorSwatch
               key={m.key}
@@ -406,8 +262,8 @@ export function ColorSettings({ theme, onUpdateColor, onResetColor, onReset, dis
           ))}
         </div>
 
-        <div style={section}>
-          <div style={sectionLabel}>Normal</div>
+        <div className="mb-4">
+          <div className="text-[10px] font-semibold uppercase tracking-[0.08em] text-[#555] mb-1.5 px-2">Normal</div>
           {normal.map((m) => (
             <ColorSwatch
               key={m.key}
@@ -422,8 +278,8 @@ export function ColorSettings({ theme, onUpdateColor, onResetColor, onReset, dis
           ))}
         </div>
 
-        <div style={section}>
-          <div style={sectionLabel}>Bright</div>
+        <div className="mb-4">
+          <div className="text-[10px] font-semibold uppercase tracking-[0.08em] text-[#555] mb-1.5 px-2">Bright</div>
           {bright.map((m) => (
             <ColorSwatch
               key={m.key}
@@ -440,24 +296,10 @@ export function ColorSettings({ theme, onUpdateColor, onResetColor, onReset, dis
       </div>
 
       {/* Footer */}
-      <div
-        style={{
-          padding: '10px 12px',
-          borderTop: '1px solid #1a1a1a',
-        }}
-      >
+      <div className="px-3 py-2.5 border-t border-border-subtle">
         <button
           onClick={onReset}
-          style={{
-            width: '100%',
-            padding: '6px',
-            background: '#1a1a1a',
-            border: '1px solid #2a2a2a',
-            borderRadius: '4px',
-            color: '#888',
-            fontSize: '12px',
-            cursor: 'pointer',
-          }}
+          className="w-full py-1.5 bg-bg-secondary border border-border-faint rounded text-text-muted text-xs cursor-pointer"
         >
           Reset to Defaults
         </button>

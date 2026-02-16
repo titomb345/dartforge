@@ -1,5 +1,6 @@
 import { IconButton } from './IconButton';
-import { PowerIcon, ReconnectIcon, PaletteIcon } from './icons';
+import { PowerIcon, PaletteIcon } from './icons';
+import { cn } from '../lib/cn';
 
 interface ToolbarProps {
   connected: boolean;
@@ -18,39 +19,30 @@ export function Toolbar({
 }: ToolbarProps) {
 
   return (
-    <div
-      style={{
-        display: 'flex',
-        alignItems: 'center',
-        padding: '4px 10px',
-        background: '#0d0d0d',
-        borderBottom: '1px solid #1a1a1a',
-      }}
-    >
-      <IconButton
-        icon={connected ? <PowerIcon /> : <ReconnectIcon />}
-        title={connected ? 'Disconnect' : 'Reconnect'}
-        accent={connected ? '#ef4444' : '#50fa7b'}
+    <div className="flex items-center px-2.5 py-1 bg-bg-primary border-b border-border-subtle">
+      <button
         onClick={connected ? onDisconnect : onReconnect}
-      />
-      <div
+        title={connected ? 'Disconnect' : 'Reconnect'}
+        className={cn(
+          'flex items-center justify-center w-[30px] h-[30px] p-0 rounded-[6px]',
+          'select-none leading-none transition-all duration-300 ease-in-out border cursor-pointer',
+          connected
+            ? 'text-connected border-connected/25 bg-connected/8'
+            : 'text-disconnected border-disconnected/25 bg-disconnected/8'
+        )}
         style={{
-          width: '1px',
-          height: '18px',
-          background: '#1e1e1e',
-          margin: '0 6px',
-        }}
-      />
-
-      <div style={{ flex: 1 }} />
-
-      <div
-        style={{
-          display: 'flex',
-          alignItems: 'center',
-          gap: '4px',
+          filter: connected
+            ? 'drop-shadow(0 0 4px rgba(34, 197, 94, 0.4))'
+            : 'drop-shadow(0 0 4px rgba(239, 68, 68, 0.4))',
         }}
       >
+        <PowerIcon />
+      </button>
+      <div className="w-px h-[18px] bg-border-dim mx-1.5" />
+
+      <div className="flex-1" />
+
+      <div className="flex items-center gap-1">
         <IconButton
           icon={<PaletteIcon />}
           title="Appearance"

@@ -10,13 +10,14 @@ import { useMudConnection } from './hooks/useMudConnection';
 import { useClassMode } from './hooks/useClassMode';
 import { useThemeColors } from './hooks/useThemeColors';
 import { buildXtermTheme } from './lib/defaultTheme';
+import { cn } from './lib/cn';
 
 function App() {
   const terminalRef = useRef<XTerm | null>(null);
   const inputRef = useRef<HTMLTextAreaElement | null>(null);
   const debugModeRef = useRef(false);
   const [debugMode, setDebugMode] = useState(false);
-  const [showAppearance, setShowColors] = useState(false);
+  const [showAppearance, setShowAppearance] = useState(false);
 
   // Set window title with version
   useEffect(() => {
@@ -40,35 +41,21 @@ function App() {
   };
 
   return (
-    <div
-      style={{
-        display: 'flex',
-        flexDirection: 'column',
-        height: '100vh',
-        background: '#0d0d0d',
-        color: '#e0e0e0',
-        position: 'relative',
-      }}
-    >
+    <div className="flex flex-col h-screen bg-bg-primary text-text-primary relative">
       <Toolbar
         connected={connected}
         onReconnect={reconnect}
         onDisconnect={disconnect}
         showAppearance={showAppearance}
-        onToggleAppearance={() => setShowColors((v) => !v)}
+        onToggleAppearance={() => setShowAppearance((v) => !v)}
       />
-      <div style={{ flex: 1, position: 'relative', overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
+      <div className="flex-1 relative overflow-hidden flex flex-col">
         <Terminal terminalRef={terminalRef} inputRef={inputRef} theme={xtermTheme} display={display} onUpdateDisplay={updateDisplay} />
         <div
-          style={{
-            position: 'absolute',
-            top: 0,
-            right: 0,
-            bottom: 0,
-            transform: showAppearance ? 'translateX(0)' : 'translateX(100%)',
-            transition: 'transform 0.3s ease',
-            zIndex: 100,
-          }}
+          className={cn(
+            'absolute top-0 right-0 bottom-0 z-[100] transition-transform duration-300 ease-in-out',
+            showAppearance ? 'translate-x-0' : 'translate-x-full'
+          )}
         >
           <ColorSettings
             theme={theme}

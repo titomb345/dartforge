@@ -1,4 +1,5 @@
-import { type CSSProperties, type ReactNode, useState } from 'react';
+import { type ReactNode } from 'react';
+import { cn } from '../lib/cn';
 
 interface IconButtonProps {
   icon: ReactNode;
@@ -17,40 +18,21 @@ export function IconButton({
   accent = '#8be9fd',
   onClick,
 }: IconButtonProps) {
-  const [hovered, setHovered] = useState(false);
-  const active = !disabled && hovered;
   const on = toggled === true;
-
-  const style: CSSProperties = {
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    width: '30px',
-    height: '30px',
-    padding: 0,
-    background: on
-      ? `${accent}18`
-      : active
-        ? `${accent}12`
-        : 'transparent',
-    color: disabled ? '#333' : on ? accent : active ? accent : '#666',
-    border: `1px solid ${on ? `${accent}44` : active ? `${accent}44` : disabled ? '#1e1e1e' : '#2a2a2a'}`,
-    borderRadius: '6px',
-    cursor: disabled ? 'default' : 'pointer',
-    userSelect: 'none',
-    lineHeight: 1,
-    transition: 'all 0.2s ease',
-    filter: on ? `drop-shadow(0 0 4px ${accent}88)` : active ? `drop-shadow(0 0 3px ${accent}44)` : 'none',
-  };
 
   return (
     <button
       onClick={onClick}
       disabled={disabled}
       title={title}
-      style={style}
-      onMouseEnter={() => setHovered(true)}
-      onMouseLeave={() => setHovered(false)}
+      className={cn(
+        'icon-btn flex items-center justify-center w-[30px] h-[30px] p-0 rounded-[6px]',
+        'select-none leading-none transition-all duration-200 ease-in-out border',
+        disabled && 'cursor-default text-text-disabled border-border-dim',
+        !disabled && !on && 'cursor-pointer text-text-dim border-border-faint',
+        !disabled && on && 'icon-btn-on cursor-pointer',
+      )}
+      style={{ '--btn-accent': accent } as React.CSSProperties}
     >
       {icon}
     </button>

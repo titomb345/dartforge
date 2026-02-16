@@ -1,6 +1,6 @@
 import { ANSI } from './ansi';
 
-const { RESET, DIM, GREEN } = ANSI;
+const { RESET, DIM, GREEN, BRIGHT_GREEN } = ANSI;
 
 // 256-color ANSI: \x1b[38;5;Nm
 const color = (n: number) => `\x1b[1;38;5;${n}m`;
@@ -175,7 +175,7 @@ export function getConnectedSplash(cols: number): string {
     '',
     ...center([`\x1b[1;36mA custom client purposely built for DartMUD${RESET}`], cols),
     '',
-    ...center([`${GREEN}Connected${RESET}`], cols),
+    ...center([`${BRIGHT_GREEN}Connected${RESET}`], cols),
     '',
     '',
   ];
@@ -209,7 +209,7 @@ export function getDisconnectSplash(cols: number): string {
     '',
     ...center([bar], cols),
     '',
-    ...center([`${DIM}${GREEN}Press enter to reconnect.${RESET}`], cols),
+    ...center([`${GREEN}Press enter to reconnect.${RESET}`], cols),
     '',
     '',
   ];
