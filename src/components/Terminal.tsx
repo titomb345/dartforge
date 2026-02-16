@@ -1,5 +1,5 @@
 import { useEffect, useRef } from 'react';
-import { Terminal as XTerm } from '@xterm/xterm';
+import { Terminal as XTerm, type ITheme } from '@xterm/xterm';
 import { FitAddon } from '@xterm/addon-fit';
 import { WebLinksAddon } from '@xterm/addon-web-links';
 import '@xterm/xterm/css/xterm.css';
@@ -8,9 +8,10 @@ import { getStartupSplash } from '../lib/splash';
 interface TerminalProps {
   terminalRef: React.MutableRefObject<XTerm | null>;
   inputRef: React.RefObject<HTMLTextAreaElement | null>;
+  theme: ITheme;
 }
 
-export function Terminal({ terminalRef, inputRef }: TerminalProps) {
+export function Terminal({ terminalRef, inputRef, theme }: TerminalProps) {
   const outerRef = useRef<HTMLDivElement>(null);
   const innerRef = useRef<HTMLDivElement>(null);
   const fitAddonRef = useRef<FitAddon | null>(null);
@@ -19,29 +20,7 @@ export function Terminal({ terminalRef, inputRef }: TerminalProps) {
     if (!innerRef.current) return;
 
     const term = new XTerm({
-      theme: {
-        background: '#000000',
-        foreground: '#e0e0e0',
-        cursor: '#000000',
-        cursorAccent: '#000000',
-        selectionBackground: '#444',
-        black: '#000000',
-        red: '#ff5555',
-        green: '#50fa7b',
-        yellow: '#f1fa8c',
-        blue: '#bd93f9',
-        magenta: '#ff79c6',
-        cyan: '#8be9fd',
-        white: '#f8f8f2',
-        brightBlack: '#6272a4',
-        brightRed: '#ff6e6e',
-        brightGreen: '#69ff94',
-        brightYellow: '#ffffa5',
-        brightBlue: '#d6acff',
-        brightMagenta: '#ff92df',
-        brightCyan: '#a4ffff',
-        brightWhite: '#ffffff',
-      },
+      theme,
       fontFamily: "'Cascadia Code', 'Fira Code', 'Consolas', monospace",
       fontSize: 14,
       scrollback: 10000,
@@ -120,6 +99,13 @@ export function Terminal({ terminalRef, inputRef }: TerminalProps) {
       terminalRef.current = null;
     };
   }, [terminalRef, inputRef]);
+
+  // Apply theme changes live
+  useEffect(() => {
+    if (terminalRef.current) {
+      terminalRef.current.options.theme = theme;
+    }
+  }, [theme, terminalRef]);
 
   // Click terminal → focus command input (but not if selecting text)
   const handleClick = () => {

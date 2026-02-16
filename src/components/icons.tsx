@@ -43,3 +43,25 @@ export function MageIcon({ size = 16 }: IconProps) {
     </svg>
   );
 }
+
+export function PaletteIcon({ size = 16 }: IconProps) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <circle cx="13.5" cy="6.5" r="1.5" fill="currentColor" stroke="none" />
+      <circle cx="17.5" cy="10.5" r="1.5" fill="currentColor" stroke="none" />
+      <circle cx="8.5" cy="7.5" r="1.5" fill="currentColor" stroke="none" />
+      <circle cx="6.5" cy="12" r="1.5" fill="currentColor" stroke="none" />
+      <path d="M12 2a10 10 0 0 0 0 20c1.1 0 2-.9 2-2v-.5c0-.55.22-1.05.58-1.41.36-.36.86-.59 1.42-.59h1.5c1.1 0 2-.9 2-2 0-5.52-4.48-10-9.5-10z" />
+    </svg>
+  );
+}
+
+export function DebugIcon({ size = 16 }: IconProps) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M7 8l-4 4 4 4" />
+      <path d="M17 8l4 4-4 4" />
+      <path d="M14 4l-4 16" />
+    </svg>
+  );
+}

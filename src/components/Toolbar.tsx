@@ -1,5 +1,5 @@
 import { IconButton } from './IconButton';
-import { PowerIcon, ReconnectIcon, SwordIcon, MageIcon } from './icons';
+import { PowerIcon, ReconnectIcon, SwordIcon, MageIcon, PaletteIcon } from './icons';
 import { ClassMode } from '../types';
 
 interface ToolbarProps {
@@ -8,6 +8,8 @@ interface ToolbarProps {
   onDisconnect: () => void;
   classMode: ClassMode;
   onClassModeChange: (mode: ClassMode) => void;
+  showColors: boolean;
+  onToggleColors: () => void;
 }
 
 export function Toolbar({
@@ -16,6 +18,8 @@ export function Toolbar({
   onDisconnect,
   classMode,
   onClassModeChange,
+  showColors,
+  onToggleColors,
 }: ToolbarProps) {
   const hasFighter = classMode === 'fighter' || classMode === 'multi';
   const hasMage = classMode === 'mage' || classMode === 'multi';
@@ -54,6 +58,21 @@ export function Toolbar({
           gap: '4px',
         }}
       >
+        <IconButton
+          icon={<PaletteIcon />}
+          title="Color settings"
+          accent="#8be9fd"
+          toggled={showColors}
+          onClick={onToggleColors}
+        />
+        <div
+          style={{
+            width: '1px',
+            height: '18px',
+            background: '#1e1e1e',
+            margin: '0 2px',
+          }}
+        />
         <IconButton
           icon={<SwordIcon />}
           title="Fighter"
