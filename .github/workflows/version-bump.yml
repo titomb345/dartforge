@@ -1,12 +1,12 @@
-name: Version Bump
+name: Version Bump & Release
 
 on:
   pull_request:
     types: [closed]
-    branches: [staging]
+    branches: [main]
 
 jobs:
-  bump:
+  bump-and-release:
     if: github.event.pull_request.merged == true
     runs-on: ubuntu-latest
     permissions:
@@ -15,7 +15,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: staging
+          ref: main
 
       - uses: actions/setup-node@v4
         with:
@@ -34,28 +34,26 @@ jobs:
         if: steps.check.outputs.has_unreleased == 'true'
         run: bash scripts/bump-version.sh
 
-      - name: Create version bump PR
+      - name: Commit and tag
         if: steps.check.outputs.has_unreleased == 'true'
         run: |
           VERSION=$(node -p "require('./package.json').version")
-          BRANCH="chore/bump-v${VERSION}"
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git checkout -b "$BRANCH"
           git add -A
           git commit -m "chore: bump version to v${VERSION}"
-          git push -u origin "$BRANCH"
-          PR_URL=$(gh pr create \
-            --base staging \
-            --head "$BRANCH" \
-            --title "chore: bump version to v${VERSION}" \
-            --body "Automated version bump triggered by PR #${{ github.event.pull_request.number }} merge.
+          git tag "v${VERSION}"
+          git push origin main --tags
 
-Updated:
-- \`package.json\`
-- \`src-tauri/tauri.conf.json\`
-- \`src-tauri/Cargo.toml\`
-- \`CHANGELOG.md\` stamped with v${VERSION} and today's date")
-          gh pr merge "$PR_URL" --auto --squash
+      - name: Create GitHub release
+        if: steps.check.outputs.has_unreleased == 'true'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          VERSION=$(node -p "require('./package.json').version")
+          # Extract changelog section for this version
+          BODY=$(sed -n "/^## \[${VERSION}\]/,/^## \[/{/^## \[${VERSION}\]/d;/^## \[/d;p}" CHANGELOG.md)
+          echo "$BODY" > /tmp/release-notes.md
+          gh release create "v${VERSION}" \
+            --title "DartForge v${VERSION}" \
+            --notes-file /tmp/release-notes.md
