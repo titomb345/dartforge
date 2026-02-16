@@ -1,6 +1,6 @@
 import { ANSI } from './ansi';
 
-const { RESET, DIM, CYAN, GREEN, BRIGHT_RED } = ANSI;
+const { RESET, DIM, GREEN } = ANSI;
 
 // 256-color ANSI: \x1b[38;5;Nm
 const color = (n: number) => `\x1b[1;38;5;${n}m`;
@@ -76,6 +76,34 @@ const LETTERS: Record<string, string[]> = {
     '██    ',
     '██████',
   ],
+  I: [
+    '██████',
+    '  ██  ',
+    '  ██  ',
+    '  ██  ',
+    '██████',
+  ],
+  S: [
+    ' █████',
+    '██    ',
+    ' ████ ',
+    '    ██',
+    '█████ ',
+  ],
+  C: [
+    ' █████',
+    '██    ',
+    '██    ',
+    '██    ',
+    ' █████',
+  ],
+  N: [
+    '██  ██',
+    '███ ██',
+    '██████',
+    '██ ███',
+    '██  ██',
+  ],
 };
 
 function buildGradientWord(word: string, colors: string[]): string[] {
@@ -124,8 +152,9 @@ export function getStartupSplash(cols: number): string {
     '',
     ...center([bar], cols),
     '',
-    ...center([`${DIM}${CYAN}DartMUD Client v0.1.0${RESET}`], cols),
-    ...center([`${DIM}Connecting to dartmud.com:2525...${RESET}`], cols),
+    ...center([`\x1b[1;36mA custom client purposely built for DartMUD${RESET}`], cols),
+    '',
+    ...center([`${DIM}Connecting...${RESET}`], cols),
     '',
     '',
   ];
@@ -144,34 +173,44 @@ export function getConnectedSplash(cols: number): string {
     '',
     ...center([bar], cols),
     '',
-    ...center([`${DIM}${CYAN}DartMUD Client v0.1.0${RESET}`], cols),
-    ...center([`${GREEN}Connected to DartMUD${RESET}`], cols),
+    ...center([`\x1b[1;36mA custom client purposely built for DartMUD${RESET}`], cols),
+    '',
+    ...center([`${GREEN}Connected${RESET}`], cols),
     '',
     '',
   ];
   return lines.join('\r\n');
 }
 
-export function getDisconnectSplash(cols: number): string {
-  const len = Math.min(cols - 4, 52);
-  const reds = [196, 197, 198, 199, 200, 199, 198, 197, 196];
+// Dark-to-bright red gradient for "DISCONNECTED" (12 letters)
+const RED_GRADIENT = [52, 88, 124, 160, 196, 196, 196, 196, 160, 124, 88, 52]
+  .map((n) => `\x1b[1;38;5;${n}m`);
+
+function redBar(cols: number): string {
+  const len = Math.min(cols - 4, 60);
+  const reds = [52, 88, 124, 160, 196, 160, 124, 88, 52];
   let bar = '';
   for (let i = 0; i < len; i++) {
     const idx = Math.floor((i / len) * (reds.length - 1));
-    bar += `\x1b[1;38;5;${reds[idx]}m━`;
+    bar += `\x1b[38;5;${reds[idx]}m━`;
   }
-  bar += RESET;
+  return bar + RESET;
+}
+
+export function getDisconnectSplash(cols: number): string {
+  const logo = buildGradientWord('DISCONNECTED', RED_GRADIENT);
+  const bar = redBar(cols);
   const lines = [
     '',
     '',
     ...center([bar], cols),
     '',
-    ...center([`${BRIGHT_RED}Connection Lost${RESET}`], cols),
-    '',
-    ...center([`${DIM}The link to DartMUD has been severed.${RESET}`], cols),
-    ...center([`${DIM}${GREEN}Hit reconnect to try again.${RESET}`], cols),
+    ...center(logo, cols),
     '',
     ...center([bar], cols),
+    '',
+    ...center([`${DIM}${GREEN}Press enter to reconnect.${RESET}`], cols),
+    '',
     '',
   ];
   return lines.join('\r\n');

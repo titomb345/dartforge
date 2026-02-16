@@ -17,65 +17,65 @@ const MAX_RETRIES: u32 = 3;
 const RETRY_DELAY: Duration = Duration::from_secs(2);
 
 pub async fn connect(app: AppHandle, mut cmd_rx: mpsc::Receiver<String>) {
-    let addr = format!("{}:{}", MUD_HOST, MUD_PORT);
-    info!("Connecting to {}...", addr);
+    let addr = format!("{MUD_HOST}:{MUD_PORT}");
+    info!("Connecting to {addr}...");
 
     let _ = app.emit(
         CONNECTION_STATUS_EVENT,
         ConnectionStatusPayload {
             connected: false,
-            message: format!("Connecting to {}...", addr),
+            message: format!("Connecting to {addr}..."),
         },
     );
 
     // Resolve DNS on a blocking thread to get the actual IP address
     let resolved = tokio::task::spawn_blocking(move || {
-        format!("{}:{}", MUD_HOST, MUD_PORT).to_socket_addrs()
+        format!("{MUD_HOST}:{MUD_PORT}").to_socket_addrs()
     }).await;
 
     let addrs: Vec<_> = match resolved {
         Ok(Ok(iter)) => iter.collect(),
         Ok(Err(e)) => {
-            error!("DNS resolution failed for {}: {}", addr, e);
+            error!("DNS resolution failed for {addr}: {e}");
             let _ = app.emit(
                 CONNECTION_STATUS_EVENT,
                 ConnectionStatusPayload {
                     connected: false,
-                    message: format!("DNS resolution failed: {}", e),
+                    message: format!("DNS resolution failed: {e}"),
                 },
             );
             return;
         }
         Err(e) => {
-            error!("DNS resolution task failed: {}", e);
+            error!("DNS resolution task failed: {e}");
             let _ = app.emit(
                 CONNECTION_STATUS_EVENT,
                 ConnectionStatusPayload {
                     connected: false,
-                    message: format!("DNS resolution failed: {}", e),
+                    message: format!("DNS resolution failed: {e}"),
                 },
             );
             return;
         }
     };
 
-    info!("Resolved {} to {:?}", addr, addrs);
+    info!("Resolved {addr} to {addrs:?}");
 
     let mut stream: Option<TcpStream> = None;
     for attempt in 1..=MAX_RETRIES {
         for resolved_addr in &addrs {
-            info!("Connection attempt {}/{} to {}", attempt, MAX_RETRIES, resolved_addr);
+            info!("Connection attempt {attempt}/{MAX_RETRIES} to {resolved_addr}");
             match timeout(CONNECT_TIMEOUT, TcpStream::connect(resolved_addr)).await {
                 Ok(Ok(s)) => {
-                    info!("Connected to {} ({})", addr, resolved_addr);
+                    info!("Connected to {addr} ({resolved_addr})");
                     stream = Some(s);
                     break;
                 }
                 Ok(Err(e)) => {
-                    warn!("Failed to connect to {}: {}", resolved_addr, e);
+                    warn!("Failed to connect to {resolved_addr}: {e}");
                 }
                 Err(_) => {
-                    warn!("Connection to {} timed out after {}s", resolved_addr, CONNECT_TIMEOUT.as_secs());
+                    warn!("Connection to {resolved_addr} timed out after {}s", CONNECT_TIMEOUT.as_secs());
                 }
             }
         }
@@ -88,7 +88,7 @@ pub async fn connect(app: AppHandle, mut cmd_rx: mpsc::Receiver<String>) {
                 CONNECTION_STATUS_EVENT,
                 ConnectionStatusPayload {
                     connected: false,
-                    message: format!("Connection failed, retrying ({}/{})...", attempt, MAX_RETRIES),
+                    message: format!("Connection failed, retrying ({attempt}/{MAX_RETRIES})..."),
                 },
             );
             tokio::time::sleep(RETRY_DELAY).await;
@@ -101,18 +101,18 @@ pub async fn connect(app: AppHandle, mut cmd_rx: mpsc::Receiver<String>) {
                 CONNECTION_STATUS_EVENT,
                 ConnectionStatusPayload {
                     connected: true,
-                    message: format!("Connected to {}", addr),
+                    message: format!("Connected to {addr}"),
                 },
             );
             s
         }
         None => {
-            error!("Failed to connect to {} after {} attempts", addr, MAX_RETRIES);
+            error!("Failed to connect to {addr} after {MAX_RETRIES} attempts");
             let _ = app.emit(
                 CONNECTION_STATUS_EVENT,
                 ConnectionStatusPayload {
                     connected: false,
-                    message: format!("Failed to connect after {} attempts", MAX_RETRIES),
+                    message: format!("Failed to connect after {MAX_RETRIES} attempts"),
                 },
             );
             return;
@@ -129,7 +129,7 @@ pub async fn connect(app: AppHandle, mut cmd_rx: mpsc::Receiver<String>) {
     let write_handle = tokio::spawn(async move {
         while let Some(data) = write_rx.recv().await {
             if let Err(e) = writer.write_all(&data).await {
-                error!("Write error: {}", e);
+                error!("Write error: {e}");
                 break;
             }
         }
@@ -138,7 +138,7 @@ pub async fn connect(app: AppHandle, mut cmd_rx: mpsc::Receiver<String>) {
     // Forward user commands to the write channel
     let cmd_handle = tokio::spawn(async move {
         while let Some(cmd) = cmd_rx.recv().await {
-            let data = format!("{}\r\n", cmd);
+            let data = format!("{cmd}\r\n");
             if write_tx_for_cmds.send(data.into_bytes()).await.is_err() {
                 break;
             }
@@ -180,7 +180,7 @@ pub async fn connect(app: AppHandle, mut cmd_rx: mpsc::Receiver<String>) {
                 }
             }
             Err(e) => {
-                error!("Read error: {}", e);
+                error!("Read error: {e}");
                 break;
             }
         }

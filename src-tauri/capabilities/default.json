@@ -8,6 +8,9 @@
     "opener:default",
     "core:event:default",
     "core:event:allow-emit",
-    "core:event:allow-listen"
+    "core:event:allow-listen",
+    "store:default",
+    "core:app:default",
+    "core:window:allow-set-title"
   ]
 }

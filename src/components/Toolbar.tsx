@@ -1,24 +1,21 @@
 import { IconButton } from './IconButton';
-import { PowerIcon, ReconnectIcon, SwordIcon, MageIcon } from './icons';
-import { ClassMode } from '../types';
+import { PowerIcon, ReconnectIcon, PaletteIcon } from './icons';
 
 interface ToolbarProps {
   connected: boolean;
   onReconnect: () => void;
   onDisconnect: () => void;
-  classMode: ClassMode;
-  onClassModeChange: (mode: ClassMode) => void;
+  showAppearance: boolean;
+  onToggleAppearance: () => void;
 }
 
 export function Toolbar({
   connected,
   onReconnect,
   onDisconnect,
-  classMode,
-  onClassModeChange,
+  showAppearance,
+  onToggleAppearance,
 }: ToolbarProps) {
-  const hasFighter = classMode === 'fighter' || classMode === 'multi';
-  const hasMage = classMode === 'mage' || classMode === 'multi';
 
   return (
     <div
@@ -55,30 +52,11 @@ export function Toolbar({
         }}
       >
         <IconButton
-          icon={<SwordIcon />}
-          title="Fighter"
-          accent="#f59e0b"
-          toggled={hasFighter}
-          onClick={() => {
-            if (hasFighter) {
-              if (hasMage) onClassModeChange('mage');
-            } else {
-              onClassModeChange(hasMage ? 'multi' : 'fighter');
-            }
-          }}
-        />
-        <IconButton
-          icon={<MageIcon />}
-          title="Mage"
-          accent="#a78bfa"
-          toggled={hasMage}
-          onClick={() => {
-            if (hasMage) {
-              if (hasFighter) onClassModeChange('fighter');
-            } else {
-              onClassModeChange(hasFighter ? 'multi' : 'mage');
-            }
-          }}
+          icon={<PaletteIcon />}
+          title="Appearance"
+          accent="#8be9fd"
+          toggled={showAppearance}
+          onClick={onToggleAppearance}
         />
       </div>
     </div>

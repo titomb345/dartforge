@@ -1,16 +1,20 @@
 import { useEffect, useRef } from 'react';
-import { Terminal as XTerm } from '@xterm/xterm';
+import { Terminal as XTerm, type ITheme } from '@xterm/xterm';
 import { FitAddon } from '@xterm/addon-fit';
 import { WebLinksAddon } from '@xterm/addon-web-links';
 import '@xterm/xterm/css/xterm.css';
 import { getStartupSplash } from '../lib/splash';
+import type { DisplaySettings } from '../hooks/useThemeColors';
 
 interface TerminalProps {
   terminalRef: React.MutableRefObject<XTerm | null>;
   inputRef: React.RefObject<HTMLTextAreaElement | null>;
+  theme: ITheme;
+  display: DisplaySettings;
+  onUpdateDisplay: <K extends keyof DisplaySettings>(key: K, value: DisplaySettings[K]) => void;
 }
 
-export function Terminal({ terminalRef, inputRef }: TerminalProps) {
+export function Terminal({ terminalRef, inputRef, theme, display, onUpdateDisplay }: TerminalProps) {
   const outerRef = useRef<HTMLDivElement>(null);
   const innerRef = useRef<HTMLDivElement>(null);
   const fitAddonRef = useRef<FitAddon | null>(null);
@@ -19,31 +23,9 @@ export function Terminal({ terminalRef, inputRef }: TerminalProps) {
     if (!innerRef.current) return;
 
     const term = new XTerm({
-      theme: {
-        background: '#000000',
-        foreground: '#e0e0e0',
-        cursor: '#000000',
-        cursorAccent: '#000000',
-        selectionBackground: '#444',
-        black: '#000000',
-        red: '#ff5555',
-        green: '#50fa7b',
-        yellow: '#f1fa8c',
-        blue: '#bd93f9',
-        magenta: '#ff79c6',
-        cyan: '#8be9fd',
-        white: '#f8f8f2',
-        brightBlack: '#6272a4',
-        brightRed: '#ff6e6e',
-        brightGreen: '#69ff94',
-        brightYellow: '#ffffa5',
-        brightBlue: '#d6acff',
-        brightMagenta: '#ff92df',
-        brightCyan: '#a4ffff',
-        brightWhite: '#ffffff',
-      },
-      fontFamily: "'Cascadia Code', 'Fira Code', 'Consolas', monospace",
-      fontSize: 14,
+      theme,
+      fontFamily: `'${display.fontFamily}', monospace`,
+      fontSize: display.fontSize,
       scrollback: 10000,
       disableStdin: true,
       cursorBlink: false,
@@ -89,15 +71,20 @@ export function Terminal({ terminalRef, inputRef }: TerminalProps) {
       }
       if (e.ctrlKey && (e.key === '=' || e.key === '+')) {
         e.preventDefault();
-        term.options.fontSize = Math.min((term.options.fontSize || 14) + 1, 28);
+        const next = Math.min((term.options.fontSize || 14) + 1, 28);
+        term.options.fontSize = next;
+        onUpdateDisplay('fontSize', next);
         fitAddon.fit();
       } else if (e.ctrlKey && e.key === '-') {
         e.preventDefault();
-        term.options.fontSize = Math.max((term.options.fontSize || 14) - 1, 8);
+        const next = Math.max((term.options.fontSize || 14) - 1, 8);
+        term.options.fontSize = next;
+        onUpdateDisplay('fontSize', next);
         fitAddon.fit();
       } else if (e.ctrlKey && e.key === '0') {
         e.preventDefault();
         term.options.fontSize = 14;
+        onUpdateDisplay('fontSize', 14);
         fitAddon.fit();
       }
     };
@@ -120,6 +107,22 @@ export function Terminal({ terminalRef, inputRef }: TerminalProps) {
       terminalRef.current = null;
     };
   }, [terminalRef, inputRef]);
+
+  // Apply theme changes live
+  useEffect(() => {
+    if (terminalRef.current) {
+      terminalRef.current.options.theme = theme;
+    }
+  }, [theme, terminalRef]);
+
+  // Apply display setting changes live
+  useEffect(() => {
+    const term = terminalRef.current;
+    if (!term) return;
+    term.options.fontFamily = `'${display.fontFamily}', monospace`;
+    term.options.fontSize = display.fontSize;
+    fitAddonRef.current?.fit();
+  }, [display.fontFamily, display.fontSize, terminalRef]);
 
   // Click terminal → focus command input (but not if selecting text)
   const handleClick = () => {

@@ -91,6 +91,7 @@ pub fn run() {
 
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
+        .plugin(tauri_plugin_store::Builder::default().build())
         .manage(ConnectionState {
             cmd_tx: Mutex::new(None),
             task_handle: Mutex::new(None),
