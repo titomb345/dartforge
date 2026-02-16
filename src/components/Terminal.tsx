@@ -21,7 +21,7 @@ export function Terminal({ terminalRef, inputRef, theme }: TerminalProps) {
 
     const term = new XTerm({
       theme,
-      fontFamily: "'Cascadia Code', 'Fira Code', 'Consolas', monospace",
+      fontFamily: "'Courier New', monospace",
       fontSize: 14,
       scrollback: 10000,
       disableStdin: true,

@@ -34,19 +34,48 @@ function ColorSwatch({
   onToggle: (key: ThemeColorKey) => void;
 }) {
   const isDefault = value === DEFAULT_THEME[colorKey];
-  const [hexInput, setHexInput] = useState(value);
+  const [hexInput, setHexInput] = useState(value.replace('#', ''));
+  const editingRef = useRef(false);
 
-  // Sync hex input when value changes externally (e.g. reset)
+  // Only sync from external changes (picker drag, reset) — not while user is typing
   useEffect(() => {
-    setHexInput(value);
+    if (!editingRef.current) {
+      setHexInput(value.replace('#', ''));
+    }
   }, [value]);
 
+  /** Strip to just hex digits, max 6 */
+  const sanitizeHex = (raw: string) =>
+    raw.replace(/^#/, '').replace(/[^0-9a-fA-F]/g, '').slice(0, 6);
+
+  // The color to display in the picker/swatch: padded with 0s for live preview
+  const previewColor = (() => {
+    const digits = sanitizeHex(hexInput);
+    if (editingRef.current && digits.length > 0) {
+      return `#${digits.padEnd(6, '0')}`;
+    }
+    return value;
+  })();
+
+  const handleHexChange = (raw: string) => {
+    editingRef.current = true;
+    const digits = sanitizeHex(raw);
+    setHexInput(digits);
+    // If they've completed all 6 digits, persist it
+    if (digits.length === 6) {
+      onChange(colorKey, `#${digits}`.toLowerCase());
+    }
+  };
+
   const handleHexSubmit = () => {
-    const cleaned = hexInput.trim();
-    if (/^#[0-9a-fA-F]{6}$/.test(cleaned)) {
-      onChange(colorKey, cleaned.toLowerCase());
+    editingRef.current = false;
+    const digits = sanitizeHex(hexInput);
+    if (digits.length === 6) {
+      onChange(colorKey, `#${digits}`.toLowerCase());
+      setHexInput(digits);
     } else {
-      setHexInput(value); // revert invalid input
+      // Revert to last saved value
+      setHexInput(value.replace('#', ''));
     }
   };
 
@@ -99,7 +128,10 @@ function ColorSwatch({
     <div>
       <div
         style={container}
-        onClick={() => onToggle(colorKey)}
+        onClick={() => {
+          if (expanded) editingRef.current = false;
+          onToggle(colorKey);
+        }}
         onMouseEnter={(e) => {
           if (!expanded) e.currentTarget.style.background = '#1a1a1a';
         }}
@@ -123,7 +155,14 @@ function ColorSwatch({
           ↺
         </button>
       </div>
-      {expanded && (
+      <div
+        style={{
+          maxHeight: expanded ? '220px' : '0px',
+          opacity: expanded ? 1 : 0,
+          overflow: 'hidden',
+          transition: 'max-height 0.25s ease, opacity 0.2s ease',
+        }}
+      >
         <div
           style={{
             padding: '8px 8px 12px',
@@ -134,35 +173,61 @@ function ColorSwatch({
           }}
         >
           <HexColorPicker
-            color={value}
-            onChange={(c) => onChange(colorKey, c)}
+            color={previewColor}
+            onChange={(c) => {
+              editingRef.current = false;
+              onChange(colorKey, c);
+            }}
             style={{ width: '100%', height: '140px' }}
           />
-          <input
-            type="text"
-            value={hexInput}
-            onChange={(e) => setHexInput(e.target.value)}
-            onBlur={handleHexSubmit}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter') handleHexSubmit();
-            }}
-            onClick={(e) => e.stopPropagation()}
-            spellCheck={false}
+          <div
             style={{
+              display: 'flex',
+              alignItems: 'center',
               width: '100%',
-              padding: '4px 8px',
               background: '#111',
               border: '1px solid #333',
               borderRadius: '4px',
-              color: '#ccc',
-              fontSize: '12px',
-              fontFamily: 'monospace',
-              textAlign: 'center',
-              outline: 'none',
+              overflow: 'hidden',
             }}
-          />
+          >
+            <span
+              style={{
+                padding: '4px 0 4px 10px',
+                color: '#555',
+                fontSize: '12px',
+                fontFamily: 'monospace',
+                userSelect: 'none',
+              }}
+            >
+              #
+            </span>
+            <input
+              type="text"
+              value={hexInput}
+              onChange={(e) => handleHexChange(e.target.value)}
+              onBlur={handleHexSubmit}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') handleHexSubmit();
+              }}
+              onClick={(e) => e.stopPropagation()}
+              spellCheck={false}
+              maxLength={6}
+              style={{
+                flex: 1,
+                padding: '4px 10px 4px 2px',
+                background: 'transparent',
+                border: 'none',
+                color: '#ccc',
+                fontSize: '12px',
+                fontFamily: 'monospace',
+                textAlign: 'center',
+                outline: 'none',
+              }}
+            />
+          </div>
         </div>
-      )}
+      </div>
     </div>
   );
 }
@@ -256,7 +321,7 @@ export function ColorSettings({ theme, onUpdateColor, onResetColor, onReset, deb
         </div>
 
         <div style={section}>
-          <div style={sectionLabel}>Normal (0-7)</div>
+          <div style={sectionLabel}>Normal</div>
           {normal.map((m) => (
             <ColorSwatch
               key={m.key}
@@ -272,7 +337,7 @@ export function ColorSettings({ theme, onUpdateColor, onResetColor, onReset, deb
         </div>
 
         <div style={section}>
-          <div style={sectionLabel}>Bright (8-15)</div>
+          <div style={sectionLabel}>Bright</div>
           {bright.map((m) => (
             <ColorSwatch
               key={m.key}

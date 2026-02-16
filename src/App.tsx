@@ -1,5 +1,7 @@
-import { useRef, useState } from 'react';
+import { useRef, useState, useEffect } from 'react';
 import type { Terminal as XTerm } from '@xterm/xterm';
+import { getVersion } from '@tauri-apps/api/app';
+import { getCurrentWindow } from '@tauri-apps/api/window';
 import { Terminal } from './components/Terminal';
 import { CommandInput } from './components/CommandInput';
 import { Toolbar } from './components/Toolbar';
@@ -16,12 +18,20 @@ function App() {
   const [debugMode, setDebugMode] = useState(false);
   const [showColors, setShowColors] = useState(false);
 
+  // Set window title with version
+  useEffect(() => {
+    getVersion().then((v) => {
+      getCurrentWindow().setTitle(`DartForge v${v}`);
+    }).catch(console.error);
+  }, []);
+
   const { theme, updateColor, resetColor, resetColors } = useThemeColors();
   const xtermTheme = buildXtermTheme(theme);
 
   const { connected, passwordMode, skipHistory, sendCommand, reconnect, disconnect } =
     useMudConnection(terminalRef, debugModeRef);
-  const { classMode, setClassMode } = useClassMode();
+  // Class mode hook preserved for future use
+  useClassMode();
 
   const toggleDebug = () => {
     const next = !debugMode;
@@ -44,8 +54,6 @@ function App() {
         connected={connected}
         onReconnect={reconnect}
         onDisconnect={disconnect}
-        classMode={classMode}
-        onClassModeChange={setClassMode}
         showColors={showColors}
         onToggleColors={() => setShowColors((v) => !v)}
       />

@@ -9,6 +9,8 @@
     "core:event:default",
     "core:event:allow-emit",
     "core:event:allow-listen",
-    "store:default"
+    "store:default",
+    "core:app:default",
+    "core:window:allow-set-title"
   ]
 }

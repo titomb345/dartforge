@@ -1,0 +1,61 @@
+name: Version Bump
+
+on:
+  pull_request:
+    types: [closed]
+    branches: [staging]
+
+jobs:
+  bump:
+    if: github.event.pull_request.merged == true
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: staging
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: '.nvmrc'
+
+      - name: Check for unreleased changes
+        id: check
+        run: |
+          if grep -q '^\## \[Unreleased-' CHANGELOG.md; then
+            echo "has_unreleased=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "has_unreleased=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Bump version
+        if: steps.check.outputs.has_unreleased == 'true'
+        run: bash scripts/bump-version.sh
+
+      - name: Create version bump PR
+        if: steps.check.outputs.has_unreleased == 'true'
+        run: |
+          VERSION=$(node -p "require('./package.json').version")
+          BRANCH="chore/bump-v${VERSION}"
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git checkout -b "$BRANCH"
+          git add -A
+          git commit -m "chore: bump version to v${VERSION}"
+          git push -u origin "$BRANCH"
+          PR_URL=$(gh pr create \
+            --base staging \
+            --head "$BRANCH" \
+            --title "chore: bump version to v${VERSION}" \
+            --body "Automated version bump triggered by PR #${{ github.event.pull_request.number }} merge.
+
+Updated:
+- \`package.json\`
+- \`src-tauri/tauri.conf.json\`
+- \`src-tauri/Cargo.toml\`
+- \`CHANGELOG.md\` stamped with v${VERSION} and today's date")
+          gh pr merge "$PR_URL" --auto --squash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
