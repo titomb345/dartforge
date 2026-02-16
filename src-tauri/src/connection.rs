@@ -1,8 +1,10 @@
-use log::{error, info};
+use std::net::ToSocketAddrs;
+use log::{error, info, warn};
 use tauri::{AppHandle, Emitter};
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::TcpStream;
 use tokio::sync::mpsc;
+use tokio::time::{timeout, Duration};
 
 use crate::ansi;
 use crate::events::{ConnectionStatusPayload, MudOutputPayload, CONNECTION_STATUS_EVENT, MUD_OUTPUT_EVENT};
@@ -10,6 +12,9 @@ use crate::events::{ConnectionStatusPayload, MudOutputPayload, CONNECTION_STATUS
 const MUD_HOST: &str = "dartmud.com";
 const MUD_PORT: u16 = 2525;
 const READ_BUF_SIZE: usize = 4096;
+const CONNECT_TIMEOUT: Duration = Duration::from_secs(10);
+const MAX_RETRIES: u32 = 3;
+const RETRY_DELAY: Duration = Duration::from_secs(2);
 
 pub async fn connect(app: AppHandle, mut cmd_rx: mpsc::Receiver<String>) {
     let addr = format!("{}:{}", MUD_HOST, MUD_PORT);
@@ -23,9 +28,75 @@ pub async fn connect(app: AppHandle, mut cmd_rx: mpsc::Receiver<String>) {
         },
     );
 
-    let stream = match TcpStream::connect(&addr).await {
-        Ok(s) => {
-            info!("Connected to {}", addr);
+    // Resolve DNS on a blocking thread to get the actual IP address
+    let resolved = tokio::task::spawn_blocking(move || {
+        format!("{}:{}", MUD_HOST, MUD_PORT).to_socket_addrs()
+    }).await;
+
+    let addrs: Vec<_> = match resolved {
+        Ok(Ok(iter)) => iter.collect(),
+        Ok(Err(e)) => {
+            error!("DNS resolution failed for {}: {}", addr, e);
+            let _ = app.emit(
+                CONNECTION_STATUS_EVENT,
+                ConnectionStatusPayload {
+                    connected: false,
+                    message: format!("DNS resolution failed: {}", e),
+                },
+            );
+            return;
+        }
+        Err(e) => {
+            error!("DNS resolution task failed: {}", e);
+            let _ = app.emit(
+                CONNECTION_STATUS_EVENT,
+                ConnectionStatusPayload {
+                    connected: false,
+                    message: format!("DNS resolution failed: {}", e),
+                },
+            );
+            return;
+        }
+    };
+
+    info!("Resolved {} to {:?}", addr, addrs);
+
+    let mut stream: Option<TcpStream> = None;
+    for attempt in 1..=MAX_RETRIES {
+        for resolved_addr in &addrs {
+            info!("Connection attempt {}/{} to {}", attempt, MAX_RETRIES, resolved_addr);
+            match timeout(CONNECT_TIMEOUT, TcpStream::connect(resolved_addr)).await {
+                Ok(Ok(s)) => {
+                    info!("Connected to {} ({})", addr, resolved_addr);
+                    stream = Some(s);
+                    break;
+                }
+                Ok(Err(e)) => {
+                    warn!("Failed to connect to {}: {}", resolved_addr, e);
+                }
+                Err(_) => {
+                    warn!("Connection to {} timed out after {}s", resolved_addr, CONNECT_TIMEOUT.as_secs());
+                }
+            }
+        }
+        if stream.is_some() {
+            break;
+        }
+        if attempt < MAX_RETRIES {
+            info!("Retrying in {}s...", RETRY_DELAY.as_secs());
+            let _ = app.emit(
+                CONNECTION_STATUS_EVENT,
+                ConnectionStatusPayload {
+                    connected: false,
+                    message: format!("Connection failed, retrying ({}/{})...", attempt, MAX_RETRIES),
+                },
+            );
+            tokio::time::sleep(RETRY_DELAY).await;
+        }
+    }
+
+    let stream = match stream {
+        Some(s) => {
             let _ = app.emit(
                 CONNECTION_STATUS_EVENT,
                 ConnectionStatusPayload {
@@ -35,13 +106,13 @@ pub async fn connect(app: AppHandle, mut cmd_rx: mpsc::Receiver<String>) {
             );
             s
         }
-        Err(e) => {
-            error!("Failed to connect to {}: {}", addr, e);
+        None => {
+            error!("Failed to connect to {} after {} attempts", addr, MAX_RETRIES);
             let _ = app.emit(
                 CONNECTION_STATUS_EVENT,
                 ConnectionStatusPayload {
                     connected: false,
-                    message: format!("Failed to connect: {}", e),
+                    message: format!("Failed to connect after {} attempts", MAX_RETRIES),
                 },
             );
             return;
@@ -50,19 +121,33 @@ pub async fn connect(app: AppHandle, mut cmd_rx: mpsc::Receiver<String>) {
 
     let (mut reader, mut writer) = stream.into_split();
 
-    // Spawn write loop
+    // Channel for sending data to the writer (both user commands and telnet responses)
+    let (write_tx, mut write_rx) = mpsc::channel::<Vec<u8>>(100);
+    let write_tx_for_cmds = write_tx.clone();
+
+    // Spawn write loop — handles both user commands and telnet responses
     let write_handle = tokio::spawn(async move {
-        while let Some(cmd) = cmd_rx.recv().await {
-            let data = format!("{}\r\n", cmd);
-            if let Err(e) = writer.write_all(data.as_bytes()).await {
+        while let Some(data) = write_rx.recv().await {
+            if let Err(e) = writer.write_all(&data).await {
                 error!("Write error: {}", e);
                 break;
             }
         }
     });
 
-    // Read loop
+    // Forward user commands to the write channel
+    let cmd_handle = tokio::spawn(async move {
+        while let Some(cmd) = cmd_rx.recv().await {
+            let data = format!("{}\r\n", cmd);
+            if write_tx_for_cmds.send(data.into_bytes()).await.is_err() {
+                break;
+            }
+        }
+    });
+
+    // Read loop — remainder holds partial IAC sequences between reads
     let mut buf = vec![0u8; READ_BUF_SIZE];
+    let mut remainder: Vec<u8> = Vec::new();
     loop {
         match reader.read(&mut buf).await {
             Ok(0) => {
@@ -70,8 +155,29 @@ pub async fn connect(app: AppHandle, mut cmd_rx: mpsc::Receiver<String>) {
                 break;
             }
             Ok(n) => {
-                let output = ansi::process_output(&buf[..n]);
-                let _ = app.emit(MUD_OUTPUT_EVENT, MudOutputPayload { data: output });
+                // Prepend any leftover bytes from the previous read
+                let input = if remainder.is_empty() {
+                    buf[..n].to_vec()
+                } else {
+                    let mut combined = std::mem::take(&mut remainder);
+                    combined.extend_from_slice(&buf[..n]);
+                    combined
+                };
+
+                let processed = ansi::process_output(&input);
+                remainder = processed.remainder;
+
+                // Send telnet responses back to server
+                for response in processed.responses {
+                    if write_tx.send(response).await.is_err() {
+                        break;
+                    }
+                }
+
+                // Emit display text to frontend
+                if !processed.display.is_empty() {
+                    let _ = app.emit(MUD_OUTPUT_EVENT, MudOutputPayload { data: processed.display });
+                }
             }
             Err(e) => {
                 error!("Read error: {}", e);
@@ -80,6 +186,7 @@ pub async fn connect(app: AppHandle, mut cmd_rx: mpsc::Receiver<String>) {
         }
     }
 
+    cmd_handle.abort();
     write_handle.abort();
 
     let _ = app.emit(

@@ -2,13 +2,15 @@ import { useRef } from 'react';
 import type { Terminal as XTerm } from '@xterm/xterm';
 import { Terminal } from './components/Terminal';
 import { CommandInput } from './components/CommandInput';
-import { StatusBar } from './components/StatusBar';
+import { Toolbar } from './components/Toolbar';
 import { useMudConnection } from './hooks/useMudConnection';
 import { useClassMode } from './hooks/useClassMode';
 
 function App() {
   const terminalRef = useRef<XTerm | null>(null);
-  const { connected, statusMessage, sendCommand } = useMudConnection(terminalRef);
+  const inputRef = useRef<HTMLTextAreaElement | null>(null);
+  const { connected, passwordMode, skipHistory, sendCommand, reconnect, disconnect } =
+    useMudConnection(terminalRef);
   const { classMode, setClassMode } = useClassMode();
 
   return (
@@ -21,14 +23,23 @@ function App() {
         color: '#e0e0e0',
       }}
     >
-      <StatusBar
+      <Toolbar
         connected={connected}
-        statusMessage={statusMessage}
+        onReconnect={reconnect}
+        onDisconnect={disconnect}
         classMode={classMode}
         onClassModeChange={setClassMode}
       />
-      <Terminal terminalRef={terminalRef} />
-      <CommandInput onSend={sendCommand} disabled={!connected} />
+      <Terminal terminalRef={terminalRef} inputRef={inputRef} />
+      <CommandInput
+        ref={inputRef}
+        onSend={sendCommand}
+        onReconnect={reconnect}
+        disabled={!connected}
+        connected={connected}
+        passwordMode={passwordMode}
+        skipHistory={skipHistory}
+      />
     </div>
   );
 }
