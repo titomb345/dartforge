@@ -1,4 +1,5 @@
-import { type CSSProperties, useRef } from 'react';
+import { type CSSProperties, useState, useEffect, useRef } from 'react';
+import { HexColorPicker } from 'react-colorful';
 import {
   THEME_COLOR_META,
   DEFAULT_THEME,
@@ -19,17 +20,35 @@ function ColorSwatch({
   colorKey,
   label,
   value,
+  expanded,
   onChange,
   onReset,
+  onToggle,
 }: {
   colorKey: ThemeColorKey;
   label: string;
   value: string;
+  expanded: boolean;
   onChange: (key: ThemeColorKey, value: string) => void;
   onReset: (key: ThemeColorKey) => void;
+  onToggle: (key: ThemeColorKey) => void;
 }) {
-  const inputRef = useRef<HTMLInputElement>(null);
   const isDefault = value === DEFAULT_THEME[colorKey];
+  const [hexInput, setHexInput] = useState(value);
+
+  // Sync hex input when value changes externally (e.g. reset)
+  useEffect(() => {
+    setHexInput(value);
+  }, [value]);
+
+  const handleHexSubmit = () => {
+    const cleaned = hexInput.trim();
+    if (/^#[0-9a-fA-F]{6}$/.test(cleaned)) {
+      onChange(colorKey, cleaned.toLowerCase());
+    } else {
+      setHexInput(value); // revert invalid input
+    }
+  };
 
   const container: CSSProperties = {
     display: 'flex',
@@ -39,6 +58,7 @@ function ColorSwatch({
     borderRadius: '4px',
     cursor: 'pointer',
     transition: 'background 0.15s',
+    background: expanded ? '#1a1a1a' : 'transparent',
   };
 
   const swatch: CSSProperties = {
@@ -76,34 +96,73 @@ function ColorSwatch({
   };
 
   return (
-    <div
-      style={container}
-      onClick={() => inputRef.current?.click()}
-      onMouseEnter={(e) => (e.currentTarget.style.background = '#1a1a1a')}
-      onMouseLeave={(e) => (e.currentTarget.style.background = 'transparent')}
-    >
-      <div style={swatch} />
-      <span style={labelStyle}>{label}</span>
-      <span style={hexStyle}>{value}</span>
-      <button
-        style={resetStyle}
-        title="Reset to default"
-        onClick={(e) => {
-          e.stopPropagation();
-          onReset(colorKey);
+    <div>
+      <div
+        style={container}
+        onClick={() => onToggle(colorKey)}
+        onMouseEnter={(e) => {
+          if (!expanded) e.currentTarget.style.background = '#1a1a1a';
         }}
-        onMouseEnter={(e) => (e.currentTarget.style.color = '#aaa')}
-        onMouseLeave={(e) => (e.currentTarget.style.color = '#555')}
+        onMouseLeave={(e) => {
+          if (!expanded) e.currentTarget.style.background = 'transparent';
+        }}
       >
-        ↺
-      </button>
-      <input
-        ref={inputRef}
-        type="color"
-        value={value}
-        onChange={(e) => onChange(colorKey, e.target.value)}
-        style={{ position: 'absolute', opacity: 0, pointerEvents: 'none' }}
-      />
+        <div style={swatch} />
+        <span style={labelStyle}>{label}</span>
+        <span style={hexStyle}>{value}</span>
+        <button
+          style={resetStyle}
+          title="Reset to default"
+          onClick={(e) => {
+            e.stopPropagation();
+            onReset(colorKey);
+          }}
+          onMouseEnter={(e) => (e.currentTarget.style.color = '#aaa')}
+          onMouseLeave={(e) => (e.currentTarget.style.color = '#555')}
+        >
+          ↺
+        </button>
+      </div>
+      {expanded && (
+        <div
+          style={{
+            padding: '8px 8px 12px',
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'center',
+            gap: '8px',
+          }}
+        >
+          <HexColorPicker
+            color={value}
+            onChange={(c) => onChange(colorKey, c)}
+            style={{ width: '100%', height: '140px' }}
+          />
+          <input
+            type="text"
+            value={hexInput}
+            onChange={(e) => setHexInput(e.target.value)}
+            onBlur={handleHexSubmit}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') handleHexSubmit();
+            }}
+            onClick={(e) => e.stopPropagation()}
+            spellCheck={false}
+            style={{
+              width: '100%',
+              padding: '4px 8px',
+              background: '#111',
+              border: '1px solid #333',
+              borderRadius: '4px',
+              color: '#ccc',
+              fontSize: '12px',
+              fontFamily: 'monospace',
+              textAlign: 'center',
+              outline: 'none',
+            }}
+          />
+        </div>
+      )}
     </div>
   );
 }
@@ -112,6 +171,12 @@ export function ColorSettings({ theme, onUpdateColor, onResetColor, onReset, deb
   const base = THEME_COLOR_META.filter((m) => m.group === 'base');
   const normal = THEME_COLOR_META.filter((m) => m.group === 'normal');
   const bright = THEME_COLOR_META.filter((m) => m.group === 'bright');
+  const [expandedKey, setExpandedKey] = useState<ThemeColorKey | null>(null);
+  const scrollRef = useRef<HTMLDivElement>(null);
+
+  const toggleExpanded = (key: ThemeColorKey) => {
+    setExpandedKey((prev) => (prev === key ? null : key));
+  };
 
   const section: CSSProperties = {
     marginBottom: '16px',
@@ -173,7 +238,7 @@ export function ColorSettings({ theme, onUpdateColor, onResetColor, onReset, deb
       </div>
 
       {/* Color list */}
-      <div style={{ flex: 1, overflowY: 'auto', padding: '12px 4px' }}>
+      <div ref={scrollRef} style={{ flex: 1, overflowY: 'auto', padding: '12px 4px' }}>
         <div style={section}>
           <div style={sectionLabel}>Base</div>
           {base.map((m) => (
@@ -182,8 +247,10 @@ export function ColorSettings({ theme, onUpdateColor, onResetColor, onReset, deb
               colorKey={m.key}
               label={m.label}
               value={theme[m.key]}
+              expanded={expandedKey === m.key}
               onChange={onUpdateColor}
               onReset={onResetColor}
+              onToggle={toggleExpanded}
             />
           ))}
         </div>
@@ -196,8 +263,10 @@ export function ColorSettings({ theme, onUpdateColor, onResetColor, onReset, deb
               colorKey={m.key}
               label={m.label}
               value={theme[m.key]}
+              expanded={expandedKey === m.key}
               onChange={onUpdateColor}
               onReset={onResetColor}
+              onToggle={toggleExpanded}
             />
           ))}
         </div>
@@ -210,8 +279,10 @@ export function ColorSettings({ theme, onUpdateColor, onResetColor, onReset, deb
               colorKey={m.key}
               label={m.label}
               value={theme[m.key]}
+              expanded={expandedKey === m.key}
               onChange={onUpdateColor}
               onReset={onResetColor}
+              onToggle={toggleExpanded}
             />
           ))}
         </div>

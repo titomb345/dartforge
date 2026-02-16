@@ -65,40 +65,6 @@ export function Toolbar({
           toggled={showColors}
           onClick={onToggleColors}
         />
-        <div
-          style={{
-            width: '1px',
-            height: '18px',
-            background: '#1e1e1e',
-            margin: '0 2px',
-          }}
-        />
-        <IconButton
-          icon={<SwordIcon />}
-          title="Fighter"
-          accent="#f59e0b"
-          toggled={hasFighter}
-          onClick={() => {
-            if (hasFighter) {
-              if (hasMage) onClassModeChange('mage');
-            } else {
-              onClassModeChange(hasMage ? 'multi' : 'fighter');
-            }
-          }}
-        />
-        <IconButton
-          icon={<MageIcon />}
-          title="Mage"
-          accent="#a78bfa"
-          toggled={hasMage}
-          onClick={() => {
-            if (hasMage) {
-              if (hasFighter) onClassModeChange('fighter');
-            } else {
-              onClassModeChange(hasFighter ? 'multi' : 'mage');
-            }
-          }}
-        />
       </div>
     </div>
   );
