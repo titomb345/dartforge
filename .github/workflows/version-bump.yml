@@ -12,6 +12,7 @@ jobs:
     permissions:
       contents: write
       pull-requests: write
+      actions: write
     steps:
       - uses: actions/checkout@v4
         with:
@@ -59,3 +60,10 @@ jobs:
             --title "chore: bump version to v${VERSION}" \
             --body "Automated version bump to v${VERSION}. Merge to update main."
           gh pr merge "$BRANCH" --squash --auto --delete-branch
+
+      - name: Trigger build
+        if: steps.check.outputs.has_unreleased == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          VERSION: ${{ steps.version.outputs.version }}
+        run: gh workflow run build-release.yml -f "tag=v${VERSION}"
