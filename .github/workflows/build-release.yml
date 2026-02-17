@@ -12,7 +12,13 @@ on:
 
 jobs:
   build:
-    runs-on: windows-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-latest
+          - os: macos-latest
+    runs-on: ${{ matrix.os }}
     permissions:
       contents: write
     steps:
@@ -34,15 +40,6 @@ jobs:
 
       - run: npm ci
 
-      - name: Extract changelog
-        id: changelog
-        shell: bash
-        run: |
-          VERSION="${{ steps.tag.outputs.tag }}"
-          VERSION="${VERSION#v}"
-          BODY=$(sed -n "/^## \[${VERSION}\]/,/^## \[/{/^## \[${VERSION}\]/d;/^## \[/d;p}" CHANGELOG.md)
-          echo "$BODY" > release-notes.md
-
       - name: Build Tauri app
         uses: tauri-apps/tauri-action@v0.6
         env:
@@ -53,6 +50,29 @@ jobs:
           releaseBody: ''
           releaseDraft: false
           prerelease: false
+
+  release-notes:
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Resolve tag
+        id: tag
+        shell: bash
+        run: echo "tag=${{ github.event.inputs.tag || github.ref_name }}" >> "$GITHUB_OUTPUT"
+
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ steps.tag.outputs.tag }}
+
+      - name: Extract changelog
+        shell: bash
+        run: |
+          VERSION="${{ steps.tag.outputs.tag }}"
+          VERSION="${VERSION#v}"
+          BODY=$(sed -n "/^## \[${VERSION}\]/,/^## \[/{/^## \[${VERSION}\]/d;/^## \[/d;p}" CHANGELOG.md)
+          echo "$BODY" > release-notes.md
 
       - name: Update release notes
         env:
