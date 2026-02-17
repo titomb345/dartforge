@@ -82,6 +82,14 @@
   filter: drop-shadow(0 0 4px color-mix(in srgb, var(--btn-accent) 50%, transparent));
 }
 
+/* Status readout — instrument gauge styling */
+.status-readout:hover {
+  background: color-mix(in srgb, var(--readout-color) 6%, transparent);
+  border-color: color-mix(in srgb, var(--readout-color) 12%, transparent);
+  border-left-color: var(--readout-color);
+  filter: drop-shadow(0 0 4px color-mix(in srgb, var(--readout-color) 15%, transparent));
+}
+
 /* Game clock — instrument readout styling */
 .game-clock:hover {
   background: color-mix(in srgb, var(--gc-accent) 4%, transparent);

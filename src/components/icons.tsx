@@ -136,3 +136,75 @@ export function ChevronRightIcon({ size = 10 }: IconProps) {
     </svg>
   );
 }
+
+export function HeartIcon({ size = 11 }: IconProps) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="currentColor" stroke="none">
+      <path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z" />
+    </svg>
+  );
+}
+
+export function FocusIcon({ size = 11 }: IconProps) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <circle cx="12" cy="12" r="10" />
+      <circle cx="12" cy="12" r="6" />
+      <circle cx="12" cy="12" r="2" fill="currentColor" stroke="none" />
+    </svg>
+  );
+}
+
+export function FoodIcon({ size = 11 }: IconProps) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M18 8h1a4 4 0 0 1 0 8h-1" />
+      <path d="M2 8h16v9a4 4 0 0 1-4 4H6a4 4 0 0 1-4-4V8z" />
+      <line x1="6" y1="1" x2="6" y2="4" />
+      <line x1="10" y1="1" x2="10" y2="4" />
+      <line x1="14" y1="1" x2="14" y2="4" />
+    </svg>
+  );
+}
+
+export function WeightIcon({ size = 11 }: IconProps) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M12 2a3 3 0 0 0-3 3c0 1.1.6 2.1 1.5 2.6L9 22h6l-1.5-14.4A3 3 0 0 0 15 5a3 3 0 0 0-3-3z" />
+    </svg>
+  );
+}
+
+export function BootIcon({ size = 11 }: IconProps) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="currentColor" stroke="none">
+      <path d="M7 20h10v2H7zM15 4l-1 4h3l-1 4h3v6H5v-6h3l-1-4h3L9 4z" />
+    </svg>
+  );
+}
+
+export function FilterIcon({ size = 12 }: IconProps) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3" />
+    </svg>
+  );
+}
+
+export function AuraIcon({ size = 11 }: IconProps) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="currentColor" stroke="none">
+      <path d="M12 2l1.09 3.36L16.36 4l-1.36 3.27L18.36 8.36l-3.36 1.09L16 12.73l-3.27-1.36L11.64 14.73l-1.09-3.36L7.27 12.73l1.36-3.27L5.27 8.36l3.36-1.09L7.27 4l3.27 1.36z" />
+      <path d="M19 15l.54 1.66 1.66.54-1.66.54L19 19.4l-.54-1.66-1.66-.54 1.66-.54z" opacity="0.7" />
+      <path d="M5 17l.36 1.1 1.1.36-1.1.36L5 19.92l-.36-1.1-1.1-.36 1.1-.36z" opacity="0.5" />
+    </svg>
+  );
+}
+
+export function DropletIcon({ size = 11 }: IconProps) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="currentColor" stroke="none">
+      <path d="M12 2.69l5.66 5.66a8 8 0 1 1-11.31 0z" />
+    </svg>
+  );
+}

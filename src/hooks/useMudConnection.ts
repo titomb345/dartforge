@@ -6,6 +6,7 @@ import { MUD_OUTPUT_EVENT, CONNECTION_STATUS_EVENT } from '../lib/tauriEvents';
 import { MudOutputPayload, ConnectionStatusPayload } from '../types';
 import { getConnectedSplash, getDisconnectSplash } from '../lib/splash';
 import { smartWrite } from '../lib/terminalUtils';
+import type { OutputFilter } from '../lib/outputFilter';
 
 /** End marker for the DartMUD ASCII banner */
 const BANNER_END_MARKER = 'Ferdarchi';
@@ -76,6 +77,8 @@ export function useMudConnection(
   debugModeRef: React.RefObject<boolean>,
   onOutputChunk?: (data: string) => void,
   onCharacterName?: (name: string) => void,
+  outputFilterRef?: React.RefObject<OutputFilter | null>,
+  onLogin?: () => void,
 ) {
   const [connected, setConnected] = useState(false);
   const [statusMessage, setStatusMessage] = useState('Connecting...');
@@ -86,12 +89,15 @@ export function useMudConnection(
   const passwordModeRef = useRef(false);
   const skipHistoryRef = useRef(false);
   const captureNameRef = useRef(false);
+  const loginFiredRef = useRef(false);
 
   // Store latest callback refs to avoid re-subscribing on every change
   const onOutputChunkRef = useRef(onOutputChunk);
   onOutputChunkRef.current = onOutputChunk;
   const onCharacterNameRef = useRef(onCharacterName);
   onCharacterNameRef.current = onCharacterName;
+  const onLoginRef = useRef(onLogin);
+  onLoginRef.current = onLogin;
 
   // Banner filtering state
   const filteringBannerRef = useRef(false);
@@ -116,6 +122,14 @@ export function useMudConnection(
             skipHistoryRef.current = true;
             setSkipHistory(true);
           }
+          // Detect successful login or reconnect
+          if (
+            !loginFiredRef.current &&
+            (/Running under version/i.test(data) || /reconnecting to old object/i.test(data))
+          ) {
+            loginFiredRef.current = true;
+            onLoginRef.current?.();
+          }
         };
 
         // Banner filtering: suppress the server's ASCII splash on connect
@@ -133,34 +147,50 @@ export function useMudConnection(
             if (afterBanner.length > 0) {
               detectPrompts(afterBanner);
               onOutputChunkRef.current?.(afterBanner);
-              let afterOutput = debugModeRef.current ? annotateAnsi(afterBanner) : afterBanner;
-              if (endsWithPrompt(afterBanner)) {
-                afterOutput += '\n';
+              const filteredAfter = outputFilterRef?.current
+                ? outputFilterRef.current.filter(afterBanner)
+                : afterBanner;
+              if (filteredAfter) {
+                let afterOutput = debugModeRef.current ? annotateAnsi(filteredAfter) : filteredAfter;
+                if (endsWithPrompt(filteredAfter)) {
+                  afterOutput += '\n';
+                }
+                smartWrite(term, afterOutput);
               }
-              smartWrite(term, afterOutput);
             }
           } else if (bannerBufferRef.current.length > BANNER_MAX_BUFFER) {
             // Safety: too much data without finding banner, flush it all
             filteringBannerRef.current = false;
-            detectPrompts(bannerBufferRef.current);
-            onOutputChunkRef.current?.(bannerBufferRef.current);
-            let flushOutput = debugModeRef.current ? annotateAnsi(bannerBufferRef.current) : bannerBufferRef.current;
-            if (endsWithPrompt(bannerBufferRef.current)) {
-              flushOutput += '\n';
-            }
-            smartWrite(term, flushOutput);
+            const rawBuffer = bannerBufferRef.current;
             bannerBufferRef.current = '';
+            detectPrompts(rawBuffer);
+            onOutputChunkRef.current?.(rawBuffer);
+            const filteredBuffer = outputFilterRef?.current
+              ? outputFilterRef.current.filter(rawBuffer)
+              : rawBuffer;
+            if (filteredBuffer) {
+              let flushOutput = debugModeRef.current ? annotateAnsi(filteredBuffer) : filteredBuffer;
+              if (endsWithPrompt(filteredBuffer)) {
+                flushOutput += '\n';
+              }
+              smartWrite(term, flushOutput);
+            }
           }
           return;
         }
 
         detectPrompts(event.payload.data);
         onOutputChunkRef.current?.(event.payload.data);
-        let output = debugModeRef.current ? annotateAnsi(event.payload.data) : event.payload.data;
-        if (endsWithPrompt(event.payload.data)) {
-          output += '\n';
+        const filtered = outputFilterRef?.current
+          ? outputFilterRef.current.filter(event.payload.data)
+          : event.payload.data;
+        if (filtered) {
+          let output = debugModeRef.current ? annotateAnsi(filtered) : filtered;
+          if (endsWithPrompt(filtered)) {
+            output += '\n';
+          }
+          smartWrite(term, output);
         }
-        smartWrite(term, output);
       });
 
       const unlistenStatus = await listen<ConnectionStatusPayload>(
@@ -175,10 +205,13 @@ export function useMudConnection(
               term.write(getConnectedSplash(term.cols));
               filteringBannerRef.current = true;
               bannerBufferRef.current = '';
+              loginFiredRef.current = false;
+              outputFilterRef?.current?.reset();
             } else if (!event.payload.connected && wasConnectedRef.current && term) {
               // Connection dropped — stop any active filtering, show disconnect splash
               filteringBannerRef.current = false;
               bannerBufferRef.current = '';
+              outputFilterRef?.current?.reset();
               smartWrite(term, getDisconnectSplash(term.cols));
             }
 

@@ -1,6 +1,6 @@
 import type { Store } from '@tauri-apps/plugin-store';
 
-export const CURRENT_VERSION = 2;
+export const CURRENT_VERSION = 3;
 
 /** Raw store contents — all keys are optional since older stores may lack them. */
 export type StoreData = Record<string, unknown>;
@@ -21,6 +21,13 @@ const MIGRATIONS: MigrationFn[] = [
     }
     if (!('showInlineImproves' in data)) {
       data.showInlineImproves = false;
+    }
+    return data;
+  },
+  // v2 → v3: initialize compact mode setting
+  (data) => {
+    if (!('compactMode' in data)) {
+      data.compactMode = false;
     }
     return data;
   },
