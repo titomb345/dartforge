@@ -1,4 +1,5 @@
 import { useGameClock } from '../hooks/useGameClock';
+import { cn } from '../lib/cn';
 import { SunIcon, MoonIcon, SunriseIcon, SunsetIcon } from './icons';
 
 function TimeIcon({ hour, accent }: { hour: number; accent: string }) {
@@ -17,14 +18,15 @@ export function GameClock() {
     holiday,
     reckoningLabel,
     accent,
+    allDates,
     cycleReckoning,
   } = useGameClock();
 
   return (
     <button
       onClick={cycleReckoning}
-      title="Click to cycle reckoning"
-      className="game-clock relative flex items-center gap-2.5 pl-2.5 pr-3 py-[3px] rounded-[3px] select-none cursor-pointer border border-transparent transition-all duration-300"
+      title={allDates}
+      className="game-clock relative flex items-center gap-2.5 h-[20px] pl-2.5 pr-3 rounded-[3px] select-none cursor-pointer border border-transparent transition-all duration-300"
       style={
         {
           '--gc-accent': accent,
@@ -34,40 +36,42 @@ export function GameClock() {
         } as React.CSSProperties
       }
     >
-      {/* Time of day — accent colored, icon gets glow */}
-      <span className="flex items-center gap-1 w-[10ch]" style={{ color: accent }}>
+      {/* Time of day — icon only, text in tooltip */}
+      <span className="flex items-center" style={{ color: accent }} title={timeOfDay}>
         <TimeIcon hour={hour} accent={accent} />
-        <span className="text-[11px] leading-none tracking-wide uppercase">{timeOfDay}</span>
       </span>
 
       <span className="text-[11px] text-text-disabled leading-none">&middot;</span>
 
-      {/* Date — primary readout */}
-      <span className="text-[11px] leading-none text-text-label w-[32ch] text-center tracking-[0.01em]">
+      {/* Date — primary readout, natural width */}
+      <span className="text-[11px] leading-none text-text-label whitespace-nowrap tracking-[0.01em]">
         {formattedDate}
       </span>
 
-      {/* Holiday badge — rare, should feel special */}
-      {holiday && (
-        <>
-          <span className="text-[11px] text-text-disabled leading-none">&middot;</span>
-          <span
-            className="game-clock-holiday text-[10px] leading-none px-1.5 py-[2px] rounded-[2px] tracking-wide"
-            style={{
-              color: accent,
-              background: `color-mix(in srgb, ${accent} 8%, transparent)`,
-              boxShadow: `0 0 6px color-mix(in srgb, ${accent} 15%, transparent)`,
-            }}
-          >
-            {holiday}
-          </span>
-        </>
-      )}
+      {/* Holiday badge — animated reveal, no height shift */}
+      <span
+        className={cn(
+          'flex items-center gap-2.5 transition-all duration-500 overflow-hidden',
+          holiday ? 'max-w-[300px] opacity-100' : 'max-w-0 opacity-0'
+        )}
+      >
+        <span className="text-[11px] text-text-disabled leading-none">&middot;</span>
+        <span
+          className="game-clock-holiday text-[10px] leading-none px-1.5 py-[2px] rounded-[2px] tracking-wide whitespace-nowrap"
+          style={{
+            color: accent,
+            background: `color-mix(in srgb, ${accent} 8%, transparent)`,
+            boxShadow: `0 0 6px color-mix(in srgb, ${accent} 15%, transparent)`,
+          }}
+        >
+          {holiday ?? ''}
+        </span>
+      </span>
 
       <span className="text-[11px] text-text-disabled leading-none">&middot;</span>
 
-      {/* Reckoning label — quiet metadata */}
-      <span className="text-[11px] leading-none text-text-dim w-[8ch] text-right tracking-[0.02em]">
+      {/* Reckoning label — natural width */}
+      <span className="text-[11px] leading-none text-text-dim whitespace-nowrap tracking-[0.02em]">
         {reckoningLabel}
       </span>
     </button>

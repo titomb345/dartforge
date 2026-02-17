@@ -1,3 +1,5 @@
+import { cn } from '../lib/cn';
+
 interface StatusReadoutProps {
   icon: React.ReactNode;
   label: string;
@@ -6,19 +8,23 @@ interface StatusReadoutProps {
   glow?: boolean;
   compact?: boolean;
   filtered?: boolean;
+  danger?: boolean;
   onClick?: () => void;
 }
 
-export function StatusReadout({ icon, label, color, tooltip, glow, compact, filtered, onClick }: StatusReadoutProps) {
+export function StatusReadout({ icon, label, color, tooltip, glow, compact, filtered, danger, onClick }: StatusReadoutProps) {
   return (
     <button
       onClick={onClick}
       title={tooltip}
-      className={`status-readout relative flex items-center rounded-[3px] select-none border border-transparent transition-all duration-200 ${onClick ? 'cursor-pointer' : 'cursor-default'}`}
+      className={cn(
+        'status-readout relative flex items-center rounded-[3px] select-none border border-transparent transition-all duration-200',
+        onClick ? 'cursor-pointer' : 'cursor-default',
+        danger && !filtered && 'status-readout-danger'
+      )}
       style={
         {
           '--readout-color': color,
-          opacity: filtered ? 0.4 : 1,
           paddingLeft: compact ? 6 : 8,
           paddingRight: compact ? 6 : 10,
           paddingTop: 3,

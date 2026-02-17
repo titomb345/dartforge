@@ -19,18 +19,24 @@ interface GameClockState {
   reckoning: Reckoning;
   reckoningLabel: string;
   accent: string;
+  allDates: string;
 }
 
 function computeState(reckoning: Reckoning): GameClockState {
   const hour = queryHour();
+  const timeOfDay = getTimeOfDay(hour);
+  const allDates = [Reckoning.Common, Reckoning.Thorpian, Reckoning.Adachian]
+    .map((r) => `${getReckoningLabel(r)}: ${formatDate(null, r)}`)
+    .join('\n');
   return {
     formattedDate: formatDate(null, reckoning),
     hour,
-    timeOfDay: getTimeOfDay(hour),
+    timeOfDay,
     holiday: getHoliday(null, reckoning),
     reckoning,
     reckoningLabel: getReckoningLabel(reckoning),
     accent: getReckoningAccent(reckoning),
+    allDates,
   };
 }
 

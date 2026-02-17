@@ -1,4 +1,4 @@
-import { useRef, useState, useEffect, useCallback } from 'react';
+import { useRef, useState, useEffect, useCallback, useLayoutEffect } from 'react';
 import type { Terminal as XTerm } from '@xterm/xterm';
 import { getVersion } from '@tauri-apps/api/app';
 import { getCurrentWindow } from '@tauri-apps/api/window';
@@ -9,7 +9,7 @@ import { ColorSettings } from './components/ColorSettings';
 import { SkillPanel } from './components/SkillPanel';
 import { GameClock } from './components/GameClock';
 import { StatusReadout } from './components/StatusReadout';
-import { HeartIcon, FocusIcon, FoodIcon, DropletIcon, AuraIcon, WeightIcon, BootIcon, FilterIcon } from './components/icons';
+import { HeartIcon, FocusIcon, FoodIcon, DropletIcon, AuraIcon, WeightIcon, BootIcon, CompressIcon } from './components/icons';
 import { useMudConnection } from './hooks/useMudConnection';
 import { useClassMode } from './hooks/useClassMode';
 import { useThemeColors } from './hooks/useThemeColors';
@@ -37,6 +37,10 @@ function App() {
   const [compactBar, setCompactBar] = useState(false);
   const [filterFlags, setFilterFlags] = useState<FilterFlags>({ ...DEFAULT_FILTER_FLAGS });
   const [loggedIn, setLoggedIn] = useState(false);
+  const statusBarRef = useRef<HTMLDivElement | null>(null);
+  const [autoCompact, setAutoCompact] = useState(false);
+  const [twoRow, setTwoRow] = useState(false);
+  const manualCompactRef = useRef(false);
 
   // Set window title with version + load compact mode from settings
   useEffect(() => {
@@ -114,6 +118,33 @@ function App() {
     load('settings.json').then((store) => store.set('compactBar', compactBar)).catch(console.error);
   }, [compactBar]);
 
+  // Responsive status bar: two-row layout when narrow, auto-compact when overflowing.
+  // To prevent oscillation (compact shrinks content → no overflow → uncompact → overflow again),
+  // we store the scrollWidth that triggered auto-compact and only release when the container
+  // grows wider than that threshold.
+  const autoCompactThresholdRef = useRef(0);
+  useLayoutEffect(() => {
+    const el = statusBarRef.current;
+    if (!el) return;
+    const observer = new ResizeObserver(() => {
+      const width = el.clientWidth;
+      setTwoRow(width < 500);
+      if (manualCompactRef.current) return;
+      if (!autoCompact && el.scrollWidth > width) {
+        // Content overflows → engage auto-compact and remember the width needed
+        autoCompactThresholdRef.current = el.scrollWidth;
+        setAutoCompact(true);
+      } else if (autoCompact && width >= autoCompactThresholdRef.current) {
+        // Container is now wide enough to fit expanded content → release
+        setAutoCompact(false);
+      }
+    });
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, [autoCompact]);
+
+  const effectiveCompact = compactBar || autoCompact;
+
   // Skill tracker — needs sendCommand ref (set after useMudConnection)
   const sendCommandRef = useRef<((cmd: string) => Promise<void>) | null>(null);
   const { activeCharacter, skillData, setActiveCharacter, handleSkillMatch, showInlineImproves, toggleInlineImproves } =
@@ -170,6 +201,10 @@ function App() {
     setFilterFlags((prev) => ({ ...prev, [key]: !prev[key] }));
   }, []);
 
+  // Danger pulse triggers on red/magenta theme colors — consistent across all tracker scales
+  const isDanger = (themeColor: string) =>
+    themeColor === 'red' || themeColor === 'brightRed' || themeColor === 'magenta';
+
   return (
     <div className="flex flex-col h-screen bg-bg-primary text-text-primary relative">
       <Toolbar
@@ -224,12 +259,24 @@ function App() {
         </div>
       </div>
       {/* Game status bar — vitals left, clock right */}
-      <div className="flex items-center gap-1 px-1.5 py-0.5 bg-bg-secondary border-t border-border-subtle">
+      <div
+        ref={statusBarRef}
+        className={cn(
+          'flex items-center gap-1 px-1.5 py-0.5 border-t border-border-faint',
+          twoRow && 'flex-wrap'
+        )}
+        style={{ background: 'linear-gradient(to bottom, #1e1e1e, #1a1a1a)' }}
+      >
         {loggedIn && (
           <>
             <button
-              onClick={() => setCompactBar((v) => !v)}
-              title={compactBar ? 'Show status labels' : 'Compact status bar'}
+              onClick={() => {
+                setCompactBar((v) => {
+                  manualCompactRef.current = !v;
+                  return !v;
+                });
+              }}
+              title={compactBar ? 'Expand status labels' : 'Compact status bar'}
               className={cn(
                 'flex items-center justify-center w-5 h-5 rounded-[3px] transition-all duration-200 border cursor-pointer',
                 compactBar
@@ -237,92 +284,120 @@ function App() {
                   : 'text-text-dim border-transparent hover:text-text-muted'
               )}
             >
-              <FilterIcon size={10} />
+              <CompressIcon size={10} />
             </button>
-        {concentration && (
-          <StatusReadout
-            icon={<FocusIcon size={11} />}
-            label={concentration.label}
-            color={theme[concentration.themeColor]}
-            tooltip={concentration.message}
-            glow={concentration.severity <= 1}
-            filtered={filterFlags.concentration}
-            onClick={() => toggleFilter('concentration')}
-          />
-        )}
-        {aura && (
-          <StatusReadout
-            icon={<AuraIcon size={11} />}
-            label={aura.label}
-            color={theme[aura.themeColor]}
-            tooltip={aura.key === 'none' ? 'You have no aura.' : `Your aura appears to be ${aura.descriptor}.`}
-            glow={aura.severity <= 1}
-            filtered={filterFlags.aura}
-            onClick={() => toggleFilter('aura')}
-          />
-        )}
-        {health && (
-          <StatusReadout
-            icon={<HeartIcon size={11} />}
-            label={health.label}
-            color={theme[health.themeColor]}
-            tooltip={health.message}
-            glow={health.severity <= 1}
-            compact={compactBar}
-            onClick={() => sendCommand('hp')}
-          />
-        )}
-        {hunger && (
-          <StatusReadout
-            icon={<FoodIcon size={11} />}
-            label={hunger.label}
-            color={theme[hunger.themeColor]}
-            tooltip={`You are ${hunger.descriptor}.`}
-            glow={hunger.severity <= 1}
-            compact={compactBar}
-            filtered={filterFlags.hunger}
-            onClick={() => toggleFilter('hunger')}
-          />
-        )}
-        {thirst && (
-          <StatusReadout
-            icon={<DropletIcon size={11} />}
-            label={thirst.label}
-            color={theme[thirst.themeColor]}
-            tooltip={`You are ${thirst.descriptor}.`}
-            glow={thirst.severity <= 1}
-            compact={compactBar}
-            filtered={filterFlags.thirst}
-            onClick={() => toggleFilter('thirst')}
-          />
-        )}
-        {encumbrance && (
-          <StatusReadout
-            icon={<WeightIcon size={11} />}
-            label={encumbrance.label}
-            color={theme[encumbrance.themeColor]}
-            tooltip={encumbrance.descriptor}
-            glow={encumbrance.severity <= 1}
-            compact={compactBar}
-            filtered={filterFlags.encumbrance}
-            onClick={() => toggleFilter('encumbrance')}
-          />
-        )}
-        {movement && (
-          <StatusReadout
-            icon={<BootIcon size={11} />}
-            label={movement.label}
-            color={theme[movement.themeColor]}
-            tooltip={movement.descriptor}
-            glow={movement.severity <= 1}
-            compact={compactBar}
-            filtered={filterFlags.movement}
-            onClick={() => toggleFilter('movement')}
-          />
-        )}
+
+            {/* Combat group — concentration, aura, health */}
+            {concentration && (
+              <StatusReadout
+                icon={<FocusIcon size={11} />}
+                label={concentration.label}
+                color={theme[concentration.themeColor]}
+                tooltip={concentration.message}
+                glow={concentration.severity <= 1}
+                danger={isDanger(concentration.themeColor)}
+                compact={effectiveCompact}
+                filtered={filterFlags.concentration}
+                onClick={() => toggleFilter('concentration')}
+              />
+            )}
+            {aura && (
+              <StatusReadout
+                icon={<AuraIcon size={11} />}
+                label={aura.label}
+                color={theme[aura.themeColor]}
+                tooltip={aura.key === 'none' ? 'You have no aura.' : `Your aura appears to be ${aura.descriptor}.`}
+                glow={aura.severity <= 1}
+                danger={isDanger(aura.themeColor)}
+                compact={effectiveCompact}
+                filtered={filterFlags.aura}
+                onClick={() => toggleFilter('aura')}
+              />
+            )}
+            {health && (
+              <StatusReadout
+                icon={<HeartIcon size={11} />}
+                label={health.label}
+                color={theme[health.themeColor]}
+                tooltip={health.message}
+                glow={health.severity <= 1}
+                danger={isDanger(health.themeColor)}
+                compact={effectiveCompact}
+                onClick={() => sendCommand('hp')}
+              />
+            )}
+
+            {/* Divider between combat and survival */}
+            {(concentration || aura || health) && (hunger || thirst) && (
+              <div className="w-px h-3.5 bg-border-dim mx-0.5" />
+            )}
+
+            {/* Survival group — hunger, thirst */}
+            {hunger && (
+              <StatusReadout
+                icon={<FoodIcon size={11} />}
+                label={hunger.label}
+                color={theme[hunger.themeColor]}
+                tooltip={`You are ${hunger.descriptor}.`}
+                glow={hunger.severity <= 1}
+                danger={isDanger(hunger.themeColor)}
+                compact={effectiveCompact}
+                filtered={filterFlags.hunger}
+                onClick={() => toggleFilter('hunger')}
+              />
+            )}
+            {thirst && (
+              <StatusReadout
+                icon={<DropletIcon size={11} />}
+                label={thirst.label}
+                color={theme[thirst.themeColor]}
+                tooltip={`You are ${thirst.descriptor}.`}
+                glow={thirst.severity <= 1}
+                danger={isDanger(thirst.themeColor)}
+                compact={effectiveCompact}
+                filtered={filterFlags.thirst}
+                onClick={() => toggleFilter('thirst')}
+              />
+            )}
+
+            {/* Divider between survival and physical */}
+            {(hunger || thirst) && (encumbrance || movement) && (
+              <div className="w-px h-3.5 bg-border-dim mx-0.5" />
+            )}
+
+            {/* Physical group — encumbrance, movement */}
+            {encumbrance && (
+              <StatusReadout
+                icon={<WeightIcon size={11} />}
+                label={encumbrance.label}
+                color={theme[encumbrance.themeColor]}
+                tooltip={encumbrance.descriptor}
+                glow={encumbrance.severity <= 1}
+                danger={isDanger(encumbrance.themeColor)}
+                compact={effectiveCompact}
+                filtered={filterFlags.encumbrance}
+                onClick={() => toggleFilter('encumbrance')}
+              />
+            )}
+            {movement && (
+              <StatusReadout
+                icon={<BootIcon size={11} />}
+                label={movement.label}
+                color={theme[movement.themeColor]}
+                tooltip={movement.descriptor}
+                glow={movement.severity <= 1}
+                danger={isDanger(movement.themeColor)}
+                compact={effectiveCompact}
+                filtered={filterFlags.movement}
+                onClick={() => toggleFilter('movement')}
+              />
+            )}
+
+            {/* Divider before clock */}
+            <div className="w-px h-3.5 bg-border-dim mx-0.5" />
           </>
         )}
-        <div className="ml-auto">
+        <div className={cn('ml-auto', twoRow && 'basis-full flex justify-end')}>
           <GameClock />
         </div>
       </div>

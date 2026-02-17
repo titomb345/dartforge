@@ -107,3 +107,12 @@
   0%, 100% { opacity: 0.85; }
   50% { opacity: 1; }
 }
+
+/* Status readout danger pulse — critical severity states */
+@keyframes danger-pulse {
+  0%, 100% { border-left-color: var(--readout-color); }
+  50% { border-left-color: transparent; }
+}
+.status-readout-danger {
+  animation: danger-pulse 1.5s ease-in-out infinite;
+}
