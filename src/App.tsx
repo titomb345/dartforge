@@ -287,7 +287,18 @@ function App() {
               <CompressIcon size={10} />
             </button>
 
-            {/* Combat group — concentration, aura, health */}
+            {/* Combat group — health, concentration, aura */}
+            {health && (
+              <StatusReadout
+                icon={<HeartIcon size={11} />}
+                label={health.label}
+                color={theme[health.themeColor]}
+                tooltip={health.message}
+                glow={health.severity <= 1}
+                danger={isDanger(health.themeColor)}
+                compact={effectiveCompact}
+              />
+            )}
             {concentration && (
               <StatusReadout
                 icon={<FocusIcon size={11} />}
@@ -312,18 +323,6 @@ function App() {
                 compact={effectiveCompact}
                 filtered={filterFlags.aura}
                 onClick={() => toggleFilter('aura')}
-              />
-            )}
-            {health && (
-              <StatusReadout
-                icon={<HeartIcon size={11} />}
-                label={health.label}
-                color={theme[health.themeColor]}
-                tooltip={health.message}
-                glow={health.severity <= 1}
-                danger={isDanger(health.themeColor)}
-                compact={effectiveCompact}
-                onClick={() => sendCommand('hp')}
               />
             )}
 
