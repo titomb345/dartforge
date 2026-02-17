@@ -6,16 +6,20 @@ const DO: u8 = 0xFD;
 const DONT: u8 = 0xFE;
 const SB: u8 = 0xFA;
 const SE: u8 = 0xF0;
+const GA: u8 = 0xF9;
 
 /// Result of processing raw MUD output.
 /// Contains the display text (with IAC stripped), any Telnet responses to send back,
-/// and any leftover bytes from incomplete IAC sequences at the end of the buffer.
+/// any leftover bytes from incomplete IAC sequences, and whether GA was received.
 pub struct ProcessedOutput {
     pub display: String,
     pub responses: Vec<Vec<u8>>,
     /// Unconsumed bytes from a partial IAC sequence at the end of the buffer.
     /// Must be prepended to the next read.
     pub remainder: Vec<u8>,
+    /// True if an IAC GA (Go Ahead) was received in this chunk,
+    /// signalling the server has finished sending and is awaiting input.
+    pub ga: bool,
 }
 
 /// Process raw bytes from the MUD server.
@@ -25,6 +29,7 @@ pub struct ProcessedOutput {
 pub fn process_output(raw: &[u8]) -> ProcessedOutput {
     let mut display_bytes: Vec<u8> = Vec::with_capacity(raw.len());
     let mut responses: Vec<Vec<u8>> = Vec::new();
+    let mut ga = false;
     let mut i = 0;
 
     while i < raw.len() {
@@ -35,6 +40,7 @@ pub fn process_output(raw: &[u8]) -> ProcessedOutput {
                     display: String::from_utf8_lossy(&display_bytes).into_owned(),
                     responses,
                     remainder: raw[i..].to_vec(),
+                    ga,
                 };
             }
 
@@ -52,6 +58,7 @@ pub fn process_output(raw: &[u8]) -> ProcessedOutput {
                             display: String::from_utf8_lossy(&display_bytes).into_owned(),
                             responses,
                             remainder: raw[i..].to_vec(),
+                            ga,
                         };
                     }
                     let cmd = raw[i + 1];
@@ -82,10 +89,16 @@ pub fn process_output(raw: &[u8]) -> ProcessedOutput {
                             display: String::from_utf8_lossy(&display_bytes).into_owned(),
                             responses,
                             remainder: raw[i..].to_vec(),
+                            ga,
                         };
                     }
                 }
-                // Other 2-byte IAC commands (NOP, GA, EOR, etc.) — skip
+                // Go Ahead — server is done sending, prompt is ready
+                GA => {
+                    ga = true;
+                    i += 2;
+                }
+                // Other 2-byte IAC commands (NOP, EOR, etc.) — skip
                 _ => {
                     i += 2;
                 }
@@ -100,5 +113,6 @@ pub fn process_output(raw: &[u8]) -> ProcessedOutput {
         display: String::from_utf8_lossy(&display_bytes).into_owned(),
         responses,
         remainder: Vec::new(),
+        ga,
     }
 }

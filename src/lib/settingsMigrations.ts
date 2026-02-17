@@ -1,6 +1,6 @@
 import type { Store } from '@tauri-apps/plugin-store';
 
-export const CURRENT_VERSION = 3;
+export const CURRENT_VERSION = 4;
 
 /** Raw store contents — all keys are optional since older stores may lack them. */
 export type StoreData = Record<string, unknown>;
@@ -29,6 +29,21 @@ const MIGRATIONS: MigrationFn[] = [
     if (!('compactMode' in data)) {
       data.compactMode = false;
     }
+    return data;
+  },
+  // v3 → v4: per-status filtering replaces compact mode toggle
+  (data) => {
+    const wasCompact = data.compactMode === true;
+    delete data.compactMode;
+    data.compactBar = false;
+    data.filteredStatuses = {
+      concentration: wasCompact,
+      hunger: wasCompact,
+      thirst: wasCompact,
+      aura: wasCompact,
+      encumbrance: wasCompact,
+      movement: wasCompact,
+    };
     return data;
   },
 ];

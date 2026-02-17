@@ -9,6 +9,7 @@ export type {
 
 export interface MudOutputPayload {
   data: string;
+  ga: boolean;
 }
 
 export interface ConnectionStatusPayload {

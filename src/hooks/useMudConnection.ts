@@ -15,13 +15,24 @@ const BANNER_MAX_BUFFER = 5000;
 
 /**
  * Detect if data ends with a MUD prompt ("> ") without a trailing newline.
- * When the server sends a prompt, the next response would get jammed onto
- * the same line. Adding a newline after the prompt keeps output clean.
+ * Used as fallback when IAC GA is not available.
  */
 function endsWithPrompt(data: string): boolean {
-  // Strip ANSI escape sequences to check the visible text
   const stripped = data.replace(/\x1b\[[0-9;]*[A-Za-z]/g, '');
   return stripped.endsWith('\n> ') || stripped.endsWith('\r\n> ') || stripped === '> ';
+}
+
+/**
+ * Strip the game prompt ("> ") from output text. With IAC GA signalling
+ * end-of-response, the prompt is unnecessary in a split-pane client.
+ * Returns empty string for bare prompts.
+ */
+function stripPrompt(data: string): string {
+  const clean = data.replace(/\x1b\[[0-9;]*[A-Za-z]/g, '');
+  // Bare prompt only — suppress entirely
+  if (clean.trim() === '>' || clean.trim() === '') return '';
+  // Strip trailing prompt after newline
+  return data.replace(/\r?\n> ?$/, '\n');
 }
 
 /** Map a single ANSI SGR code to a human-readable name */
@@ -152,10 +163,12 @@ export function useMudConnection(
                 : afterBanner;
               if (filteredAfter) {
                 let afterOutput = debugModeRef.current ? annotateAnsi(filteredAfter) : filteredAfter;
-                if (endsWithPrompt(filteredAfter)) {
+                if (event.payload.ga) {
+                  afterOutput = stripPrompt(afterOutput);
+                } else if (endsWithPrompt(filteredAfter)) {
                   afterOutput += '\n';
                 }
-                smartWrite(term, afterOutput);
+                if (afterOutput) smartWrite(term, afterOutput);
               }
             }
           } else if (bannerBufferRef.current.length > BANNER_MAX_BUFFER) {
@@ -170,10 +183,12 @@ export function useMudConnection(
               : rawBuffer;
             if (filteredBuffer) {
               let flushOutput = debugModeRef.current ? annotateAnsi(filteredBuffer) : filteredBuffer;
-              if (endsWithPrompt(filteredBuffer)) {
+              if (event.payload.ga) {
+                flushOutput = stripPrompt(flushOutput);
+              } else if (endsWithPrompt(filteredBuffer)) {
                 flushOutput += '\n';
               }
-              smartWrite(term, flushOutput);
+              if (flushOutput) smartWrite(term, flushOutput);
             }
           }
           return;
@@ -186,10 +201,12 @@ export function useMudConnection(
           : event.payload.data;
         if (filtered) {
           let output = debugModeRef.current ? annotateAnsi(filtered) : filtered;
-          if (endsWithPrompt(filtered)) {
+          if (event.payload.ga) {
+            output = stripPrompt(output);
+          } else if (endsWithPrompt(filtered)) {
             output += '\n';
           }
-          smartWrite(term, output);
+          if (output) smartWrite(term, output);
         }
       });
 

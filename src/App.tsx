@@ -23,7 +23,7 @@ import { useMovement } from './hooks/useMovement';
 import { load } from '@tauri-apps/plugin-store';
 import { buildXtermTheme } from './lib/defaultTheme';
 import { OutputProcessor } from './lib/outputProcessor';
-import { OutputFilter } from './lib/outputFilter';
+import { OutputFilter, DEFAULT_FILTER_FLAGS, type FilterFlags } from './lib/outputFilter';
 import { matchSkillLine } from './lib/skillPatterns';
 import { cn } from './lib/cn';
 
@@ -34,7 +34,8 @@ function App() {
   const [debugMode, setDebugMode] = useState(false);
   const [showAppearance, setShowAppearance] = useState(false);
   const [showSkills, setShowSkills] = useState(false);
-  const [compactMode, setCompactMode] = useState(false);
+  const [compactBar, setCompactBar] = useState(false);
+  const [filterFlags, setFilterFlags] = useState<FilterFlags>({ ...DEFAULT_FILTER_FLAGS });
   const [loggedIn, setLoggedIn] = useState(false);
 
   // Set window title with version + load compact mode from settings
@@ -43,8 +44,10 @@ function App() {
       getCurrentWindow().setTitle(`DartForge v${v}`);
     }).catch(console.error);
     load('settings.json').then(async (store) => {
-      const saved = await store.get<boolean>('compactMode');
-      if (saved != null) setCompactMode(saved);
+      const savedCompact = await store.get<boolean>('compactBar');
+      if (savedCompact != null) setCompactBar(savedCompact);
+      const savedFilters = await store.get<FilterFlags>('filteredStatuses');
+      if (savedFilters != null) setFilterFlags(savedFilters);
     }).catch(console.error);
   }, []);
 
@@ -98,13 +101,18 @@ function App() {
     });
   }
 
-  // Keep compact mode in sync with the filter + persist
+  // Keep filter flags in sync with OutputFilter + persist
   useEffect(() => {
     if (outputFilterRef.current) {
-      outputFilterRef.current.compactMode = compactMode;
+      outputFilterRef.current.filterFlags = { ...filterFlags };
     }
-    load('settings.json').then((store) => store.set('compactMode', compactMode)).catch(console.error);
-  }, [compactMode]);
+    load('settings.json').then((store) => store.set('filteredStatuses', filterFlags)).catch(console.error);
+  }, [filterFlags]);
+
+  // Persist compact bar state
+  useEffect(() => {
+    load('settings.json').then((store) => store.set('compactBar', compactBar)).catch(console.error);
+  }, [compactBar]);
 
   // Skill tracker — needs sendCommand ref (set after useMudConnection)
   const sendCommandRef = useRef<((cmd: string) => Promise<void>) | null>(null);
@@ -157,6 +165,10 @@ function App() {
     debugModeRef.current = next;
     setDebugMode(next);
   };
+
+  const toggleFilter = useCallback((key: keyof FilterFlags) => {
+    setFilterFlags((prev) => ({ ...prev, [key]: !prev[key] }));
+  }, []);
 
   return (
     <div className="flex flex-col h-screen bg-bg-primary text-text-primary relative">
@@ -216,27 +228,17 @@ function App() {
         {loggedIn && (
           <>
             <button
-              onClick={() => setCompactMode((v) => !v)}
-              title={compactMode ? 'Compact mode: status messages hidden from terminal' : 'Verbose mode: status messages shown in terminal'}
+              onClick={() => setCompactBar((v) => !v)}
+              title={compactBar ? 'Show status labels' : 'Compact status bar'}
               className={cn(
                 'flex items-center justify-center w-5 h-5 rounded-[3px] transition-all duration-200 border cursor-pointer',
-                compactMode
+                compactBar
                   ? 'text-cyan border-cyan/25 bg-cyan/8'
                   : 'text-text-dim border-transparent hover:text-text-muted'
               )}
             >
               <FilterIcon size={10} />
             </button>
-        {health && (
-          <StatusReadout
-            icon={<HeartIcon size={11} />}
-            label={health.label}
-            color={theme[health.themeColor]}
-            tooltip={health.message}
-            glow={health.severity <= 1}
-            onClick={compactMode ? undefined : () => sendCommand('hp')}
-          />
-        )}
         {concentration && (
           <StatusReadout
             icon={<FocusIcon size={11} />}
@@ -244,7 +246,8 @@ function App() {
             color={theme[concentration.themeColor]}
             tooltip={concentration.message}
             glow={concentration.severity <= 1}
-            onClick={compactMode ? undefined : () => sendCommand('conc')}
+            filtered={filterFlags.concentration}
+            onClick={() => toggleFilter('concentration')}
           />
         )}
         {aura && (
@@ -254,7 +257,19 @@ function App() {
             color={theme[aura.themeColor]}
             tooltip={aura.key === 'none' ? 'You have no aura.' : `Your aura appears to be ${aura.descriptor}.`}
             glow={aura.severity <= 1}
-            onClick={compactMode ? undefined : () => sendCommand('aura')}
+            filtered={filterFlags.aura}
+            onClick={() => toggleFilter('aura')}
+          />
+        )}
+        {health && (
+          <StatusReadout
+            icon={<HeartIcon size={11} />}
+            label={health.label}
+            color={theme[health.themeColor]}
+            tooltip={health.message}
+            glow={health.severity <= 1}
+            compact={compactBar}
+            onClick={() => sendCommand('hp')}
           />
         )}
         {hunger && (
@@ -264,7 +279,9 @@ function App() {
             color={theme[hunger.themeColor]}
             tooltip={`You are ${hunger.descriptor}.`}
             glow={hunger.severity <= 1}
-            onClick={compactMode ? undefined : () => sendCommand('score')}
+            compact={compactBar}
+            filtered={filterFlags.hunger}
+            onClick={() => toggleFilter('hunger')}
           />
         )}
         {thirst && (
@@ -274,7 +291,9 @@ function App() {
             color={theme[thirst.themeColor]}
             tooltip={`You are ${thirst.descriptor}.`}
             glow={thirst.severity <= 1}
-            onClick={compactMode ? undefined : () => sendCommand('score')}
+            compact={compactBar}
+            filtered={filterFlags.thirst}
+            onClick={() => toggleFilter('thirst')}
           />
         )}
         {encumbrance && (
@@ -284,7 +303,9 @@ function App() {
             color={theme[encumbrance.themeColor]}
             tooltip={encumbrance.descriptor}
             glow={encumbrance.severity <= 1}
-            onClick={compactMode ? undefined : () => sendCommand('score')}
+            compact={compactBar}
+            filtered={filterFlags.encumbrance}
+            onClick={() => toggleFilter('encumbrance')}
           />
         )}
         {movement && (
@@ -294,7 +315,9 @@ function App() {
             color={theme[movement.themeColor]}
             tooltip={movement.descriptor}
             glow={movement.severity <= 1}
-            onClick={compactMode ? undefined : () => sendCommand('score')}
+            compact={compactBar}
+            filtered={filterFlags.movement}
+            onClick={() => toggleFilter('movement')}
           />
         )}
           </>

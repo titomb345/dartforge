@@ -34,6 +34,25 @@ export interface OutputFilterCallbacks {
   onMovement?: (match: MovementMatch) => void;
 }
 
+/** Per-status filter flags — controls which status types get stripped from terminal. */
+export interface FilterFlags {
+  concentration: boolean;
+  hunger: boolean;
+  thirst: boolean;
+  aura: boolean;
+  encumbrance: boolean;
+  movement: boolean;
+}
+
+export const DEFAULT_FILTER_FLAGS: FilterFlags = {
+  concentration: false,
+  hunger: false,
+  thirst: false,
+  aura: false,
+  encumbrance: false,
+  movement: false,
+};
+
 /**
  * Line-buffered output filter that removes tracked status messages from
  * raw MUD output before it reaches the terminal. Fires callbacks when
@@ -49,8 +68,8 @@ export class OutputFilter {
    * Each server prompt ("> ") decrements the counter.
    */
   private syncRemaining = 0;
-  /** When true, strip concentration/needs/aura/encumbrance/movement from terminal. */
-  compactMode = false;
+  /** Per-status filter flags — when true, matching messages are stripped from terminal. */
+  filterFlags: FilterFlags = { ...DEFAULT_FILTER_FLAGS };
 
   constructor(callbacks: OutputFilterCallbacks = {}) {
     this.callbacks = callbacks;
@@ -150,7 +169,16 @@ export class OutputFilter {
 
       // --- Compact mode: strip status lines from terminal ---
 
-      if (this.compactMode && (concMatch || needsMatch || auraMatch || encumbranceMatch || movementMatch)) {
+      if (
+        !isScoreBlockLine(stripped) && (
+          (this.filterFlags.concentration && concMatch) ||
+          (this.filterFlags.hunger && needsMatch?.hunger) ||
+          (this.filterFlags.thirst && needsMatch?.thirst) ||
+          (this.filterFlags.aura && auraMatch) ||
+          (this.filterFlags.encumbrance && encumbranceMatch) ||
+          (this.filterFlags.movement && movementMatch)
+        )
+      ) {
         continue;
       }
 
