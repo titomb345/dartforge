@@ -1,0 +1,80 @@
+import type { DataStore } from '../contexts/DataStoreContext';
+
+export const CURRENT_VERSION = 4;
+
+/** Raw store contents — all keys are optional since older stores may lack them. */
+export type StoreData = Record<string, unknown>;
+
+type MigrationFn = (data: StoreData) => StoreData;
+
+/**
+ * Ordered migration functions. MIGRATIONS[n] migrates version n → n+1.
+ * The v0→v1 migration is a no-op — it just stamps the version on pre-versioning installs.
+ */
+const MIGRATIONS: MigrationFn[] = [
+  // v0 → v1: no-op, stamps _version on existing installs
+  (data) => data,
+  // v1 → v2: initialize skill tracking settings
+  (data) => {
+    if (!('activeCharacter' in data)) {
+      data.activeCharacter = null;
+    }
+    if (!('showInlineImproves' in data)) {
+      data.showInlineImproves = false;
+    }
+    return data;
+  },
+  // v2 → v3: initialize compact mode setting
+  (data) => {
+    if (!('compactMode' in data)) {
+      data.compactMode = false;
+    }
+    return data;
+  },
+  // v3 → v4: per-status filtering replaces compact mode toggle
+  (data) => {
+    const wasCompact = data.compactMode === true;
+    delete data.compactMode;
+    data.compactBar = false;
+    data.filteredStatuses = {
+      concentration: wasCompact,
+      hunger: wasCompact,
+      thirst: wasCompact,
+      aura: wasCompact,
+      encumbrance: wasCompact,
+      movement: wasCompact,
+    };
+    return data;
+  },
+];
+
+const SETTINGS_FILE = 'settings.json';
+
+/**
+ * Read the settings `_version`, run any pending migrations sequentially,
+ * then write the updated `_version` back.
+ */
+export async function migrateSettings(dataStore: DataStore): Promise<void> {
+  const version = (await dataStore.get<number>(SETTINGS_FILE, '_version')) ?? 0;
+
+  if (version >= CURRENT_VERSION) return;
+
+  // Snapshot all keys into a plain object
+  let data: StoreData = {};
+  for (const key of await dataStore.keys(SETTINGS_FILE)) {
+    data[key] = await dataStore.get(SETTINGS_FILE, key);
+  }
+
+  // Run each migration sequentially
+  for (let v = version; v < CURRENT_VERSION; v++) {
+    data = MIGRATIONS[v](data);
+  }
+
+  // Write migrated values back
+  for (const [key, value] of Object.entries(data)) {
+    await dataStore.set(SETTINGS_FILE, key, value);
+  }
+
+  await dataStore.set(SETTINGS_FILE, '_version', CURRENT_VERSION);
+  await dataStore.save(SETTINGS_FILE);
+}

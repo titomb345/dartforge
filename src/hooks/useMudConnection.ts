@@ -4,7 +4,9 @@ import { invoke } from '@tauri-apps/api/core';
 import type { Terminal } from '@xterm/xterm';
 import { MUD_OUTPUT_EVENT, CONNECTION_STATUS_EVENT } from '../lib/tauriEvents';
 import { MudOutputPayload, ConnectionStatusPayload } from '../types';
-import { getConnectedSplash, getDisconnectSplash } from '../lib/splash';
+import { getConnectingSplash, getConnectedSplash, getDisconnectSplash } from '../lib/splash';
+import { smartWrite } from '../lib/terminalUtils';
+import type { OutputFilter } from '../lib/outputFilter';
 
 /** End marker for the DartMUD ASCII banner */
 const BANNER_END_MARKER = 'Ferdarchi';
@@ -13,32 +15,24 @@ const BANNER_MAX_BUFFER = 5000;
 
 /**
  * Detect if data ends with a MUD prompt ("> ") without a trailing newline.
- * When the server sends a prompt, the next response would get jammed onto
- * the same line. Adding a newline after the prompt keeps output clean.
+ * Used as fallback when IAC GA is not available.
  */
 function endsWithPrompt(data: string): boolean {
-  // Strip ANSI escape sequences to check the visible text
   const stripped = data.replace(/\x1b\[[0-9;]*[A-Za-z]/g, '');
   return stripped.endsWith('\n> ') || stripped.endsWith('\r\n> ') || stripped === '> ';
 }
 
 /**
- * Write data to terminal with smart auto-scroll.
- * If user has scrolled up to read history, new output won't yank them back.
- * If user is at the bottom, it scrolls normally.
+ * Strip the game prompt ("> ") from output text. With IAC GA signalling
+ * end-of-response, the prompt is unnecessary in a split-pane client.
+ * Returns empty string for bare prompts.
  */
-function smartWrite(term: Terminal, data: string) {
-  const buffer = term.buffer.active;
-  const scrolledUp = buffer.baseY - buffer.viewportY;
-
-  if (scrolledUp <= 0) {
-    term.write(data);
-  } else {
-    term.write(data, () => {
-      const newBase = term.buffer.active.baseY;
-      term.scrollToLine(newBase - scrolledUp);
-    });
-  }
+function stripPrompt(data: string): string {
+  const clean = data.replace(/\x1b\[[0-9;]*[A-Za-z]/g, '');
+  // Bare prompt only — suppress entirely
+  if (clean.trim() === '>' || clean.trim() === '') return '';
+  // Strip trailing prompt after newline
+  return data.replace(/\r?\n> ?$/, '\n');
 }
 
 /** Map a single ANSI SGR code to a human-readable name */
@@ -92,6 +86,10 @@ function annotateAnsi(data: string): string {
 export function useMudConnection(
   terminalRef: React.MutableRefObject<Terminal | null>,
   debugModeRef: React.RefObject<boolean>,
+  onOutputChunk?: (data: string) => void,
+  onCharacterName?: (name: string) => void,
+  outputFilterRef?: React.RefObject<OutputFilter | null>,
+  onLogin?: () => void,
 ) {
   const [connected, setConnected] = useState(false);
   const [statusMessage, setStatusMessage] = useState('Connecting...');
@@ -101,6 +99,16 @@ export function useMudConnection(
   const wasConnectedRef = useRef(false);
   const passwordModeRef = useRef(false);
   const skipHistoryRef = useRef(false);
+  const captureNameRef = useRef(false);
+  const loginFiredRef = useRef(false);
+
+  // Store latest callback refs to avoid re-subscribing on every change
+  const onOutputChunkRef = useRef(onOutputChunk);
+  onOutputChunkRef.current = onOutputChunk;
+  const onCharacterNameRef = useRef(onCharacterName);
+  onCharacterNameRef.current = onCharacterName;
+  const onLoginRef = useRef(onLogin);
+  onLoginRef.current = onLogin;
 
   // Banner filtering state
   const filteringBannerRef = useRef(false);
@@ -121,8 +129,17 @@ export function useMudConnection(
             setPasswordMode(true);
             setSkipHistory(true);
           } else if (/name:/i.test(data)) {
+            captureNameRef.current = true;
             skipHistoryRef.current = true;
             setSkipHistory(true);
+          }
+          // Detect successful login or reconnect
+          if (
+            !loginFiredRef.current &&
+            (/Running under version/i.test(data) || /reconnecting to old object/i.test(data))
+          ) {
+            loginFiredRef.current = true;
+            onLoginRef.current?.();
           }
         };
 
@@ -140,32 +157,57 @@ export function useMudConnection(
             bannerBufferRef.current = '';
             if (afterBanner.length > 0) {
               detectPrompts(afterBanner);
-              let afterOutput = debugModeRef.current ? annotateAnsi(afterBanner) : afterBanner;
-              if (endsWithPrompt(afterBanner)) {
-                afterOutput += '\n';
+              onOutputChunkRef.current?.(afterBanner);
+              const filteredAfter = outputFilterRef?.current
+                ? outputFilterRef.current.filter(afterBanner)
+                : afterBanner;
+              if (filteredAfter) {
+                let afterOutput = debugModeRef.current ? annotateAnsi(filteredAfter) : filteredAfter;
+                if (event.payload.ga) {
+                  afterOutput = stripPrompt(afterOutput);
+                } else if (endsWithPrompt(filteredAfter)) {
+                  afterOutput += '\n';
+                }
+                if (afterOutput) smartWrite(term, afterOutput);
               }
-              smartWrite(term, afterOutput);
             }
           } else if (bannerBufferRef.current.length > BANNER_MAX_BUFFER) {
             // Safety: too much data without finding banner, flush it all
             filteringBannerRef.current = false;
-            detectPrompts(bannerBufferRef.current);
-            let flushOutput = debugModeRef.current ? annotateAnsi(bannerBufferRef.current) : bannerBufferRef.current;
-            if (endsWithPrompt(bannerBufferRef.current)) {
-              flushOutput += '\n';
-            }
-            smartWrite(term, flushOutput);
+            const rawBuffer = bannerBufferRef.current;
             bannerBufferRef.current = '';
+            detectPrompts(rawBuffer);
+            onOutputChunkRef.current?.(rawBuffer);
+            const filteredBuffer = outputFilterRef?.current
+              ? outputFilterRef.current.filter(rawBuffer)
+              : rawBuffer;
+            if (filteredBuffer) {
+              let flushOutput = debugModeRef.current ? annotateAnsi(filteredBuffer) : filteredBuffer;
+              if (event.payload.ga) {
+                flushOutput = stripPrompt(flushOutput);
+              } else if (endsWithPrompt(filteredBuffer)) {
+                flushOutput += '\n';
+              }
+              if (flushOutput) smartWrite(term, flushOutput);
+            }
           }
           return;
         }
 
-        let output = debugModeRef.current ? annotateAnsi(event.payload.data) : event.payload.data;
-        if (endsWithPrompt(event.payload.data)) {
-          output += '\n';
-        }
         detectPrompts(event.payload.data);
-        smartWrite(term, output);
+        onOutputChunkRef.current?.(event.payload.data);
+        const filtered = outputFilterRef?.current
+          ? outputFilterRef.current.filter(event.payload.data)
+          : event.payload.data;
+        if (filtered) {
+          let output = debugModeRef.current ? annotateAnsi(filtered) : filtered;
+          if (event.payload.ga) {
+            output = stripPrompt(output);
+          } else if (endsWithPrompt(filtered)) {
+            output += '\n';
+          }
+          if (output) smartWrite(term, output);
+        }
       });
 
       const unlistenStatus = await listen<ConnectionStatusPayload>(
@@ -180,10 +222,13 @@ export function useMudConnection(
               term.write(getConnectedSplash(term.cols));
               filteringBannerRef.current = true;
               bannerBufferRef.current = '';
+              loginFiredRef.current = false;
+              outputFilterRef?.current?.reset();
             } else if (!event.payload.connected && wasConnectedRef.current && term) {
               // Connection dropped — stop any active filtering, show disconnect splash
               filteringBannerRef.current = false;
               bannerBufferRef.current = '';
+              outputFilterRef?.current?.reset();
               smartWrite(term, getDisconnectSplash(term.cols));
             }
 
@@ -207,6 +252,11 @@ export function useMudConnection(
 
   const sendCommand = useCallback(async (command: string) => {
     try {
+      // Capture character name if we just saw a "name:" prompt
+      if (captureNameRef.current) {
+        captureNameRef.current = false;
+        onCharacterNameRef.current?.(command.trim());
+      }
       if (passwordModeRef.current) {
         passwordModeRef.current = false;
         setPasswordMode(false);
@@ -223,11 +273,16 @@ export function useMudConnection(
 
   const reconnect = useCallback(async () => {
     try {
+      const term = terminalRef.current;
+      if (term) {
+        term.clear();
+        term.write(getConnectingSplash(term.cols));
+      }
       await invoke('reconnect');
     } catch (e) {
       console.error('Failed to reconnect:', e);
     }
-  }, []);
+  }, [terminalRef]);
 
   const disconnect = useCallback(async () => {
     try {

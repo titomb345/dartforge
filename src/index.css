@@ -21,6 +21,8 @@
   --color-purple: #a78bfa;
   --color-comment: #6272a4;
   --color-amber: #f59e0b;
+  --color-reckoning-common: #f59e0b;
+  --color-reckoning-adachian: #f472b6;
 }
 
 @layer base {
@@ -34,6 +36,31 @@
     color: var(--color-text-primary);
     font-family: 'Cascadia Code', 'Fira Code', 'Consolas', monospace;
   }
+}
+
+/* Slim scrollbars for panels */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: #333;
+  border-radius: 3px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #555;
+}
+
+/* Hide scrollbar on filter pill rows */
+.scrollbar-none::-webkit-scrollbar {
+  display: none;
+}
+.scrollbar-none {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
 }
 
 /* Password mode (no Tailwind equivalent) */
@@ -53,4 +80,46 @@
   color: var(--btn-accent);
   border-color: color-mix(in srgb, var(--btn-accent) 25%, transparent);
   filter: drop-shadow(0 0 4px color-mix(in srgb, var(--btn-accent) 50%, transparent));
+}
+
+/* Status readout — instrument gauge styling */
+.status-readout:hover {
+  background: color-mix(in srgb, var(--readout-color) 6%, transparent);
+  border-color: color-mix(in srgb, var(--readout-color) 12%, transparent);
+  border-left-color: var(--readout-color);
+  filter: drop-shadow(0 0 4px color-mix(in srgb, var(--readout-color) 15%, transparent));
+}
+
+/* Game clock — instrument readout styling */
+.game-clock:hover {
+  background: color-mix(in srgb, var(--gc-accent) 4%, transparent);
+  border-color: color-mix(in srgb, var(--gc-accent) 10%, transparent);
+  border-left-color: var(--gc-accent);
+  filter: drop-shadow(0 0 4px color-mix(in srgb, var(--gc-accent) 12%, transparent));
+}
+
+/* Holiday badge slow pulse */
+.game-clock-holiday {
+  animation: holiday-glow 3s ease-in-out infinite;
+}
+
+@keyframes holiday-glow {
+  0%, 100% { opacity: 0.85; }
+  50% { opacity: 1; }
+}
+
+/* Status readout danger pulse — critical severity states */
+@keyframes danger-pulse {
+  0%, 100% { border-left-color: var(--readout-color); }
+  50% { border-left-color: transparent; }
+}
+.status-readout-danger {
+  animation: danger-pulse 1.5s ease-in-out infinite;
+}
+
+/* Suppress all transitions during active window resize to prevent layout-switch jank */
+.resizing *,
+.resizing *::before,
+.resizing *::after {
+  transition-duration: 0s !important;
 }

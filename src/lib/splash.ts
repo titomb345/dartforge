@@ -1,6 +1,6 @@
 import { ANSI } from './ansi';
 
-const { RESET, DIM, GREEN, BRIGHT_GREEN } = ANSI;
+const { RESET, DIM, CYAN, GREEN, BRIGHT_GREEN } = ANSI;
 
 // 256-color ANSI: \x1b[38;5;Nm
 const color = (n: number) => `\x1b[1;38;5;${n}m`;
@@ -154,7 +154,28 @@ export function getStartupSplash(cols: number): string {
     '',
     ...center([`\x1b[1;36mA custom client purposely built for DartMUD${RESET}`], cols),
     '',
-    ...center([`${DIM}Connecting...${RESET}`], cols),
+    ...center([`${DIM}Press Enter to connect${RESET}`], cols),
+    '',
+    '',
+  ];
+  return lines.join('\r\n');
+}
+
+export function getConnectingSplash(cols: number): string {
+  const logo = buildGradientWord('DARTFORGE', GRADIENT);
+  const bar = gradientBar(cols);
+  const lines = [
+    '',
+    '',
+    ...center([bar], cols),
+    '',
+    ...center(logo, cols),
+    '',
+    ...center([bar], cols),
+    '',
+    ...center([`\x1b[1;36mA custom client purposely built for DartMUD${RESET}`], cols),
+    '',
+    ...center([`${CYAN}Connecting...${RESET}`], cols),
     '',
     '',
   ];

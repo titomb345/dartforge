@@ -24,3 +24,6 @@ Thumbs.db
 
 # Logs
 *.log
+
+# Skill data (personal, written by import script)
+skills-*.json

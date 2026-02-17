@@ -10,6 +10,7 @@
     "core:event:allow-emit",
     "core:event:allow-listen",
     "store:default",
+    "dialog:default",
     "core:app:default",
     "core:window:allow-set-title"
   ]

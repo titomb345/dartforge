@@ -6,6 +6,7 @@ pub const CONNECTION_STATUS_EVENT: &str = "mud:connection-status";
 #[derive(Clone, Serialize, Deserialize)]
 pub struct MudOutputPayload {
     pub data: String,
+    pub ga: bool,
 }
 
 #[derive(Clone, Serialize, Deserialize)]

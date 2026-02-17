@@ -1,7 +1,17 @@
 export type ClassMode = 'mage' | 'fighter' | 'multi';
 
+export type Panel = 'appearance' | 'skills' | 'settings';
+
+export type {
+  SkillTier,
+  SkillRecord,
+  CharacterSkillFile,
+  SkillMatchResult,
+} from './skills';
+
 export interface MudOutputPayload {
   data: string;
+  ga: boolean;
 }
 
 export interface ConnectionStatusPayload {

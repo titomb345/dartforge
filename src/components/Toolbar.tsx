@@ -1,5 +1,5 @@
 import { IconButton } from './IconButton';
-import { PowerIcon, PaletteIcon } from './icons';
+import { PowerIcon, PaletteIcon, TrendingUpIcon, GearIcon } from './icons';
 import { cn } from '../lib/cn';
 
 interface ToolbarProps {
@@ -8,6 +8,10 @@ interface ToolbarProps {
   onDisconnect: () => void;
   showAppearance: boolean;
   onToggleAppearance: () => void;
+  showSkills: boolean;
+  onToggleSkills: () => void;
+  showSettings: boolean;
+  onToggleSettings: () => void;
 }
 
 export function Toolbar({
@@ -16,6 +20,10 @@ export function Toolbar({
   onDisconnect,
   showAppearance,
   onToggleAppearance,
+  showSkills,
+  onToggleSkills,
+  showSettings,
+  onToggleSettings,
 }: ToolbarProps) {
 
   return (
@@ -44,11 +52,25 @@ export function Toolbar({
 
       <div className="flex items-center gap-1">
         <IconButton
+          icon={<TrendingUpIcon />}
+          title="Skills"
+          accent="#50fa7b"
+          toggled={showSkills}
+          onClick={onToggleSkills}
+        />
+        <IconButton
           icon={<PaletteIcon />}
           title="Appearance"
           accent="#8be9fd"
           toggled={showAppearance}
           onClick={onToggleAppearance}
+        />
+        <IconButton
+          icon={<GearIcon />}
+          title="Settings"
+          accent="#bd93f9"
+          toggled={showSettings}
+          onClick={onToggleSettings}
         />
       </div>
     </div>

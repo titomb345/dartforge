@@ -176,7 +176,7 @@ pub async fn connect(app: AppHandle, mut cmd_rx: mpsc::Receiver<String>) {
 
                 // Emit display text to frontend
                 if !processed.display.is_empty() {
-                    let _ = app.emit(MUD_OUTPUT_EVENT, MudOutputPayload { data: processed.display });
+                    let _ = app.emit(MUD_OUTPUT_EVENT, MudOutputPayload { data: processed.display, ga: processed.ga });
                 }
             }
             Err(e) => {
