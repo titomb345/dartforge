@@ -4,7 +4,7 @@ import { invoke } from '@tauri-apps/api/core';
 import type { Terminal } from '@xterm/xterm';
 import { MUD_OUTPUT_EVENT, CONNECTION_STATUS_EVENT } from '../lib/tauriEvents';
 import { MudOutputPayload, ConnectionStatusPayload } from '../types';
-import { getConnectedSplash, getDisconnectSplash } from '../lib/splash';
+import { getConnectingSplash, getConnectedSplash, getDisconnectSplash } from '../lib/splash';
 import { smartWrite } from '../lib/terminalUtils';
 import type { OutputFilter } from '../lib/outputFilter';
 
@@ -273,11 +273,16 @@ export function useMudConnection(
 
   const reconnect = useCallback(async () => {
     try {
+      const term = terminalRef.current;
+      if (term) {
+        term.clear();
+        term.write(getConnectingSplash(term.cols));
+      }
       await invoke('reconnect');
     } catch (e) {
       console.error('Failed to reconnect:', e);
     }
-  }, []);
+  }, [terminalRef]);
 
   const disconnect = useCallback(async () => {
     try {

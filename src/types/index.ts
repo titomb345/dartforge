@@ -1,5 +1,7 @@
 export type ClassMode = 'mage' | 'fighter' | 'multi';
 
+export type Panel = 'appearance' | 'skills' | 'settings';
+
 export type {
   SkillTier,
   SkillRecord,

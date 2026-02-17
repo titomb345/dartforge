@@ -116,3 +116,10 @@
 .status-readout-danger {
   animation: danger-pulse 1.5s ease-in-out infinite;
 }
+
+/* Suppress all transitions during active window resize to prevent layout-switch jank */
+.resizing *,
+.resizing *::before,
+.resizing *::after {
+  transition-duration: 0s !important;
+}

@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { cn } from '../lib/cn';
 
 interface StatusReadoutProps {
@@ -13,9 +14,14 @@ interface StatusReadoutProps {
 }
 
 export function StatusReadout({ icon, label, color, tooltip, glow, compact, filtered, danger, onClick }: StatusReadoutProps) {
+  const [hovered, setHovered] = useState(false);
+  const showExpanded = !compact || hovered;
+
   return (
     <button
       onClick={onClick}
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => setHovered(false)}
       title={tooltip}
       className={cn(
         'status-readout relative flex items-center rounded-[3px] select-none border border-transparent transition-all duration-200',
@@ -25,8 +31,8 @@ export function StatusReadout({ icon, label, color, tooltip, glow, compact, filt
       style={
         {
           '--readout-color': color,
-          paddingLeft: compact ? 6 : 8,
-          paddingRight: compact ? 6 : 10,
+          paddingLeft: showExpanded ? 8 : 6,
+          paddingRight: showExpanded ? 10 : 6,
           paddingTop: 3,
           paddingBottom: 3,
           borderLeftWidth: 2,
@@ -49,9 +55,9 @@ export function StatusReadout({ icon, label, color, tooltip, glow, compact, filt
         className="text-[11px] leading-none tracking-wide uppercase overflow-hidden whitespace-nowrap transition-all duration-200"
         style={{
           color,
-          maxWidth: compact ? 0 : 200,
-          opacity: compact ? 0 : 1,
-          marginLeft: compact ? 0 : 6,
+          maxWidth: showExpanded ? 200 : 0,
+          opacity: showExpanded ? 1 : 0,
+          marginLeft: showExpanded ? 6 : 0,
         }}
       >
         {label}

@@ -6,6 +6,8 @@ import { Terminal } from './components/Terminal';
 import { CommandInput } from './components/CommandInput';
 import { Toolbar } from './components/Toolbar';
 import { ColorSettings } from './components/ColorSettings';
+import { DataDirSettings } from './components/DataDirSettings';
+import { SetupDialog } from './components/SetupDialog';
 import { SkillPanel } from './components/SkillPanel';
 import { GameClock } from './components/GameClock';
 import { StatusReadout } from './components/StatusReadout';
@@ -20,39 +22,66 @@ import { useNeeds } from './hooks/useNeeds';
 import { useAura } from './hooks/useAura';
 import { useEncumbrance } from './hooks/useEncumbrance';
 import { useMovement } from './hooks/useMovement';
-import { load } from '@tauri-apps/plugin-store';
+import { useDataStore } from './contexts/DataStoreContext';
 import { buildXtermTheme } from './lib/defaultTheme';
 import { OutputProcessor } from './lib/outputProcessor';
 import { OutputFilter, DEFAULT_FILTER_FLAGS, type FilterFlags } from './lib/outputFilter';
 import { matchSkillLine } from './lib/skillPatterns';
 import { cn } from './lib/cn';
 
+import type { Panel } from './types';
+
+/**
+ * App gate — shows the setup dialog until a data location is configured,
+ * then mounts the main client. This ensures no hooks (connection, terminal,
+ * trackers) run until setup is complete.
+ */
 function App() {
+  const dataStore = useDataStore();
+
+  // Set window title regardless of setup state
+  useEffect(() => {
+    getVersion().then((v) => {
+      getCurrentWindow().setTitle(`DartForge v${v}`);
+    }).catch(console.error);
+  }, []);
+
+  if (dataStore.needsSetup) {
+    return <SetupDialog />;
+  }
+
+  if (!dataStore.ready) {
+    return null;
+  }
+
+  return <AppMain />;
+}
+
+/** Main client — only mounts after data location is configured and ready. */
+function AppMain() {
   const terminalRef = useRef<XTerm | null>(null);
   const inputRef = useRef<HTMLTextAreaElement | null>(null);
   const debugModeRef = useRef(false);
   const [debugMode, setDebugMode] = useState(false);
-  const [showAppearance, setShowAppearance] = useState(false);
-  const [showSkills, setShowSkills] = useState(false);
+  const [activePanel, setActivePanel] = useState<Panel | null>(null);
+  const togglePanel = (panel: Panel) => setActivePanel((v) => v === panel ? null : panel);
   const [compactBar, setCompactBar] = useState(false);
   const [filterFlags, setFilterFlags] = useState<FilterFlags>({ ...DEFAULT_FILTER_FLAGS });
   const [loggedIn, setLoggedIn] = useState(false);
   const statusBarRef = useRef<HTMLDivElement | null>(null);
   const [autoCompact, setAutoCompact] = useState(false);
   const [twoRow, setTwoRow] = useState(false);
-  const manualCompactRef = useRef(false);
 
-  // Set window title with version + load compact mode from settings
+  const dataStore = useDataStore();
+
+  // Load compact mode + filter flags from settings
   useEffect(() => {
-    getVersion().then((v) => {
-      getCurrentWindow().setTitle(`DartForge v${v}`);
-    }).catch(console.error);
-    load('settings.json').then(async (store) => {
-      const savedCompact = await store.get<boolean>('compactBar');
+    (async () => {
+      const savedCompact = await dataStore.get<boolean>('settings.json', 'compactBar');
       if (savedCompact != null) setCompactBar(savedCompact);
-      const savedFilters = await store.get<FilterFlags>('filteredStatuses');
+      const savedFilters = await dataStore.get<FilterFlags>('settings.json', 'filteredStatuses');
       if (savedFilters != null) setFilterFlags(savedFilters);
-    }).catch(console.error);
+    })().catch(console.error);
   }, []);
 
   const { theme, updateColor, resetColor, display, updateDisplay, resetDisplay, resetAll } = useThemeColors();
@@ -110,18 +139,33 @@ function App() {
     if (outputFilterRef.current) {
       outputFilterRef.current.filterFlags = { ...filterFlags };
     }
-    load('settings.json').then((store) => store.set('filteredStatuses', filterFlags)).catch(console.error);
+    dataStore.set('settings.json', 'filteredStatuses', filterFlags).catch(console.error);
   }, [filterFlags]);
 
   // Persist compact bar state
   useEffect(() => {
-    load('settings.json').then((store) => store.set('compactBar', compactBar)).catch(console.error);
+    dataStore.set('settings.json', 'compactBar', compactBar).catch(console.error);
   }, [compactBar]);
 
+  // Suppress transitions during active window resize to prevent breakpoint flash
+  useEffect(() => {
+    let timeoutId: ReturnType<typeof setTimeout>;
+    const handleResize = () => {
+      document.documentElement.classList.add('resizing');
+      clearTimeout(timeoutId);
+      timeoutId = setTimeout(() => {
+        document.documentElement.classList.remove('resizing');
+      }, 150);
+    };
+    window.addEventListener('resize', handleResize);
+    return () => {
+      window.removeEventListener('resize', handleResize);
+      clearTimeout(timeoutId);
+      document.documentElement.classList.remove('resizing');
+    };
+  }, []);
+
   // Responsive status bar: two-row layout when narrow, auto-compact when overflowing.
-  // To prevent oscillation (compact shrinks content → no overflow → uncompact → overflow again),
-  // we store the scrollWidth that triggered auto-compact and only release when the container
-  // grows wider than that threshold.
   const autoCompactThresholdRef = useRef(0);
   useLayoutEffect(() => {
     const el = statusBarRef.current;
@@ -129,13 +173,10 @@ function App() {
     const observer = new ResizeObserver(() => {
       const width = el.clientWidth;
       setTwoRow(width < 500);
-      if (manualCompactRef.current) return;
       if (!autoCompact && el.scrollWidth > width) {
-        // Content overflows → engage auto-compact and remember the width needed
         autoCompactThresholdRef.current = el.scrollWidth;
         setAutoCompact(true);
       } else if (autoCompact && width >= autoCompactThresholdRef.current) {
-        // Container is now wide enough to fit expanded content → release
         setAutoCompact(false);
       }
     });
@@ -148,7 +189,7 @@ function App() {
   // Skill tracker — needs sendCommand ref (set after useMudConnection)
   const sendCommandRef = useRef<((cmd: string) => Promise<void>) | null>(null);
   const { activeCharacter, skillData, setActiveCharacter, handleSkillMatch, showInlineImproves, toggleInlineImproves } =
-    useSkillTracker(sendCommandRef, processorRef, terminalRef);
+    useSkillTracker(sendCommandRef, processorRef, terminalRef, dataStore);
 
   // Process output chunks through the skill detection pipeline
   const onOutputChunk = useCallback((data: string) => {
@@ -166,10 +207,6 @@ function App() {
   const LOGIN_COMMANDS = ['hp', 'score'];
 
   const onLogin = useCallback(() => {
-    // Suppress all sync output so login/reconnect is invisible to the user.
-    // Extra counts beyond LOGIN_COMMANDS.length account for server-initiated
-    // prompts: the post-login prompt on fresh login, and the server-sent
-    // score block prompt on reconnect.
     outputFilterRef.current?.startSync(LOGIN_COMMANDS.length + 2);
     for (const cmd of LOGIN_COMMANDS) {
       sendCommandRef.current?.(cmd);
@@ -201,7 +238,6 @@ function App() {
     setFilterFlags((prev) => ({ ...prev, [key]: !prev[key] }));
   }, []);
 
-  // Danger pulse triggers on red/magenta theme colors — consistent across all tracker scales
   const isDanger = (themeColor: string) =>
     themeColor === 'red' || themeColor === 'brightRed' || themeColor === 'magenta';
 
@@ -211,10 +247,12 @@ function App() {
         connected={connected}
         onReconnect={reconnect}
         onDisconnect={disconnect}
-        showAppearance={showAppearance}
-        onToggleAppearance={() => setShowAppearance((v) => !v)}
-        showSkills={showSkills}
-        onToggleSkills={() => setShowSkills((v) => !v)}
+        showAppearance={activePanel === 'appearance'}
+        onToggleAppearance={() => togglePanel('appearance')}
+        showSkills={activePanel === 'skills'}
+        onToggleSkills={() => togglePanel('skills')}
+        showSettings={activePanel === 'settings'}
+        onToggleSettings={() => togglePanel('settings')}
       />
       <div className="flex-1 overflow-hidden flex flex-row relative">
         {/* Left: Terminal + overlays */}
@@ -223,7 +261,7 @@ function App() {
           <div
             className={cn(
               'absolute top-0 right-0 bottom-0 z-[100] transition-transform duration-300 ease-in-out',
-              showAppearance ? 'translate-x-0' : 'translate-x-full'
+              activePanel === 'appearance' ? 'translate-x-0' : 'translate-x-full'
             )}
           >
             <ColorSettings
@@ -239,15 +277,20 @@ function App() {
             />
           </div>
         </div>
-        {/* Right: Skill panel — inline on xl+, overlay on smaller screens */}
+        {/* Right: Settings panel overlay */}
         <div
           className={cn(
-            'h-full overflow-hidden transition-all duration-300 ease-in-out',
-            // xl+: inline panel (pushes terminal content)
-            showSkills ? 'xl:w-[360px]' : 'xl:w-0',
-            // <xl: overlay panel (slides over content)
-            'max-xl:absolute max-xl:right-0 max-xl:top-0 max-xl:bottom-0 max-xl:z-[100] max-xl:w-[360px]',
-            showSkills ? 'max-xl:translate-x-0' : 'max-xl:translate-x-full',
+            'absolute top-0 right-0 bottom-0 z-[100] transition-transform duration-300 ease-in-out',
+            activePanel === 'settings' ? 'translate-x-0' : 'translate-x-full'
+          )}
+        >
+          <DataDirSettings />
+        </div>
+        {/* Right: Skill panel overlay */}
+        <div
+          className={cn(
+            'absolute top-0 right-0 bottom-0 z-[100] transition-transform duration-300 ease-in-out',
+            activePanel === 'skills' ? 'translate-x-0' : 'translate-x-full'
           )}
         >
           <SkillPanel
@@ -270,18 +313,16 @@ function App() {
         {loggedIn && (
           <>
             <button
-              onClick={() => {
-                setCompactBar((v) => {
-                  manualCompactRef.current = !v;
-                  return !v;
-                });
-              }}
-              title={compactBar ? 'Expand status labels' : 'Compact status bar'}
+              onClick={() => setCompactBar((v) => !v)}
+              disabled={autoCompact}
+              title={autoCompact ? 'Compact mode (auto)' : compactBar ? 'Expand status labels' : 'Compact status bar'}
               className={cn(
-                'flex items-center justify-center w-5 h-5 rounded-[3px] transition-all duration-200 border cursor-pointer',
-                compactBar
-                  ? 'text-cyan border-cyan/25 bg-cyan/8'
-                  : 'text-text-dim border-transparent hover:text-text-muted'
+                'flex items-center justify-center w-5 h-5 rounded-[3px] transition-all duration-200 border',
+                autoCompact
+                  ? 'text-text-dim/50 border-transparent cursor-default'
+                  : compactBar
+                    ? 'text-cyan border-cyan/25 bg-cyan/8 cursor-pointer'
+                    : 'text-text-dim border-transparent hover:text-text-muted cursor-pointer'
               )}
             >
               <CompressIcon size={10} />

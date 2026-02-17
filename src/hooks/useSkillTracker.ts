@@ -1,11 +1,11 @@
 import { useState, useCallback, useEffect, useRef } from 'react';
-import { load } from '@tauri-apps/plugin-store';
 import type { Terminal as XTerm } from '@xterm/xterm';
 import type { CharacterSkillFile, SkillMatchResult, SkillRecord } from '../types/skills';
 import { getTierForCount, getTierByName, getImprovesToNextTier } from '../lib/skillTiers';
 import { matchSkillLine } from '../lib/skillPatterns';
 import { smartWrite } from '../lib/terminalUtils';
 import type { OutputProcessor } from '../lib/outputProcessor';
+import type { DataStore } from '../contexts/DataStoreContext';
 
 const SETTINGS_FILE = 'settings.json';
 const ACTIVE_CHAR_KEY = 'activeCharacter';
@@ -14,7 +14,7 @@ const SHOW_SKILL_TIMEOUT_MS = 15_000;
 
 const EMPTY_SKILL_FILE: CharacterSkillFile = { skills: {}, pets: {} };
 
-function storeFileName(name: string): string {
+function skillFileName(name: string): string {
   return `skills-${name.toLowerCase()}.json`;
 }
 
@@ -22,6 +22,7 @@ export function useSkillTracker(
   sendCommandRef: React.RefObject<((cmd: string) => Promise<void>) | null>,
   processorRef: React.RefObject<OutputProcessor | null>,
   terminalRef: React.RefObject<XTerm | null>,
+  dataStore: DataStore,
 ) {
   const [activeCharacter, setActiveCharacterState] = useState<string | null>(null);
   const activeCharacterRef = useRef<string | null>(null);
@@ -32,16 +33,20 @@ export function useSkillTracker(
   const [showInlineImproves, setShowInlineImproves] = useState(false);
   const showInlineImprovesRef = useRef(false);
 
+  // Keep a stable ref to dataStore for use in callbacks
+  const dataStoreRef = useRef(dataStore);
+  dataStoreRef.current = dataStore;
+
   // Load last active character + inline preference from settings on mount
   useEffect(() => {
+    if (!dataStore.ready) return;
     (async () => {
       try {
-        const store = await load(SETTINGS_FILE);
-        const saved = await store.get<string>(ACTIVE_CHAR_KEY);
+        const saved = await dataStore.get<string>(SETTINGS_FILE, ACTIVE_CHAR_KEY);
         if (saved) {
           await loadCharacterSkills(saved);
         }
-        const inlinePref = await store.get<boolean>(INLINE_IMPROVES_KEY);
+        const inlinePref = await dataStore.get<boolean>(SETTINGS_FILE, INLINE_IMPROVES_KEY);
         if (inlinePref != null) {
           showInlineImprovesRef.current = inlinePref;
           setShowInlineImproves(inlinePref);
@@ -50,16 +55,17 @@ export function useSkillTracker(
         console.error('Failed to load settings:', e);
       }
     })();
-  }, []);
+  }, [dataStore.ready]);
 
   async function loadCharacterSkills(name: string) {
     const lower = name.toLowerCase();
     activeCharacterRef.current = lower;
     setActiveCharacterState(lower);
     try {
-      const store = await load(storeFileName(lower));
-      const skills = (await store.get<CharacterSkillFile['skills']>('skills')) ?? {};
-      const pets = (await store.get<CharacterSkillFile['pets']>('pets')) ?? {};
+      const ds = dataStoreRef.current;
+      const filename = skillFileName(lower);
+      const skills = (await ds.get<CharacterSkillFile['skills']>(filename, 'skills')) ?? {};
+      const pets = (await ds.get<CharacterSkillFile['pets']>(filename, 'pets')) ?? {};
       setSkillData({ skills, pets });
     } catch (e) {
       console.error('Failed to load skill data for', lower, e);
@@ -69,10 +75,11 @@ export function useSkillTracker(
 
   async function saveSkillData(name: string, data: CharacterSkillFile) {
     try {
-      const store = await load(storeFileName(name));
-      await store.set('skills', data.skills);
-      await store.set('pets', data.pets);
-      await store.save();
+      const ds = dataStoreRef.current;
+      const filename = skillFileName(name);
+      await ds.set(filename, 'skills', data.skills);
+      await ds.set(filename, 'pets', data.pets);
+      await ds.save(filename);
     } catch (e) {
       console.error('Failed to save skill data:', e);
     }
@@ -82,9 +89,9 @@ export function useSkillTracker(
     const lower = name.toLowerCase();
     // Persist to settings
     try {
-      const store = await load(SETTINGS_FILE);
-      await store.set(ACTIVE_CHAR_KEY, lower);
-      await store.save();
+      const ds = dataStoreRef.current;
+      await ds.set(SETTINGS_FILE, ACTIVE_CHAR_KEY, lower);
+      await ds.save(SETTINGS_FILE);
     } catch (e) {
       console.error('Failed to save active character:', e);
     }
@@ -95,9 +102,9 @@ export function useSkillTracker(
     showInlineImprovesRef.current = value;
     setShowInlineImproves(value);
     try {
-      const store = await load(SETTINGS_FILE);
-      await store.set(INLINE_IMPROVES_KEY, value);
-      await store.save();
+      const ds = dataStoreRef.current;
+      await ds.set(SETTINGS_FILE, INLINE_IMPROVES_KEY, value);
+      await ds.save(SETTINGS_FILE);
     } catch (e) {
       console.error('Failed to save inline improve setting:', e);
     }

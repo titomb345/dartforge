@@ -1,4 +1,4 @@
-import type { Store } from '@tauri-apps/plugin-store';
+import type { DataStore } from '../contexts/DataStoreContext';
 
 export const CURRENT_VERSION = 4;
 
@@ -48,19 +48,21 @@ const MIGRATIONS: MigrationFn[] = [
   },
 ];
 
+const SETTINGS_FILE = 'settings.json';
+
 /**
- * Read the store's `_version`, run any pending migrations sequentially,
+ * Read the settings `_version`, run any pending migrations sequentially,
  * then write the updated `_version` back.
  */
-export async function migrateSettings(store: Store): Promise<void> {
-  const version = (await store.get<number>('_version')) ?? 0;
+export async function migrateSettings(dataStore: DataStore): Promise<void> {
+  const version = (await dataStore.get<number>(SETTINGS_FILE, '_version')) ?? 0;
 
   if (version >= CURRENT_VERSION) return;
 
-  // Snapshot all keys we care about into a plain object
+  // Snapshot all keys into a plain object
   let data: StoreData = {};
-  for (const key of await store.keys()) {
-    data[key] = await store.get(key);
+  for (const key of await dataStore.keys(SETTINGS_FILE)) {
+    data[key] = await dataStore.get(SETTINGS_FILE, key);
   }
 
   // Run each migration sequentially
@@ -70,9 +72,9 @@ export async function migrateSettings(store: Store): Promise<void> {
 
   // Write migrated values back
   for (const [key, value] of Object.entries(data)) {
-    await store.set(key, value);
+    await dataStore.set(SETTINGS_FILE, key, value);
   }
 
-  await store.set('_version', CURRENT_VERSION);
-  await store.save();
+  await dataStore.set(SETTINGS_FILE, '_version', CURRENT_VERSION);
+  await dataStore.save(SETTINGS_FILE);
 }

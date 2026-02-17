@@ -9,6 +9,30 @@ The `[Unreleased]` header controls automatic version bumping on merge:
 - `[Unreleased-minor]` → 0.1.0 → 0.2.0
 - `[Unreleased-major]` → 0.1.0 → 1.0.0
 
+## [Unreleased-minor]
+
+### Added
+- Configurable data directory with Dropbox/cloud sync support
+- First-run setup dialog for selecting data location
+- Rust storage backend for reading/writing to arbitrary paths
+- Automatic backup system (session-start, hourly, pre-restore)
+- Backup browser and restore UI in settings panel
+- Settings panel with data location management and backup tabs
+- Skill tracker panel with categorization, persistence, and responsive layout
+- In-game clock with three DartMUD calendar systems
+- Status bar with 7 game state trackers (health, concentration, aura, hunger, thirst, encumbrance, movement)
+- Per-status message filtering (click a readout to suppress its terminal messages)
+- Hover-to-expand on compact status readouts
+- Manual connect flow — press Enter or click power button to connect (no auto-connect)
+- Connecting/Connected/Disconnected splash screens
+- macOS build support in release workflow
+
+### Changed
+- Panels (appearance, skills, settings) are now mutually exclusive — only one open at a time
+- Status bar auto-compacts on narrow windows with disabled compress button
+- Skills panel uses consistent overlay behavior at all screen sizes
+- Resize transitions suppressed to prevent panel flash at breakpoints
+
 ## [0.2.0] - 2026-02-16
 
 ### Added

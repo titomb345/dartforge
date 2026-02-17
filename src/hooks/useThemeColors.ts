@@ -1,5 +1,5 @@
 import { useState, useCallback, useEffect } from 'react';
-import { load } from '@tauri-apps/plugin-store';
+import { useDataStore } from '../contexts/DataStoreContext';
 import { DEFAULT_THEME, type TerminalTheme, type ThemeColorKey } from '../lib/defaultTheme';
 import { migrateSettings } from '../lib/settingsMigrations';
 
@@ -40,21 +40,22 @@ export const DEFAULT_DISPLAY = {
 export type DisplaySettings = typeof DEFAULT_DISPLAY;
 
 export function useThemeColors() {
+  const dataStore = useDataStore();
   const [theme, setTheme] = useState<TerminalTheme>({ ...DEFAULT_THEME });
   const [display, setDisplay] = useState<DisplaySettings>({ ...DEFAULT_DISPLAY });
   const [loaded, setLoaded] = useState(false);
 
   // Load saved settings from store on mount
   useEffect(() => {
+    if (!dataStore.ready) return;
     (async () => {
       try {
-        const store = await load(STORE_FILE);
-        await migrateSettings(store);
-        const savedTheme = await store.get<Partial<TerminalTheme>>(STORE_KEY);
+        await migrateSettings(dataStore);
+        const savedTheme = await dataStore.get<Partial<TerminalTheme>>(STORE_FILE, STORE_KEY);
         if (savedTheme) {
           setTheme({ ...DEFAULT_THEME, ...savedTheme });
         }
-        const savedDisplay = await store.get<Partial<DisplaySettings>>(DISPLAY_KEY);
+        const savedDisplay = await dataStore.get<Partial<DisplaySettings>>(STORE_FILE, DISPLAY_KEY);
         if (savedDisplay) {
           // If saved font is no longer available, fall back to default
           if (savedDisplay.fontFamily && !(FONT_OPTIONS as readonly string[]).includes(savedDisplay.fontFamily)) {
@@ -67,53 +68,53 @@ export function useThemeColors() {
       }
       setLoaded(true);
     })();
-  }, []);
+  }, [dataStore.ready]);
 
   const updateColor = useCallback((key: ThemeColorKey, value: string) => {
     setTheme((prev) => {
       const next = { ...prev, [key]: value };
-      load(STORE_FILE).then((store) => store.set(STORE_KEY, next)).catch(console.error);
+      dataStore.set(STORE_FILE, STORE_KEY, next).catch(console.error);
       return next;
     });
-  }, []);
+  }, [dataStore]);
 
   const resetColor = useCallback((key: ThemeColorKey) => {
     setTheme((prev) => {
       const next = { ...prev, [key]: DEFAULT_THEME[key] };
-      load(STORE_FILE).then((store) => store.set(STORE_KEY, next)).catch(console.error);
+      dataStore.set(STORE_FILE, STORE_KEY, next).catch(console.error);
       return next;
     });
-  }, []);
+  }, [dataStore]);
 
   const resetColors = useCallback(() => {
     setTheme({ ...DEFAULT_THEME });
-    load(STORE_FILE).then((store) => store.delete(STORE_KEY)).catch(console.error);
-  }, []);
+    dataStore.delete(STORE_FILE, STORE_KEY).catch(console.error);
+  }, [dataStore]);
 
   const updateDisplay = useCallback(<K extends keyof DisplaySettings>(key: K, value: DisplaySettings[K]) => {
     setDisplay((prev) => {
       const next = { ...prev, [key]: value };
-      load(STORE_FILE).then((store) => store.set(DISPLAY_KEY, next)).catch(console.error);
+      dataStore.set(STORE_FILE, DISPLAY_KEY, next).catch(console.error);
       return next;
     });
-  }, []);
+  }, [dataStore]);
 
   const resetDisplay = useCallback((key: keyof DisplaySettings) => {
     setDisplay((prev) => {
       const next = { ...prev, [key]: DEFAULT_DISPLAY[key] };
-      load(STORE_FILE).then((store) => store.set(DISPLAY_KEY, next)).catch(console.error);
+      dataStore.set(STORE_FILE, DISPLAY_KEY, next).catch(console.error);
       return next;
     });
-  }, []);
+  }, [dataStore]);
 
   const resetAll = useCallback(() => {
     setTheme({ ...DEFAULT_THEME });
     setDisplay({ ...DEFAULT_DISPLAY });
-    load(STORE_FILE).then(async (store) => {
-      await store.delete(STORE_KEY);
-      await store.delete(DISPLAY_KEY);
-    }).catch(console.error);
-  }, []);
+    (async () => {
+      await dataStore.delete(STORE_FILE, STORE_KEY);
+      await dataStore.delete(STORE_FILE, DISPLAY_KEY);
+    })().catch(console.error);
+  }, [dataStore]);
 
   return {
     theme, updateColor, resetColor, resetColors,

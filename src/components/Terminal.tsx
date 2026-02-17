@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Terminal as XTerm, type ITheme } from '@xterm/xterm';
 import { FitAddon } from '@xterm/addon-fit';
 import { WebLinksAddon } from '@xterm/addon-web-links';
@@ -18,6 +18,7 @@ export function Terminal({ terminalRef, inputRef, theme, display, onUpdateDispla
   const outerRef = useRef<HTMLDivElement>(null);
   const innerRef = useRef<HTMLDivElement>(null);
   const fitAddonRef = useRef<FitAddon | null>(null);
+  const [isScrolledUp, setIsScrolledUp] = useState(false);
 
   useEffect(() => {
     if (!innerRef.current) return;
@@ -100,9 +101,19 @@ export function Terminal({ terminalRef, inputRef, theme, display, onUpdateDispla
     });
     observer.observe(innerRef.current);
 
+    // Track whether user has scrolled up from the bottom
+    const checkScrollPosition = () => {
+      const buffer = term.buffer.active;
+      setIsScrolledUp(buffer.baseY - buffer.viewportY > 0);
+    };
+    const scrollDisposable = term.onScroll(checkScrollPosition);
+    const writeDisposable = term.onWriteParsed(checkScrollPosition);
+
     return () => {
       window.removeEventListener('keydown', handleKeyboard);
       observer.disconnect();
+      scrollDisposable.dispose();
+      writeDisposable.dispose();
       term.dispose();
       terminalRef.current = null;
     };
@@ -135,9 +146,38 @@ export function Terminal({ terminalRef, inputRef, theme, display, onUpdateDispla
     <div
       ref={outerRef}
       onClick={handleClick}
-      className="flex-1 bg-black px-4 py-3 overflow-hidden cursor-default"
+      className="relative flex-1 bg-black px-4 py-3 overflow-hidden cursor-default"
     >
       <div ref={innerRef} className="w-full h-full overflow-hidden" />
+
+      {/* Scroll-to-bottom indicator */}
+      <button
+        onClick={(e) => {
+          e.stopPropagation();
+          terminalRef.current?.scrollToBottom();
+        }}
+        className={`absolute bottom-4 right-8 z-10 flex items-center justify-center
+          w-8 h-8 rounded-full
+          bg-zinc-700/70 backdrop-blur-sm border border-zinc-600/40
+          text-zinc-400 hover:text-zinc-100 hover:bg-zinc-600/80
+          transition-all duration-200 ease-out cursor-pointer
+          ${isScrolledUp ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-2 pointer-events-none'}`}
+        title="Scroll to bottom"
+      >
+        <svg
+          xmlns="http://www.w3.org/2000/svg"
+          width="16"
+          height="16"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="2.5"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        >
+          <polyline points="6 9 12 15 18 9" />
+        </svg>
+      </button>
     </div>
   );
 }

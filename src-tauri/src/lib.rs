@@ -1,6 +1,7 @@
 mod ansi;
 mod connection;
 mod events;
+mod storage;
 
 use std::sync::Mutex;
 use tauri::{Emitter, Manager};
@@ -92,14 +93,31 @@ pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_store::Builder::default().build())
+        .plugin(tauri_plugin_dialog::init())
         .manage(ConnectionState {
             cmd_tx: Mutex::new(None),
             task_handle: Mutex::new(None),
         })
-        .invoke_handler(tauri::generate_handler![send_command, reconnect, disconnect])
+        .invoke_handler(tauri::generate_handler![
+            send_command,
+            reconnect,
+            disconnect,
+            storage::resolve_data_dir,
+            storage::get_active_data_dir,
+            storage::read_data_file,
+            storage::write_data_file,
+            storage::copy_data_to_dir,
+            storage::check_dir_valid,
+            storage::create_backup,
+            storage::list_backups,
+            storage::restore_backup,
+            storage::prune_backups,
+        ])
         .setup(|app| {
-            let state = app.state::<ConnectionState>();
-            spawn_connection(app.handle(), &state, true);
+            // Initialize storage state with default app data dir
+            let data_dir = app.path().app_data_dir().expect("Failed to get app data dir");
+            let _ = std::fs::create_dir_all(&data_dir);
+            app.manage(storage::StorageState::new(data_dir));
             Ok(())
         })
         .run(tauri::generate_context!())

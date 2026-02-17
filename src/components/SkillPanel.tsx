@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { load } from '@tauri-apps/plugin-store';
+import { useDataStore } from '../contexts/DataStoreContext';
 import type { CharacterSkillFile, SkillRecord, SkillCategory } from '../types/skills';
 import { getTierForCount, getImprovesToNextTier } from '../lib/skillTiers';
 import {
@@ -156,6 +156,7 @@ function buildSubGroups(
 }
 
 export function SkillPanel({ activeCharacter, skillData, showInlineImproves, onToggleInlineImproves }: SkillPanelProps) {
+  const dataStore = useDataStore();
   const [filter, setFilter] = useState<FilterValue>('all');
   const [sort, setSort] = useState<SortMode>('name');
   const [showSubs, setShowSubs] = useState(true);
@@ -163,32 +164,31 @@ export function SkillPanel({ activeCharacter, skillData, showInlineImproves, onT
 
   // Load persisted panel settings on mount
   useEffect(() => {
+    if (!dataStore.ready) return;
     (async () => {
       try {
-        const store = await load(SETTINGS_FILE);
-        const savedFilter = await store.get<FilterValue>(SKILL_FILTER_KEY);
+        const savedFilter = await dataStore.get<FilterValue>(SETTINGS_FILE, SKILL_FILTER_KEY);
         if (savedFilter) setFilter(savedFilter);
-        const savedSort = await store.get<SortMode>(SKILL_SORT_KEY);
+        const savedSort = await dataStore.get<SortMode>(SETTINGS_FILE, SKILL_SORT_KEY);
         if (savedSort) setSort(savedSort);
-        const savedSubs = await store.get<boolean>(SKILL_SUBS_KEY);
+        const savedSubs = await dataStore.get<boolean>(SETTINGS_FILE, SKILL_SUBS_KEY);
         if (savedSubs != null) setShowSubs(savedSubs);
       } catch (e) {
         console.error('Failed to load skill panel settings:', e);
       }
       loaded.current = true;
     })();
-  }, []);
+  }, [dataStore.ready]);
 
   // Persist panel settings on change (skip initial load)
   useEffect(() => {
     if (!loaded.current) return;
     (async () => {
       try {
-        const store = await load(SETTINGS_FILE);
-        await store.set(SKILL_FILTER_KEY, filter);
-        await store.set(SKILL_SORT_KEY, sort);
-        await store.set(SKILL_SUBS_KEY, showSubs);
-        await store.save();
+        await dataStore.set(SETTINGS_FILE, SKILL_FILTER_KEY, filter);
+        await dataStore.set(SETTINGS_FILE, SKILL_SORT_KEY, sort);
+        await dataStore.set(SETTINGS_FILE, SKILL_SUBS_KEY, showSubs);
+        await dataStore.save(SETTINGS_FILE);
       } catch (e) {
         console.error('Failed to save skill panel settings:', e);
       }
