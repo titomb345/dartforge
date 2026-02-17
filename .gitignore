@@ -18,6 +18,9 @@ src-tauri/target/
 # Claude
 .claude/settings.local.json
 
+# Plans (local brainstorming)
+.plans/
+
 # OS
 .DS_Store
 Thumbs.db
