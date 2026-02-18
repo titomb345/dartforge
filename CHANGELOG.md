@@ -9,7 +9,7 @@ The `[Unreleased]` header controls automatic version bumping on merge:
 - `[Unreleased-minor]` → 0.1.0 → 0.2.0
 - `[Unreleased-major]` → 0.1.0 → 1.0.0
 
-## [Unreleased-minor]
+## [0.4.0] - 2026-02-18
 
 ### Added
 - Web client — play DartMUD in any browser via WebSocket proxy
