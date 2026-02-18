@@ -1,0 +1,10 @@
+[build]
+  command = "npm run build:web"
+  publish = "dist-web"
+
+# Serve index.web.html for all paths (SPA fallback).
+# Netlify serves matching static assets first before applying this rewrite.
+[[redirects]]
+  from = "/*"
+  to = "/index.web.html"
+  status = 200
