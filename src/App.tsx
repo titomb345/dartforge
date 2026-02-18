@@ -1,7 +1,6 @@
 import { useRef, useState, useEffect, useCallback, useLayoutEffect } from 'react';
 import type { Terminal as XTerm } from '@xterm/xterm';
-import { getVersion } from '@tauri-apps/api/app';
-import { getCurrentWindow } from '@tauri-apps/api/window';
+import { getAppVersion, setWindowTitle, getPlatform } from './lib/platform';
 import { Terminal } from './components/Terminal';
 import { CommandInput } from './components/CommandInput';
 import { Toolbar } from './components/Toolbar';
@@ -13,6 +12,7 @@ import { GameClock } from './components/GameClock';
 import { StatusReadout } from './components/StatusReadout';
 import { HeartIcon, FocusIcon, FoodIcon, DropletIcon, AuraIcon, WeightIcon, BootIcon, CompressIcon } from './components/icons';
 import { useMudConnection } from './hooks/useMudConnection';
+import { useTransport } from './contexts/TransportContext';
 import { useClassMode } from './hooks/useClassMode';
 import { useThemeColors } from './hooks/useThemeColors';
 import { useSkillTracker } from './hooks/useSkillTracker';
@@ -41,8 +41,8 @@ function App() {
 
   // Set window title regardless of setup state
   useEffect(() => {
-    getVersion().then((v) => {
-      getCurrentWindow().setTitle(`DartForge v${v}`);
+    getAppVersion().then((v) => {
+      setWindowTitle(`DartForge v${v}`);
     }).catch(console.error);
   }, []);
 
@@ -73,6 +73,7 @@ function AppMain() {
   const [twoRow, setTwoRow] = useState(false);
 
   const dataStore = useDataStore();
+  const settingsLoadedRef = useRef(false);
 
   // Load compact mode + filter flags from settings
   useEffect(() => {
@@ -81,6 +82,7 @@ function AppMain() {
       if (savedCompact != null) setCompactBar(savedCompact);
       const savedFilters = await dataStore.get<FilterFlags>('settings.json', 'filteredStatuses');
       if (savedFilters != null) setFilterFlags(savedFilters);
+      settingsLoadedRef.current = true;
     })().catch(console.error);
   }, []);
 
@@ -139,11 +141,14 @@ function AppMain() {
     if (outputFilterRef.current) {
       outputFilterRef.current.filterFlags = { ...filterFlags };
     }
+    // Don't persist until settings are loaded — prevents defaults from overwriting synced values
+    if (!settingsLoadedRef.current) return;
     dataStore.set('settings.json', 'filteredStatuses', filterFlags).catch(console.error);
   }, [filterFlags]);
 
   // Persist compact bar state
   useEffect(() => {
+    if (!settingsLoadedRef.current) return;
     dataStore.set('settings.json', 'compactBar', compactBar).catch(console.error);
   }, [compactBar]);
 
@@ -214,8 +219,10 @@ function AppMain() {
     setLoggedIn(true);
   }, []);
 
+  const transport = useTransport();
+
   const { connected, passwordMode, skipHistory, sendCommand, reconnect, disconnect } =
-    useMudConnection(terminalRef, debugModeRef, onOutputChunk, onCharacterName, outputFilterRef, onLogin);
+    useMudConnection(terminalRef, debugModeRef, transport, onOutputChunk, onCharacterName, outputFilterRef, onLogin);
 
   // Keep sendCommand ref up to date for the skill tracker
   sendCommandRef.current = sendCommand;
@@ -277,15 +284,17 @@ function AppMain() {
             />
           </div>
         </div>
-        {/* Right: Settings panel overlay */}
-        <div
-          className={cn(
-            'absolute top-0 right-0 bottom-0 z-[100] transition-transform duration-300 ease-in-out',
-            activePanel === 'settings' ? 'translate-x-0' : 'translate-x-full'
-          )}
-        >
-          <DataDirSettings />
-        </div>
+        {/* Right: Settings panel overlay (Tauri only) */}
+        {getPlatform() === 'tauri' && (
+          <div
+            className={cn(
+              'absolute top-0 right-0 bottom-0 z-[100] transition-transform duration-300 ease-in-out',
+              activePanel === 'settings' ? 'translate-x-0' : 'translate-x-full'
+            )}
+          >
+            <DataDirSettings />
+          </div>
+        )}
         {/* Right: Skill panel overlay */}
         <div
           className={cn(

@@ -1,5 +1,7 @@
 import { IconButton } from './IconButton';
+import { DropboxButton } from './DropboxButton';
 import { PowerIcon, PaletteIcon, TrendingUpIcon, GearIcon } from './icons';
+import { getPlatform } from '../lib/platform';
 import { cn } from '../lib/cn';
 
 interface ToolbarProps {
@@ -51,6 +53,7 @@ export function Toolbar({
       <div className="flex-1" />
 
       <div className="flex items-center gap-1">
+        {getPlatform() === 'web' && <DropboxButton />}
         <IconButton
           icon={<TrendingUpIcon />}
           title="Skills"
@@ -65,13 +68,15 @@ export function Toolbar({
           toggled={showAppearance}
           onClick={onToggleAppearance}
         />
-        <IconButton
-          icon={<GearIcon />}
-          title="Settings"
-          accent="#bd93f9"
-          toggled={showSettings}
-          onClick={onToggleSettings}
-        />
+        {getPlatform() === 'tauri' && (
+          <IconButton
+            icon={<GearIcon />}
+            title="Settings"
+            accent="#bd93f9"
+            toggled={showSettings}
+            onClick={onToggleSettings}
+          />
+        )}
       </div>
     </div>
   );

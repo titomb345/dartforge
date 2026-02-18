@@ -1,8 +1,6 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
-import { listen } from '@tauri-apps/api/event';
-import { invoke } from '@tauri-apps/api/core';
 import type { Terminal } from '@xterm/xterm';
-import { MUD_OUTPUT_EVENT, CONNECTION_STATUS_EVENT } from '../lib/tauriEvents';
+import type { MudTransport } from '../lib/transport';
 import { MudOutputPayload, ConnectionStatusPayload } from '../types';
 import { getConnectingSplash, getConnectedSplash, getDisconnectSplash } from '../lib/splash';
 import { smartWrite } from '../lib/terminalUtils';
@@ -86,6 +84,7 @@ function annotateAnsi(data: string): string {
 export function useMudConnection(
   terminalRef: React.MutableRefObject<Terminal | null>,
   debugModeRef: React.RefObject<boolean>,
+  transport: MudTransport,
   onOutputChunk?: (data: string) => void,
   onCharacterName?: (name: string) => void,
   outputFilterRef?: React.RefObject<OutputFilter | null>,
@@ -114,132 +113,134 @@ export function useMudConnection(
   const filteringBannerRef = useRef(false);
   const bannerBufferRef = useRef('');
 
+  // Keep transport ref stable for callbacks
+  const transportRef = useRef(transport);
+  transportRef.current = transport;
+
   useEffect(() => {
     let cancelled = false;
 
     async function setup() {
-      const unlistenOutput = await listen<MudOutputPayload>(MUD_OUTPUT_EVENT, (event) => {
-        if (cancelled || !terminalRef.current) return;
-        const term = terminalRef.current;
+      const cleanup = await transportRef.current.connect({
+        onOutput: (payload: MudOutputPayload) => {
+          if (cancelled || !terminalRef.current) return;
+          const term = terminalRef.current;
 
-        const detectPrompts = (data: string) => {
-          if (/password:/i.test(data)) {
-            passwordModeRef.current = true;
-            skipHistoryRef.current = true;
-            setPasswordMode(true);
-            setSkipHistory(true);
-          } else if (/name:/i.test(data)) {
-            captureNameRef.current = true;
-            skipHistoryRef.current = true;
-            setSkipHistory(true);
-          }
-          // Detect successful login or reconnect
-          if (
-            !loginFiredRef.current &&
-            (/Running under version/i.test(data) || /reconnecting to old object/i.test(data))
-          ) {
-            loginFiredRef.current = true;
-            onLoginRef.current?.();
-          }
-        };
+          const detectPrompts = (data: string) => {
+            if (/password:/i.test(data)) {
+              passwordModeRef.current = true;
+              skipHistoryRef.current = true;
+              setPasswordMode(true);
+              setSkipHistory(true);
+            } else if (/name:/i.test(data)) {
+              captureNameRef.current = true;
+              skipHistoryRef.current = true;
+              setSkipHistory(true);
+            }
+            // Detect successful login or reconnect
+            if (
+              !loginFiredRef.current &&
+              (/Running under version/i.test(data) || /reconnecting to old object/i.test(data))
+            ) {
+              loginFiredRef.current = true;
+              onLoginRef.current?.();
+            }
+          };
 
-        // Banner filtering: suppress the server's ASCII splash on connect
-        if (filteringBannerRef.current) {
-          bannerBufferRef.current += event.payload.data;
+          // Banner filtering: suppress the server's ASCII splash on connect
+          if (filteringBannerRef.current) {
+            bannerBufferRef.current += payload.data;
 
-          const markerIdx = bannerBufferRef.current.indexOf(BANNER_END_MARKER);
-          if (markerIdx >= 0) {
-            // Found end of banner — pass through anything after the marker line
-            filteringBannerRef.current = false;
-            const lineEnd = bannerBufferRef.current.indexOf('\n', markerIdx);
-            const afterBanner =
-              lineEnd >= 0 ? bannerBufferRef.current.substring(lineEnd + 1) : '';
-            bannerBufferRef.current = '';
-            if (afterBanner.length > 0) {
-              detectPrompts(afterBanner);
-              onOutputChunkRef.current?.(afterBanner);
-              const filteredAfter = outputFilterRef?.current
-                ? outputFilterRef.current.filter(afterBanner)
-                : afterBanner;
-              if (filteredAfter) {
-                let afterOutput = debugModeRef.current ? annotateAnsi(filteredAfter) : filteredAfter;
-                if (event.payload.ga) {
-                  afterOutput = stripPrompt(afterOutput);
-                } else if (endsWithPrompt(filteredAfter)) {
-                  afterOutput += '\n';
+            const markerIdx = bannerBufferRef.current.indexOf(BANNER_END_MARKER);
+            if (markerIdx >= 0) {
+              // Found end of banner — pass through anything after the marker line
+              filteringBannerRef.current = false;
+              const lineEnd = bannerBufferRef.current.indexOf('\n', markerIdx);
+              const afterBanner =
+                lineEnd >= 0 ? bannerBufferRef.current.substring(lineEnd + 1) : '';
+              bannerBufferRef.current = '';
+              if (afterBanner.length > 0) {
+                detectPrompts(afterBanner);
+                onOutputChunkRef.current?.(afterBanner);
+                const filteredAfter = outputFilterRef?.current
+                  ? outputFilterRef.current.filter(afterBanner)
+                  : afterBanner;
+                if (filteredAfter) {
+                  let afterOutput = debugModeRef.current ? annotateAnsi(filteredAfter) : filteredAfter;
+                  if (payload.ga) {
+                    afterOutput = stripPrompt(afterOutput);
+                  } else if (endsWithPrompt(filteredAfter)) {
+                    afterOutput += '\n';
+                  }
+                  if (afterOutput) smartWrite(term, afterOutput);
                 }
-                if (afterOutput) smartWrite(term, afterOutput);
+              }
+            } else if (bannerBufferRef.current.length > BANNER_MAX_BUFFER) {
+              // Safety: too much data without finding banner, flush it all
+              filteringBannerRef.current = false;
+              const rawBuffer = bannerBufferRef.current;
+              bannerBufferRef.current = '';
+              detectPrompts(rawBuffer);
+              onOutputChunkRef.current?.(rawBuffer);
+              const filteredBuffer = outputFilterRef?.current
+                ? outputFilterRef.current.filter(rawBuffer)
+                : rawBuffer;
+              if (filteredBuffer) {
+                let flushOutput = debugModeRef.current ? annotateAnsi(filteredBuffer) : filteredBuffer;
+                if (payload.ga) {
+                  flushOutput = stripPrompt(flushOutput);
+                } else if (endsWithPrompt(filteredBuffer)) {
+                  flushOutput += '\n';
+                }
+                if (flushOutput) smartWrite(term, flushOutput);
               }
             }
-          } else if (bannerBufferRef.current.length > BANNER_MAX_BUFFER) {
-            // Safety: too much data without finding banner, flush it all
-            filteringBannerRef.current = false;
-            const rawBuffer = bannerBufferRef.current;
-            bannerBufferRef.current = '';
-            detectPrompts(rawBuffer);
-            onOutputChunkRef.current?.(rawBuffer);
-            const filteredBuffer = outputFilterRef?.current
-              ? outputFilterRef.current.filter(rawBuffer)
-              : rawBuffer;
-            if (filteredBuffer) {
-              let flushOutput = debugModeRef.current ? annotateAnsi(filteredBuffer) : filteredBuffer;
-              if (event.payload.ga) {
-                flushOutput = stripPrompt(flushOutput);
-              } else if (endsWithPrompt(filteredBuffer)) {
-                flushOutput += '\n';
-              }
-              if (flushOutput) smartWrite(term, flushOutput);
-            }
+            return;
           }
-          return;
-        }
 
-        detectPrompts(event.payload.data);
-        onOutputChunkRef.current?.(event.payload.data);
-        const filtered = outputFilterRef?.current
-          ? outputFilterRef.current.filter(event.payload.data)
-          : event.payload.data;
-        if (filtered) {
-          let output = debugModeRef.current ? annotateAnsi(filtered) : filtered;
-          if (event.payload.ga) {
-            output = stripPrompt(output);
-          } else if (endsWithPrompt(filtered)) {
-            output += '\n';
+          detectPrompts(payload.data);
+          onOutputChunkRef.current?.(payload.data);
+          const filtered = outputFilterRef?.current
+            ? outputFilterRef.current.filter(payload.data)
+            : payload.data;
+          if (filtered) {
+            let output = debugModeRef.current ? annotateAnsi(filtered) : filtered;
+            if (payload.ga) {
+              output = stripPrompt(output);
+            } else if (endsWithPrompt(filtered)) {
+              output += '\n';
+            }
+            if (output) smartWrite(term, output);
           }
-          if (output) smartWrite(term, output);
-        }
+        },
+
+        onStatus: (payload: ConnectionStatusPayload) => {
+          if (cancelled) return;
+          const term = terminalRef.current;
+
+          if (payload.connected && !wasConnectedRef.current && term) {
+            // Just connected — clear terminal, show our splash, start filtering banner
+            term.clear();
+            term.write(getConnectedSplash(term.cols));
+            filteringBannerRef.current = true;
+            bannerBufferRef.current = '';
+            loginFiredRef.current = false;
+            outputFilterRef?.current?.reset();
+          } else if (!payload.connected && wasConnectedRef.current && term) {
+            // Connection dropped — stop any active filtering, show disconnect splash
+            filteringBannerRef.current = false;
+            bannerBufferRef.current = '';
+            outputFilterRef?.current?.reset();
+            smartWrite(term, getDisconnectSplash(term.cols));
+          }
+
+          wasConnectedRef.current = payload.connected;
+          setConnected(payload.connected);
+          setStatusMessage(payload.message);
+        },
       });
 
-      const unlistenStatus = await listen<ConnectionStatusPayload>(
-        CONNECTION_STATUS_EVENT,
-        (event) => {
-          if (!cancelled) {
-            const term = terminalRef.current;
-
-            if (event.payload.connected && !wasConnectedRef.current && term) {
-              // Just connected — clear terminal, show our splash, start filtering banner
-              term.clear();
-              term.write(getConnectedSplash(term.cols));
-              filteringBannerRef.current = true;
-              bannerBufferRef.current = '';
-              loginFiredRef.current = false;
-              outputFilterRef?.current?.reset();
-            } else if (!event.payload.connected && wasConnectedRef.current && term) {
-              // Connection dropped — stop any active filtering, show disconnect splash
-              filteringBannerRef.current = false;
-              bannerBufferRef.current = '';
-              outputFilterRef?.current?.reset();
-              smartWrite(term, getDisconnectSplash(term.cols));
-            }
-
-            wasConnectedRef.current = event.payload.connected;
-            setConnected(event.payload.connected);
-            setStatusMessage(event.payload.message);
-          }
-        }
-      );
-
-      unlistenRefs.current = [unlistenOutput, unlistenStatus];
+      unlistenRefs.current = [cleanup];
     }
 
     setup();
@@ -265,7 +266,7 @@ export function useMudConnection(
         skipHistoryRef.current = false;
         setSkipHistory(false);
       }
-      await invoke('send_command', { command });
+      await transportRef.current.sendCommand(command);
     } catch (e) {
       console.error('Failed to send command:', e);
     }
@@ -278,7 +279,7 @@ export function useMudConnection(
         term.clear();
         term.write(getConnectingSplash(term.cols));
       }
-      await invoke('reconnect');
+      await transportRef.current.reconnect();
     } catch (e) {
       console.error('Failed to reconnect:', e);
     }
@@ -286,7 +287,7 @@ export function useMudConnection(
 
   const disconnect = useCallback(async () => {
     try {
-      await invoke('disconnect');
+      await transportRef.current.disconnect();
     } catch (e) {
       console.error('Failed to disconnect:', e);
     }

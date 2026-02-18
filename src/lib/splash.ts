@@ -5,17 +5,15 @@ const { RESET, DIM, CYAN, GREEN, BRIGHT_GREEN } = ANSI;
 // 256-color ANSI: \x1b[38;5;Nm
 const color = (n: number) => `\x1b[1;38;5;${n}m`;
 
-// Pink → Orange → Green → Blue gradient across 9 letters (DARTFORGE)
+// Pink → Orange → Green → Blue gradient across 7 letters (DARTMUD)
 const GRADIENT = [
   color(198), // D - hot pink
   color(196), // A - red
-  color(202), // R - orange-red
-  color(208), // T - orange
-  color(214), // F - gold
-  color(40),  // O - green
-  color(39),  // R - sky blue
-  color(33),  // G - blue
-  color(27),  // E - deep blue
+  color(208), // R - orange
+  color(214), // T - gold
+  color(40),  // M - green
+  color(39),  // U - cyan
+  color(63),  // D - purple
 ];
 
 // Each letter is 5 rows x 6 cols (using ██ per pixel)
@@ -48,26 +46,19 @@ const LETTERS: Record<string, string[]> = {
     '  ██  ',
     '  ██  ',
   ],
-  F: [
+  M: [
+    '██  ██',
     '██████',
-    '██    ',
-    '████  ',
-    '██    ',
-    '██    ',
+    '██████',
+    '██  ██',
+    '██  ██',
   ],
-  O: [
+  U: [
+    '██  ██',
+    '██  ██',
+    '██  ██',
+    '██  ██',
     ' ████ ',
-    '██  ██',
-    '██  ██',
-    '██  ██',
-    ' ████ ',
-  ],
-  G: [
-    ' █████',
-    '██    ',
-    '██ ███',
-    '██  ██',
-    ' █████',
   ],
   E: [
     '██████',
@@ -104,6 +95,13 @@ const LETTERS: Record<string, string[]> = {
     '██ ███',
     '██  ██',
   ],
+  O: [
+    ' ████ ',
+    '██  ██',
+    '██  ██',
+    '██  ██',
+    ' ████ ',
+  ],
 };
 
 function buildGradientWord(word: string, colors: string[]): string[] {
@@ -122,7 +120,7 @@ function buildGradientWord(word: string, colors: string[]): string[] {
 
 function gradientBar(width: number): string {
   const len = Math.min(width - 4, 60);
-  const colors = [198, 196, 202, 208, 214, 40, 39, 33, 27];
+  const colors = [198, 196, 208, 214, 40, 39, 63];
   let bar = '';
   for (let i = 0; i < len; i++) {
     const idx = Math.floor((i / len) * (colors.length - 1));
@@ -141,8 +139,10 @@ function center(lines: string[], width: number): string[] {
 }
 
 export function getStartupSplash(cols: number): string {
-  const logo = buildGradientWord('DARTFORGE', GRADIENT);
+  const logo = buildGradientWord('DARTMUD', GRADIENT);
   const bar = gradientBar(cols);
+  const year = `${DIM}-= 1991 - 2025 =-${RESET}`;
+  const welcome = `${DIM}Welcome to the Lands of Ferdarchi!${RESET}`;
   const lines = [
     '',
     '',
@@ -152,9 +152,11 @@ export function getStartupSplash(cols: number): string {
     '',
     ...center([bar], cols),
     '',
-    ...center([`\x1b[1;36mA custom client purposely built for DartMUD${RESET}`], cols),
+    ...center([year], cols),
     '',
-    ...center([`${DIM}Press Enter to connect${RESET}`], cols),
+    ...center([welcome], cols),
+    '',
+    ...center([`${GREEN}Press Enter to connect${RESET}`], cols),
     '',
     '',
   ];
@@ -162,8 +164,10 @@ export function getStartupSplash(cols: number): string {
 }
 
 export function getConnectingSplash(cols: number): string {
-  const logo = buildGradientWord('DARTFORGE', GRADIENT);
+  const logo = buildGradientWord('DARTMUD', GRADIENT);
   const bar = gradientBar(cols);
+  const year = `${DIM}-= 1991 - 2025 =-${RESET}`;
+  const welcome = `${DIM}Welcome to the Lands of Ferdarchi!${RESET}`;
   const lines = [
     '',
     '',
@@ -173,7 +177,9 @@ export function getConnectingSplash(cols: number): string {
     '',
     ...center([bar], cols),
     '',
-    ...center([`\x1b[1;36mA custom client purposely built for DartMUD${RESET}`], cols),
+    ...center([year], cols),
+    '',
+    ...center([welcome], cols),
     '',
     ...center([`${CYAN}Connecting...${RESET}`], cols),
     '',
@@ -183,8 +189,10 @@ export function getConnectingSplash(cols: number): string {
 }
 
 export function getConnectedSplash(cols: number): string {
-  const logo = buildGradientWord('DARTFORGE', GRADIENT);
+  const logo = buildGradientWord('DARTMUD', GRADIENT);
   const bar = gradientBar(cols);
+  const year = `${DIM}-= 1991 - 2025 =-${RESET}`;
+  const welcome = `${DIM}Welcome to the Lands of Ferdarchi!${RESET}`;
   const lines = [
     '',
     '',
@@ -194,7 +202,9 @@ export function getConnectedSplash(cols: number): string {
     '',
     ...center([bar], cols),
     '',
-    ...center([`\x1b[1;36mA custom client purposely built for DartMUD${RESET}`], cols),
+    ...center([year], cols),
+    '',
+    ...center([welcome], cols),
     '',
     ...center([`${BRIGHT_GREEN}Connected${RESET}`], cols),
     '',

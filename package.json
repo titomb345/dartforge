@@ -5,8 +5,11 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
+    "dev:web": "vite --config vite.config.web.ts",
     "build": "tsc && vite build",
+    "build:web": "tsc && vite build --config vite.config.web.ts",
     "preview": "vite preview",
+    "preview:web": "vite preview --config vite.config.web.ts",
     "tauri": "tauri"
   },
   "dependencies": {
