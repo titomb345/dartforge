@@ -8,7 +8,7 @@ import {
   getSkillCategory, getSkillSubcategory,
   CATEGORY_LABELS, CATEGORY_ORDER, SUBCATEGORY_ORDER,
 } from '../lib/skillCategories';
-import { PinIcon, ArrowLeftIcon, ArrowRightIcon } from './icons';
+import { PinIcon, PinOffIcon, ArrowLeftIcon, ArrowRightIcon, ChevronUpIcon, ChevronDownIcon } from './icons';
 
 const SETTINGS_FILE = 'settings.json';
 const SKILL_FILTER_KEY = 'skillPanelFilter';
@@ -18,6 +18,13 @@ const SKILL_SUBS_KEY = 'skillPanelShowSubs';
 interface SkillPanelProps {
   mode?: 'slideout' | 'pinned';
   onPin?: (side: DockSide) => void;
+  side?: DockSide;
+  onUnpin?: () => void;
+  onSwapSide?: () => void;
+  onMoveUp?: () => void;
+  onMoveDown?: () => void;
+  canMoveUp?: boolean;
+  canMoveDown?: boolean;
 }
 
 type FilterValue = 'all' | SkillCategory;
@@ -156,12 +163,27 @@ function buildSubGroups(
     }));
 }
 
-export function SkillPanel({ mode = 'slideout', onPin }: SkillPanelProps) {
-  const { activeCharacter, skillData, showInlineImproves, toggleInlineImproves } = useSkillTrackerContext();
+function charDisplayName(name: string): string {
+  return name.charAt(0).toUpperCase() + name.slice(1);
+}
+
+export function SkillPanel({
+  mode = 'slideout',
+  onPin,
+  side,
+  onUnpin,
+  onSwapSide,
+  onMoveUp,
+  onMoveDown,
+  canMoveUp,
+  canMoveDown,
+}: SkillPanelProps) {
+  const { activeCharacter, skillData } = useSkillTrackerContext();
   const dataStore = useDataStore();
   const [filter, setFilter] = useState<FilterValue>('all');
   const [sort, setSort] = useState<SortMode>('name');
   const [showSubs, setShowSubs] = useState(true);
+  const [searchText, setSearchText] = useState('');
   const loaded = useRef(false);
 
   // Load persisted panel settings on mount
@@ -212,8 +234,11 @@ export function SkillPanel({ mode = 'slideout', onPin }: SkillPanelProps) {
   }, [skillData.skills, sort]);
 
   const allSkillsSorted = useMemo(() => {
-    return sortSkills(Object.values(skillData.skills), sort);
-  }, [skillData.skills, sort]);
+    const sorted = sortSkills(Object.values(skillData.skills), sort);
+    if (!searchText) return sorted;
+    const lower = searchText.toLowerCase();
+    return sorted.filter((r) => r.skill.toLowerCase().includes(lower));
+  }, [skillData.skills, sort, searchText]);
 
   const visibleCategories = useMemo(() => {
     if (filter === 'all') return CATEGORY_ORDER.filter((cat) => categorizedSkills[cat].length > 0);
@@ -240,99 +265,116 @@ export function SkillPanel({ mode = 'slideout', onPin }: SkillPanelProps) {
 
   const isPinned = mode === 'pinned';
 
+  const titleText = `Skills${activeCharacter ? ` (${charDisplayName(activeCharacter)})` : ''}`;
+
+  const sortButton = (
+    <button
+      onClick={() => setSort(sort === 'name' ? 'count' : 'name')}
+      title={sort === 'name' ? 'Sorted by name — click for count' : 'Sorted by count — click for name'}
+      className={`flex items-center rounded text-[10px] cursor-pointer px-1.5 py-[2px] transition-all duration-200 ease-in-out border ${
+        sort === 'count'
+          ? 'bg-cyan/15 border-cyan/40 text-cyan'
+          : 'bg-transparent border-border-dim text-text-dim hover:text-text-label'
+      }`}
+    >
+      {sort === 'name' ? 'A-Z' : '#↓'}
+    </button>
+  );
+
   return (
     <div className={isPinned ? 'h-full flex flex-col overflow-hidden' : 'w-[360px] h-full bg-bg-primary border-l border-border-subtle flex flex-col overflow-hidden'}>
-      {/* Header — only in slide-out mode (pinned mode uses PinnedPanelWrapper header) */}
-      {!isPinned && (
-      <div className="flex items-center justify-between px-3 py-2.5 border-b border-border-subtle">
-        <span className="text-[13px] font-semibold text-text-heading">
-          Skills{activeCharacter ? ` (${activeCharacter.charAt(0).toUpperCase()}${activeCharacter.slice(1)})` : ''}
-        </span>
+      {/* Header */}
+      <div className="flex items-center justify-between px-3 py-2.5 border-b border-border-subtle shrink-0">
+        <span className="text-[13px] font-semibold text-text-heading">{titleText}</span>
         <div className="flex items-center gap-1.5">
-          {onPin && (
-            <div className="relative">
-              <button
-                onClick={() => setShowPinMenu((v) => !v)}
-                title="Pin panel"
-                className="flex items-center rounded text-[10px] cursor-pointer px-1.5 py-[2px] transition-all duration-200 ease-in-out border bg-transparent border-border-dim text-text-dim hover:text-green hover:border-green/40"
-              >
-                <PinIcon size={10} />
-              </button>
-              {showPinMenu && (
-                <div className="absolute top-full right-0 mt-1 z-50 flex flex-col gap-0.5 bg-bg-secondary border border-border rounded-md p-1 shadow-lg min-w-[100px]">
+          {isPinned ? (
+            <>
+              {side === 'left' && sortButton}
+              {side === 'right' && onSwapSide && side && (
+                <button
+                  onClick={onSwapSide}
+                  title="Move to left side"
+                  className="flex items-center justify-center w-5 h-5 rounded-[3px] cursor-pointer text-text-dim hover:text-text-label transition-colors duration-150"
+                >
+                  <ArrowLeftIcon size={9} />
+                </button>
+              )}
+              {canMoveUp && onMoveUp && (
+                <button
+                  onClick={onMoveUp}
+                  title="Move up"
+                  className="flex items-center justify-center w-5 h-5 rounded-[3px] cursor-pointer text-text-dim hover:text-text-label transition-colors duration-150"
+                >
+                  <ChevronUpIcon size={9} />
+                </button>
+              )}
+              {canMoveDown && onMoveDown && (
+                <button
+                  onClick={onMoveDown}
+                  title="Move down"
+                  className="flex items-center justify-center w-5 h-5 rounded-[3px] cursor-pointer text-text-dim hover:text-text-label transition-colors duration-150"
+                >
+                  <ChevronDownIcon size={9} />
+                </button>
+              )}
+              {onUnpin && (
+                <button
+                  onClick={onUnpin}
+                  title="Unpin panel"
+                  className="flex items-center justify-center w-5 h-5 rounded-[3px] cursor-pointer text-text-dim hover:text-text-label transition-colors duration-150"
+                >
+                  <PinOffIcon size={11} />
+                </button>
+              )}
+              {side === 'right' && sortButton}
+              {side === 'left' && onSwapSide && side && (
+                <button
+                  onClick={onSwapSide}
+                  title="Move to right side"
+                  className="flex items-center justify-center w-5 h-5 rounded-[3px] cursor-pointer text-text-dim hover:text-text-label transition-colors duration-150"
+                >
+                  <ArrowRightIcon size={9} />
+                </button>
+              )}
+            </>
+          ) : (
+            <>
+              {onPin && (
+                <div className="relative">
                   <button
-                    onClick={() => { onPin('left'); setShowPinMenu(false); }}
-                    className="flex items-center gap-1.5 px-2 py-1 rounded text-[11px] text-text-label hover:bg-bg-primary hover:text-text-primary cursor-pointer transition-colors duration-100"
+                    onClick={() => setShowPinMenu((v) => !v)}
+                    title="Pin panel"
+                    className="flex items-center rounded text-[10px] cursor-pointer px-1.5 py-[2px] transition-all duration-200 ease-in-out border bg-transparent border-border-dim text-text-dim hover:text-green hover:border-green/40"
                   >
-                    <ArrowLeftIcon size={9} /> Pin Left
+                    <PinIcon size={10} />
                   </button>
-                  <button
-                    onClick={() => { onPin('right'); setShowPinMenu(false); }}
-                    className="flex items-center gap-1.5 px-2 py-1 rounded text-[11px] text-text-label hover:bg-bg-primary hover:text-text-primary cursor-pointer transition-colors duration-100"
-                  >
-                    <ArrowRightIcon size={9} /> Pin Right
-                  </button>
+                  {showPinMenu && (
+                    <div className="absolute top-full right-0 mt-1 z-50 flex flex-col gap-0.5 bg-bg-secondary border border-border rounded-md p-1 shadow-lg min-w-[100px]">
+                      <button
+                        onClick={() => { onPin('left'); setShowPinMenu(false); }}
+                        className="flex items-center gap-1.5 px-2 py-1 rounded text-[11px] text-text-label hover:bg-bg-primary hover:text-text-primary cursor-pointer transition-colors duration-100"
+                      >
+                        <ArrowLeftIcon size={9} /> Pin Left
+                      </button>
+                      <button
+                        onClick={() => { onPin('right'); setShowPinMenu(false); }}
+                        className="flex items-center gap-1.5 px-2 py-1 rounded text-[11px] text-text-label hover:bg-bg-primary hover:text-text-primary cursor-pointer transition-colors duration-100"
+                      >
+                        <ArrowRightIcon size={9} /> Pin Right
+                      </button>
+                    </div>
+                  )}
                 </div>
               )}
-            </div>
+              {sortButton}
+            </>
           )}
-          <button
-            onClick={() => setSort(sort === 'name' ? 'count' : 'name')}
-            title={sort === 'name' ? 'Sorted by name — click for count' : 'Sorted by count — click for name'}
-            className={`flex items-center rounded text-[10px] cursor-pointer px-1.5 py-[2px] transition-all duration-200 ease-in-out border ${
-              sort === 'count'
-                ? 'bg-cyan/15 border-cyan/40 text-cyan'
-                : 'bg-transparent border-border-dim text-text-dim hover:text-text-label'
-            }`}
-          >
-            {sort === 'name' ? 'A-Z' : '#↓'}
-          </button>
-          <button
-            onClick={() => toggleInlineImproves(!showInlineImproves)}
-            title="Show skill improves inline in terminal"
-            className={`flex items-center rounded text-[10px] cursor-pointer px-1.5 py-[2px] transition-all duration-200 ease-in-out border ${
-              showInlineImproves
-                ? 'bg-cyan/15 border-cyan/40 text-cyan'
-                : 'bg-transparent border-border-dim text-text-dim hover:text-text-label'
-            }`}
-          >
-            Inline
-          </button>
         </div>
       </div>
-      )}
-
-      {/* Pinned mode controls */}
-      {isPinned && (
-        <div className="flex items-center justify-end gap-1.5 px-2 py-1.5 border-b border-border-subtle">
-          <button
-            onClick={() => setSort(sort === 'name' ? 'count' : 'name')}
-            title={sort === 'name' ? 'Sorted by name — click for count' : 'Sorted by count — click for name'}
-            className={`flex items-center rounded text-[10px] cursor-pointer px-1.5 py-[2px] transition-all duration-200 ease-in-out border ${
-              sort === 'count'
-                ? 'bg-cyan/15 border-cyan/40 text-cyan'
-                : 'bg-transparent border-border-dim text-text-dim hover:text-text-label'
-            }`}
-          >
-            {sort === 'name' ? 'A-Z' : '#↓'}
-          </button>
-          <button
-            onClick={() => toggleInlineImproves(!showInlineImproves)}
-            title="Show skill improves inline in terminal"
-            className={`flex items-center rounded text-[10px] cursor-pointer px-1.5 py-[2px] transition-all duration-200 ease-in-out border ${
-              showInlineImproves
-                ? 'bg-cyan/15 border-cyan/40 text-cyan'
-                : 'bg-transparent border-border-dim text-text-dim hover:text-text-label'
-            }`}
-          >
-            Inline
-          </button>
-        </div>
-      )}
 
       {/* Category filter */}
       {hasAnySkills && (
-        <div className="flex items-center gap-1 px-2 py-2 border-b border-border-subtle flex-wrap">
+        <div className="flex items-center gap-1 px-2 py-2 border-b border-border-subtle flex-wrap shrink-0">
           <FilterPill label="All" active={filter === 'all'} onClick={() => setFilter('all')} />
           {CATEGORY_ORDER.map((cat) =>
             categorizedSkills[cat].length > 0 ? (
@@ -351,6 +393,29 @@ export function SkillPanel({ mode = 'slideout', onPin }: SkillPanelProps) {
               />
             ) : null,
           )}
+        </div>
+      )}
+
+      {/* Text filter — only on "all" tab */}
+      {filter === 'all' && hasAnySkills && (
+        <div className="px-2 py-1.5 border-b border-border-subtle shrink-0">
+          <div className="relative">
+            <input
+              type="text"
+              value={searchText}
+              onChange={(e) => setSearchText(e.target.value)}
+              placeholder="Filter skills..."
+              className="w-full text-[11px] px-2 py-1 rounded border border-border-dim bg-bg-input text-text-primary placeholder:text-text-dim focus:outline-none focus:border-cyan/40 transition-colors duration-150"
+            />
+            {searchText && (
+              <button
+                onClick={() => setSearchText('')}
+                className="absolute right-1.5 top-1/2 -translate-y-1/2 text-text-dim hover:text-text-label text-[11px] cursor-pointer"
+              >
+                ×
+              </button>
+            )}
+          </div>
         </div>
       )}
 

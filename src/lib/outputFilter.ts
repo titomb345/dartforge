@@ -4,6 +4,8 @@ import { matchNeedsLine, type NeedLevel } from './needsPatterns';
 import { matchAuraLine, type AuraMatch } from './auraPatterns';
 import { matchEncumbranceLine, type EncumbranceMatch } from './encumbrancePatterns';
 import { matchMovementLine, type MovementMatch } from './movementPatterns';
+import { matchChatLine } from './chatPatterns';
+import type { ChatMessage } from '../types/chat';
 
 /** Strip ANSI escape sequences for pattern matching */
 function stripAnsi(data: string): string {
@@ -32,6 +34,7 @@ export interface OutputFilterCallbacks {
   onAura?: (match: AuraMatch) => void;
   onEncumbrance?: (match: EncumbranceMatch) => void;
   onMovement?: (match: MovementMatch) => void;
+  onChat?: (msg: ChatMessage) => void;
 }
 
 /** Per-status filter flags — controls which status types get stripped from terminal. */
@@ -70,6 +73,8 @@ export class OutputFilter {
   private syncRemaining = 0;
   /** Per-status filter flags — when true, matching messages are stripped from terminal. */
   filterFlags: FilterFlags = { ...DEFAULT_FILTER_FLAGS };
+  /** Active character name for own-message detection in chat matching. */
+  activeCharacter: string | null = null;
 
   constructor(callbacks: OutputFilterCallbacks = {}) {
     this.callbacks = callbacks;
@@ -140,6 +145,12 @@ export class OutputFilter {
       const healthMatch = matchHealthLine(stripped);
       if (healthMatch) {
         this.callbacks.onHealth?.(healthMatch);
+      }
+
+      // --- Chat detection (observational — never strips) ---
+      const chatMatch = matchChatLine(stripped, this.activeCharacter);
+      if (chatMatch) {
+        this.callbacks.onChat?.(chatMatch);
       }
 
       // --- Sync suppression (login/reconnect auto-send) ---

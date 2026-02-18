@@ -1,6 +1,6 @@
 import { IconButton } from './IconButton';
 import { DropboxButton } from './DropboxButton';
-import { PowerIcon, PaletteIcon, TrendingUpIcon, GearIcon } from './icons';
+import { PowerIcon, PaletteIcon, TrendingUpIcon, ChatIcon, GearIcon } from './icons';
 import { getPlatform } from '../lib/platform';
 import { cn } from '../lib/cn';
 
@@ -13,6 +13,9 @@ interface ToolbarProps {
   showSkills: boolean;
   onToggleSkills: () => void;
   skillsPinned?: boolean;
+  showChat: boolean;
+  onToggleChat: () => void;
+  chatPinned?: boolean;
   showSettings: boolean;
   onToggleSettings: () => void;
 }
@@ -26,12 +29,15 @@ export function Toolbar({
   showSkills,
   onToggleSkills,
   skillsPinned,
+  showChat,
+  onToggleChat,
+  chatPinned,
   showSettings,
   onToggleSettings,
 }: ToolbarProps) {
 
   return (
-    <div className="flex items-center px-2.5 py-1 bg-bg-primary border-b border-border-subtle">
+    <div className="flex items-center px-2.5 py-1 bg-bg-primary rounded-lg">
       <button
         onClick={connected ? onDisconnect : onReconnect}
         title={connected ? 'Disconnect' : 'Reconnect'}
@@ -56,6 +62,14 @@ export function Toolbar({
 
       <div className="flex items-center gap-1">
         {getPlatform() === 'web' && <DropboxButton />}
+        <IconButton
+          icon={<ChatIcon />}
+          title="Chat"
+          accent="#8be9fd"
+          toggled={showChat}
+          pinned={chatPinned}
+          onClick={onToggleChat}
+        />
         <IconButton
           icon={<TrendingUpIcon />}
           title="Skills"

@@ -8,6 +8,7 @@ import { ColorSettings } from './components/ColorSettings';
 import { DataDirSettings } from './components/DataDirSettings';
 import { SetupDialog } from './components/SetupDialog';
 import { SkillPanel } from './components/SkillPanel';
+import { ChatPanel } from './components/ChatPanel';
 import { GameClock } from './components/GameClock';
 import { StatusReadout } from './components/StatusReadout';
 import { HeartIcon, FocusIcon, FoodIcon, DropletIcon, AuraIcon, WeightIcon, BootIcon, CompressIcon } from './components/icons';
@@ -16,6 +17,7 @@ import { useTransport } from './contexts/TransportContext';
 import { useClassMode } from './hooks/useClassMode';
 import { useThemeColors } from './hooks/useThemeColors';
 import { useSkillTracker } from './hooks/useSkillTracker';
+import { useChatMessages } from './hooks/useChatMessages';
 import { useConcentration } from './hooks/useConcentration';
 import { useHealth } from './hooks/useHealth';
 import { useNeeds } from './hooks/useNeeds';
@@ -32,6 +34,7 @@ import { cn } from './lib/cn';
 import type { Panel, PanelLayout, PinnablePanel, DockSide } from './types';
 import { PinnedRegion } from './components/PinnedRegion';
 import { SkillTrackerProvider } from './contexts/SkillTrackerContext';
+import { ChatProvider } from './contexts/ChatContext';
 
 /**
  * App gate — shows the setup dialog until a data location is configured,
@@ -132,7 +135,29 @@ function AppMain() {
     });
   }, []);
 
+  const movePanel = useCallback((panel: PinnablePanel, direction: 'up' | 'down') => {
+    setPanelLayout((prev) => {
+      const moveSide = (arr: PinnablePanel[]): PinnablePanel[] => {
+        const idx = arr.indexOf(panel);
+        if (idx < 0) return arr;
+        const targetIdx = direction === 'up' ? idx - 1 : idx + 1;
+        if (targetIdx < 0 || targetIdx >= arr.length) return arr;
+        const next = [...arr];
+        [next[idx], next[targetIdx]] = [next[targetIdx], next[idx]];
+        return next;
+      };
+      if (prev.left.includes(panel)) {
+        return { left: moveSide(prev.left), right: prev.right };
+      }
+      if (prev.right.includes(panel)) {
+        return { left: prev.left, right: moveSide(prev.right) };
+      }
+      return prev;
+    });
+  }, []);
+
   const isSkillsPinned = panelLayout.left.includes('skills') || panelLayout.right.includes('skills');
+  const isChatPinned = panelLayout.left.includes('chat') || panelLayout.right.includes('chat');
 
   // Persist panel layout
   useEffect(() => {
@@ -149,6 +174,12 @@ function AppMain() {
     processorRef.current = new OutputProcessor();
     processorRef.current.registerMatcher(matchSkillLine);
   }
+
+  // Chat messages hook
+  const { messages: chatMessages, filters: chatFilters, mutedSenders, handleChatMessage, toggleFilter: toggleChatFilter, muteSender, unmuteSender } =
+    useChatMessages();
+  const handleChatMessageRef = useRef(handleChatMessage);
+  handleChatMessageRef.current = handleChatMessage;
 
   // Status trackers
   const { concentration, updateConcentration } = useConcentration();
@@ -187,6 +218,7 @@ function AppMain() {
       onAura: (match) => { updateAuraRef.current(match); },
       onEncumbrance: (match) => { updateEncumbranceRef.current(match); },
       onMovement: (match) => { updateMovementRef.current(match); },
+      onChat: (msg) => { handleChatMessageRef.current(msg); },
     });
   }
 
@@ -250,6 +282,13 @@ function AppMain() {
   const { activeCharacter, skillData, setActiveCharacter, handleSkillMatch, showInlineImproves, toggleInlineImproves } =
     useSkillTracker(sendCommandRef, processorRef, terminalRef, dataStore);
 
+  // Keep OutputFilter's activeCharacter in sync for chat own-message detection
+  useEffect(() => {
+    if (outputFilterRef.current) {
+      outputFilterRef.current.activeCharacter = activeCharacter;
+    }
+  }, [activeCharacter]);
+
   // Process output chunks through the skill detection pipeline
   const onOutputChunk = useCallback((data: string) => {
     const matches = processorRef.current!.processChunk(data);
@@ -303,10 +342,12 @@ function AppMain() {
     themeColor === 'red' || themeColor === 'brightRed' || themeColor === 'magenta';
 
   const skillTrackerValue = { activeCharacter, skillData, showInlineImproves, toggleInlineImproves };
+  const chatValue = { messages: chatMessages, filters: chatFilters, mutedSenders, toggleFilter: toggleChatFilter, muteSender, unmuteSender };
 
   return (
     <SkillTrackerProvider value={skillTrackerValue}>
-    <div className="flex flex-col h-screen bg-bg-primary text-text-primary relative">
+    <ChatProvider value={chatValue}>
+    <div className="flex flex-col h-screen bg-bg-canvas text-text-primary relative p-1 gap-1">
       <Toolbar
         connected={connected}
         onReconnect={reconnect}
@@ -316,20 +357,25 @@ function AppMain() {
         showSkills={activePanel === 'skills'}
         onToggleSkills={() => togglePanel('skills')}
         skillsPinned={isSkillsPinned}
+        showChat={activePanel === 'chat'}
+        onToggleChat={() => togglePanel('chat')}
+        chatPinned={isChatPinned}
         showSettings={activePanel === 'settings'}
         onToggleSettings={() => togglePanel('settings')}
       />
-      <div className="flex-1 overflow-hidden flex flex-row relative">
+      <div className="flex-1 overflow-hidden flex flex-row gap-1 relative">
         {/* Left pinned region */}
         <PinnedRegion
           side="left"
           panels={panelLayout.left}
+          otherSidePanelCount={panelLayout.right.length}
           onUnpin={unpinPanel}
           onSwapSide={swapPanelSide}
+          onMovePanel={movePanel}
         />
 
         {/* Center: Terminal */}
-        <div className="flex-1 overflow-hidden flex flex-col">
+        <div className="flex-1 overflow-hidden flex flex-col rounded-lg">
           <Terminal terminalRef={terminalRef} inputRef={inputRef} theme={xtermTheme} display={display} onUpdateDisplay={updateDisplay} />
         </div>
 
@@ -337,8 +383,10 @@ function AppMain() {
         <PinnedRegion
           side="right"
           panels={panelLayout.right}
+          otherSidePanelCount={panelLayout.left.length}
           onUnpin={unpinPanel}
           onSwapSide={swapPanelSide}
+          onMovePanel={movePanel}
         />
 
         {/* Slide-out overlays — anchored to right edge of window */}
@@ -384,12 +432,28 @@ function AppMain() {
             />
           </div>
         )}
+        {/* Chat slide-out — only when NOT pinned */}
+        {!isChatPinned && (
+          <div
+            className={cn(
+              'absolute top-0 right-0 bottom-0 z-[100] transition-transform duration-300 ease-in-out',
+              activePanel === 'chat' ? 'translate-x-0' : 'translate-x-full'
+            )}
+          >
+            <ChatPanel
+              mode="slideout"
+              onPin={(side) => pinPanel('chat', side)}
+            />
+          </div>
+        )}
       </div>
+      {/* Bottom controls card — status bar + command input */}
+      <div className="rounded-lg bg-bg-primary overflow-hidden">
       {/* Game status bar — vitals left, clock right */}
       <div
         ref={statusBarRef}
         className={cn(
-          'flex items-center gap-1 px-1.5 py-0.5 border-t border-border-faint',
+          'flex items-center gap-1 px-1.5 py-0.5',
           twoRow && 'flex-wrap'
         )}
         style={{ background: 'linear-gradient(to bottom, #1e1e1e, #1a1a1a)' }}
@@ -534,7 +598,9 @@ function AppMain() {
         passwordMode={passwordMode}
         skipHistory={skipHistory}
       />
+      </div>
     </div>
+    </ChatProvider>
     </SkillTrackerProvider>
   );
 }

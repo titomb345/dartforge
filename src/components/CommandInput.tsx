@@ -124,7 +124,7 @@ export const CommandInput = forwardRef<HTMLTextAreaElement, CommandInputProps>(
     );
 
     return (
-      <div className="flex items-start px-2.5 py-1.5 bg-bg-primary border-t border-border-subtle transition-[border-color] duration-300 ease-in-out">
+      <div className="flex items-start px-2.5 py-1.5 border-t border-border-subtle transition-[border-color] duration-300 ease-in-out">
         {/* Prompt / line count */}
         <span
           className={cn(

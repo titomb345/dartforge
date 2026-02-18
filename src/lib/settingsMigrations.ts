@@ -1,6 +1,6 @@
 import type { DataStore } from '../contexts/DataStoreContext';
 
-export const CURRENT_VERSION = 5;
+export const CURRENT_VERSION = 6;
 
 /** Raw store contents — all keys are optional since older stores may lack them. */
 export type StoreData = Record<string, unknown>;
@@ -50,6 +50,22 @@ const MIGRATIONS: MigrationFn[] = [
   (data) => {
     if (!('panelLayout' in data)) {
       data.panelLayout = { left: [], right: [] };
+    }
+    return data;
+  },
+  // v5 → v6: initialize chat panel settings
+  (data) => {
+    if (!('chatMutedSenders' in data)) {
+      data.chatMutedSenders = [];
+    }
+    if (!('chatFilters' in data)) {
+      data.chatFilters = {
+        say: false,
+        shout: false,
+        ooc: true,
+        tell: true,
+        sz: true,
+      };
     }
     return data;
   },

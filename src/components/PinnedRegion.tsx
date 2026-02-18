@@ -1,52 +1,89 @@
-import type { ComponentType } from 'react';
-import type { PinnablePanel, DockSide } from '../types';
-import { PinnedPanelWrapper } from './PinnedPanelWrapper';
+import type React from 'react';
+import type { DockSide, PinnablePanel } from '../types';
 import { SkillPanel } from './SkillPanel';
-import { cn } from '../lib/cn';
+import { ChatPanel } from './ChatPanel';
 
-const PANEL_META: Record<PinnablePanel, { title: string; accent: string; component: ComponentType }> = {
-  skills: { title: 'Skills', accent: '#50fa7b', component: () => <SkillPanel mode="pinned" /> },
+
+interface PinnedPanelRenderProps {
+  side: DockSide;
+  onUnpin: () => void;
+  onSwapSide: () => void;
+  canSwapSide: boolean;
+  onMoveUp?: () => void;
+  onMoveDown?: () => void;
+  canMoveUp: boolean;
+  canMoveDown: boolean;
+}
+
+const PANEL_META: Record<PinnablePanel, {
+  render: (props: PinnedPanelRenderProps) => React.JSX.Element;
+}> = {
+  skills: {
+    render: (props) => (
+      <SkillPanel
+        mode="pinned"
+        side={props.side}
+        onUnpin={props.onUnpin}
+        onSwapSide={props.canSwapSide ? props.onSwapSide : undefined}
+        onMoveUp={props.onMoveUp}
+        onMoveDown={props.onMoveDown}
+        canMoveUp={props.canMoveUp}
+        canMoveDown={props.canMoveDown}
+      />
+    ),
+  },
+  chat: {
+    render: (props) => (
+      <ChatPanel
+        mode="pinned"
+        side={props.side}
+        onUnpin={props.onUnpin}
+        onSwapSide={props.canSwapSide ? props.onSwapSide : undefined}
+        onMoveUp={props.onMoveUp}
+        onMoveDown={props.onMoveDown}
+        canMoveUp={props.canMoveUp}
+        canMoveDown={props.canMoveDown}
+      />
+    ),
+  },
 };
 
 interface PinnedRegionProps {
   side: DockSide;
   panels: PinnablePanel[];
+  otherSidePanelCount: number;
   onUnpin: (panel: PinnablePanel) => void;
   onSwapSide: (panel: PinnablePanel) => void;
+  onMovePanel: (panel: PinnablePanel, direction: 'up' | 'down') => void;
 }
 
-export function PinnedRegion({ side, panels, onUnpin, onSwapSide }: PinnedRegionProps) {
+export function PinnedRegion({ side, panels, otherSidePanelCount, onUnpin, onSwapSide, onMovePanel }: PinnedRegionProps) {
   if (panels.length === 0) return null;
+
+  const canSwapSide = otherSidePanelCount < 3;
 
   return (
     <div
-      className={cn(
-        'pinned-region flex flex-col overflow-hidden bg-bg-primary',
-        side === 'left'
-          ? 'pinned-region-left border-r border-border-subtle'
-          : 'pinned-region-right border-l border-border-subtle',
-      )}
+      className="flex flex-col gap-1"
       style={{ width: 320 }}
     >
       {panels.map((panelId, i) => {
-        const { title, accent, component: PanelComponent } = PANEL_META[panelId];
+        const { render } = PANEL_META[panelId];
         return (
           <div
             key={panelId}
-            className={cn(
-              'flex-1 flex flex-col overflow-hidden min-h-0',
-              i < panels.length - 1 && 'border-b border-border-subtle',
-            )}
+            className="flex-1 flex flex-col overflow-hidden min-h-0 rounded-lg bg-bg-primary"
           >
-            <PinnedPanelWrapper
-              title={title}
-              side={side}
-              accent={accent}
-              onUnpin={() => onUnpin(panelId)}
-              onSwapSide={() => onSwapSide(panelId)}
-            >
-              <PanelComponent />
-            </PinnedPanelWrapper>
+            {render({
+              side,
+              onUnpin: () => onUnpin(panelId),
+              onSwapSide: () => onSwapSide(panelId),
+              canSwapSide,
+              onMoveUp: i > 0 ? () => onMovePanel(panelId, 'up') : undefined,
+              onMoveDown: i < panels.length - 1 ? () => onMovePanel(panelId, 'down') : undefined,
+              canMoveUp: i > 0,
+              canMoveDown: i < panels.length - 1,
+            })}
           </div>
         );
       })}
