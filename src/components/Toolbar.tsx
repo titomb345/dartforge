@@ -12,6 +12,7 @@ interface ToolbarProps {
   onToggleAppearance: () => void;
   showSkills: boolean;
   onToggleSkills: () => void;
+  skillsPinned?: boolean;
   showSettings: boolean;
   onToggleSettings: () => void;
 }
@@ -24,6 +25,7 @@ export function Toolbar({
   onToggleAppearance,
   showSkills,
   onToggleSkills,
+  skillsPinned,
   showSettings,
   onToggleSettings,
 }: ToolbarProps) {
@@ -59,6 +61,7 @@ export function Toolbar({
           title="Skills"
           accent="#50fa7b"
           toggled={showSkills}
+          pinned={skillsPinned}
           onClick={onToggleSkills}
         />
         <IconButton

@@ -81,6 +81,22 @@
   border-color: color-mix(in srgb, var(--btn-accent) 25%, transparent);
   filter: drop-shadow(0 0 4px color-mix(in srgb, var(--btn-accent) 50%, transparent));
 }
+.icon-btn-pinned {
+  color: color-mix(in srgb, var(--btn-accent) 50%, transparent);
+  border-color: color-mix(in srgb, var(--btn-accent) 15%, transparent);
+  border-style: dashed;
+}
+
+/* Pinned region fade-in */
+.pinned-region-left,
+.pinned-region-right {
+  animation: region-fade-in 250ms ease-out;
+}
+
+@keyframes region-fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
 
 /* Status readout — instrument gauge styling */
 .status-readout:hover {

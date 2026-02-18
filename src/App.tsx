@@ -29,7 +29,9 @@ import { OutputFilter, DEFAULT_FILTER_FLAGS, type FilterFlags } from './lib/outp
 import { matchSkillLine } from './lib/skillPatterns';
 import { cn } from './lib/cn';
 
-import type { Panel } from './types';
+import type { Panel, PanelLayout, PinnablePanel, DockSide } from './types';
+import { PinnedRegion } from './components/PinnedRegion';
+import { SkillTrackerProvider } from './contexts/SkillTrackerContext';
 
 /**
  * App gate — shows the setup dialog until a data location is configured,
@@ -65,6 +67,8 @@ function AppMain() {
   const [debugMode, setDebugMode] = useState(false);
   const [activePanel, setActivePanel] = useState<Panel | null>(null);
   const togglePanel = (panel: Panel) => setActivePanel((v) => v === panel ? null : panel);
+  const [panelLayout, setPanelLayout] = useState<PanelLayout>({ left: [], right: [] });
+  const panelLayoutLoadedRef = useRef(false);
   const [compactBar, setCompactBar] = useState(false);
   const [filterFlags, setFilterFlags] = useState<FilterFlags>({ ...DEFAULT_FILTER_FLAGS });
   const [loggedIn, setLoggedIn] = useState(false);
@@ -75,16 +79,66 @@ function AppMain() {
   const dataStore = useDataStore();
   const settingsLoadedRef = useRef(false);
 
-  // Load compact mode + filter flags from settings
+  // Load compact mode + filter flags + panel layout from settings
   useEffect(() => {
     (async () => {
       const savedCompact = await dataStore.get<boolean>('settings.json', 'compactBar');
       if (savedCompact != null) setCompactBar(savedCompact);
       const savedFilters = await dataStore.get<FilterFlags>('settings.json', 'filteredStatuses');
       if (savedFilters != null) setFilterFlags(savedFilters);
+      const savedLayout = await dataStore.get<PanelLayout>('settings.json', 'panelLayout');
+      if (savedLayout != null) setPanelLayout(savedLayout);
+      panelLayoutLoadedRef.current = true;
       settingsLoadedRef.current = true;
     })().catch(console.error);
   }, []);
+
+  // Panel docking helpers
+  const pinPanel = useCallback((panel: PinnablePanel, side: DockSide) => {
+    setPanelLayout((prev) => {
+      const left = prev.left.filter((p): p is PinnablePanel => p !== panel);
+      const right = prev.right.filter((p): p is PinnablePanel => p !== panel);
+      const next: PanelLayout = { left, right };
+      if (next[side].length < 3) {
+        next[side] = [...next[side], panel];
+      }
+      return next;
+    });
+    setActivePanel(null);
+  }, []);
+
+  const unpinPanel = useCallback((panel: PinnablePanel) => {
+    setPanelLayout((prev) => ({
+      left: prev.left.filter((p): p is PinnablePanel => p !== panel),
+      right: prev.right.filter((p): p is PinnablePanel => p !== panel),
+    }));
+  }, []);
+
+  const swapPanelSide = useCallback((panel: PinnablePanel) => {
+    setPanelLayout((prev) => {
+      if (prev.left.includes(panel)) {
+        return {
+          left: prev.left.filter((p): p is PinnablePanel => p !== panel),
+          right: prev.right.length < 3 ? [...prev.right, panel] : prev.right,
+        };
+      }
+      if (prev.right.includes(panel)) {
+        return {
+          left: prev.left.length < 3 ? [...prev.left, panel] : prev.left,
+          right: prev.right.filter((p): p is PinnablePanel => p !== panel),
+        };
+      }
+      return prev;
+    });
+  }, []);
+
+  const isSkillsPinned = panelLayout.left.includes('skills') || panelLayout.right.includes('skills');
+
+  // Persist panel layout
+  useEffect(() => {
+    if (!panelLayoutLoadedRef.current) return;
+    dataStore.set('settings.json', 'panelLayout', panelLayout).catch(console.error);
+  }, [panelLayout]);
 
   const { theme, updateColor, resetColor, display, updateDisplay, resetDisplay, resetAll } = useThemeColors();
   const xtermTheme = buildXtermTheme(theme);
@@ -248,7 +302,10 @@ function AppMain() {
   const isDanger = (themeColor: string) =>
     themeColor === 'red' || themeColor === 'brightRed' || themeColor === 'magenta';
 
+  const skillTrackerValue = { activeCharacter, skillData, showInlineImproves, toggleInlineImproves };
+
   return (
+    <SkillTrackerProvider value={skillTrackerValue}>
     <div className="flex flex-col h-screen bg-bg-primary text-text-primary relative">
       <Toolbar
         connected={connected}
@@ -258,33 +315,51 @@ function AppMain() {
         onToggleAppearance={() => togglePanel('appearance')}
         showSkills={activePanel === 'skills'}
         onToggleSkills={() => togglePanel('skills')}
+        skillsPinned={isSkillsPinned}
         showSettings={activePanel === 'settings'}
         onToggleSettings={() => togglePanel('settings')}
       />
       <div className="flex-1 overflow-hidden flex flex-row relative">
-        {/* Left: Terminal + overlays */}
-        <div className="flex-1 relative overflow-hidden flex flex-col">
+        {/* Left pinned region */}
+        <PinnedRegion
+          side="left"
+          panels={panelLayout.left}
+          onUnpin={unpinPanel}
+          onSwapSide={swapPanelSide}
+        />
+
+        {/* Center: Terminal */}
+        <div className="flex-1 overflow-hidden flex flex-col">
           <Terminal terminalRef={terminalRef} inputRef={inputRef} theme={xtermTheme} display={display} onUpdateDisplay={updateDisplay} />
-          <div
-            className={cn(
-              'absolute top-0 right-0 bottom-0 z-[100] transition-transform duration-300 ease-in-out',
-              activePanel === 'appearance' ? 'translate-x-0' : 'translate-x-full'
-            )}
-          >
-            <ColorSettings
-              theme={theme}
-              onUpdateColor={updateColor}
-              onResetColor={resetColor}
-              onReset={resetAll}
-              display={display}
-              onUpdateDisplay={updateDisplay}
-              onResetDisplay={resetDisplay}
-              debugMode={debugMode}
-              onToggleDebug={toggleDebug}
-            />
-          </div>
         </div>
-        {/* Right: Settings panel overlay (Tauri only) */}
+
+        {/* Right pinned region */}
+        <PinnedRegion
+          side="right"
+          panels={panelLayout.right}
+          onUnpin={unpinPanel}
+          onSwapSide={swapPanelSide}
+        />
+
+        {/* Slide-out overlays — anchored to right edge of window */}
+        <div
+          className={cn(
+            'absolute top-0 right-0 bottom-0 z-[100] transition-transform duration-300 ease-in-out',
+            activePanel === 'appearance' ? 'translate-x-0' : 'translate-x-full'
+          )}
+        >
+          <ColorSettings
+            theme={theme}
+            onUpdateColor={updateColor}
+            onResetColor={resetColor}
+            onReset={resetAll}
+            display={display}
+            onUpdateDisplay={updateDisplay}
+            onResetDisplay={resetDisplay}
+            debugMode={debugMode}
+            onToggleDebug={toggleDebug}
+          />
+        </div>
         {getPlatform() === 'tauri' && (
           <div
             className={cn(
@@ -295,20 +370,20 @@ function AppMain() {
             <DataDirSettings />
           </div>
         )}
-        {/* Right: Skill panel overlay */}
-        <div
-          className={cn(
-            'absolute top-0 right-0 bottom-0 z-[100] transition-transform duration-300 ease-in-out',
-            activePanel === 'skills' ? 'translate-x-0' : 'translate-x-full'
-          )}
-        >
-          <SkillPanel
-            activeCharacter={activeCharacter}
-            skillData={skillData}
-            showInlineImproves={showInlineImproves}
-            onToggleInlineImproves={toggleInlineImproves}
-          />
-        </div>
+        {/* Skills slide-out — only when NOT pinned */}
+        {!isSkillsPinned && (
+          <div
+            className={cn(
+              'absolute top-0 right-0 bottom-0 z-[100] transition-transform duration-300 ease-in-out',
+              activePanel === 'skills' ? 'translate-x-0' : 'translate-x-full'
+            )}
+          >
+            <SkillPanel
+              mode="slideout"
+              onPin={(side) => pinPanel('skills', side)}
+            />
+          </div>
+        )}
       </div>
       {/* Game status bar — vitals left, clock right */}
       <div
@@ -460,6 +535,7 @@ function AppMain() {
         skipHistory={skipHistory}
       />
     </div>
+    </SkillTrackerProvider>
   );
 }
 

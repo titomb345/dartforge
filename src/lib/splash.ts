@@ -130,15 +130,24 @@ function gradientBar(width: number): string {
   return bar + RESET;
 }
 
-function center(lines: string[], width: number): string[] {
+const LEFT_PAD = '  ';
+
+/** Left-align with padding only (for the bar) */
+function align(lines: string[]): string[] {
+  return lines.map((line) => LEFT_PAD + line);
+}
+
+/** Center text under the bar, then left-pad the whole thing */
+function centerUnderBar(lines: string[], barWidth: number): string[] {
   return lines.map((line) => {
     const visible = line.replace(/\x1b\[[0-9;]*m/g, '');
-    const pad = Math.max(0, Math.floor((width - visible.length) / 2));
-    return ' '.repeat(pad) + line;
+    const pad = Math.max(0, Math.floor((barWidth - visible.length) / 2));
+    return LEFT_PAD + ' '.repeat(pad) + line;
   });
 }
 
 export function getStartupSplash(cols: number): string {
+  const barWidth = Math.min(cols - 4, 60);
   const logo = buildGradientWord('DARTMUD', GRADIENT);
   const bar = gradientBar(cols);
   const year = `${DIM}-= 1991 - 2025 =-${RESET}`;
@@ -146,17 +155,17 @@ export function getStartupSplash(cols: number): string {
   const lines = [
     '',
     '',
-    ...center([bar], cols),
+    ...align([bar]),
     '',
-    ...center(logo, cols),
+    ...centerUnderBar(logo, barWidth),
     '',
-    ...center([bar], cols),
+    ...align([bar]),
     '',
-    ...center([year], cols),
+    ...centerUnderBar([year], barWidth),
     '',
-    ...center([welcome], cols),
+    ...centerUnderBar([welcome], barWidth),
     '',
-    ...center([`${GREEN}Press Enter to connect${RESET}`], cols),
+    ...centerUnderBar([`${GREEN}Press Enter to connect${RESET}`], barWidth),
     '',
     '',
   ];
@@ -164,6 +173,7 @@ export function getStartupSplash(cols: number): string {
 }
 
 export function getConnectingSplash(cols: number): string {
+  const barWidth = Math.min(cols - 4, 60);
   const logo = buildGradientWord('DARTMUD', GRADIENT);
   const bar = gradientBar(cols);
   const year = `${DIM}-= 1991 - 2025 =-${RESET}`;
@@ -171,17 +181,17 @@ export function getConnectingSplash(cols: number): string {
   const lines = [
     '',
     '',
-    ...center([bar], cols),
+    ...align([bar]),
     '',
-    ...center(logo, cols),
+    ...centerUnderBar(logo, barWidth),
     '',
-    ...center([bar], cols),
+    ...align([bar]),
     '',
-    ...center([year], cols),
+    ...centerUnderBar([year], barWidth),
     '',
-    ...center([welcome], cols),
+    ...centerUnderBar([welcome], barWidth),
     '',
-    ...center([`${CYAN}Connecting...${RESET}`], cols),
+    ...centerUnderBar([`${CYAN}Connecting...${RESET}`], barWidth),
     '',
     '',
   ];
@@ -189,6 +199,7 @@ export function getConnectingSplash(cols: number): string {
 }
 
 export function getConnectedSplash(cols: number): string {
+  const barWidth = Math.min(cols - 4, 60);
   const logo = buildGradientWord('DARTMUD', GRADIENT);
   const bar = gradientBar(cols);
   const year = `${DIM}-= 1991 - 2025 =-${RESET}`;
@@ -196,17 +207,17 @@ export function getConnectedSplash(cols: number): string {
   const lines = [
     '',
     '',
-    ...center([bar], cols),
+    ...align([bar]),
     '',
-    ...center(logo, cols),
+    ...centerUnderBar(logo, barWidth),
     '',
-    ...center([bar], cols),
+    ...align([bar]),
     '',
-    ...center([year], cols),
+    ...centerUnderBar([year], barWidth),
     '',
-    ...center([welcome], cols),
+    ...centerUnderBar([welcome], barWidth),
     '',
-    ...center([`${BRIGHT_GREEN}Connected${RESET}`], cols),
+    ...centerUnderBar([`${BRIGHT_GREEN}Connected${RESET}`], barWidth),
     '',
     '',
   ];
@@ -229,18 +240,19 @@ function redBar(cols: number): string {
 }
 
 export function getDisconnectSplash(cols: number): string {
+  const barWidth = Math.min(cols - 4, 60);
   const logo = buildGradientWord('DISCONNECTED', RED_GRADIENT);
   const bar = redBar(cols);
   const lines = [
     '',
     '',
-    ...center([bar], cols),
+    ...align([bar]),
     '',
-    ...center(logo, cols),
+    ...centerUnderBar(logo, barWidth),
     '',
-    ...center([bar], cols),
+    ...align([bar]),
     '',
-    ...center([`${GREEN}Press enter to reconnect.${RESET}`], cols),
+    ...centerUnderBar([`${GREEN}Press enter to reconnect.${RESET}`], barWidth),
     '',
     '',
   ];

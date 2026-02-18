@@ -1,11 +1,14 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useDataStore } from '../contexts/DataStoreContext';
-import type { CharacterSkillFile, SkillRecord, SkillCategory } from '../types/skills';
+import { useSkillTrackerContext } from '../contexts/SkillTrackerContext';
+import type { SkillRecord, SkillCategory } from '../types/skills';
+import type { DockSide } from '../types';
 import { getTierForCount, getImprovesToNextTier } from '../lib/skillTiers';
 import {
   getSkillCategory, getSkillSubcategory,
   CATEGORY_LABELS, CATEGORY_ORDER, SUBCATEGORY_ORDER,
 } from '../lib/skillCategories';
+import { PinIcon, ArrowLeftIcon, ArrowRightIcon } from './icons';
 
 const SETTINGS_FILE = 'settings.json';
 const SKILL_FILTER_KEY = 'skillPanelFilter';
@@ -13,10 +16,8 @@ const SKILL_SORT_KEY = 'skillPanelSort';
 const SKILL_SUBS_KEY = 'skillPanelShowSubs';
 
 interface SkillPanelProps {
-  activeCharacter: string | null;
-  skillData: CharacterSkillFile;
-  showInlineImproves: boolean;
-  onToggleInlineImproves: (value: boolean) => void;
+  mode?: 'slideout' | 'pinned';
+  onPin?: (side: DockSide) => void;
 }
 
 type FilterValue = 'all' | SkillCategory;
@@ -155,7 +156,8 @@ function buildSubGroups(
     }));
 }
 
-export function SkillPanel({ activeCharacter, skillData, showInlineImproves, onToggleInlineImproves }: SkillPanelProps) {
+export function SkillPanel({ mode = 'slideout', onPin }: SkillPanelProps) {
+  const { activeCharacter, skillData, showInlineImproves, toggleInlineImproves } = useSkillTrackerContext();
   const dataStore = useDataStore();
   const [filter, setFilter] = useState<FilterValue>('all');
   const [sort, setSort] = useState<SortMode>('name');
@@ -234,14 +236,46 @@ export function SkillPanel({ activeCharacter, skillData, showInlineImproves, onT
 
   const showPets = filter === 'all';
 
+  const [showPinMenu, setShowPinMenu] = useState(false);
+
+  const isPinned = mode === 'pinned';
+
   return (
-    <div className="w-[360px] h-full bg-bg-primary border-l border-border-subtle flex flex-col overflow-hidden">
-      {/* Header */}
+    <div className={isPinned ? 'h-full flex flex-col overflow-hidden' : 'w-[360px] h-full bg-bg-primary border-l border-border-subtle flex flex-col overflow-hidden'}>
+      {/* Header — only in slide-out mode (pinned mode uses PinnedPanelWrapper header) */}
+      {!isPinned && (
       <div className="flex items-center justify-between px-3 py-2.5 border-b border-border-subtle">
         <span className="text-[13px] font-semibold text-text-heading">
           Skills{activeCharacter ? ` (${activeCharacter.charAt(0).toUpperCase()}${activeCharacter.slice(1)})` : ''}
         </span>
         <div className="flex items-center gap-1.5">
+          {onPin && (
+            <div className="relative">
+              <button
+                onClick={() => setShowPinMenu((v) => !v)}
+                title="Pin panel"
+                className="flex items-center rounded text-[10px] cursor-pointer px-1.5 py-[2px] transition-all duration-200 ease-in-out border bg-transparent border-border-dim text-text-dim hover:text-green hover:border-green/40"
+              >
+                <PinIcon size={10} />
+              </button>
+              {showPinMenu && (
+                <div className="absolute top-full right-0 mt-1 z-50 flex flex-col gap-0.5 bg-bg-secondary border border-border rounded-md p-1 shadow-lg min-w-[100px]">
+                  <button
+                    onClick={() => { onPin('left'); setShowPinMenu(false); }}
+                    className="flex items-center gap-1.5 px-2 py-1 rounded text-[11px] text-text-label hover:bg-bg-primary hover:text-text-primary cursor-pointer transition-colors duration-100"
+                  >
+                    <ArrowLeftIcon size={9} /> Pin Left
+                  </button>
+                  <button
+                    onClick={() => { onPin('right'); setShowPinMenu(false); }}
+                    className="flex items-center gap-1.5 px-2 py-1 rounded text-[11px] text-text-label hover:bg-bg-primary hover:text-text-primary cursor-pointer transition-colors duration-100"
+                  >
+                    <ArrowRightIcon size={9} /> Pin Right
+                  </button>
+                </div>
+              )}
+            </div>
+          )}
           <button
             onClick={() => setSort(sort === 'name' ? 'count' : 'name')}
             title={sort === 'name' ? 'Sorted by name — click for count' : 'Sorted by count — click for name'}
@@ -254,7 +288,7 @@ export function SkillPanel({ activeCharacter, skillData, showInlineImproves, onT
             {sort === 'name' ? 'A-Z' : '#↓'}
           </button>
           <button
-            onClick={() => onToggleInlineImproves(!showInlineImproves)}
+            onClick={() => toggleInlineImproves(!showInlineImproves)}
             title="Show skill improves inline in terminal"
             className={`flex items-center rounded text-[10px] cursor-pointer px-1.5 py-[2px] transition-all duration-200 ease-in-out border ${
               showInlineImproves
@@ -266,6 +300,35 @@ export function SkillPanel({ activeCharacter, skillData, showInlineImproves, onT
           </button>
         </div>
       </div>
+      )}
+
+      {/* Pinned mode controls */}
+      {isPinned && (
+        <div className="flex items-center justify-end gap-1.5 px-2 py-1.5 border-b border-border-subtle">
+          <button
+            onClick={() => setSort(sort === 'name' ? 'count' : 'name')}
+            title={sort === 'name' ? 'Sorted by name — click for count' : 'Sorted by count — click for name'}
+            className={`flex items-center rounded text-[10px] cursor-pointer px-1.5 py-[2px] transition-all duration-200 ease-in-out border ${
+              sort === 'count'
+                ? 'bg-cyan/15 border-cyan/40 text-cyan'
+                : 'bg-transparent border-border-dim text-text-dim hover:text-text-label'
+            }`}
+          >
+            {sort === 'name' ? 'A-Z' : '#↓'}
+          </button>
+          <button
+            onClick={() => toggleInlineImproves(!showInlineImproves)}
+            title="Show skill improves inline in terminal"
+            className={`flex items-center rounded text-[10px] cursor-pointer px-1.5 py-[2px] transition-all duration-200 ease-in-out border ${
+              showInlineImproves
+                ? 'bg-cyan/15 border-cyan/40 text-cyan'
+                : 'bg-transparent border-border-dim text-text-dim hover:text-text-label'
+            }`}
+          >
+            Inline
+          </button>
+        </div>
+      )}
 
       {/* Category filter */}
       {hasAnySkills && (

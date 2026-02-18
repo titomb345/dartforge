@@ -1,6 +1,6 @@
 import type { DataStore } from '../contexts/DataStoreContext';
 
-export const CURRENT_VERSION = 4;
+export const CURRENT_VERSION = 5;
 
 /** Raw store contents — all keys are optional since older stores may lack them. */
 export type StoreData = Record<string, unknown>;
@@ -44,6 +44,13 @@ const MIGRATIONS: MigrationFn[] = [
       encumbrance: wasCompact,
       movement: wasCompact,
     };
+    return data;
+  },
+  // v4 → v5: initialize panel docking layout
+  (data) => {
+    if (!('panelLayout' in data)) {
+      data.panelLayout = { left: [], right: [] };
+    }
     return data;
   },
 ];
