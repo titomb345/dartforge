@@ -81,6 +81,8 @@ export const CommandInput = forwardRef<HTMLTextAreaElement, CommandInputProps>(
             onReconnect();
             return;
           }
+          // Don't send empty lines during login prompts (Name:/Password:)
+          if (skipHistory && value.trim() === '') return;
           submit();
         } else if (e.key === 'Escape') {
           e.preventDefault();

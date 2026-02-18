@@ -6,6 +6,7 @@ export interface ChatState {
   filters: ChatFilters;
   mutedSenders: string[];
   toggleFilter: (type: ChatType) => void;
+  setAllFilters: (filters: ChatFilters) => void;
   muteSender: (name: string) => void;
   unmuteSender: (name: string) => void;
 }

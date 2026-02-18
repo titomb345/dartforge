@@ -1,6 +1,6 @@
 import type { DataStore } from '../contexts/DataStoreContext';
 
-export const CURRENT_VERSION = 6;
+export const CURRENT_VERSION = 7;
 
 /** Raw store contents — all keys are optional since older stores may lack them. */
 export type StoreData = Record<string, unknown>;
@@ -66,6 +66,13 @@ const MIGRATIONS: MigrationFn[] = [
         tell: true,
         sz: true,
       };
+    }
+    return data;
+  },
+  // v6 → v7: initialize counter period length setting
+  (data) => {
+    if (!('counterPeriodLength' in data)) {
+      data.counterPeriodLength = 10;
     }
     return data;
   },

@@ -102,6 +102,13 @@ const LETTERS: Record<string, string[]> = {
     '██  ██',
     ' ████ ',
   ],
+  P: [
+    '████  ',
+    '██  ██',
+    '████  ',
+    '██    ',
+    '██    ',
+  ],
 };
 
 function buildGradientWord(word: string, colors: string[]): string[] {
@@ -146,11 +153,11 @@ function centerUnderBar(lines: string[], barWidth: number): string[] {
   });
 }
 
-export function getStartupSplash(cols: number): string {
+function mainSplash(cols: number, statusLine: string): string {
   const barWidth = Math.min(cols - 4, 60);
   const logo = buildGradientWord('DARTMUD', GRADIENT);
   const bar = gradientBar(cols);
-  const year = `${DIM}-= 1991 - 2025 =-${RESET}`;
+  const year = `${DIM}-= 1991 - ${new Date().getFullYear()} =-${RESET}`;
   const welcome = `${DIM}Welcome to the Lands of Ferdarchi!${RESET}`;
   const lines = [
     '',
@@ -165,67 +172,27 @@ export function getStartupSplash(cols: number): string {
     '',
     ...centerUnderBar([welcome], barWidth),
     '',
-    ...centerUnderBar([`${GREEN}Press Enter to connect${RESET}`], barWidth),
+    ...centerUnderBar([statusLine], barWidth),
     '',
     '',
   ];
   return lines.join('\r\n');
+}
+
+export function getStartupSplash(cols: number): string {
+  return mainSplash(cols, `${GREEN}Press Enter to connect${RESET}`);
 }
 
 export function getConnectingSplash(cols: number): string {
-  const barWidth = Math.min(cols - 4, 60);
-  const logo = buildGradientWord('DARTMUD', GRADIENT);
-  const bar = gradientBar(cols);
-  const year = `${DIM}-= 1991 - 2025 =-${RESET}`;
-  const welcome = `${DIM}Welcome to the Lands of Ferdarchi!${RESET}`;
-  const lines = [
-    '',
-    '',
-    ...align([bar]),
-    '',
-    ...centerUnderBar(logo, barWidth),
-    '',
-    ...align([bar]),
-    '',
-    ...centerUnderBar([year], barWidth),
-    '',
-    ...centerUnderBar([welcome], barWidth),
-    '',
-    ...centerUnderBar([`${CYAN}Connecting...${RESET}`], barWidth),
-    '',
-    '',
-  ];
-  return lines.join('\r\n');
+  return mainSplash(cols, `${CYAN}Connecting...${RESET}`);
 }
 
 export function getConnectedSplash(cols: number): string {
-  const barWidth = Math.min(cols - 4, 60);
-  const logo = buildGradientWord('DARTMUD', GRADIENT);
-  const bar = gradientBar(cols);
-  const year = `${DIM}-= 1991 - 2025 =-${RESET}`;
-  const welcome = `${DIM}Welcome to the Lands of Ferdarchi!${RESET}`;
-  const lines = [
-    '',
-    '',
-    ...align([bar]),
-    '',
-    ...centerUnderBar(logo, barWidth),
-    '',
-    ...align([bar]),
-    '',
-    ...centerUnderBar([year], barWidth),
-    '',
-    ...centerUnderBar([welcome], barWidth),
-    '',
-    ...centerUnderBar([`${BRIGHT_GREEN}Connected${RESET}`], barWidth),
-    '',
-    '',
-  ];
-  return lines.join('\r\n');
+  return mainSplash(cols, `${BRIGHT_GREEN}Connected${RESET}`);
 }
 
-// Dark-to-bright red gradient for "DISCONNECTED" (12 letters)
-const RED_GRADIENT = [52, 88, 124, 160, 196, 196, 196, 196, 160, 124, 88, 52]
+// Dark-to-bright red gradient for "DROPPED" (7 letters)
+const RED_GRADIENT = [52, 88, 160, 196, 160, 88, 52]
   .map((n) => `\x1b[1;38;5;${n}m`);
 
 function redBar(cols: number): string {
@@ -241,7 +208,7 @@ function redBar(cols: number): string {
 
 export function getDisconnectSplash(cols: number): string {
   const barWidth = Math.min(cols - 4, 60);
-  const logo = buildGradientWord('DISCONNECTED', RED_GRADIENT);
+  const logo = buildGradientWord('DROPPED', RED_GRADIENT);
   const bar = redBar(cols);
   const lines = [
     '',

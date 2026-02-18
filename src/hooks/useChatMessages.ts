@@ -58,6 +58,10 @@ export function useChatMessages() {
     setFilters((prev) => ({ ...prev, [type]: !prev[type] }));
   }, []);
 
+  const setAllFilters = useCallback((next: ChatFilters) => {
+    setFilters(next);
+  }, []);
+
   const muteSender = useCallback((name: string) => {
     setMutedSenders((prev) => {
       const lower = name.toLowerCase();
@@ -80,6 +84,7 @@ export function useChatMessages() {
     mutedSenders,
     handleChatMessage,
     toggleFilter,
+    setAllFilters,
     muteSender,
     unmuteSender,
     clearMessages,

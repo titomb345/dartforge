@@ -145,10 +145,12 @@ export function ChatPanel({
   canMoveUp,
   canMoveDown,
 }: ChatPanelProps) {
-  const { messages, filters, mutedSenders, toggleFilter, muteSender, unmuteSender } = useChatContext();
+  const { messages, filters, mutedSenders, toggleFilter, setAllFilters, muteSender, unmuteSender } = useChatContext();
   const scrollRef = useRef<HTMLDivElement | null>(null);
   const isNearBottomRef = useRef(true);
   const [showPinMenu, setShowPinMenu] = useState(false);
+  const [exclusiveFilter, setExclusiveFilter] = useState<ChatType | null>(null);
+  const filtersBeforeExclusiveRef = useRef<Record<ChatType, boolean> | null>(null);
 
   const isPinned = mode === 'pinned';
 
@@ -182,14 +184,54 @@ export function ChatPanel({
   const noneActive = Object.values(filters).every((v) => !v);
 
   const toggleAll = () => {
-    if (allActive) {
-      // Turn all off (but this is weird — instead just reset to defaults)
+    if (exclusiveFilter) {
+      // Exit exclusive mode — restore previous filters
+      if (filtersBeforeExclusiveRef.current) {
+        setAllFilters(filtersBeforeExclusiveRef.current as Record<ChatType, boolean> & Record<string, boolean>);
+        filtersBeforeExclusiveRef.current = null;
+      }
+      setExclusiveFilter(null);
       return;
     }
-    // Turn all on
+    if (allActive) return;
+    const all = { ...filters } as Record<ChatType, boolean>;
     for (const type of Object.keys(filters) as ChatType[]) {
-      if (!filters[type]) toggleFilter(type);
+      all[type] = true;
     }
+    setAllFilters(all as Record<ChatType, boolean> & Record<string, boolean>);
+  };
+
+  const handleFilterClick = (type: ChatType) => {
+    if (exclusiveFilter) {
+      // Exit exclusive mode and restore previous filters
+      if (filtersBeforeExclusiveRef.current) {
+        setAllFilters(filtersBeforeExclusiveRef.current as Record<ChatType, boolean> & Record<string, boolean>);
+        filtersBeforeExclusiveRef.current = null;
+      }
+      setExclusiveFilter(null);
+      return;
+    }
+    toggleFilter(type);
+  };
+
+  const handleFilterDoubleClick = (type: ChatType) => {
+    if (exclusiveFilter === type) {
+      // Already exclusive on this one — exit exclusive mode
+      if (filtersBeforeExclusiveRef.current) {
+        setAllFilters(filtersBeforeExclusiveRef.current as Record<ChatType, boolean> & Record<string, boolean>);
+        filtersBeforeExclusiveRef.current = null;
+      }
+      setExclusiveFilter(null);
+      return;
+    }
+    // Enter exclusive mode — save current filters, enable only this type
+    filtersBeforeExclusiveRef.current = { ...filters };
+    const exclusive: Record<string, boolean> = {};
+    for (const t of Object.keys(filters) as ChatType[]) {
+      exclusive[t] = t === type;
+    }
+    setAllFilters(exclusive as Record<ChatType, boolean> & Record<string, boolean>);
+    setExclusiveFilter(type);
   };
 
   return (
@@ -280,13 +322,15 @@ export function ChatPanel({
 
       {/* Filter pills */}
       <div className="flex items-center gap-1 px-2 py-2 border-b border-border-subtle flex-wrap shrink-0">
-        <FilterPill label="All" active={allActive} onClick={toggleAll} />
+        <FilterPill label="All" active={allActive && !exclusiveFilter} onClick={toggleAll} />
         {(Object.keys(CHAT_TYPE_LABELS) as ChatType[]).map((type) => (
           <FilterPill
             key={type}
             label={CHAT_TYPE_LABELS[type]}
             active={filters[type]}
-            onClick={() => toggleFilter(type)}
+            exclusive={exclusiveFilter === type}
+            onClick={() => handleFilterClick(type)}
+            onDoubleClick={() => handleFilterDoubleClick(type)}
           />
         ))}
       </div>
@@ -336,19 +380,29 @@ export function ChatPanel({
 function FilterPill({
   label,
   active,
+  exclusive,
   onClick,
+  onDoubleClick,
 }: {
   label: string;
   active: boolean;
+  exclusive?: boolean;
   onClick: () => void;
+  onDoubleClick?: () => void;
 }) {
   return (
     <button
       onClick={onClick}
+      onDoubleClick={(e) => {
+        e.preventDefault();
+        onDoubleClick?.();
+      }}
       className={`px-2 py-0.5 text-[10px] font-mono rounded-full border cursor-pointer transition-colors duration-150 whitespace-nowrap ${
-        active
-          ? 'bg-cyan/15 border-cyan/40 text-cyan'
-          : 'bg-transparent border-border-dim text-text-dim hover:text-text-label hover:border-border-subtle'
+        exclusive
+          ? 'bg-amber/15 border-amber/40 text-amber'
+          : active
+            ? 'bg-cyan/15 border-cyan/40 text-cyan'
+            : 'bg-transparent border-border-dim text-text-dim hover:text-text-label hover:border-border-subtle'
       }`}
     >
       {label}

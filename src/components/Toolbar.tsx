@@ -1,6 +1,6 @@
 import { IconButton } from './IconButton';
 import { DropboxButton } from './DropboxButton';
-import { PowerIcon, PaletteIcon, TrendingUpIcon, ChatIcon, GearIcon } from './icons';
+import { PowerIcon, PaletteIcon, TrendingUpIcon, ChatIcon, CounterIcon, GearIcon } from './icons';
 import { getPlatform } from '../lib/platform';
 import { cn } from '../lib/cn';
 
@@ -16,6 +16,9 @@ interface ToolbarProps {
   showChat: boolean;
   onToggleChat: () => void;
   chatPinned?: boolean;
+  showCounter: boolean;
+  onToggleCounter: () => void;
+  counterPinned?: boolean;
   showSettings: boolean;
   onToggleSettings: () => void;
 }
@@ -32,6 +35,9 @@ export function Toolbar({
   showChat,
   onToggleChat,
   chatPinned,
+  showCounter,
+  onToggleCounter,
+  counterPinned,
   showSettings,
   onToggleSettings,
 }: ToolbarProps) {
@@ -69,6 +75,14 @@ export function Toolbar({
           toggled={showChat}
           pinned={chatPinned}
           onClick={onToggleChat}
+        />
+        <IconButton
+          icon={<CounterIcon />}
+          title="Counters"
+          accent="#f59e0b"
+          toggled={showCounter}
+          pinned={counterPinned}
+          onClick={onToggleCounter}
         />
         <IconButton
           icon={<TrendingUpIcon />}

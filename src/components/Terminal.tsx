@@ -60,13 +60,21 @@ export function Terminal({ terminalRef, inputRef, theme, display, onUpdateDispla
       term.write(getStartupSplash(term.cols));
     });
 
+    // Preserve terminal selection text when data arrives (writes can clear it)
+    let lastSelection = '';
+    const selDisposable = term.onSelectionChange(() => {
+      const sel = term.getSelection();
+      if (sel) lastSelection = sel;
+    });
+
     // Ctrl+C to copy terminal selection
     const handleKeyboard = (e: KeyboardEvent) => {
       if (e.ctrlKey && e.key === 'c') {
-        const sel = term.getSelection();
+        const sel = term.getSelection() || lastSelection;
         if (sel) {
           navigator.clipboard.writeText(sel);
           term.clearSelection();
+          lastSelection = '';
         }
         return;
       }
@@ -112,6 +120,7 @@ export function Terminal({ terminalRef, inputRef, theme, display, onUpdateDispla
     return () => {
       window.removeEventListener('keydown', handleKeyboard);
       observer.disconnect();
+      selDisposable.dispose();
       scrollDisposable.dispose();
       writeDisposable.dispose();
       term.dispose();

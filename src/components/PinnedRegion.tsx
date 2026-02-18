@@ -2,6 +2,7 @@ import type React from 'react';
 import type { DockSide, PinnablePanel } from '../types';
 import { SkillPanel } from './SkillPanel';
 import { ChatPanel } from './ChatPanel';
+import { CounterPanel } from './CounterPanel';
 
 
 interface PinnedPanelRenderProps {
@@ -35,6 +36,20 @@ const PANEL_META: Record<PinnablePanel, {
   chat: {
     render: (props) => (
       <ChatPanel
+        mode="pinned"
+        side={props.side}
+        onUnpin={props.onUnpin}
+        onSwapSide={props.canSwapSide ? props.onSwapSide : undefined}
+        onMoveUp={props.onMoveUp}
+        onMoveDown={props.onMoveDown}
+        canMoveUp={props.canMoveUp}
+        canMoveDown={props.canMoveDown}
+      />
+    ),
+  },
+  counter: {
+    render: (props) => (
+      <CounterPanel
         mode="pinned"
         side={props.side}
         onUnpin={props.onUnpin}

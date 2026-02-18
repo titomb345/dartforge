@@ -9,6 +9,7 @@ import { DataDirSettings } from './components/DataDirSettings';
 import { SetupDialog } from './components/SetupDialog';
 import { SkillPanel } from './components/SkillPanel';
 import { ChatPanel } from './components/ChatPanel';
+import { CounterPanel } from './components/CounterPanel';
 import { GameClock } from './components/GameClock';
 import { StatusReadout } from './components/StatusReadout';
 import { HeartIcon, FocusIcon, FoodIcon, DropletIcon, AuraIcon, WeightIcon, BootIcon, CompressIcon } from './components/icons';
@@ -18,6 +19,7 @@ import { useClassMode } from './hooks/useClassMode';
 import { useThemeColors } from './hooks/useThemeColors';
 import { useSkillTracker } from './hooks/useSkillTracker';
 import { useChatMessages } from './hooks/useChatMessages';
+import { useImproveCounters } from './hooks/useImproveCounters';
 import { useConcentration } from './hooks/useConcentration';
 import { useHealth } from './hooks/useHealth';
 import { useNeeds } from './hooks/useNeeds';
@@ -35,6 +37,7 @@ import type { Panel, PanelLayout, PinnablePanel, DockSide } from './types';
 import { PinnedRegion } from './components/PinnedRegion';
 import { SkillTrackerProvider } from './contexts/SkillTrackerContext';
 import { ChatProvider } from './contexts/ChatContext';
+import { ImproveCounterProvider } from './contexts/ImproveCounterContext';
 
 /**
  * App gate — shows the setup dialog until a data location is configured,
@@ -158,6 +161,7 @@ function AppMain() {
 
   const isSkillsPinned = panelLayout.left.includes('skills') || panelLayout.right.includes('skills');
   const isChatPinned = panelLayout.left.includes('chat') || panelLayout.right.includes('chat');
+  const isCounterPinned = panelLayout.left.includes('counter') || panelLayout.right.includes('counter');
 
   // Persist panel layout
   useEffect(() => {
@@ -176,7 +180,7 @@ function AppMain() {
   }
 
   // Chat messages hook
-  const { messages: chatMessages, filters: chatFilters, mutedSenders, handleChatMessage, toggleFilter: toggleChatFilter, muteSender, unmuteSender } =
+  const { messages: chatMessages, filters: chatFilters, mutedSenders, handleChatMessage, toggleFilter: toggleChatFilter, setAllFilters: setAllChatFilters, muteSender, unmuteSender } =
     useChatMessages();
   const handleChatMessageRef = useRef(handleChatMessage);
   handleChatMessageRef.current = handleChatMessage;
@@ -282,6 +286,11 @@ function AppMain() {
   const { activeCharacter, skillData, setActiveCharacter, handleSkillMatch, showInlineImproves, toggleInlineImproves } =
     useSkillTracker(sendCommandRef, processorRef, terminalRef, dataStore);
 
+  // Improve counter hook
+  const { handleCounterMatch, ...counterRest } = useImproveCounters();
+  const handleCounterMatchRef = useRef(handleCounterMatch);
+  handleCounterMatchRef.current = handleCounterMatch;
+
   // Keep OutputFilter's activeCharacter in sync for chat own-message detection
   useEffect(() => {
     if (outputFilterRef.current) {
@@ -294,6 +303,7 @@ function AppMain() {
     const matches = processorRef.current!.processChunk(data);
     for (const match of matches) {
       handleSkillMatch(match);
+      handleCounterMatchRef.current(match);
     }
   }, [handleSkillMatch]);
 
@@ -317,7 +327,7 @@ function AppMain() {
   const { connected, passwordMode, skipHistory, sendCommand, reconnect, disconnect } =
     useMudConnection(terminalRef, debugModeRef, transport, onOutputChunk, onCharacterName, outputFilterRef, onLogin);
 
-  // Keep sendCommand ref up to date for the skill tracker
+  // Keep sendCommand ref up to date for login commands
   sendCommandRef.current = sendCommand;
 
   // Clear logged-in state on disconnect
@@ -342,11 +352,13 @@ function AppMain() {
     themeColor === 'red' || themeColor === 'brightRed' || themeColor === 'magenta';
 
   const skillTrackerValue = { activeCharacter, skillData, showInlineImproves, toggleInlineImproves };
-  const chatValue = { messages: chatMessages, filters: chatFilters, mutedSenders, toggleFilter: toggleChatFilter, muteSender, unmuteSender };
+  const chatValue = { messages: chatMessages, filters: chatFilters, mutedSenders, toggleFilter: toggleChatFilter, setAllFilters: setAllChatFilters, muteSender, unmuteSender };
+  const counterValue = { handleCounterMatch, ...counterRest };
 
   return (
     <SkillTrackerProvider value={skillTrackerValue}>
     <ChatProvider value={chatValue}>
+    <ImproveCounterProvider value={counterValue}>
     <div className="flex flex-col h-screen bg-bg-canvas text-text-primary relative p-1 gap-1">
       <Toolbar
         connected={connected}
@@ -360,6 +372,9 @@ function AppMain() {
         showChat={activePanel === 'chat'}
         onToggleChat={() => togglePanel('chat')}
         chatPinned={isChatPinned}
+        showCounter={activePanel === 'counter'}
+        onToggleCounter={() => togglePanel('counter')}
+        counterPinned={isCounterPinned}
         showSettings={activePanel === 'settings'}
         onToggleSettings={() => togglePanel('settings')}
       />
@@ -443,6 +458,20 @@ function AppMain() {
             <ChatPanel
               mode="slideout"
               onPin={(side) => pinPanel('chat', side)}
+            />
+          </div>
+        )}
+        {/* Counter slide-out — only when NOT pinned */}
+        {!isCounterPinned && (
+          <div
+            className={cn(
+              'absolute top-0 right-0 bottom-0 z-[100] transition-transform duration-300 ease-in-out',
+              activePanel === 'counter' ? 'translate-x-0' : 'translate-x-full'
+            )}
+          >
+            <CounterPanel
+              mode="slideout"
+              onPin={(side) => pinPanel('counter', side)}
             />
           </div>
         )}
@@ -600,6 +629,7 @@ function AppMain() {
       />
       </div>
     </div>
+    </ImproveCounterProvider>
     </ChatProvider>
     </SkillTrackerProvider>
   );
