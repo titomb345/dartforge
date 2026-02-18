@@ -9,6 +9,23 @@ The `[Unreleased]` header controls automatic version bumping on merge:
 - `[Unreleased-minor]` → 0.1.0 → 0.2.0
 - `[Unreleased-major]` → 0.1.0 → 1.0.0
 
+## [Unreleased-minor]
+
+### Added
+- Web client — play DartMUD in any browser via WebSocket proxy
+- WebSocket-to-TCP proxy server (Rust) with Fly.io deployment config
+- Dropbox integration with popup OAuth (PKCE), folder picker, and bidirectional sync
+- Storage mode setup gate — first-run screen blocks app until user chooses Dropbox or localStorage
+- Web setup screen with colorful DARTMUD block-letter banner
+- Transport abstraction layer (Tauri IPC for desktop, WebSocket for web)
+
+### Changed
+- Terminal splash banner updated from DARTFORGE to DARTMUD with rainbow gradient
+- Splash now includes "1991 - 2025" tagline and "Welcome to the Lands of Ferdarchi"
+
+### Fixed
+- Settings (filteredStatuses, compactBar) no longer overwritten with defaults on page reload
+
 ## [0.3.0] - 2026-02-17
 
 ### Added
