@@ -5,8 +5,12 @@ export interface ChatState {
   messages: ChatMessage[];
   filters: ChatFilters;
   mutedSenders: string[];
+  soundAlerts: ChatFilters;
+  newestFirst: boolean;
   toggleFilter: (type: ChatType) => void;
   setAllFilters: (filters: ChatFilters) => void;
+  toggleSoundAlert: (type: ChatType) => void;
+  toggleNewestFirst: () => void;
   muteSender: (name: string) => void;
   unmuteSender: (name: string) => void;
 }

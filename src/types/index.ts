@@ -1,6 +1,6 @@
 export type ClassMode = 'mage' | 'fighter' | 'multi';
 
-export type Panel = 'appearance' | 'skills' | 'chat' | 'counter' | 'settings';
+export type Panel = 'appearance' | 'skills' | 'chat' | 'counter' | 'aliases' | 'settings';
 
 export type PinnablePanel = 'skills' | 'chat' | 'counter';
 export type DockSide = 'left' | 'right';

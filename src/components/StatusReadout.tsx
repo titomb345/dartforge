@@ -1,5 +1,4 @@
 import { useState } from 'react';
-import { useDoubleClick } from '../hooks/useDoubleClick';
 import { cn } from '../lib/cn';
 
 interface StatusReadoutProps {
@@ -14,23 +13,23 @@ interface StatusReadoutProps {
   filtered?: boolean;
   danger?: boolean;
   onClick?: () => void;
-  onDoubleClick?: () => void;
+  onToggleCompact?: () => void;
 }
 
-export function StatusReadout({ icon, label, color, tooltip, glow, compact, autoCompact, filtered, danger, onClick, onDoubleClick }: StatusReadoutProps) {
+export function StatusReadout({ icon, label, color, tooltip, glow, compact, autoCompact, filtered, danger, onClick, onToggleCompact }: StatusReadoutProps) {
   const [hovered, setHovered] = useState(false);
   const showExpanded = !compact || (hovered && !!autoCompact);
-  const handleClick = useDoubleClick(onClick, onDoubleClick);
 
   return (
     <button
-      onClick={handleClick}
+      onClick={onClick}
+      onContextMenu={onToggleCompact ? (e) => { e.preventDefault(); onToggleCompact(); } : undefined}
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
       title={tooltip}
       className={cn(
         'status-readout relative flex items-center rounded-[3px] select-none border border-transparent transition-all duration-200',
-        (onClick || onDoubleClick) ? 'cursor-pointer' : 'cursor-default',
+        (onClick || onToggleCompact) ? 'cursor-pointer' : 'cursor-default',
         danger && !filtered && 'status-readout-danger'
       )}
       style={

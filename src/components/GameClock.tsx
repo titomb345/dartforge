@@ -1,5 +1,4 @@
 import { useGameClock } from '../hooks/useGameClock';
-import { useDoubleClick } from '../hooks/useDoubleClick';
 import { cn } from '../lib/cn';
 import { SunIcon, MoonIcon, SunriseIcon, SunsetIcon } from './icons';
 
@@ -28,11 +27,10 @@ export function GameClock({ compact, onToggleCompact }: GameClockProps) {
     cycleReckoning,
   } = useGameClock();
 
-  const handleClick = useDoubleClick(cycleReckoning, onToggleCompact);
-
   return (
     <button
-      onClick={handleClick}
+      onClick={cycleReckoning}
+      onContextMenu={onToggleCompact ? (e) => { e.preventDefault(); onToggleCompact(); } : undefined}
       title={`${timeOfDay}\n${allDates}`}
       className="game-clock relative flex items-center gap-2.5 h-[20px] rounded-[3px] select-none cursor-pointer border border-transparent transition-all duration-300"
       style={

@@ -2,7 +2,7 @@ import { useEffect, useRef, useState, useMemo } from 'react';
 import { useChatContext } from '../contexts/ChatContext';
 import type { ChatMessage, ChatType } from '../types/chat';
 import type { DockSide } from '../types';
-import { PinIcon, PinOffIcon, ArrowLeftIcon, ArrowRightIcon, ChevronUpIcon, ChevronDownIcon, VolumeOffIcon } from './icons';
+import { PinIcon, PinOffIcon, ArrowLeftIcon, ArrowRightIcon, ChevronUpIcon, ChevronDownIcon, VolumeOffIcon, SortAscIcon, SortDescIcon } from './icons';
 
 const CHAT_TYPE_LABELS: Record<ChatType, string> = {
   say: 'Say',
@@ -145,39 +145,43 @@ export function ChatPanel({
   canMoveUp,
   canMoveDown,
 }: ChatPanelProps) {
-  const { messages, filters, mutedSenders, toggleFilter, setAllFilters, muteSender, unmuteSender } = useChatContext();
+  const { messages, filters, mutedSenders, soundAlerts, newestFirst, toggleFilter, setAllFilters, toggleSoundAlert, toggleNewestFirst, muteSender, unmuteSender } = useChatContext();
   const scrollRef = useRef<HTMLDivElement | null>(null);
-  const isNearBottomRef = useRef(true);
+  const isNearEdgeRef = useRef(true);
   const [showPinMenu, setShowPinMenu] = useState(false);
   const [exclusiveFilter, setExclusiveFilter] = useState<ChatType | null>(null);
-  const filtersBeforeExclusiveRef = useRef<Record<ChatType, boolean> | null>(null);
 
   const isPinned = mode === 'pinned';
 
-  // Filter messages based on active filters and mute list
+  // Filter and sort messages
   const visibleMessages = useMemo(() => {
-    return messages.filter((msg) => {
+    const filtered = messages.filter((msg) => {
       if (!filters[msg.type]) return false;
       if (mutedSenders.some((s) => s.toLowerCase() === msg.sender.toLowerCase())) return false;
       return true;
     });
-  }, [messages, filters, mutedSenders]);
+    return newestFirst ? [...filtered].reverse() : filtered;
+  }, [messages, filters, mutedSenders, newestFirst]);
 
   // Track scroll position to determine auto-scroll behavior
   const handleScroll = () => {
     const el = scrollRef.current;
     if (!el) return;
     const threshold = 40;
-    isNearBottomRef.current = el.scrollHeight - el.scrollTop - el.clientHeight < threshold;
+    if (newestFirst) {
+      isNearEdgeRef.current = el.scrollTop < threshold;
+    } else {
+      isNearEdgeRef.current = el.scrollHeight - el.scrollTop - el.clientHeight < threshold;
+    }
   };
 
-  // Auto-scroll to bottom on new messages (only if near bottom)
+  // Auto-scroll on new messages (to top when newest-first, to bottom when oldest-first)
   useEffect(() => {
-    if (isNearBottomRef.current) {
+    if (isNearEdgeRef.current) {
       const el = scrollRef.current;
-      if (el) el.scrollTop = el.scrollHeight;
+      if (el) el.scrollTop = newestFirst ? 0 : el.scrollHeight;
     }
-  }, [visibleMessages.length]);
+  }, [visibleMessages.length, newestFirst]);
 
   // Check if "All" is active (all filters on)
   const allActive = Object.values(filters).every(Boolean);
@@ -185,13 +189,7 @@ export function ChatPanel({
 
   const toggleAll = () => {
     if (exclusiveFilter) {
-      // Exit exclusive mode — restore previous filters
-      if (filtersBeforeExclusiveRef.current) {
-        setAllFilters(filtersBeforeExclusiveRef.current as Record<ChatType, boolean> & Record<string, boolean>);
-        filtersBeforeExclusiveRef.current = null;
-      }
       setExclusiveFilter(null);
-      return;
     }
     if (allActive) return;
     const all = { ...filters } as Record<ChatType, boolean>;
@@ -201,44 +199,54 @@ export function ChatPanel({
     setAllFilters(all as Record<ChatType, boolean> & Record<string, boolean>);
   };
 
+  // Single-click cycling: off → on → exclusive → off
   const handleFilterClick = (type: ChatType) => {
-    if (exclusiveFilter) {
-      // Exit exclusive mode and restore previous filters
-      if (filtersBeforeExclusiveRef.current) {
-        setAllFilters(filtersBeforeExclusiveRef.current as Record<ChatType, boolean> & Record<string, boolean>);
-        filtersBeforeExclusiveRef.current = null;
-      }
+    if (exclusiveFilter === type) {
+      // Exclusive on this type → turn it off
+      toggleFilter(type);
       setExclusiveFilter(null);
       return;
     }
-    toggleFilter(type);
+    if (exclusiveFilter) {
+      // Exclusive on a different type → exit exclusive, toggle this pill
+      setExclusiveFilter(null);
+      toggleFilter(type);
+      return;
+    }
+    if (filters[type]) {
+      // Already active → enter exclusive mode
+      const exclusive: Record<string, boolean> = {};
+      for (const t of Object.keys(filters) as ChatType[]) {
+        exclusive[t] = t === type;
+      }
+      setAllFilters(exclusive as Record<ChatType, boolean> & Record<string, boolean>);
+      setExclusiveFilter(type);
+    } else {
+      // Inactive → turn on
+      toggleFilter(type);
+    }
   };
 
-  const handleFilterDoubleClick = (type: ChatType) => {
-    if (exclusiveFilter === type) {
-      // Already exclusive on this one — exit exclusive mode
-      if (filtersBeforeExclusiveRef.current) {
-        setAllFilters(filtersBeforeExclusiveRef.current as Record<ChatType, boolean> & Record<string, boolean>);
-        filtersBeforeExclusiveRef.current = null;
-      }
-      setExclusiveFilter(null);
-      return;
-    }
-    // Enter exclusive mode — save current filters, enable only this type
-    filtersBeforeExclusiveRef.current = { ...filters };
-    const exclusive: Record<string, boolean> = {};
-    for (const t of Object.keys(filters) as ChatType[]) {
-      exclusive[t] = t === type;
-    }
-    setAllFilters(exclusive as Record<ChatType, boolean> & Record<string, boolean>);
-    setExclusiveFilter(type);
+  // Right-click to toggle sound alert
+  const handleFilterRightClick = (e: React.MouseEvent, type: ChatType) => {
+    e.preventDefault();
+    toggleSoundAlert(type);
   };
 
   return (
     <div className={isPinned ? 'h-full flex flex-col overflow-hidden' : 'w-[360px] h-full bg-bg-primary border-l border-border-subtle flex flex-col overflow-hidden'}>
       {/* Header */}
       <div className="flex items-center justify-between px-3 py-2.5 border-b border-border-subtle shrink-0">
-        <span className="text-[13px] font-semibold text-text-heading">Chat</span>
+        <div className="flex items-center gap-1.5">
+          <span className="text-[13px] font-semibold text-text-heading">Chat</span>
+          <button
+            onClick={toggleNewestFirst}
+            title={newestFirst ? 'Newest first (click for oldest first)' : 'Oldest first (click for newest first)'}
+            className="flex items-center justify-center w-5 h-5 rounded-[3px] cursor-pointer text-text-dim hover:text-text-label transition-colors duration-150"
+          >
+            {newestFirst ? <SortAscIcon size={10} /> : <SortDescIcon size={10} />}
+          </button>
+        </div>
         <div className="flex items-center gap-1.5">
           {isPinned ? (
             <>
@@ -329,8 +337,9 @@ export function ChatPanel({
             label={CHAT_TYPE_LABELS[type]}
             active={filters[type]}
             exclusive={exclusiveFilter === type}
+            soundAlert={soundAlerts[type]}
             onClick={() => handleFilterClick(type)}
-            onDoubleClick={() => handleFilterDoubleClick(type)}
+            onContextMenu={(e) => handleFilterRightClick(e, type)}
           />
         ))}
       </div>
@@ -381,23 +390,23 @@ function FilterPill({
   label,
   active,
   exclusive,
+  soundAlert,
   onClick,
-  onDoubleClick,
+  onContextMenu,
 }: {
   label: string;
   active: boolean;
   exclusive?: boolean;
+  soundAlert?: boolean;
   onClick: () => void;
-  onDoubleClick?: () => void;
+  onContextMenu?: (e: React.MouseEvent) => void;
 }) {
   return (
     <button
       onClick={onClick}
-      onDoubleClick={(e) => {
-        e.preventDefault();
-        onDoubleClick?.();
-      }}
-      className={`px-2 py-0.5 text-[10px] font-mono rounded-full border cursor-pointer transition-colors duration-150 whitespace-nowrap ${
+      onContextMenu={onContextMenu}
+      title={onContextMenu ? 'Right-click to toggle sound alert' : undefined}
+      className={`relative px-2 py-0.5 text-[10px] font-mono rounded-full border cursor-pointer transition-colors duration-150 whitespace-nowrap ${
         exclusive
           ? 'bg-amber/15 border-amber/40 text-amber'
           : active
@@ -406,6 +415,14 @@ function FilterPill({
       }`}
     >
       {label}
+      {soundAlert && (
+        <span
+          className="absolute -top-0.5 -right-0.5 w-[5px] h-[5px] rounded-full"
+          style={{
+            backgroundColor: exclusive ? 'var(--color-amber)' : active ? 'var(--color-cyan)' : 'var(--color-text-dim)',
+          }}
+        />
+      )}
     </button>
   );
 }

@@ -13,12 +13,31 @@ const DEFAULT_FILTERS: ChatFilters = {
   sz: true,
 };
 
+const DEFAULT_SOUND_ALERTS: ChatFilters = {
+  say: true,
+  shout: true,
+  ooc: true,
+  tell: true,
+  sz: true,
+};
+
+// Shared Audio instance for chime playback
+const chimeAudio = new Audio('/chime1.wav');
+
 export function useChatMessages() {
   const dataStore = useDataStore();
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [filters, setFilters] = useState<ChatFilters>({ ...DEFAULT_FILTERS });
   const [mutedSenders, setMutedSenders] = useState<string[]>([]);
+  const [soundAlerts, setSoundAlerts] = useState<ChatFilters>({ ...DEFAULT_SOUND_ALERTS });
+  const [newestFirst, setNewestFirst] = useState(true);
   const loaded = useRef(false);
+
+  // Refs for current values (used in handleChatMessage callback)
+  const mutedSendersRef = useRef(mutedSenders);
+  mutedSendersRef.current = mutedSenders;
+  const soundAlertsRef = useRef(soundAlerts);
+  soundAlertsRef.current = soundAlerts;
 
   // Load persisted chat settings
   useEffect(() => {
@@ -29,6 +48,10 @@ export function useChatMessages() {
         if (savedFilters) setFilters(savedFilters);
         const savedMuted = await dataStore.get<string[]>(SETTINGS_FILE, 'chatMutedSenders');
         if (savedMuted) setMutedSenders(savedMuted);
+        const savedAlerts = await dataStore.get<ChatFilters>(SETTINGS_FILE, 'chatSoundAlerts');
+        if (savedAlerts) setSoundAlerts(savedAlerts);
+        const savedNewest = await dataStore.get<boolean>(SETTINGS_FILE, 'chatNewestFirst');
+        if (savedNewest != null) setNewestFirst(savedNewest);
       } catch (e) {
         console.error('Failed to load chat settings:', e);
       }
@@ -47,7 +70,30 @@ export function useChatMessages() {
     dataStore.set(SETTINGS_FILE, 'chatMutedSenders', mutedSenders).catch(console.error);
   }, [mutedSenders]);
 
+  useEffect(() => {
+    if (!loaded.current) return;
+    dataStore.set(SETTINGS_FILE, 'chatSoundAlerts', soundAlerts).catch(console.error);
+  }, [soundAlerts]);
+
+  useEffect(() => {
+    if (!loaded.current) return;
+    dataStore.set(SETTINGS_FILE, 'chatNewestFirst', newestFirst).catch(console.error);
+  }, [newestFirst]);
+
   const handleChatMessage = useCallback((msg: ChatMessage) => {
+    // Check if this message qualifies for a sound alert
+    // Only filtered by muted senders and per-type sound toggle (not by chat panel visibility)
+    const m = mutedSendersRef.current;
+    const s = soundAlertsRef.current;
+    if (
+      !msg.isOwn &&
+      s[msg.type] &&
+      !m.some((name) => name.toLowerCase() === msg.sender.toLowerCase())
+    ) {
+      chimeAudio.currentTime = 0;
+      chimeAudio.play().catch(() => {});
+    }
+
     setMessages((prev) => {
       const next = [...prev, msg];
       return next.length > MAX_MESSAGES ? next.slice(-MAX_MESSAGES) : next;
@@ -60,6 +106,14 @@ export function useChatMessages() {
 
   const setAllFilters = useCallback((next: ChatFilters) => {
     setFilters(next);
+  }, []);
+
+  const toggleSoundAlert = useCallback((type: ChatType) => {
+    setSoundAlerts((prev) => ({ ...prev, [type]: !prev[type] }));
+  }, []);
+
+  const toggleNewestFirst = useCallback(() => {
+    setNewestFirst((prev) => !prev);
   }, []);
 
   const muteSender = useCallback((name: string) => {
@@ -82,9 +136,13 @@ export function useChatMessages() {
     messages,
     filters,
     mutedSenders,
+    soundAlerts,
+    newestFirst,
     handleChatMessage,
     toggleFilter,
     setAllFilters,
+    toggleSoundAlert,
+    toggleNewestFirst,
     muteSender,
     unmuteSender,
     clearMessages,

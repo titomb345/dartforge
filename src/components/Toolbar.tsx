@@ -1,6 +1,6 @@
 import { IconButton } from './IconButton';
 import { DropboxButton } from './DropboxButton';
-import { PowerIcon, PaletteIcon, TrendingUpIcon, ChatIcon, CounterIcon, GearIcon } from './icons';
+import { PowerIcon, PaletteIcon, TrendingUpIcon, ChatIcon, CounterIcon, AliasIcon, GearIcon } from './icons';
 import { getPlatform } from '../lib/platform';
 import { cn } from '../lib/cn';
 
@@ -19,6 +19,8 @@ interface ToolbarProps {
   showCounter: boolean;
   onToggleCounter: () => void;
   counterPinned?: boolean;
+  showAliases: boolean;
+  onToggleAliases: () => void;
   showSettings: boolean;
   onToggleSettings: () => void;
 }
@@ -38,6 +40,8 @@ export function Toolbar({
   showCounter,
   onToggleCounter,
   counterPinned,
+  showAliases,
+  onToggleAliases,
   showSettings,
   onToggleSettings,
 }: ToolbarProps) {
@@ -91,6 +95,14 @@ export function Toolbar({
           toggled={showSkills}
           pinned={skillsPinned}
           onClick={onToggleSkills}
+        />
+        <div className="w-px h-[18px] bg-border-dim mx-1.5" />
+        <IconButton
+          icon={<AliasIcon />}
+          title="Aliases"
+          accent="#a78bfa"
+          toggled={showAliases}
+          onClick={onToggleAliases}
         />
         <IconButton
           icon={<PaletteIcon />}

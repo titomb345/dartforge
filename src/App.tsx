@@ -20,6 +20,7 @@ import { useThemeColors } from './hooks/useThemeColors';
 import { useSkillTracker } from './hooks/useSkillTracker';
 import { useChatMessages } from './hooks/useChatMessages';
 import { useImproveCounters } from './hooks/useImproveCounters';
+import { useAliases } from './hooks/useAliases';
 import { useConcentration } from './hooks/useConcentration';
 import { useHealth } from './hooks/useHealth';
 import { useNeeds } from './hooks/useNeeds';
@@ -29,6 +30,7 @@ import { useMovement } from './hooks/useMovement';
 import { useDataStore } from './contexts/DataStoreContext';
 import { buildXtermTheme } from './lib/defaultTheme';
 import { OutputProcessor } from './lib/outputProcessor';
+import { expandInput } from './lib/aliasEngine';
 import { OutputFilter, DEFAULT_FILTER_FLAGS, type FilterFlags } from './lib/outputFilter';
 import { matchSkillLine } from './lib/skillPatterns';
 import { cn } from './lib/cn';
@@ -38,6 +40,9 @@ import { PinnedRegion } from './components/PinnedRegion';
 import { SkillTrackerProvider } from './contexts/SkillTrackerContext';
 import { ChatProvider } from './contexts/ChatContext';
 import { ImproveCounterProvider } from './contexts/ImproveCounterContext';
+import { AliasProvider } from './contexts/AliasContext';
+import { AliasPanel } from './components/AliasPanel';
+import { smartWrite } from './lib/terminalUtils';
 
 /**
  * App gate — shows the setup dialog until a data location is configured,
@@ -180,7 +185,7 @@ function AppMain() {
   }
 
   // Chat messages hook
-  const { messages: chatMessages, filters: chatFilters, mutedSenders, handleChatMessage, toggleFilter: toggleChatFilter, setAllFilters: setAllChatFilters, muteSender, unmuteSender } =
+  const { messages: chatMessages, filters: chatFilters, mutedSenders, soundAlerts: chatSoundAlerts, newestFirst: chatNewestFirst, handleChatMessage, toggleFilter: toggleChatFilter, setAllFilters: setAllChatFilters, toggleSoundAlert: toggleChatSoundAlert, toggleNewestFirst: toggleChatNewestFirst, muteSender, unmuteSender } =
     useChatMessages();
   const handleChatMessageRef = useRef(handleChatMessage);
   handleChatMessageRef.current = handleChatMessage;
@@ -293,6 +298,16 @@ function AppMain() {
   const handleCounterMatchRef = useRef(handleCounterMatch);
   handleCounterMatchRef.current = handleCounterMatch;
 
+  // Alias system
+  const aliasState = useAliases(dataStore, activeCharacter);
+  const { mergedAliases, enableSpeedwalk } = aliasState;
+  const mergedAliasesRef = useRef(mergedAliases);
+  mergedAliasesRef.current = mergedAliases;
+  const enableSpeedwalkRef = useRef(enableSpeedwalk);
+  enableSpeedwalkRef.current = enableSpeedwalk;
+  const activeCharacterRef = useRef(activeCharacter);
+  activeCharacterRef.current = activeCharacter;
+
   // Keep OutputFilter's activeCharacter in sync for chat own-message detection
   useEffect(() => {
     if (outputFilterRef.current) {
@@ -332,6 +347,29 @@ function AppMain() {
   // Keep sendCommand ref up to date for login commands
   sendCommandRef.current = sendCommand;
 
+  // Alias-expanded send: preprocesses input through the alias engine
+  const handleSend = useCallback(async (rawInput: string) => {
+    const result = expandInput(rawInput, mergedAliasesRef.current, {
+      enableSpeedwalk: enableSpeedwalkRef.current,
+      activeCharacter: activeCharacterRef.current,
+    });
+    for (const cmd of result.commands) {
+      switch (cmd.type) {
+        case 'send':
+          await sendCommand(cmd.text);
+          break;
+        case 'delay':
+          await new Promise<void>((r) => setTimeout(r, cmd.ms));
+          break;
+        case 'echo':
+          if (terminalRef.current) {
+            smartWrite(terminalRef.current, `\x1b[36m${cmd.text}\x1b[0m\r\n`);
+          }
+          break;
+      }
+    }
+  }, [sendCommand]);
+
   // Clear logged-in state on disconnect
   useEffect(() => {
     if (!connected) setLoggedIn(false);
@@ -354,10 +392,11 @@ function AppMain() {
     themeColor === 'red' || themeColor === 'brightRed' || themeColor === 'magenta';
 
   const skillTrackerValue = { activeCharacter, skillData, showInlineImproves, toggleInlineImproves, updateSkillCount, deleteSkill };
-  const chatValue = { messages: chatMessages, filters: chatFilters, mutedSenders, toggleFilter: toggleChatFilter, setAllFilters: setAllChatFilters, muteSender, unmuteSender };
+  const chatValue = { messages: chatMessages, filters: chatFilters, mutedSenders, soundAlerts: chatSoundAlerts, newestFirst: chatNewestFirst, toggleFilter: toggleChatFilter, setAllFilters: setAllChatFilters, toggleSoundAlert: toggleChatSoundAlert, toggleNewestFirst: toggleChatNewestFirst, muteSender, unmuteSender };
   const counterValue = { handleCounterMatch, ...counterRest };
 
   return (
+    <AliasProvider value={aliasState}>
     <SkillTrackerProvider value={skillTrackerValue}>
     <ChatProvider value={chatValue}>
     <ImproveCounterProvider value={counterValue}>
@@ -377,6 +416,8 @@ function AppMain() {
         showCounter={activePanel === 'counter'}
         onToggleCounter={() => togglePanel('counter')}
         counterPinned={isCounterPinned}
+        showAliases={activePanel === 'aliases'}
+        onToggleAliases={() => togglePanel('aliases')}
         showSettings={activePanel === 'settings'}
         onToggleSettings={() => togglePanel('settings')}
       />
@@ -477,6 +518,15 @@ function AppMain() {
             />
           </div>
         )}
+        {/* Aliases slide-out — slideout only, no pinning */}
+        <div
+          className={cn(
+            'absolute top-0 right-0 bottom-0 z-[100] transition-transform duration-300 ease-in-out',
+            activePanel === 'aliases' ? 'translate-x-0' : 'translate-x-full'
+          )}
+        >
+          <AliasPanel onClose={() => setActivePanel(null)} />
+        </div>
       </div>
       {/* Bottom controls card — status bar + command input */}
       <div className="rounded-lg bg-bg-primary overflow-hidden">
@@ -501,7 +551,7 @@ function AppMain() {
                 danger={isDanger(health.themeColor)}
                 compact={autoCompact || !!compactReadouts.health}
                 autoCompact={autoCompact}
-                onDoubleClick={() => toggleCompactReadout('health')}
+                onToggleCompact={() => toggleCompactReadout('health')}
               />
             )}
             {concentration && (
@@ -516,7 +566,7 @@ function AppMain() {
                 autoCompact={autoCompact}
                 filtered={filterFlags.concentration}
                 onClick={() => toggleFilter('concentration')}
-                onDoubleClick={() => toggleCompactReadout('concentration')}
+                onToggleCompact={() => toggleCompactReadout('concentration')}
               />
             )}
             {aura && (
@@ -531,7 +581,7 @@ function AppMain() {
                 autoCompact={autoCompact}
                 filtered={filterFlags.aura}
                 onClick={() => toggleFilter('aura')}
-                onDoubleClick={() => toggleCompactReadout('aura')}
+                onToggleCompact={() => toggleCompactReadout('aura')}
               />
             )}
             {hunger && (
@@ -546,7 +596,7 @@ function AppMain() {
                 autoCompact={autoCompact}
                 filtered={filterFlags.hunger}
                 onClick={() => toggleFilter('hunger')}
-                onDoubleClick={() => toggleCompactReadout('hunger')}
+                onToggleCompact={() => toggleCompactReadout('hunger')}
               />
             )}
             {thirst && (
@@ -561,7 +611,7 @@ function AppMain() {
                 autoCompact={autoCompact}
                 filtered={filterFlags.thirst}
                 onClick={() => toggleFilter('thirst')}
-                onDoubleClick={() => toggleCompactReadout('thirst')}
+                onToggleCompact={() => toggleCompactReadout('thirst')}
               />
             )}
             {encumbrance && (
@@ -576,7 +626,7 @@ function AppMain() {
                 autoCompact={autoCompact}
                 filtered={filterFlags.encumbrance}
                 onClick={() => toggleFilter('encumbrance')}
-                onDoubleClick={() => toggleCompactReadout('encumbrance')}
+                onToggleCompact={() => toggleCompactReadout('encumbrance')}
               />
             )}
             {movement && (
@@ -591,7 +641,7 @@ function AppMain() {
                 autoCompact={autoCompact}
                 filtered={filterFlags.movement}
                 onClick={() => toggleFilter('movement')}
-                onDoubleClick={() => toggleCompactReadout('movement')}
+                onToggleCompact={() => toggleCompactReadout('movement')}
               />
             )}
           </>
@@ -605,7 +655,7 @@ function AppMain() {
       </div>
       <CommandInput
         ref={inputRef}
-        onSend={sendCommand}
+        onSend={handleSend}
         onReconnect={reconnect}
         disabled={!connected}
         connected={connected}
@@ -617,6 +667,7 @@ function AppMain() {
     </ImproveCounterProvider>
     </ChatProvider>
     </SkillTrackerProvider>
+    </AliasProvider>
   );
 }
 

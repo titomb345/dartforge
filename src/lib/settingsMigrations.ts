@@ -1,6 +1,6 @@
 import type { DataStore } from '../contexts/DataStoreContext';
 
-export const CURRENT_VERSION = 8;
+export const CURRENT_VERSION = 10;
 
 /** Raw store contents — all keys are optional since older stores may lack them. */
 export type StoreData = Record<string, unknown>;
@@ -90,6 +90,28 @@ const MIGRATIONS: MigrationFn[] = [
       movement: wasCompact,
       clock: false,
     };
+    return data;
+  },
+  // v8 → v9: initialize alias settings
+  (data) => {
+    // globalAliases moved from settings.json to aliases.json — clean up if present
+    delete data.globalAliases;
+    if (!('enableSpeedwalk' in data)) {
+      data.enableSpeedwalk = true;
+    }
+    return data;
+  },
+  // v9 → v10: initialize chat sound alert settings
+  (data) => {
+    if (!('chatSoundAlerts' in data)) {
+      data.chatSoundAlerts = {
+        say: true,
+        shout: true,
+        ooc: true,
+        tell: true,
+        sz: true,
+      };
+    }
     return data;
   },
 ];
