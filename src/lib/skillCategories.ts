@@ -1,7 +1,7 @@
 import type { SkillCategory } from '../types/skills';
 
 const COMBAT_SKILLS = new Set([
-  'acrobatics', 'aim blows', 'archery', 'attack speed', 'bashing', 'brawling',
+  'aim blows', 'archery', 'attack speed', 'bashing', 'brawling',
   'control', 'daring', 'dodge', 'fighting', 'hafted',
   'multiple attacks', 'offensive', 'parry', 'shield use', 'split defense',
   'sword', 'thrown', 'two handed hafted', 'two handed sword',
@@ -41,6 +41,11 @@ const CRAFTING_SKILLS = new Set([
   'sewing', 'smithing', 'stone working', 'tanning', 'wood working',
 ]);
 
+const MOVEMENT_SKILLS = new Set([
+  'acrobatics', 'climbing', 'hiking', 'navigation', 'riding', 'sailing',
+  'spelunking', 'swimming', 'travel',
+]);
+
 const THIEF_SKILLS = new Set([
   'ambush', 'hiding', 'lock picking', 'lockpicking', 'pilfer', 'sneaking',
 ]);
@@ -53,6 +58,7 @@ export function getSkillCategory(skillName: string): SkillCategory {
   if (MAGIC_SKILLS.has(lower)) return 'magic';
   if (SPELL_SKILLS.has(lower)) return 'spells';
   if (CRAFTING_SKILLS.has(lower)) return 'crafting';
+  if (MOVEMENT_SKILLS.has(lower)) return 'movement';
   if (THIEF_SKILLS.has(lower)) return 'thief';
 
   // Auto-detect language skills (except "language magic" which is magic)
@@ -100,12 +106,14 @@ export const CATEGORY_LABELS: Record<SkillCategory, string> = {
   magic: 'Magic',
   spells: 'Spells',
   crafting: 'Crafting',
+  movement: 'Movement',
   language: 'Language',
   thief: 'Thief',
+  pets: 'Pets',
   other: 'Other',
 };
 
 /** Display order for categories */
 export const CATEGORY_ORDER: SkillCategory[] = [
-  'combat', 'magic', 'spells', 'crafting', 'thief', 'language', 'other',
+  'combat', 'magic', 'spells', 'crafting', 'movement', 'thief', 'language', 'pets', 'other',
 ];

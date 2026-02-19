@@ -1,4 +1,5 @@
 import { useGameClock } from '../hooks/useGameClock';
+import { useDoubleClick } from '../hooks/useDoubleClick';
 import { cn } from '../lib/cn';
 import { SunIcon, MoonIcon, SunriseIcon, SunsetIcon } from './icons';
 
@@ -10,7 +11,12 @@ function TimeIcon({ hour, accent }: { hour: number; accent: string }) {
   return <span style={style}><MoonIcon size={11} /></span>;
 }
 
-export function GameClock() {
+interface GameClockProps {
+  compact?: boolean;
+  onToggleCompact?: () => void;
+}
+
+export function GameClock({ compact, onToggleCompact }: GameClockProps) {
   const {
     formattedDate,
     hour,
@@ -22,57 +28,70 @@ export function GameClock() {
     cycleReckoning,
   } = useGameClock();
 
+  const handleClick = useDoubleClick(cycleReckoning, onToggleCompact);
+
   return (
     <button
-      onClick={cycleReckoning}
-      title={allDates}
-      className="game-clock relative flex items-center gap-2.5 h-[20px] pl-2.5 pr-3 rounded-[3px] select-none cursor-pointer border border-transparent transition-all duration-300"
+      onClick={handleClick}
+      title={`${timeOfDay}\n${allDates}`}
+      className="game-clock relative flex items-center gap-2.5 h-[20px] rounded-[3px] select-none cursor-pointer border border-transparent transition-all duration-300"
       style={
         {
           '--gc-accent': accent,
+          paddingLeft: compact ? 6 : 10,
+          paddingRight: compact ? 6 : 12,
           borderLeftWidth: 2,
           borderLeftColor: accent,
           borderLeftStyle: 'solid',
         } as React.CSSProperties
       }
     >
-      {/* Time of day — icon only, text in tooltip */}
-      <span className="flex items-center" style={{ color: accent }} title={timeOfDay}>
+      {/* Time of day — always visible */}
+      <span className="flex items-center" style={{ color: accent }}>
         <TimeIcon hour={hour} accent={accent} />
       </span>
 
-      <span className="text-[11px] text-text-disabled leading-none">&middot;</span>
-
-      {/* Date — primary readout, natural width */}
-      <span className="text-[11px] leading-none text-text-label whitespace-nowrap tracking-[0.01em]">
-        {formattedDate}
-      </span>
-
-      {/* Holiday badge — animated reveal, no height shift */}
+      {/* Collapsible content */}
       <span
-        className={cn(
-          'flex items-center gap-2.5 transition-all duration-500 overflow-hidden',
-          holiday ? 'max-w-[300px] opacity-100' : 'max-w-0 opacity-0'
-        )}
+        className="flex items-center gap-2.5 overflow-hidden whitespace-nowrap transition-all duration-300"
+        style={{
+          maxWidth: compact ? 0 : 500,
+          opacity: compact ? 0 : 1,
+        }}
       >
         <span className="text-[11px] text-text-disabled leading-none">&middot;</span>
-        <span
-          className="game-clock-holiday text-[10px] leading-none px-1.5 py-[2px] rounded-[2px] tracking-wide whitespace-nowrap"
-          style={{
-            color: accent,
-            background: `color-mix(in srgb, ${accent} 8%, transparent)`,
-            boxShadow: `0 0 6px color-mix(in srgb, ${accent} 15%, transparent)`,
-          }}
-        >
-          {holiday ?? ''}
+
+        {/* Date */}
+        <span className="text-[11px] leading-none text-text-label whitespace-nowrap tracking-[0.01em]">
+          {formattedDate}
         </span>
-      </span>
 
-      <span className="text-[11px] text-text-disabled leading-none">&middot;</span>
+        {/* Holiday badge */}
+        <span
+          className={cn(
+            'flex items-center gap-2.5 transition-all duration-500 overflow-hidden',
+            holiday ? 'max-w-[300px] opacity-100' : 'max-w-0 opacity-0'
+          )}
+        >
+          <span className="text-[11px] text-text-disabled leading-none">&middot;</span>
+          <span
+            className="game-clock-holiday text-[10px] leading-none px-1.5 py-[2px] rounded-[2px] tracking-wide whitespace-nowrap"
+            style={{
+              color: accent,
+              background: `color-mix(in srgb, ${accent} 8%, transparent)`,
+              boxShadow: `0 0 6px color-mix(in srgb, ${accent} 15%, transparent)`,
+            }}
+          >
+            {holiday ?? ''}
+          </span>
+        </span>
 
-      {/* Reckoning label — natural width */}
-      <span className="text-[11px] leading-none text-text-dim whitespace-nowrap tracking-[0.02em]">
-        {reckoningLabel}
+        <span className="text-[11px] text-text-disabled leading-none">&middot;</span>
+
+        {/* Reckoning label */}
+        <span className="text-[11px] leading-none text-text-dim whitespace-nowrap tracking-[0.02em]">
+          {reckoningLabel}
+        </span>
       </span>
     </button>
   );

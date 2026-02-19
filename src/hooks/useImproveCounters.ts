@@ -20,9 +20,39 @@ function makeCounter(name: string): ImproveCounter {
     totalImps: 0,
     startedAt: null,
     accumulatedMs: 0,
-    lastTickAt: null,
+    lastResumedAt: null,
     periodStartAt: null,
     impsInCurrentPeriod: 0,
+  };
+}
+
+/** Migrate counters saved with old ISO-string format to epoch-ms numbers */
+function migrateCounter(c: ImproveCounter & Record<string, unknown>): ImproveCounter {
+  // Handle old field name (lastTickAt → lastResumedAt)
+  let lastResumedAt: number | null = (c.lastResumedAt as number | null) ?? null;
+  const oldTick = c.lastTickAt as string | number | null | undefined;
+  if (oldTick != null && lastResumedAt == null) {
+    lastResumedAt = typeof oldTick === 'string' ? new Date(oldTick).getTime() : oldTick;
+  } else if (typeof lastResumedAt === 'string') {
+    lastResumedAt = new Date(lastResumedAt as unknown as string).getTime();
+  }
+
+  let periodStartAt: number | null = c.periodStartAt;
+  if (typeof periodStartAt === 'string') {
+    periodStartAt = new Date(periodStartAt as unknown as string).getTime();
+  }
+
+  return {
+    id: c.id,
+    name: c.name,
+    status: c.status,
+    skills: c.skills,
+    totalImps: c.totalImps,
+    startedAt: c.startedAt,
+    accumulatedMs: c.accumulatedMs,
+    lastResumedAt,
+    periodStartAt,
+    impsInCurrentPeriod: c.impsInCurrentPeriod,
   };
 }
 
@@ -57,16 +87,17 @@ export function useImproveCounters() {
           const now = Date.now();
           const periodMs = (savedPeriod ?? 10) * 60_000;
 
-          // Resume running counters
-          const resumed = savedCounters.map((c) => {
-            if (c.status === 'running' && c.lastTickAt) {
-              const gap = now - new Date(c.lastTickAt).getTime();
-              const updated = { ...c, accumulatedMs: c.accumulatedMs + gap, lastTickAt: new Date().toISOString() };
+          // Migrate old format + resume running counters
+          const resumed = savedCounters.map((raw) => {
+            const c = migrateCounter(raw as ImproveCounter & Record<string, unknown>);
+            if (c.status === 'running' && c.lastResumedAt) {
+              const gap = now - c.lastResumedAt;
+              const updated = { ...c, accumulatedMs: c.accumulatedMs + gap, lastResumedAt: now };
               // Check if period expired during gap
               if (updated.periodStartAt) {
-                const periodElapsed = now - new Date(updated.periodStartAt).getTime();
+                const periodElapsed = now - updated.periodStartAt;
                 if (periodElapsed > periodMs) {
-                  updated.periodStartAt = new Date().toISOString();
+                  updated.periodStartAt = now;
                   updated.impsInCurrentPeriod = 0;
                 }
               }
@@ -111,16 +142,21 @@ export function useImproveCounters() {
     return () => clearInterval(id);
   }, [counters.map((c) => c.status).join(',')]);
 
-  // Periodic save for running counters (update lastTickAt)
+  // Periodic save for running counters — flush elapsed into accumulatedMs
   useEffect(() => {
     const hasRunning = counters.some((c) => c.status === 'running');
     if (!hasRunning || !loaded.current) return;
     const id = setInterval(() => {
       setCounters((prev) => {
-        const now = new Date().toISOString();
-        return prev.map((c) =>
-          c.status === 'running' ? { ...c, lastTickAt: now } : c,
-        );
+        const now = Date.now();
+        return prev.map((c) => {
+          if (c.status !== 'running' || !c.lastResumedAt) return c;
+          return {
+            ...c,
+            accumulatedMs: c.accumulatedMs + (now - c.lastResumedAt),
+            lastResumedAt: now,
+          };
+        });
       });
     }, SAVE_INTERVAL_MS);
     return () => clearInterval(id);
@@ -157,15 +193,15 @@ export function useImproveCounters() {
 
   // --- Controls ---
   const startCounter = useCallback((id: string) => {
-    const now = new Date().toISOString();
+    const now = Date.now();
     setCounters((prev) =>
       prev.map((c) => {
         if (c.id !== id) return c;
         return {
           ...c,
           status: 'running' as CounterStatus,
-          startedAt: c.startedAt ?? now,
-          lastTickAt: now,
+          startedAt: c.startedAt ?? new Date(now).toISOString(),
+          lastResumedAt: now,
           periodStartAt: c.periodStartAt ?? now,
         };
       }),
@@ -177,23 +213,23 @@ export function useImproveCounters() {
     setCounters((prev) =>
       prev.map((c) => {
         if (c.id !== id || c.status !== 'running') return c;
-        const elapsed = c.lastTickAt ? now - new Date(c.lastTickAt).getTime() : 0;
+        const elapsed = c.lastResumedAt ? now - c.lastResumedAt : 0;
         return {
           ...c,
           status: 'paused' as CounterStatus,
           accumulatedMs: c.accumulatedMs + elapsed,
-          lastTickAt: null,
+          lastResumedAt: null,
         };
       }),
     );
   }, []);
 
   const resumeCounter = useCallback((id: string) => {
-    const now = new Date().toISOString();
+    const now = Date.now();
     setCounters((prev) =>
       prev.map((c) => {
         if (c.id !== id || c.status !== 'paused') return c;
-        return { ...c, status: 'running' as CounterStatus, lastTickAt: now };
+        return { ...c, status: 'running' as CounterStatus, lastResumedAt: now };
       }),
     );
   }, []);
@@ -204,14 +240,14 @@ export function useImproveCounters() {
       prev.map((c) => {
         if (c.id !== id) return c;
         if (c.status === 'stopped') return c;
-        const elapsed = c.status === 'running' && c.lastTickAt
-          ? now - new Date(c.lastTickAt).getTime()
+        const elapsed = c.status === 'running' && c.lastResumedAt
+          ? now - c.lastResumedAt
           : 0;
         return {
           ...c,
           status: 'stopped' as CounterStatus,
           accumulatedMs: c.accumulatedMs + elapsed,
-          lastTickAt: null,
+          lastResumedAt: null,
         };
       }),
     );
@@ -228,7 +264,7 @@ export function useImproveCounters() {
           totalImps: 0,
           startedAt: null,
           accumulatedMs: 0,
-          lastTickAt: null,
+          lastResumedAt: null,
           periodStartAt: null,
           impsInCurrentPeriod: 0,
         };
@@ -253,13 +289,13 @@ export function useImproveCounters() {
           let periodStart = c.periodStartAt;
           let periodImps = c.impsInCurrentPeriod;
           if (periodStart) {
-            const periodElapsed = now - new Date(periodStart).getTime();
+            const periodElapsed = now - periodStart;
             if (periodElapsed > periodLengthMinutes * 60_000) {
-              periodStart = new Date(now).toISOString();
+              periodStart = now;
               periodImps = 0;
             }
           } else {
-            periodStart = new Date(now).toISOString();
+            periodStart = now;
             periodImps = 0;
           }
 
@@ -302,10 +338,9 @@ export function useImproveCounters() {
 
   // --- Computed helpers ---
   const getElapsedMs = useCallback((counter: ImproveCounter): number => {
-    // Use tick to force recalculation
     void tick;
-    if (counter.status === 'running' && counter.lastTickAt) {
-      return counter.accumulatedMs + (Date.now() - new Date(counter.lastTickAt).getTime());
+    if (counter.status === 'running' && counter.lastResumedAt) {
+      return counter.accumulatedMs + (Date.now() - counter.lastResumedAt);
     }
     return counter.accumulatedMs;
   }, [tick]);

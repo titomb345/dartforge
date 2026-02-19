@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useDataStore } from '../contexts/DataStoreContext';
 import { useSkillTrackerContext } from '../contexts/SkillTrackerContext';
 import type { SkillRecord, SkillCategory } from '../types/skills';
@@ -8,7 +8,7 @@ import {
   getSkillCategory, getSkillSubcategory,
   CATEGORY_LABELS, CATEGORY_ORDER, SUBCATEGORY_ORDER,
 } from '../lib/skillCategories';
-import { PinIcon, PinOffIcon, ArrowLeftIcon, ArrowRightIcon, ChevronUpIcon, ChevronDownIcon } from './icons';
+import { PinIcon, PinOffIcon, ArrowLeftIcon, ArrowRightIcon, ChevronUpIcon, ChevronDownIcon, TrashIcon } from './icons';
 
 const SETTINGS_FILE = 'settings.json';
 const SKILL_FILTER_KEY = 'skillPanelFilter';
@@ -44,15 +44,78 @@ function sortSkills(skills: SkillRecord[], mode: SortMode): SkillRecord[] {
 }
 
 function SkillRow({ record, displayName }: { record: SkillRecord; displayName?: string }) {
+  const { updateSkillCount, deleteSkill } = useSkillTrackerContext();
   const tier = getTierForCount(record.count);
   const toNext = getImprovesToNextTier(record.count);
 
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState('');
+  const [confirmingDelete, setConfirmingDelete] = useState(false);
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  const startEdit = useCallback(() => {
+    setDraft(String(record.count));
+    setEditing(true);
+  }, [record.count]);
+
+  useEffect(() => {
+    if (editing) {
+      inputRef.current?.focus();
+      inputRef.current?.select();
+    }
+  }, [editing]);
+
+  const commit = useCallback(() => {
+    const parsed = parseInt(draft, 10);
+    if (!isNaN(parsed) && parsed !== record.count) {
+      updateSkillCount(record.skill, parsed);
+    }
+    setEditing(false);
+  }, [draft, record.count, record.skill, updateSkillCount]);
+
   return (
-    <div className="flex items-center gap-1 px-2 py-1 hover:bg-bg-secondary rounded transition-[background] duration-150">
+    <div className="group flex items-center gap-1 px-2 py-1 hover:bg-bg-secondary rounded transition-[background] duration-150">
+      {confirmingDelete ? (
+        <button
+          onClick={() => { deleteSkill(record.skill); setConfirmingDelete(false); }}
+          onBlur={() => setConfirmingDelete(false)}
+          className="text-[8px] font-mono text-red border border-red/40 rounded px-1 py-px cursor-pointer hover:bg-red/10 shrink-0 transition-colors duration-150"
+        >
+          Del?
+        </button>
+      ) : (
+        <button
+          onClick={() => setConfirmingDelete(true)}
+          title="Delete skill"
+          className="w-0 overflow-hidden opacity-0 group-hover:w-4 group-hover:opacity-100 shrink-0 flex items-center justify-center text-text-dim hover:text-red cursor-pointer transition-all duration-150"
+        >
+          <TrashIcon size={9} />
+        </button>
+      )}
       <span className="text-xs text-text-label flex-1 truncate" title={record.skill}>{displayName ?? record.skill}</span>
-      <span className="text-[11px] font-mono text-text-heading w-[34px] shrink-0 text-right">
-        {record.count}
-      </span>
+      {editing ? (
+        <input
+          ref={inputRef}
+          type="number"
+          min={0}
+          value={draft}
+          onChange={(e) => setDraft(e.target.value)}
+          onBlur={commit}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') (e.target as HTMLInputElement).blur();
+            else if (e.key === 'Escape') { setEditing(false); }
+          }}
+          className="text-[11px] font-mono text-text-heading w-[34px] shrink-0 text-right bg-bg-input border border-cyan/40 rounded px-0.5 py-0 outline-none [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+        />
+      ) : (
+        <span
+          onClick={startEdit}
+          title="Click to edit"
+          className="text-[11px] font-mono text-text-heading w-[34px] shrink-0 text-right cursor-pointer hover:text-cyan transition-colors duration-150"
+        >
+          {record.count}
+        </span>
+      )}
       <span className="text-[11px] font-mono text-cyan w-[74px] shrink-0 text-center truncate">
         {tier.abbr}
       </span>
@@ -74,13 +137,16 @@ function ColumnHeaders() {
   );
 }
 
-/** Accent colors for combat subcategory dividers */
+/** Accent colors for subcategory dividers (combat + fallback for pets) */
 const SUB_GROUP_COLORS: Record<string, string> = {
   Weapons: '#f59e0b',  // amber
   SODA: '#22c55e',     // green
   Defense: '#a78bfa',  // purple
   General: '#8be9fd',  // cyan
 };
+
+/** Default color for pet name dividers */
+const PET_DIVIDER_COLOR = '#50fa7b';
 
 function langDisplayName(skill: string): string | undefined {
   return skill.startsWith('language ') ? skill.slice(9) : undefined;
@@ -91,11 +157,13 @@ function SkillSection({
   skills,
   subGroups,
   stripLangPrefix,
+  subGroupColor,
 }: {
   title?: string;
   skills: SkillRecord[];
   subGroups?: SubGroup[];
   stripLangPrefix?: boolean;
+  subGroupColor?: string;
 }) {
   if (skills.length === 0) return null;
 
@@ -108,26 +176,27 @@ function SkillSection({
       )}
       <ColumnHeaders />
       {subGroups ? (
-        subGroups.map((group) =>
-          group.skills.length > 0 ? (
+        subGroups.map((group) => {
+          const color = SUB_GROUP_COLORS[group.name] ?? subGroupColor ?? '#666';
+          return group.skills.length > 0 ? (
             <div key={group.name}>
               <div className="flex items-center gap-1.5 px-2 pt-1.5 pb-0.5">
-                <div className="h-px flex-1" style={{ background: `color-mix(in srgb, ${SUB_GROUP_COLORS[group.name] ?? '#666'} 40%, transparent)` }} />
+                <div className="h-px flex-1" style={{ background: `color-mix(in srgb, ${color} 40%, transparent)` }} />
                 <span
                   className="text-[9px] font-mono uppercase tracking-wider"
-                  style={{ color: SUB_GROUP_COLORS[group.name] ?? '#666' }}
+                  style={{ color }}
                 >
                   {group.name}
                 </span>
-                <div className="h-px flex-1" style={{ background: `color-mix(in srgb, ${SUB_GROUP_COLORS[group.name] ?? '#666'} 40%, transparent)` }} />
+                <div className="h-px flex-1" style={{ background: `color-mix(in srgb, ${color} 40%, transparent)` }} />
               </div>
               {group.skills.map((record) => (
                 <SkillRow key={record.skill} record={record}
                   displayName={stripLangPrefix ? langDisplayName(record.skill) : undefined} />
               ))}
             </div>
-          ) : null,
-        )
+          ) : null;
+        })
       ) : (
         skills.map((record) => (
           <SkillRow key={record.skill} record={record}
@@ -221,45 +290,51 @@ export function SkillPanel({
 
   const categorizedSkills = useMemo(() => {
     const groups: Record<SkillCategory, SkillRecord[]> = {
-      combat: [], magic: [], spells: [], crafting: [], language: [], thief: [], other: [],
+      combat: [], magic: [], spells: [], crafting: [], movement: [], language: [], thief: [], pets: [], other: [],
     };
     for (const record of Object.values(skillData.skills)) {
       const cat = getSkillCategory(record.skill);
       groups[cat].push(record);
     }
+    // Fold pet skills into the 'pets' category
+    for (const petSkills of Object.values(skillData.pets)) {
+      for (const record of Object.values(petSkills)) {
+        groups.pets.push(record);
+      }
+    }
     for (const cat of CATEGORY_ORDER) {
       groups[cat] = sortSkills(groups[cat], sort);
     }
     return groups;
-  }, [skillData.skills, sort]);
+  }, [skillData.skills, skillData.pets, sort]);
+
+  const petSubGroups = useMemo((): SubGroup[] => {
+    return Object.entries(skillData.pets)
+      .map(([petName, skills]) => ({
+        name: charDisplayName(petName),
+        skills: sortSkills(Object.values(skills), sort),
+      }))
+      .filter((g) => g.skills.length > 0)
+      .sort((a, b) => a.name.localeCompare(b.name));
+  }, [skillData.pets, sort]);
 
   const allSkillsSorted = useMemo(() => {
-    const sorted = sortSkills(Object.values(skillData.skills), sort);
+    const allRecords = [
+      ...Object.values(skillData.skills),
+      ...Object.values(skillData.pets).flatMap((ps) => Object.values(ps)),
+    ];
+    const sorted = sortSkills(allRecords, sort);
     if (!searchText) return sorted;
     const lower = searchText.toLowerCase();
     return sorted.filter((r) => r.skill.toLowerCase().includes(lower));
-  }, [skillData.skills, sort, searchText]);
+  }, [skillData.skills, skillData.pets, sort, searchText]);
 
   const visibleCategories = useMemo(() => {
     if (filter === 'all') return CATEGORY_ORDER.filter((cat) => categorizedSkills[cat].length > 0);
     return categorizedSkills[filter].length > 0 ? [filter] : [];
   }, [filter, categorizedSkills]);
 
-  const petSections = useMemo(() => {
-    return Object.entries(skillData.pets)
-      .map(([petName, skills]) => ({
-        name: petName,
-        skills: sortSkills(Object.values(skills), sort),
-      }))
-      .filter((s) => s.skills.length > 0)
-      .sort((a, b) => a.name.localeCompare(b.name));
-  }, [skillData.pets, sort]);
-
-  const hasAnySkills =
-    CATEGORY_ORDER.some((cat) => categorizedSkills[cat].length > 0) ||
-    petSections.length > 0;
-
-  const showPets = filter === 'all';
+  const hasAnySkills = CATEGORY_ORDER.some((cat) => categorizedSkills[cat].length > 0);
 
   const [showPinMenu, setShowPinMenu] = useState(false);
 
@@ -438,23 +513,23 @@ export function SkillPanel({
           <SkillSection skills={allSkillsSorted} />
         ) : (
           /* Single category view — with subcategories for combat */
-          visibleCategories.map((cat) => (
-            <SkillSection
-              key={cat}
-              skills={categorizedSkills[cat]}
-              subGroups={cat === 'combat' && showSubs ? buildSubGroups(categorizedSkills[cat], cat, sort) : undefined}
-              stripLangPrefix={cat === 'language'}
-            />
-          ))
+          visibleCategories.map((cat) => {
+            const subGroups =
+              cat === 'combat' && showSubs ? buildSubGroups(categorizedSkills[cat], cat, sort) :
+              cat === 'pets' ? petSubGroups :
+              undefined;
+            return (
+              <SkillSection
+                key={cat}
+                skills={categorizedSkills[cat]}
+                subGroups={subGroups}
+                stripLangPrefix={cat === 'language'}
+                subGroupColor={cat === 'pets' ? PET_DIVIDER_COLOR : undefined}
+              />
+            );
+          })
         )}
 
-        {showPets && petSections.map((section) => (
-          <SkillSection
-            key={section.name}
-            title={section.name}
-            skills={section.skills}
-          />
-        ))}
       </div>
     </div>
   );

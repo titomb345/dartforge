@@ -258,6 +258,26 @@ export function useSkillTracker(
     }
   }, [sendCommandRef, processorRef, terminalRef]);
 
+  const updateSkillCount = useCallback((skill: string, newCount: number) => {
+    const clamped = Math.max(0, Math.round(newCount));
+    setSkillData((prev) => {
+      const existing = prev.skills[skill];
+      if (!existing) return prev;
+      return {
+        ...prev,
+        skills: { ...prev.skills, [skill]: { ...existing, count: clamped } },
+      };
+    });
+  }, []);
+
+  const deleteSkill = useCallback((skill: string) => {
+    setSkillData((prev) => {
+      if (!prev.skills[skill]) return prev;
+      const { [skill]: _, ...rest } = prev.skills;
+      return { ...prev, skills: rest };
+    });
+  }, []);
+
   return {
     activeCharacter,
     skillData,
@@ -265,5 +285,7 @@ export function useSkillTracker(
     handleSkillMatch,
     showInlineImproves,
     toggleInlineImproves,
+    updateSkillCount,
+    deleteSkill,
   };
 }

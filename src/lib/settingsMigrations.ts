@@ -1,6 +1,6 @@
 import type { DataStore } from '../contexts/DataStoreContext';
 
-export const CURRENT_VERSION = 7;
+export const CURRENT_VERSION = 8;
 
 /** Raw store contents — all keys are optional since older stores may lack them. */
 export type StoreData = Record<string, unknown>;
@@ -74,6 +74,22 @@ const MIGRATIONS: MigrationFn[] = [
     if (!('counterPeriodLength' in data)) {
       data.counterPeriodLength = 10;
     }
+    return data;
+  },
+  // v7 → v8: replace global compactBar with per-readout compactReadouts
+  (data) => {
+    const wasCompact = data.compactBar === true;
+    delete data.compactBar;
+    data.compactReadouts = {
+      health: wasCompact,
+      concentration: wasCompact,
+      aura: wasCompact,
+      hunger: wasCompact,
+      thirst: wasCompact,
+      encumbrance: wasCompact,
+      movement: wasCompact,
+      clock: false,
+    };
     return data;
   },
 ];

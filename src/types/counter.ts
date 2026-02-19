@@ -7,15 +7,15 @@ export interface ImproveCounter {
   skills: Record<string, number>;
   totalImps: number;
 
-  /** ISO timestamp when counter was first started */
+  /** ISO timestamp when counter was first started (metadata only) */
   startedAt: string | null;
-  /** Total accumulated elapsed ms (excludes paused time) */
+  /** Frozen elapsed ms — updated on pause, stop, and periodic save */
   accumulatedMs: number;
-  /** ISO timestamp of last save/pause — used for resume calculation */
-  lastTickAt: string | null;
+  /** Epoch ms when counter was last started/resumed (null when not running) */
+  lastResumedAt: number | null;
 
-  /** ISO timestamp when current period began */
-  periodStartAt: string | null;
+  /** Epoch ms when current period began */
+  periodStartAt: number | null;
   /** Imps counted since periodStartAt */
   impsInCurrentPeriod: number;
 }

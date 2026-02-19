@@ -6,6 +6,8 @@ export interface SkillTrackerState {
   skillData: CharacterSkillFile;
   showInlineImproves: boolean;
   toggleInlineImproves: (value: boolean) => void;
+  updateSkillCount: (skill: string, newCount: number) => void;
+  deleteSkill: (skill: string) => void;
 }
 
 const SkillTrackerContext = createContext<SkillTrackerState | null>(null);

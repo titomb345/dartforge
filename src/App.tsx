@@ -12,7 +12,7 @@ import { ChatPanel } from './components/ChatPanel';
 import { CounterPanel } from './components/CounterPanel';
 import { GameClock } from './components/GameClock';
 import { StatusReadout } from './components/StatusReadout';
-import { HeartIcon, FocusIcon, FoodIcon, DropletIcon, AuraIcon, WeightIcon, BootIcon, CompressIcon } from './components/icons';
+import { HeartIcon, FocusIcon, FoodIcon, DropletIcon, AuraIcon, WeightIcon, BootIcon } from './components/icons';
 import { useMudConnection } from './hooks/useMudConnection';
 import { useTransport } from './contexts/TransportContext';
 import { useClassMode } from './hooks/useClassMode';
@@ -75,7 +75,7 @@ function AppMain() {
   const togglePanel = (panel: Panel) => setActivePanel((v) => v === panel ? null : panel);
   const [panelLayout, setPanelLayout] = useState<PanelLayout>({ left: [], right: [] });
   const panelLayoutLoadedRef = useRef(false);
-  const [compactBar, setCompactBar] = useState(false);
+  const [compactReadouts, setCompactReadouts] = useState<Record<string, boolean>>({});
   const [filterFlags, setFilterFlags] = useState<FilterFlags>({ ...DEFAULT_FILTER_FLAGS });
   const [loggedIn, setLoggedIn] = useState(false);
   const statusBarRef = useRef<HTMLDivElement | null>(null);
@@ -88,8 +88,8 @@ function AppMain() {
   // Load compact mode + filter flags + panel layout from settings
   useEffect(() => {
     (async () => {
-      const savedCompact = await dataStore.get<boolean>('settings.json', 'compactBar');
-      if (savedCompact != null) setCompactBar(savedCompact);
+      const savedCompact = await dataStore.get<Record<string, boolean>>('settings.json', 'compactReadouts');
+      if (savedCompact != null) setCompactReadouts(savedCompact);
       const savedFilters = await dataStore.get<FilterFlags>('settings.json', 'filteredStatuses');
       if (savedFilters != null) setFilterFlags(savedFilters);
       const savedLayout = await dataStore.get<PanelLayout>('settings.json', 'panelLayout');
@@ -236,11 +236,11 @@ function AppMain() {
     dataStore.set('settings.json', 'filteredStatuses', filterFlags).catch(console.error);
   }, [filterFlags]);
 
-  // Persist compact bar state
+  // Persist per-readout compact state
   useEffect(() => {
     if (!settingsLoadedRef.current) return;
-    dataStore.set('settings.json', 'compactBar', compactBar).catch(console.error);
-  }, [compactBar]);
+    dataStore.set('settings.json', 'compactReadouts', compactReadouts).catch(console.error);
+  }, [compactReadouts]);
 
   // Suppress transitions during active window resize to prevent breakpoint flash
   useEffect(() => {
@@ -279,11 +279,13 @@ function AppMain() {
     return () => observer.disconnect();
   }, [autoCompact]);
 
-  const effectiveCompact = compactBar || autoCompact;
+  const toggleCompactReadout = useCallback((key: string) => {
+    setCompactReadouts((prev) => ({ ...prev, [key]: !prev[key] }));
+  }, []);
 
   // Skill tracker — needs sendCommand ref (set after useMudConnection)
   const sendCommandRef = useRef<((cmd: string) => Promise<void>) | null>(null);
-  const { activeCharacter, skillData, setActiveCharacter, handleSkillMatch, showInlineImproves, toggleInlineImproves } =
+  const { activeCharacter, skillData, setActiveCharacter, handleSkillMatch, showInlineImproves, toggleInlineImproves, updateSkillCount, deleteSkill } =
     useSkillTracker(sendCommandRef, processorRef, terminalRef, dataStore);
 
   // Improve counter hook
@@ -351,7 +353,7 @@ function AppMain() {
   const isDanger = (themeColor: string) =>
     themeColor === 'red' || themeColor === 'brightRed' || themeColor === 'magenta';
 
-  const skillTrackerValue = { activeCharacter, skillData, showInlineImproves, toggleInlineImproves };
+  const skillTrackerValue = { activeCharacter, skillData, showInlineImproves, toggleInlineImproves, updateSkillCount, deleteSkill };
   const chatValue = { messages: chatMessages, filters: chatFilters, mutedSenders, toggleFilter: toggleChatFilter, setAllFilters: setAllChatFilters, muteSender, unmuteSender };
   const counterValue = { handleCounterMatch, ...counterRest };
 
@@ -489,23 +491,6 @@ function AppMain() {
       >
         {loggedIn && (
           <>
-            <button
-              onClick={() => setCompactBar((v) => !v)}
-              disabled={autoCompact}
-              title={autoCompact ? 'Compact mode (auto)' : compactBar ? 'Expand status labels' : 'Compact status bar'}
-              className={cn(
-                'flex items-center justify-center w-5 h-5 rounded-[3px] transition-all duration-200 border',
-                autoCompact
-                  ? 'text-text-dim/50 border-transparent cursor-default'
-                  : compactBar
-                    ? 'text-cyan border-cyan/25 bg-cyan/8 cursor-pointer'
-                    : 'text-text-dim border-transparent hover:text-text-muted cursor-pointer'
-              )}
-            >
-              <CompressIcon size={10} />
-            </button>
-
-            {/* Combat group — health, concentration, aura */}
             {health && (
               <StatusReadout
                 icon={<HeartIcon size={11} />}
@@ -514,7 +499,9 @@ function AppMain() {
                 tooltip={health.message}
                 glow={health.severity <= 1}
                 danger={isDanger(health.themeColor)}
-                compact={effectiveCompact}
+                compact={autoCompact || !!compactReadouts.health}
+                autoCompact={autoCompact}
+                onDoubleClick={() => toggleCompactReadout('health')}
               />
             )}
             {concentration && (
@@ -525,9 +512,11 @@ function AppMain() {
                 tooltip={concentration.message}
                 glow={concentration.severity <= 1}
                 danger={isDanger(concentration.themeColor)}
-                compact={effectiveCompact}
+                compact={autoCompact || !!compactReadouts.concentration}
+                autoCompact={autoCompact}
                 filtered={filterFlags.concentration}
                 onClick={() => toggleFilter('concentration')}
+                onDoubleClick={() => toggleCompactReadout('concentration')}
               />
             )}
             {aura && (
@@ -538,18 +527,13 @@ function AppMain() {
                 tooltip={aura.key === 'none' ? 'You have no aura.' : `Your aura appears to be ${aura.descriptor}.`}
                 glow={aura.severity <= 1}
                 danger={isDanger(aura.themeColor)}
-                compact={effectiveCompact}
+                compact={autoCompact || !!compactReadouts.aura}
+                autoCompact={autoCompact}
                 filtered={filterFlags.aura}
                 onClick={() => toggleFilter('aura')}
+                onDoubleClick={() => toggleCompactReadout('aura')}
               />
             )}
-
-            {/* Divider between combat and survival */}
-            {(concentration || aura || health) && (hunger || thirst) && (
-              <div className="w-px h-3.5 bg-border-dim mx-0.5" />
-            )}
-
-            {/* Survival group — hunger, thirst */}
             {hunger && (
               <StatusReadout
                 icon={<FoodIcon size={11} />}
@@ -558,9 +542,11 @@ function AppMain() {
                 tooltip={`You are ${hunger.descriptor}.`}
                 glow={hunger.severity <= 1}
                 danger={isDanger(hunger.themeColor)}
-                compact={effectiveCompact}
+                compact={autoCompact || !!compactReadouts.hunger}
+                autoCompact={autoCompact}
                 filtered={filterFlags.hunger}
                 onClick={() => toggleFilter('hunger')}
+                onDoubleClick={() => toggleCompactReadout('hunger')}
               />
             )}
             {thirst && (
@@ -571,18 +557,13 @@ function AppMain() {
                 tooltip={`You are ${thirst.descriptor}.`}
                 glow={thirst.severity <= 1}
                 danger={isDanger(thirst.themeColor)}
-                compact={effectiveCompact}
+                compact={autoCompact || !!compactReadouts.thirst}
+                autoCompact={autoCompact}
                 filtered={filterFlags.thirst}
                 onClick={() => toggleFilter('thirst')}
+                onDoubleClick={() => toggleCompactReadout('thirst')}
               />
             )}
-
-            {/* Divider between survival and physical */}
-            {(hunger || thirst) && (encumbrance || movement) && (
-              <div className="w-px h-3.5 bg-border-dim mx-0.5" />
-            )}
-
-            {/* Physical group — encumbrance, movement */}
             {encumbrance && (
               <StatusReadout
                 icon={<WeightIcon size={11} />}
@@ -591,9 +572,11 @@ function AppMain() {
                 tooltip={encumbrance.descriptor}
                 glow={encumbrance.severity <= 1}
                 danger={isDanger(encumbrance.themeColor)}
-                compact={effectiveCompact}
+                compact={autoCompact || !!compactReadouts.encumbrance}
+                autoCompact={autoCompact}
                 filtered={filterFlags.encumbrance}
                 onClick={() => toggleFilter('encumbrance')}
+                onDoubleClick={() => toggleCompactReadout('encumbrance')}
               />
             )}
             {movement && (
@@ -604,18 +587,20 @@ function AppMain() {
                 tooltip={movement.descriptor}
                 glow={movement.severity <= 1}
                 danger={isDanger(movement.themeColor)}
-                compact={effectiveCompact}
+                compact={autoCompact || !!compactReadouts.movement}
+                autoCompact={autoCompact}
                 filtered={filterFlags.movement}
                 onClick={() => toggleFilter('movement')}
+                onDoubleClick={() => toggleCompactReadout('movement')}
               />
             )}
-
-            {/* Divider before clock */}
-            <div className="w-px h-3.5 bg-border-dim mx-0.5" />
           </>
         )}
         <div className={cn('ml-auto', twoRow && 'basis-full flex justify-end')}>
-          <GameClock />
+          <GameClock
+            compact={autoCompact || !!compactReadouts.clock}
+            onToggleCompact={() => toggleCompactReadout('clock')}
+          />
         </div>
       </div>
       <CommandInput
