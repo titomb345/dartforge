@@ -21,10 +21,12 @@ const OWN_SAY_RE = /^You (say|ask|exclaim) in (\w+), '(.+)'$/;
 const OWN_SHOUT_RE = /^You (shout|yell) in (\w+), '(.+)'$/;
 const OWN_OOC_RE = /^You say \(OOC\),\s*'(.+)'$/;
 
-/** Extract "-SenderName" suffix from tell/sz message bodies */
+/**
+ * Tells and SZs are anonymous — sender resolution is handled entirely by
+ * user-defined signature mappings (OutputFilter.signatureResolver).
+ * The raw message body is passed through as-is.
+ */
 function extractSender(msg: string): { sender: string; message: string } {
-  const match = msg.match(/^(.+?)\s+-(\w+)$/);
-  if (match) return { message: match[1], sender: match[2] };
   return { message: msg, sender: 'Unknown' };
 }
 

@@ -4,6 +4,7 @@ import type { MudTransport } from '../lib/transport';
 import { MudOutputPayload, ConnectionStatusPayload } from '../types';
 import { getConnectingSplash, getConnectedSplash, getDisconnectSplash } from '../lib/splash';
 import { smartWrite } from '../lib/terminalUtils';
+import { stripAnsi } from '../lib/ansiUtils';
 import type { OutputFilter } from '../lib/outputFilter';
 
 /** End marker for the DartMUD ASCII banner */
@@ -16,7 +17,7 @@ const BANNER_MAX_BUFFER = 5000;
  * Used as fallback when IAC GA is not available.
  */
 function endsWithPrompt(data: string): boolean {
-  const stripped = data.replace(/\x1b\[[0-9;]*[A-Za-z]/g, '');
+  const stripped = stripAnsi(data);
   return stripped.endsWith('\n> ') || stripped.endsWith('\r\n> ') || stripped === '> ';
 }
 
@@ -26,7 +27,7 @@ function endsWithPrompt(data: string): boolean {
  * Returns empty string for bare prompts.
  */
 function stripPrompt(data: string): string {
-  const clean = data.replace(/\x1b\[[0-9;]*[A-Za-z]/g, '');
+  const clean = stripAnsi(data);
   // Bare prompt only — suppress entirely
   if (clean.trim() === '>' || clean.trim() === '') return '';
   // Strip trailing prompt after newline

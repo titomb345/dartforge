@@ -13,6 +13,7 @@ export interface ChatState {
   toggleNewestFirst: () => void;
   muteSender: (name: string) => void;
   unmuteSender: (name: string) => void;
+  updateSender: (signature: string, playerName: string) => void;
 }
 
 const ChatContext = createContext<ChatState | null>(null);

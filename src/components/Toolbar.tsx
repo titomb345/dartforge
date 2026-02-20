@@ -1,6 +1,6 @@
 import { IconButton } from './IconButton';
 import { DropboxButton } from './DropboxButton';
-import { PowerIcon, PaletteIcon, TrendingUpIcon, ChatIcon, CounterIcon, AliasIcon, GearIcon } from './icons';
+import { PowerIcon, PaletteIcon, TrendingUpIcon, ChatIcon, CounterIcon, AliasIcon, TriggerIcon, NotesIcon, GearIcon } from './icons';
 import { getPlatform } from '../lib/platform';
 import { cn } from '../lib/cn';
 
@@ -19,8 +19,13 @@ interface ToolbarProps {
   showCounter: boolean;
   onToggleCounter: () => void;
   counterPinned?: boolean;
+  showNotes: boolean;
+  onToggleNotes: () => void;
+  notesPinned?: boolean;
   showAliases: boolean;
   onToggleAliases: () => void;
+  showTriggers: boolean;
+  onToggleTriggers: () => void;
   showSettings: boolean;
   onToggleSettings: () => void;
 }
@@ -40,8 +45,13 @@ export function Toolbar({
   showCounter,
   onToggleCounter,
   counterPinned,
+  showNotes,
+  onToggleNotes,
+  notesPinned,
   showAliases,
   onToggleAliases,
+  showTriggers,
+  onToggleTriggers,
   showSettings,
   onToggleSettings,
 }: ToolbarProps) {
@@ -96,6 +106,14 @@ export function Toolbar({
           pinned={skillsPinned}
           onClick={onToggleSkills}
         />
+        <IconButton
+          icon={<NotesIcon />}
+          title="Notes"
+          accent="#fbbf24"
+          toggled={showNotes}
+          pinned={notesPinned}
+          onClick={onToggleNotes}
+        />
         <div className="w-px h-[18px] bg-border-dim mx-1.5" />
         <IconButton
           icon={<AliasIcon />}
@@ -105,21 +123,26 @@ export function Toolbar({
           onClick={onToggleAliases}
         />
         <IconButton
+          icon={<TriggerIcon />}
+          title="Triggers"
+          accent="#ff79c6"
+          toggled={showTriggers}
+          onClick={onToggleTriggers}
+        />
+        <IconButton
           icon={<PaletteIcon />}
           title="Appearance"
           accent="#8be9fd"
           toggled={showAppearance}
           onClick={onToggleAppearance}
         />
-        {getPlatform() === 'tauri' && (
-          <IconButton
-            icon={<GearIcon />}
-            title="Settings"
-            accent="#bd93f9"
-            toggled={showSettings}
-            onClick={onToggleSettings}
-          />
-        )}
+        <IconButton
+          icon={<GearIcon />}
+          title="Settings"
+          accent="#bd93f9"
+          toggled={showSettings}
+          onClick={onToggleSettings}
+        />
       </div>
     </div>
   );

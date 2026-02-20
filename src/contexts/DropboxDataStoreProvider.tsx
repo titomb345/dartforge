@@ -113,12 +113,6 @@ export function DropboxDataStoreProvider({ children }: { children: ReactNode }) 
   // Dropbox sync layer
   // ---------------------------------------------------------------------------
 
-  function dropboxPath(filename: string): string {
-    const folder = folderPathRef.current;
-    if (!folder || folder === '/') return `/${filename}`;
-    return `${folder}/${filename}`;
-  }
-
   const scheduleDropboxUpload = useCallback((filename: string) => {
     const token = accessTokenRef.current;
     const folder = folderPathRef.current;
@@ -185,23 +179,25 @@ export function DropboxDataStoreProvider({ children }: { children: ReactNode }) 
     return merged;
   }
 
-  // Reset syncComplete when folder changes so re-sync happens
-  useEffect(() => {
-    setSyncComplete(false);
-  }, [folderPath]);
-
   // Initial sync: download files from Dropbox and merge with localStorage
   // Only runs when storageMode=dropbox + connected + folder selected
+  // Also resets syncComplete when folderPath changes (merged from separate effect)
   useEffect(() => {
     if (storageMode !== 'dropbox' || dropboxStatus !== 'connected' || !accessToken || !folderPath) {
       return;
     }
 
+    // Capture values before async work to prevent race conditions
+    // if the user disconnects or changes folder mid-sync
+    const token: string = accessToken;
+    const folder: string = folderPath;
     let cancelled = false;
+
+    setSyncComplete(false);
 
     async function initialSync() {
       try {
-        const files = await listFiles(accessToken!, folderPath!);
+        const files = await listFiles(token, folder);
         const remoteFileNames = new Set(files.map((f) => f.name));
 
         // Check for pending uploads from a previous session
@@ -217,7 +213,7 @@ export function DropboxDataStoreProvider({ children }: { children: ReactNode }) 
           if (!file.name.endsWith('.json')) continue;
 
           try {
-            const { content } = await downloadFile(accessToken!, file.path_lower);
+            const { content } = await downloadFile(token, file.path_lower);
             const remoteData = JSON.parse(content) as Record<string, unknown>;
 
             const localData = loadFromStorage(file.name);
@@ -263,7 +259,8 @@ export function DropboxDataStoreProvider({ children }: { children: ReactNode }) 
           const cache = cacheRef.current.get(filename);
           if (cache && Object.keys(cache).length > 0) {
             try {
-              await uploadFile(accessToken!, dropboxPath(filename), JSON.stringify(cache, null, 2));
+              const path = folder === '/' ? `/${filename}` : `${folder}/${filename}`;
+              await uploadFile(token, path, JSON.stringify(cache, null, 2));
             } catch (e) {
               console.error(`Upload failed for ${filename}:`, e);
             }
@@ -371,6 +368,26 @@ export function DropboxDataStoreProvider({ children }: { children: ReactNode }) 
     return Object.keys(loadFromStorage(filename));
   }, []);
 
+  const readText = useCallback(async (filename: string): Promise<string | null> => {
+    const raw = localStorage.getItem(PREFIX + filename);
+    return raw;
+  }, []);
+
+  const writeText = useCallback(async (filename: string, content: string): Promise<void> => {
+    localStorage.setItem(PREFIX + filename, content);
+    // Also upload to Dropbox if connected
+    const token = accessTokenRef.current;
+    const folder = folderPathRef.current;
+    if (token && folder) {
+      try {
+        const path = folder === '/' ? `/${filename}` : `${folder}/${filename}`;
+        await uploadFile(token, path, content);
+      } catch (e) {
+        console.error(`Dropbox upload failed for text file ${filename}:`, e);
+      }
+    }
+  }, []);
+
   const flushAll = useCallback(async (): Promise<void> => {
     // Flush localStorage
     for (const timer of dirtyRef.current.values()) clearTimeout(timer);
@@ -402,13 +419,15 @@ export function DropboxDataStoreProvider({ children }: { children: ReactNode }) 
   const completeSetup = useCallback(async (): Promise<void> => {}, []);
   const reloadFromDir = useCallback(async (): Promise<string> => 'localStorage', []);
 
-  const store: DataStore = {
-    get, set, save, delete: del, keys, flushAll,
-    activeDataDir: storageMode === 'dropbox' && accessToken && folderPath ? 'dropbox' : 'localStorage',
+  const activeDataDir = storageMode === 'dropbox' && accessToken && folderPath ? 'dropbox' : 'localStorage';
+
+  const store: DataStore = useMemo(() => ({
+    get, set, save, delete: del, keys, readText, writeText, flushAll,
+    activeDataDir,
     ready,
     needsSetup: false,
     completeSetup, reloadFromDir,
-  };
+  }), [get, set, save, del, keys, readText, writeText, flushAll, activeDataDir, ready, completeSetup, reloadFromDir]);
 
   return (
     <DataStoreContext.Provider value={store}>

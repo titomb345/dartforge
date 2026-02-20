@@ -12,10 +12,10 @@ const DATA_DIRS_KEY = 'dataDirs';
 interface BackupEntry {
   path: string;
   filename: string;
-  original_file: string;
   timestamp: string;
   tag: string;
   size: number;
+  files: string[];
 }
 
 type Tab = 'directories' | 'backups';
@@ -303,53 +303,40 @@ function BackupsTab({
     );
   }
 
-  // Group by timestamp (session)
-  const grouped = new Map<string, BackupEntry[]>();
-  for (const b of backups) {
-    const group = grouped.get(b.timestamp) ?? [];
-    group.push(b);
-    grouped.set(b.timestamp, group);
-  }
-
   return (
     <div className="space-y-3">
       <div className="text-[10px] text-text-dim mb-2">
         Restoring a backup automatically creates a safety backup of your current data first.
       </div>
-      {[...grouped.entries()].map(([timestamp, entries]) => (
-        <div key={timestamp} className="border border-border-dim rounded overflow-hidden">
-          <div className="flex items-center gap-1.5 px-2 py-1 bg-bg-secondary border-b border-border-dim">
+      {backups.map((entry) => (
+        <div key={entry.path} className="border border-border-dim rounded overflow-hidden group">
+          <div className="flex items-center gap-1.5 px-2 py-1 bg-bg-secondary">
             <ClockIcon size={10} />
             <span className="text-[10px] font-mono text-text-muted">
-              {formatTimestamp(timestamp)}
+              {formatTimestamp(entry.timestamp)}
             </span>
-            <span className="text-[9px] font-mono text-cyan/70 uppercase ml-auto">
-              {tagLabel[entries[0].tag] ?? entries[0].tag}
+            <span className="text-[9px] font-mono text-cyan/70 uppercase">
+              {tagLabel[entry.tag] ?? entry.tag}
             </span>
-          </div>
-          {entries.map((entry) => (
-            <div
-              key={entry.path}
-              className="flex items-center gap-2 px-2 py-1 hover:bg-bg-secondary group"
+            <span className="text-[10px] text-text-dim font-mono ml-auto mr-1">
+              {formatSize(entry.size)}
+            </span>
+            <button
+              onClick={() => onRestore(entry.path)}
+              className={cn(
+                'text-[10px] font-mono px-1.5 py-0.5 rounded border cursor-pointer',
+                'text-text-dim border-border-dim opacity-0 group-hover:opacity-100',
+                'hover:text-cyan hover:border-cyan/30 transition-all'
+              )}
             >
-              <span className="text-[11px] text-text-label font-mono truncate flex-1">
-                {entry.original_file}
-              </span>
-              <span className="text-[10px] text-text-dim font-mono">
-                {formatSize(entry.size)}
-              </span>
-              <button
-                onClick={() => onRestore(entry.path)}
-                className={cn(
-                  'text-[10px] font-mono px-1.5 py-0.5 rounded border cursor-pointer',
-                  'text-text-dim border-border-dim opacity-0 group-hover:opacity-100',
-                  'hover:text-cyan hover:border-cyan/30 transition-all'
-                )}
-              >
-                Restore
-              </button>
+              Restore
+            </button>
+          </div>
+          {entry.files.length > 0 && (
+            <div className="px-2 py-1 text-[10px] font-mono text-text-dim">
+              {entry.files.join(', ')}
             </div>
-          ))}
+          )}
         </div>
       ))}
     </div>

@@ -1,6 +1,6 @@
 import type { DataStore } from '../contexts/DataStoreContext';
 
-export const CURRENT_VERSION = 10;
+export const CURRENT_VERSION = 12;
 
 /** Raw store contents — all keys are optional since older stores may lack them. */
 export type StoreData = Record<string, unknown>;
@@ -114,6 +114,26 @@ const MIGRATIONS: MigrationFn[] = [
     }
     return data;
   },
+  // v10 → v11: initialize trigger system settings
+  (data) => {
+    if (!('triggersEnabled' in data)) {
+      data.triggersEnabled = true;
+    }
+    return data;
+  },
+  // v11 → v12: initialize anti-idle settings
+  (data) => {
+    if (!('antiIdleEnabled' in data)) {
+      data.antiIdleEnabled = false;
+    }
+    if (!('antiIdleCommand' in data)) {
+      data.antiIdleCommand = 'hp';
+    }
+    if (!('antiIdleMinutes' in data)) {
+      data.antiIdleMinutes = 10;
+    }
+    return data;
+  },
 ];
 
 const SETTINGS_FILE = 'settings.json';
@@ -135,7 +155,12 @@ export async function migrateSettings(dataStore: DataStore): Promise<void> {
 
   // Run each migration sequentially
   for (let v = version; v < CURRENT_VERSION; v++) {
-    data = MIGRATIONS[v](data);
+    const result = MIGRATIONS[v](data);
+    if (result == null || typeof result !== 'object') {
+      console.error(`Settings migration v${v}→v${v + 1} returned invalid data, aborting migrations`);
+      break;
+    }
+    data = result;
   }
 
   // Write migrated values back

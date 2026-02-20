@@ -1,9 +1,15 @@
-import { useCallback, useMemo, useRef, useState, useEffect } from 'react';
+import { useCallback, useRef, useState, useEffect, useMemo } from 'react';
 import { useAliasContext } from '../contexts/AliasContext';
 import { useSkillTrackerContext } from '../contexts/SkillTrackerContext';
 import { expandInput } from '../lib/aliasEngine';
+import { useFilteredGroups } from '../lib/useFilteredGroups';
+import { charDisplayName } from '../lib/panelUtils';
 import type { Alias, AliasId, AliasMatchMode, AliasScope } from '../types/alias';
 import { TrashIcon, PlusIcon, ChevronDownIcon, ChevronUpIcon } from './icons';
+import { FilterPill } from './FilterPill';
+import { MudInput, MudTextarea, MudButton } from './shared';
+import { SyntaxHelpTable } from './SyntaxHelpTable';
+import type { HelpRow } from './SyntaxHelpTable';
 
 interface AliasPanelProps {
   onClose: () => void;
@@ -14,41 +20,6 @@ const MATCH_MODE_LABELS: Record<AliasMatchMode, string> = {
   prefix: 'Prefix',
   regex: 'Regex',
 };
-
-function charDisplayName(name: string): string {
-  return name.charAt(0).toUpperCase() + name.slice(1);
-}
-
-// --- Filter Pill (reused pattern from SkillPanel) ---
-
-function FilterPill({
-  label,
-  active,
-  accent,
-  onClick,
-}: {
-  label: string;
-  active: boolean;
-  accent?: string;
-  onClick: () => void;
-}) {
-  const ACCENT_STYLES: Record<string, string> = {
-    purple: 'bg-[#a78bfa]/15 border-[#a78bfa]/40 text-[#a78bfa]',
-    cyan: 'bg-cyan/15 border-cyan/40 text-cyan',
-  };
-  return (
-    <button
-      onClick={onClick}
-      className={`px-2 py-0.5 text-[10px] font-mono rounded-full border cursor-pointer transition-colors duration-150 whitespace-nowrap ${
-        active
-          ? ACCENT_STYLES[accent ?? 'purple']
-          : 'bg-transparent border-border-dim text-text-dim hover:text-text-label hover:border-border-subtle'
-      }`}
-    >
-      {label}
-    </button>
-  );
-}
 
 // --- Alias Row ---
 
@@ -128,7 +99,9 @@ function AliasRow({
 
 // --- Syntax Help ---
 
-const HELP_ROWS: { token: string; desc: string; example?: string }[] = [
+const ALIAS_ACCENT = '#a78bfa';
+
+const ALIAS_HELP_ROWS: HelpRow[] = [
   { token: '$1 $2 .. $9', desc: 'Positional arguments (space-separated)', example: 'aa goblin  \u2192  $1 = goblin' },
   { token: '$*', desc: 'All arguments after the trigger' },
   { token: '$-', desc: 'All arguments except the last' },
@@ -141,34 +114,17 @@ const HELP_ROWS: { token: string; desc: string; example?: string }[] = [
   { token: '#echo <text>', desc: 'Print text locally (not sent to MUD)', example: '#echo --- Starting combo ---' },
 ];
 
+const ALIAS_HELP_FOOTER = (
+  <>
+    <span className="text-text-label">Match modes:</span>{' '}
+    <span className="font-mono" style={{ color: ALIAS_ACCENT }}>Exact</span> = trigger only, no arguments.{' '}
+    <span className="font-mono" style={{ color: ALIAS_ACCENT }}>Prefix</span> = trigger + arguments ($1, $2, etc.).{' '}
+    <span className="font-mono" style={{ color: ALIAS_ACCENT }}>Regex</span> = pattern match, capture groups become $1, $2.
+  </>
+);
+
 function BodySyntaxHelp() {
-  return (
-    <div className="mb-2 rounded border border-[#a78bfa]/20 bg-[#a78bfa]/5 overflow-hidden">
-      <table className="w-full text-[10px]">
-        <tbody>
-          {HELP_ROWS.map((row) => (
-            <tr key={row.token} className="border-b border-[#a78bfa]/10 last:border-b-0">
-              <td className="px-2 py-1 font-mono text-[#a78bfa] whitespace-nowrap align-top w-[100px]">
-                {row.token}
-              </td>
-              <td className="px-2 py-1 text-text-label align-top">
-                {row.desc}
-                {row.example && (
-                  <div className="font-mono text-text-dim mt-0.5">{row.example}</div>
-                )}
-              </td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-      <div className="px-2 py-1.5 border-t border-[#a78bfa]/10 text-[10px] text-text-dim">
-        <span className="text-text-label">Match modes:</span>{' '}
-        <span className="font-mono text-[#a78bfa]">Exact</span> = trigger only, no arguments.{' '}
-        <span className="font-mono text-[#a78bfa]">Prefix</span> = trigger + arguments ($1, $2, etc.).{' '}
-        <span className="font-mono text-[#a78bfa]">Regex</span> = pattern match, capture groups become $1, $2.
-      </div>
-    </div>
-  );
+  return <SyntaxHelpTable rows={ALIAS_HELP_ROWS} accentColor={ALIAS_ACCENT} footer={ALIAS_HELP_FOOTER} />;
 }
 
 // --- Alias Editor ---
@@ -242,25 +198,19 @@ function AliasEditor({
           {alias ? 'Edit Alias' : 'New Alias'}
         </span>
         <div className="flex gap-1">
-          <button
-            onClick={onCancel}
-            className="text-[10px] px-2 py-0.5 rounded border border-border-dim text-text-dim hover:text-text-label cursor-pointer transition-colors duration-150"
-          >
+          <MudButton variant="ghost" size="sm" onClick={onCancel}>
             Cancel
-          </button>
-          <button
+          </MudButton>
+          <MudButton
+            accent="purple"
+            size="sm"
             onClick={() => {
               if (canSave) onSave({ pattern: pattern.trim(), matchMode, body, group: group.trim() || 'General' }, scope, alias?.id);
             }}
             disabled={!canSave}
-            className={`text-[10px] px-2 py-0.5 rounded border cursor-pointer transition-colors duration-150 ${
-              canSave
-                ? 'border-[#a78bfa]/40 text-[#a78bfa] bg-[#a78bfa]/10 hover:bg-[#a78bfa]/20'
-                : 'border-border-dim text-text-dim opacity-50 cursor-not-allowed'
-            }`}
           >
             Save
-          </button>
+          </MudButton>
         </div>
       </div>
 
@@ -269,13 +219,13 @@ function AliasEditor({
         <div className="flex gap-2">
           <div className="flex-1">
             <label className="text-[10px] text-text-dim mb-0.5 block">Pattern</label>
-            <input
+            <MudInput
               ref={patternRef}
-              type="text"
+              accent="purple"
               value={pattern}
               onChange={(e) => setPattern(e.target.value)}
               placeholder="e.g., aa"
-              className="w-full text-[11px] font-mono px-2 py-1 rounded border border-border-dim bg-bg-input text-text-primary placeholder:text-text-dim focus:outline-none focus:border-[#a78bfa]/40 transition-colors duration-150"
+              className="w-full"
             />
           </div>
           <div className="w-[90px]">
@@ -308,12 +258,13 @@ function AliasEditor({
             </button>
           </div>
           {showHelp && <BodySyntaxHelp />}
-          <textarea
+          <MudTextarea
+            accent="purple"
             value={body}
             onChange={(e) => setBody(e.target.value)}
             placeholder="attack $1;kill $1"
             rows={3}
-            className="w-full text-[11px] font-mono px-2 py-1 rounded border border-border-dim bg-bg-input text-text-primary placeholder:text-text-dim focus:outline-none focus:border-[#a78bfa]/40 transition-colors duration-150 resize-y"
+            className="w-full"
           />
         </div>
 
@@ -321,12 +272,12 @@ function AliasEditor({
         <div className="flex gap-2">
           <div className="flex-1">
             <label className="text-[10px] text-text-dim mb-0.5 block">Group</label>
-            <input
-              type="text"
+            <MudInput
+              accent="purple"
               value={group}
               onChange={(e) => setGroup(e.target.value)}
               placeholder="General"
-              className="w-full text-[11px] px-2 py-1 rounded border border-border-dim bg-bg-input text-text-primary placeholder:text-text-dim focus:outline-none focus:border-[#a78bfa]/40 transition-colors duration-150"
+              className="w-full"
             />
           </div>
           <div className="w-[110px]">
@@ -360,12 +311,12 @@ function AliasEditor({
         <div className="border-t border-[#444] pt-2">
 
           <label className="text-[10px] text-text-dim mb-0.5 block">Test expansion</label>
-          <input
-            type="text"
+          <MudInput
+            accent="purple"
             value={testInput}
             onChange={(e) => setTestInput(e.target.value)}
             placeholder={pattern ? (matchMode === 'exact' ? pattern : `${pattern} goblin`) : 'type a test command...'}
-            className="w-full text-[11px] font-mono px-2 py-1 rounded border border-border-dim bg-bg-input text-text-primary placeholder:text-text-dim focus:outline-none focus:border-[#a78bfa]/40 transition-colors duration-150"
+            className="w-full"
           />
           {preview && (
             <div className="mt-1 px-2 py-1 rounded bg-bg-primary border border-border-dim">
@@ -401,39 +352,8 @@ export function AliasPanel({ onClose }: AliasPanelProps) {
   const aliases = scope === 'character' ? characterAliases : globalAliases;
   const aliasList = useMemo(() => Object.values(aliases), [aliases]);
 
-  // Collect unique groups
-  const groups = useMemo(() => {
-    const set = new Set<string>();
-    for (const a of aliasList) set.add(a.group || 'General');
-    return [...set].sort();
-  }, [aliasList]);
-
-  // Filter and group
-  const filteredAliases = useMemo(() => {
-    let list = aliasList;
-    if (groupFilter) list = list.filter((a) => (a.group || 'General') === groupFilter);
-    if (searchText) {
-      const lower = searchText.toLowerCase();
-      list = list.filter(
-        (a) =>
-          a.pattern.toLowerCase().includes(lower) ||
-          a.body.toLowerCase().includes(lower) ||
-          a.group.toLowerCase().includes(lower),
-      );
-    }
-    return list.sort((a, b) => a.pattern.localeCompare(b.pattern));
-  }, [aliasList, groupFilter, searchText]);
-
-  // Group aliases by group name for display
-  const groupedAliases = useMemo(() => {
-    const map = new Map<string, Alias[]>();
-    for (const a of filteredAliases) {
-      const g = a.group || 'General';
-      if (!map.has(g)) map.set(g, []);
-      map.get(g)!.push(a);
-    }
-    return [...map.entries()].sort(([a], [b]) => a.localeCompare(b));
-  }, [filteredAliases]);
+  const { groups, grouped: groupedAliases } =
+    useFilteredGroups(aliasList, groupFilter, searchText);
 
   const editingAlias = editingId ? aliases[editingId] ?? null : null;
 
@@ -493,11 +413,13 @@ export function AliasPanel({ onClose }: AliasPanelProps) {
         <FilterPill
           label="Character"
           active={scope === 'character'}
+          accent="purple"
           onClick={() => { setScope('character'); setGroupFilter(null); }}
         />
         <FilterPill
           label="Global"
           active={scope === 'global'}
+          accent="purple"
           onClick={() => { setScope('global'); setGroupFilter(null); }}
         />
         <div className="flex-1" />
@@ -520,6 +442,7 @@ export function AliasPanel({ onClose }: AliasPanelProps) {
           <FilterPill
             label="All"
             active={groupFilter === null}
+            accent="purple"
             onClick={() => setGroupFilter(null)}
           />
           {groups.map((g) => (
@@ -527,6 +450,7 @@ export function AliasPanel({ onClose }: AliasPanelProps) {
               key={g}
               label={g}
               active={groupFilter === g}
+              accent="purple"
               onClick={() => setGroupFilter(groupFilter === g ? null : g)}
             />
           ))}
@@ -536,12 +460,12 @@ export function AliasPanel({ onClose }: AliasPanelProps) {
       {/* Search */}
       <div className="px-2 py-1.5 border-b border-border-subtle shrink-0">
         <div className="relative">
-          <input
-            type="text"
+          <MudInput
+            accent="purple"
             value={searchText}
             onChange={(e) => setSearchText(e.target.value)}
             placeholder="Filter aliases..."
-            className="w-full text-[11px] px-2 py-1 rounded border border-border-dim bg-bg-input text-text-primary placeholder:text-text-dim focus:outline-none focus:border-[#a78bfa]/40 transition-colors duration-150"
+            className="w-full"
           />
           {searchText && (
             <button

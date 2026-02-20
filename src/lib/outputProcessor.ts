@@ -1,9 +1,5 @@
 import type { SkillMatchResult } from '../types/skills';
-
-/** Strip ANSI escape sequences from text (same regex as useMudConnection.ts) */
-function stripAnsi(data: string): string {
-  return data.replace(/\x1b\[[0-9;]*[A-Za-z]/g, '');
-}
+import { stripAnsi } from './ansiUtils';
 
 export type LineMatcher = (line: string) => SkillMatchResult | null;
 

@@ -2,30 +2,25 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useDataStore } from '../contexts/DataStoreContext';
 import { useSkillTrackerContext } from '../contexts/SkillTrackerContext';
 import type { SkillRecord, SkillCategory } from '../types/skills';
-import type { DockSide } from '../types';
+import type { PinnablePanelProps } from '../types';
+import { panelRootClass, charDisplayName } from '../lib/panelUtils';
 import { getTierForCount, getImprovesToNextTier } from '../lib/skillTiers';
 import {
   getSkillCategory, getSkillSubcategory,
   CATEGORY_LABELS, CATEGORY_ORDER, SUBCATEGORY_ORDER,
 } from '../lib/skillCategories';
-import { PinIcon, PinOffIcon, ArrowLeftIcon, ArrowRightIcon, ChevronUpIcon, ChevronDownIcon, TrashIcon } from './icons';
+import { TrashIcon } from './icons';
+import { FilterPill } from './FilterPill';
+import { MudInput, MudButton } from './shared';
+import { PinMenuButton } from './PinMenuButton';
+import { PinnedControls } from './PinnedControls';
 
 const SETTINGS_FILE = 'settings.json';
 const SKILL_FILTER_KEY = 'skillPanelFilter';
 const SKILL_SORT_KEY = 'skillPanelSort';
 const SKILL_SUBS_KEY = 'skillPanelShowSubs';
 
-interface SkillPanelProps {
-  mode?: 'slideout' | 'pinned';
-  onPin?: (side: DockSide) => void;
-  side?: DockSide;
-  onUnpin?: () => void;
-  onSwapSide?: () => void;
-  onMoveUp?: () => void;
-  onMoveDown?: () => void;
-  canMoveUp?: boolean;
-  canMoveDown?: boolean;
-}
+type SkillPanelProps = PinnablePanelProps;
 
 type FilterValue = 'all' | SkillCategory;
 type SortMode = 'name' | 'count';
@@ -148,21 +143,38 @@ const SUB_GROUP_COLORS: Record<string, string> = {
 /** Default color for pet name dividers */
 const PET_DIVIDER_COLOR = '#50fa7b';
 
-function langDisplayName(skill: string): string | undefined {
-  return skill.startsWith('language ') ? skill.slice(9) : undefined;
+function getSkillDisplayName(skill: string, context: 'all' | SkillCategory): string | undefined {
+  const category = getSkillCategory(skill);
+
+  // Spells: replace spaces with underscores (any tab)
+  if (category === 'spells') {
+    return skill.replace(/ /g, '_');
+  }
+
+  // Languages in "all" tab: "language common" → "language#common"
+  if (category === 'language' && context === 'all') {
+    return skill.replace(' ', '#').replace(/ /g, '_');
+  }
+
+  // Languages in language tab: strip "language " prefix, underscores for remaining spaces
+  if (category === 'language' && context === 'language') {
+    return skill.startsWith('language ') ? skill.slice(9).replace(/ /g, '_') : undefined;
+  }
+
+  return undefined;
 }
 
 function SkillSection({
   title,
   skills,
   subGroups,
-  stripLangPrefix,
+  displayContext,
   subGroupColor,
 }: {
   title?: string;
   skills: SkillRecord[];
   subGroups?: SubGroup[];
-  stripLangPrefix?: boolean;
+  displayContext?: 'all' | SkillCategory;
   subGroupColor?: string;
 }) {
   if (skills.length === 0) return null;
@@ -192,7 +204,7 @@ function SkillSection({
               </div>
               {group.skills.map((record) => (
                 <SkillRow key={record.skill} record={record}
-                  displayName={stripLangPrefix ? langDisplayName(record.skill) : undefined} />
+                  displayName={displayContext ? getSkillDisplayName(record.skill, displayContext) : undefined} />
               ))}
             </div>
           ) : null;
@@ -200,7 +212,7 @@ function SkillSection({
       ) : (
         skills.map((record) => (
           <SkillRow key={record.skill} record={record}
-            displayName={stripLangPrefix ? langDisplayName(record.skill) : undefined} />
+            displayName={displayContext ? getSkillDisplayName(record.skill, displayContext) : undefined} />
         ))
       )}
     </div>
@@ -232,10 +244,6 @@ function buildSubGroups(
     }));
 }
 
-function charDisplayName(name: string): string {
-  return name.charAt(0).toUpperCase() + name.slice(1);
-}
-
 export function SkillPanel({
   mode = 'slideout',
   onPin,
@@ -247,12 +255,16 @@ export function SkillPanel({
   canMoveUp,
   canMoveDown,
 }: SkillPanelProps) {
-  const { activeCharacter, skillData } = useSkillTrackerContext();
+  const { activeCharacter, skillData, addSkill } = useSkillTrackerContext();
   const dataStore = useDataStore();
   const [filter, setFilter] = useState<FilterValue>('all');
   const [sort, setSort] = useState<SortMode>('name');
   const [showSubs, setShowSubs] = useState(true);
   const [searchText, setSearchText] = useState('');
+  const [showAddSkill, setShowAddSkill] = useState(false);
+  const [addSkillValue, setAddSkillValue] = useState('');
+  const [addSkillCount, setAddSkillCount] = useState('');
+  const addSkillRef = useRef<HTMLInputElement>(null);
   const loaded = useRef(false);
 
   // Load persisted panel settings on mount
@@ -295,6 +307,10 @@ export function SkillPanel({
     for (const record of Object.values(skillData.skills)) {
       const cat = getSkillCategory(record.skill);
       groups[cat].push(record);
+      // "language magic" belongs in both language and magic
+      if (record.skill.toLowerCase() === 'language magic') {
+        groups.magic.push(record);
+      }
     }
     // Fold pet skills into the 'pets' category
     for (const petSkills of Object.values(skillData.pets)) {
@@ -319,15 +335,12 @@ export function SkillPanel({
   }, [skillData.pets, sort]);
 
   const allSkillsSorted = useMemo(() => {
-    const allRecords = [
-      ...Object.values(skillData.skills),
-      ...Object.values(skillData.pets).flatMap((ps) => Object.values(ps)),
-    ];
+    const allRecords = Object.values(skillData.skills);
     const sorted = sortSkills(allRecords, sort);
     if (!searchText) return sorted;
     const lower = searchText.toLowerCase();
     return sorted.filter((r) => r.skill.toLowerCase().includes(lower));
-  }, [skillData.skills, skillData.pets, sort, searchText]);
+  }, [skillData.skills, sort, searchText]);
 
   const visibleCategories = useMemo(() => {
     if (filter === 'all') return CATEGORY_ORDER.filter((cat) => categorizedSkills[cat].length > 0);
@@ -336,11 +349,34 @@ export function SkillPanel({
 
   const hasAnySkills = CATEGORY_ORDER.some((cat) => categorizedSkills[cat].length > 0);
 
-  const [showPinMenu, setShowPinMenu] = useState(false);
+  const handleAddSkill = (e: React.FormEvent) => {
+    e.preventDefault();
+    const name = addSkillValue.trim().toLowerCase();
+    if (!name) return;
+    const count = addSkillCount ? parseInt(addSkillCount, 10) : 0;
+    addSkill(name, isNaN(count) ? 0 : count);
+    setAddSkillValue('');
+    setAddSkillCount('');
+    setShowAddSkill(false);
+  };
 
   const isPinned = mode === 'pinned';
 
   const titleText = `Skills${activeCharacter ? ` (${charDisplayName(activeCharacter)})` : ''}`;
+
+  const addButton = activeCharacter ? (
+    <button
+      onClick={() => { setShowAddSkill((v) => !v); if (!showAddSkill) requestAnimationFrame(() => addSkillRef.current?.focus()); }}
+      title={showAddSkill ? 'Close add skill' : 'Add skill'}
+      className={`flex items-center rounded text-[10px] cursor-pointer px-1.5 py-[2px] transition-all duration-200 ease-in-out border ${
+        showAddSkill
+          ? 'bg-cyan/15 border-cyan/40 text-cyan'
+          : 'bg-transparent border-border-dim text-text-dim hover:text-text-label'
+      }`}
+    >
+      +
+    </button>
+  ) : null;
 
   const sortButton = (
     <button
@@ -357,91 +393,30 @@ export function SkillPanel({
   );
 
   return (
-    <div className={isPinned ? 'h-full flex flex-col overflow-hidden' : 'w-[360px] h-full bg-bg-primary border-l border-border-subtle flex flex-col overflow-hidden'}>
+    <div className={panelRootClass(isPinned)}>
       {/* Header */}
       <div className="flex items-center justify-between px-3 py-2.5 border-b border-border-subtle shrink-0">
         <span className="text-[13px] font-semibold text-text-heading">{titleText}</span>
         <div className="flex items-center gap-1.5">
           {isPinned ? (
             <>
-              {side === 'left' && sortButton}
-              {side === 'right' && onSwapSide && side && (
-                <button
-                  onClick={onSwapSide}
-                  title="Move to left side"
-                  className="flex items-center justify-center w-5 h-5 rounded-[3px] cursor-pointer text-text-dim hover:text-text-label transition-colors duration-150"
-                >
-                  <ArrowLeftIcon size={9} />
-                </button>
-              )}
-              {canMoveUp && onMoveUp && (
-                <button
-                  onClick={onMoveUp}
-                  title="Move up"
-                  className="flex items-center justify-center w-5 h-5 rounded-[3px] cursor-pointer text-text-dim hover:text-text-label transition-colors duration-150"
-                >
-                  <ChevronUpIcon size={9} />
-                </button>
-              )}
-              {canMoveDown && onMoveDown && (
-                <button
-                  onClick={onMoveDown}
-                  title="Move down"
-                  className="flex items-center justify-center w-5 h-5 rounded-[3px] cursor-pointer text-text-dim hover:text-text-label transition-colors duration-150"
-                >
-                  <ChevronDownIcon size={9} />
-                </button>
-              )}
-              {onUnpin && (
-                <button
-                  onClick={onUnpin}
-                  title="Unpin panel"
-                  className="flex items-center justify-center w-5 h-5 rounded-[3px] cursor-pointer text-text-dim hover:text-text-label transition-colors duration-150"
-                >
-                  <PinOffIcon size={11} />
-                </button>
-              )}
-              {side === 'right' && sortButton}
-              {side === 'left' && onSwapSide && side && (
-                <button
-                  onClick={onSwapSide}
-                  title="Move to right side"
-                  className="flex items-center justify-center w-5 h-5 rounded-[3px] cursor-pointer text-text-dim hover:text-text-label transition-colors duration-150"
-                >
-                  <ArrowRightIcon size={9} />
-                </button>
-              )}
+              {side === 'left' && <>{addButton}{sortButton}</>}
+              <PinnedControls
+                side={side}
+                onSwapSide={onSwapSide}
+                canMoveUp={canMoveUp}
+                onMoveUp={onMoveUp}
+                canMoveDown={canMoveDown}
+                onMoveDown={onMoveDown}
+                onUnpin={onUnpin}
+              />
+              {side === 'right' && <>{sortButton}{addButton}</>}
             </>
           ) : (
             <>
-              {onPin && (
-                <div className="relative">
-                  <button
-                    onClick={() => setShowPinMenu((v) => !v)}
-                    title="Pin panel"
-                    className="flex items-center rounded text-[10px] cursor-pointer px-1.5 py-[2px] transition-all duration-200 ease-in-out border bg-transparent border-border-dim text-text-dim hover:text-green hover:border-green/40"
-                  >
-                    <PinIcon size={10} />
-                  </button>
-                  {showPinMenu && (
-                    <div className="absolute top-full right-0 mt-1 z-50 flex flex-col gap-0.5 bg-bg-secondary border border-border rounded-md p-1 shadow-lg min-w-[100px]">
-                      <button
-                        onClick={() => { onPin('left'); setShowPinMenu(false); }}
-                        className="flex items-center gap-1.5 px-2 py-1 rounded text-[11px] text-text-label hover:bg-bg-primary hover:text-text-primary cursor-pointer transition-colors duration-100"
-                      >
-                        <ArrowLeftIcon size={9} /> Pin Left
-                      </button>
-                      <button
-                        onClick={() => { onPin('right'); setShowPinMenu(false); }}
-                        className="flex items-center gap-1.5 px-2 py-1 rounded text-[11px] text-text-label hover:bg-bg-primary hover:text-text-primary cursor-pointer transition-colors duration-100"
-                      >
-                        <ArrowRightIcon size={9} /> Pin Right
-                      </button>
-                    </div>
-                  )}
-                </div>
-              )}
+              {onPin && <PinMenuButton onPin={onPin} />}
               {sortButton}
+              {addButton}
             </>
           )}
         </div>
@@ -475,12 +450,11 @@ export function SkillPanel({
       {filter === 'all' && hasAnySkills && (
         <div className="px-2 py-1.5 border-b border-border-subtle shrink-0">
           <div className="relative">
-            <input
-              type="text"
+            <MudInput
               value={searchText}
               onChange={(e) => setSearchText(e.target.value)}
               placeholder="Filter skills..."
-              className="w-full text-[11px] px-2 py-1 rounded border border-border-dim bg-bg-input text-text-primary placeholder:text-text-dim focus:outline-none focus:border-cyan/40 transition-colors duration-150"
+              className="w-full"
             />
             {searchText && (
               <button
@@ -492,6 +466,40 @@ export function SkillPanel({
             )}
           </div>
         </div>
+      )}
+
+      {/* Add skill form */}
+      {showAddSkill && activeCharacter && (
+        <form onSubmit={handleAddSkill} className="flex items-center gap-1.5 px-3 py-2 border-b border-border-subtle shrink-0">
+          <MudInput
+            ref={addSkillRef}
+            accent="cyan"
+            size="lg"
+            value={addSkillValue}
+            onChange={(e) => setAddSkillValue(e.target.value)}
+            placeholder="Add skill..."
+            className="flex-1 min-w-0"
+          />
+          <MudInput
+            accent="cyan"
+            size="lg"
+            type="number"
+            min={0}
+            value={addSkillCount}
+            onChange={(e) => setAddSkillCount(e.target.value)}
+            placeholder="0"
+            className="w-14 text-right [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+          />
+          <MudButton
+            type="submit"
+            accent="cyan"
+            size="sm"
+            disabled={!addSkillValue.trim()}
+            className="shrink-0"
+          >
+            Add
+          </MudButton>
+        </form>
       )}
 
       {/* Skills list */}
@@ -510,7 +518,7 @@ export function SkillPanel({
 
         {filter === 'all' ? (
           /* Flat list — no category headers or subcategories */
-          <SkillSection skills={allSkillsSorted} />
+          <SkillSection skills={allSkillsSorted} displayContext="all" />
         ) : (
           /* Single category view — with subcategories for combat */
           visibleCategories.map((cat) => {
@@ -523,7 +531,7 @@ export function SkillPanel({
                 key={cat}
                 skills={categorizedSkills[cat]}
                 subGroups={subGroups}
-                stripLangPrefix={cat === 'language'}
+                displayContext={cat}
                 subGroupColor={cat === 'pets' ? PET_DIVIDER_COLOR : undefined}
               />
             );
@@ -535,32 +543,3 @@ export function SkillPanel({
   );
 }
 
-const ACCENT_STYLES: Record<string, string> = {
-  cyan: 'bg-cyan/15 border-cyan/40 text-cyan',
-  amber: 'bg-amber/15 border-amber/40 text-amber',
-};
-
-function FilterPill({
-  label,
-  active,
-  accent,
-  onClick,
-}: {
-  label: string;
-  active: boolean;
-  accent?: string;
-  onClick: () => void;
-}) {
-  return (
-    <button
-      onClick={onClick}
-      className={`px-2 py-0.5 text-[10px] font-mono rounded-full border cursor-pointer transition-colors duration-150 whitespace-nowrap ${
-        active
-          ? ACCENT_STYLES[accent ?? 'cyan']
-          : 'bg-transparent border-border-dim text-text-dim hover:text-text-label hover:border-border-subtle'
-      }`}
-    >
-      {label}
-    </button>
-  );
-}

@@ -1,4 +1,4 @@
-import { useRef, useState, useEffect, useCallback, type ReactNode } from 'react';
+import { useRef, useState, useEffect, useCallback, useMemo, type ReactNode } from 'react';
 import { invoke } from '@tauri-apps/api/core';
 import { load } from '@tauri-apps/plugin-store';
 import { DataStoreContext, type DataStore } from './DataStoreContext';
@@ -163,6 +163,19 @@ export function DataStoreProvider({ children }: { children: ReactNode }) {
     return Object.keys(cache);
   }, [ensureLoaded]);
 
+  const readText = useCallback(async (filename: string): Promise<string | null> => {
+    const result: string | null = await invoke('read_text_file', { filename });
+    return result;
+  }, []);
+
+  const writeText = useCallback(async (filename: string, content: string): Promise<void> => {
+    try {
+      await invoke('write_text_file', { filename, content });
+    } catch (e) {
+      console.error(`Failed to write text file ${filename}:`, e);
+    }
+  }, []);
+
   const flushAll = useCallback(async (): Promise<void> => {
     // Cancel all debounce timers
     for (const timer of dirtyRef.current.values()) {
@@ -208,19 +221,21 @@ export function DataStoreProvider({ children }: { children: ReactNode }) {
     return resolved;
   }, [flushAll]);
 
-  const store: DataStore = {
+  const store: DataStore = useMemo(() => ({
     get,
     set,
     save,
     delete: del,
     keys,
+    readText,
+    writeText,
     flushAll,
     activeDataDir,
     ready,
     needsSetup,
     completeSetup,
     reloadFromDir,
-  };
+  }), [get, set, save, del, keys, readText, writeText, flushAll, activeDataDir, ready, needsSetup, completeSetup, reloadFromDir]);
 
   return (
     <DataStoreContext.Provider value={store}>

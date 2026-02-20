@@ -1,4 +1,5 @@
 use std::fs;
+use std::io::{Read as _, Write as _};
 use std::path::{Path, PathBuf};
 use std::sync::Mutex;
 
@@ -17,11 +18,11 @@ impl StorageState {
     }
 
     pub fn get_dir(&self) -> PathBuf {
-        self.data_dir.lock().unwrap().clone()
+        self.data_dir.lock().unwrap_or_else(|e| e.into_inner()).clone()
     }
 
     pub fn set_dir(&self, dir: PathBuf) {
-        *self.data_dir.lock().unwrap() = dir;
+        *self.data_dir.lock().unwrap_or_else(|e| e.into_inner()) = dir;
     }
 }
 
@@ -29,10 +30,31 @@ impl StorageState {
 pub struct BackupEntry {
     pub path: String,
     pub filename: String,
-    pub original_file: String,
     pub timestamp: String,
     pub tag: String,
     pub size: u64,
+    pub files: Vec<String>,
+}
+
+/// Validate that a filename is safe (no path traversal or directory separators).
+fn validate_filename(filename: &str) -> Result<(), String> {
+    if filename.contains("..")
+        || filename.contains('/')
+        || filename.contains('\\')
+        || filename.contains('\0')
+        || filename.is_empty()
+    {
+        return Err(format!("Invalid filename: {filename}"));
+    }
+    Ok(())
+}
+
+/// Sanitize a backup tag to only allow safe filename characters.
+fn sanitize_tag(tag: &str) -> String {
+    tag.chars()
+        .filter(|c| c.is_alphanumeric() || *c == '-' || *c == '_')
+        .take(64)
+        .collect()
 }
 
 /// Check if a directory exists and is writable by creating and removing a temp file.
@@ -50,7 +72,7 @@ fn is_dir_writable(path: &Path) -> bool {
     }
 }
 
-/// List all data files (*.json, excluding backups dir) in a directory.
+/// List all data files (*.json + *.txt, excluding backups dir) in a directory.
 fn list_data_files(dir: &Path) -> Vec<PathBuf> {
     let Ok(entries) = fs::read_dir(dir) else {
         return vec![];
@@ -60,8 +82,10 @@ fn list_data_files(dir: &Path) -> Vec<PathBuf> {
         .map(|e| e.path())
         .filter(|p| {
             p.is_file()
-                && p.extension().is_some_and(|ext| ext == "json")
-                && p.file_name().is_some_and(|name| name != "local-config.json")
+                && p.extension()
+                    .is_some_and(|ext| ext == "json" || ext == "txt")
+                && p.file_name()
+                    .is_some_and(|name| name != "local-config.json")
         })
         .collect()
 }
@@ -82,11 +106,16 @@ pub fn resolve_data_dir(
     }
 
     // Fall back to default app data dir
-    let default_dir = app
-        .path()
-        .app_data_dir()
-        .expect("Failed to get app data dir");
-    let _ = fs::create_dir_all(&default_dir);
+    let default_dir = match app.path().app_data_dir() {
+        Ok(dir) => dir,
+        Err(e) => {
+            log::error!("Failed to get app data dir: {e}");
+            return String::new();
+        }
+    };
+    if let Err(e) = fs::create_dir_all(&default_dir) {
+        log::warn!("Failed to create default data dir {}: {e}", default_dir.display());
+    }
     state.set_dir(default_dir.clone());
     log::info!(
         "No configured paths valid, using default: {}",
@@ -105,6 +134,7 @@ pub fn read_data_file(
     filename: String,
     state: tauri::State<'_, StorageState>,
 ) -> Option<serde_json::Value> {
+    validate_filename(&filename).ok()?;
     let path = state.get_dir().join(&filename);
     let contents = fs::read_to_string(&path).ok()?;
     serde_json::from_str(&contents).ok()
@@ -116,14 +146,45 @@ pub fn write_data_file(
     data: serde_json::Value,
     state: tauri::State<'_, StorageState>,
 ) -> Result<(), String> {
+    validate_filename(&filename)?;
     let dir = state.get_dir();
-    let _ = fs::create_dir_all(&dir);
+    fs::create_dir_all(&dir).map_err(|e| format!("Failed to create data dir: {e}"))?;
     let path = dir.join(&filename);
 
     // Atomic write: write to temp file then rename
     let tmp_path = path.with_extension("json.tmp");
     let json = serde_json::to_string_pretty(&data).map_err(|e| e.to_string())?;
     fs::write(&tmp_path, json.as_bytes()).map_err(|e| format!("Failed to write {filename}: {e}"))?;
+    fs::rename(&tmp_path, &path).map_err(|e| format!("Failed to rename {filename}: {e}"))?;
+
+    Ok(())
+}
+
+#[tauri::command]
+pub fn read_text_file(
+    filename: String,
+    state: tauri::State<'_, StorageState>,
+) -> Option<String> {
+    validate_filename(&filename).ok()?;
+    let path = state.get_dir().join(&filename);
+    fs::read_to_string(&path).ok()
+}
+
+#[tauri::command]
+pub fn write_text_file(
+    filename: String,
+    content: String,
+    state: tauri::State<'_, StorageState>,
+) -> Result<(), String> {
+    validate_filename(&filename)?;
+    let dir = state.get_dir();
+    fs::create_dir_all(&dir).map_err(|e| format!("Failed to create data dir: {e}"))?;
+    let path = dir.join(&filename);
+
+    // Atomic write: write to temp file then rename
+    let tmp_path = path.with_extension("txt.tmp");
+    fs::write(&tmp_path, content.as_bytes())
+        .map_err(|e| format!("Failed to write {filename}: {e}"))?;
     fs::rename(&tmp_path, &path).map_err(|e| format!("Failed to rename {filename}: {e}"))?;
 
     Ok(())
@@ -162,33 +223,67 @@ pub fn check_dir_valid(path: String) -> bool {
     is_dir_writable(Path::new(&path))
 }
 
+/// Parse a backup zip filename: backup_{timestamp}.{tag}.zip
+fn parse_backup_filename(filename: &str) -> Option<(String, String)> {
+    let without_ext = filename.strip_suffix(".zip")?;
+    let without_prefix = without_ext.strip_prefix("backup_")?;
+    let (timestamp, tag) = without_prefix.rsplit_once('.')?;
+    Some((timestamp.to_string(), tag.to_string()))
+}
+
 #[tauri::command]
 pub fn create_backup(
     tag: String,
     state: tauri::State<'_, StorageState>,
-) -> Result<Vec<String>, String> {
+) -> Result<String, String> {
+    let tag = sanitize_tag(&tag);
+    if tag.is_empty() {
+        return Err("Backup tag must contain at least one alphanumeric character".to_string());
+    }
     let data_dir = state.get_dir();
     let backup_dir = data_dir.join("backups");
-    let _ = fs::create_dir_all(&backup_dir);
+    fs::create_dir_all(&backup_dir)
+        .map_err(|e| format!("Failed to create backup dir: {e}"))?;
 
     let files = list_data_files(&data_dir);
     if files.is_empty() {
-        return Ok(vec![]);
+        return Ok(String::new());
     }
 
     let now = chrono::Local::now().format("%Y-%m-%dT%H-%M-%S").to_string();
-    let mut backed_up = Vec::new();
+    let zip_name = format!("backup_{now}.{tag}.zip");
+    let zip_path = backup_dir.join(&zip_name);
+    let tmp_path = zip_path.with_extension("zip.tmp");
+
+    let zip_file = fs::File::create(&tmp_path)
+        .map_err(|e| format!("Failed to create backup zip: {e}"))?;
+    let mut zip_writer = zip::ZipWriter::new(zip_file);
+    let options = zip::write::SimpleFileOptions::default()
+        .compression_method(zip::CompressionMethod::Deflated);
 
     for file in &files {
-        let stem = file.file_stem().unwrap_or_default().to_string_lossy();
-        let backup_name = format!("{stem}_{now}.{tag}.json");
-        let dest = backup_dir.join(&backup_name);
-        fs::copy(file, &dest)
-            .map_err(|e| format!("Failed to backup {stem}: {e}"))?;
-        backed_up.push(backup_name);
+        let name = file
+            .file_name()
+            .ok_or("Invalid filename")?
+            .to_string_lossy();
+        let contents = fs::read(file)
+            .map_err(|e| format!("Failed to read {name}: {e}"))?;
+        zip_writer
+            .start_file(name.as_ref(), options)
+            .map_err(|e| format!("Failed to add {name} to zip: {e}"))?;
+        zip_writer
+            .write_all(&contents)
+            .map_err(|e| format!("Failed to write {name} to zip: {e}"))?;
     }
 
-    Ok(backed_up)
+    zip_writer
+        .finish()
+        .map_err(|e| format!("Failed to finalize zip: {e}"))?;
+
+    fs::rename(&tmp_path, &zip_path)
+        .map_err(|e| format!("Failed to rename backup zip: {e}"))?;
+
+    Ok(zip_name)
 }
 
 #[tauri::command]
@@ -202,34 +297,39 @@ pub fn list_backups(state: tauri::State<'_, StorageState>) -> Vec<BackupEntry> {
         .filter_map(|e| e.ok())
         .filter(|e| {
             e.path().is_file()
-                && e.path().extension().is_some_and(|ext| ext == "json")
+                && e.path()
+                    .extension()
+                    .is_some_and(|ext| ext == "zip")
         })
         .filter_map(|e| {
             let path = e.path();
             let filename = path.file_name()?.to_string_lossy().to_string();
             let size = e.metadata().ok()?.len();
+            let (timestamp, tag) = parse_backup_filename(&filename)?;
 
-            // Parse filename: {original}_{timestamp}.{tag}.json
-            // e.g., "skills-bob_2026-02-16T14-30-00.session-start.json"
-            let without_ext = filename.strip_suffix(".json")?;
-            let (rest, tag) = without_ext.rsplit_once('.')?;
-            let (original_file, timestamp) = rest.rsplit_once('_')?;
-            let original_file = format!("{original_file}.json");
-            let timestamp = timestamp.to_string();
-            let tag = tag.to_string();
+            // Read file list from zip
+            let zip_file = fs::File::open(&path).ok()?;
+            let archive = zip::ZipArchive::new(zip_file).ok()?;
+            let files: Vec<String> = (0..archive.len())
+                .filter_map(|i| {
+                    archive
+                        .name_for_index(i)
+                        .map(|name| name.to_string())
+                })
+                .collect();
 
             Some(BackupEntry {
                 path: path.to_string_lossy().to_string(),
                 filename,
-                original_file,
                 timestamp,
                 tag,
                 size,
+                files,
             })
         })
         .collect();
 
-    // Sort newest first
+    // Sort newest first by timestamp
     backups.sort_by(|a, b| b.timestamp.cmp(&a.timestamp));
     backups
 }
@@ -244,29 +344,45 @@ pub fn restore_backup(
         return Err(format!("Backup file not found: {backup_path}"));
     }
 
-    // Parse the backup filename to find the original file
-    let filename = backup
-        .file_name()
-        .ok_or("Invalid backup path")?
-        .to_string_lossy();
-    let without_ext = filename
-        .strip_suffix(".json")
-        .ok_or("Invalid backup filename")?;
-    let (rest, _tag) = without_ext
-        .rsplit_once('.')
-        .ok_or("Invalid backup filename format")?;
-    let (original_stem, _timestamp) = rest
-        .rsplit_once('_')
-        .ok_or("Invalid backup filename format")?;
-    let original_filename = format!("{original_stem}.json");
+    // Ensure the backup path is under our backups directory
+    let backup_dir = state.get_dir().join("backups");
+    let canonical_backup = backup
+        .canonicalize()
+        .map_err(|e| format!("Invalid backup path: {e}"))?;
+    let canonical_dir = backup_dir
+        .canonicalize()
+        .map_err(|e| format!("Backup dir error: {e}"))?;
+    if !canonical_backup.starts_with(&canonical_dir) {
+        return Err("Backup path is outside the backups directory".to_string());
+    }
 
     // Create a pre-restore backup first
     create_backup("pre-restore".to_string(), state.clone())?;
 
-    // Overwrite the original file with backup contents
-    let dest = state.get_dir().join(&original_filename);
-    fs::copy(&backup, &dest)
-        .map_err(|e| format!("Failed to restore {original_filename}: {e}"))?;
+    // Extract zip contents to data dir
+    let data_dir = state.get_dir();
+    let zip_file =
+        fs::File::open(&backup).map_err(|e| format!("Failed to open backup: {e}"))?;
+    let mut archive =
+        zip::ZipArchive::new(zip_file).map_err(|e| format!("Invalid backup zip: {e}"))?;
+
+    for i in 0..archive.len() {
+        let mut entry = archive
+            .by_index(i)
+            .map_err(|e| format!("Failed to read zip entry: {e}"))?;
+        let name = entry.name().to_string();
+
+        // Safety: only extract files with safe names
+        validate_filename(&name)?;
+
+        let dest = data_dir.join(&name);
+        let mut contents = Vec::new();
+        entry
+            .read_to_end(&mut contents)
+            .map_err(|e| format!("Failed to read {name} from zip: {e}"))?;
+        fs::write(&dest, &contents)
+            .map_err(|e| format!("Failed to restore {name}: {e}"))?;
+    }
 
     Ok(())
 }
@@ -281,14 +397,14 @@ pub fn prune_backups(keep: usize, state: tauri::State<'_, StorageState>) -> Resu
     let mut files: Vec<PathBuf> = entries
         .filter_map(|e| e.ok())
         .map(|e| e.path())
-        .filter(|p| p.is_file() && p.extension().is_some_and(|ext| ext == "json"))
+        .filter(|p| p.is_file() && p.extension().is_some_and(|ext| ext == "zip"))
         .collect();
 
     if files.len() <= keep {
         return Ok(0);
     }
 
-    // Sort newest first by filename (timestamps are in the name)
+    // Sort newest first by filename (timestamps are embedded)
     files.sort_by(|a, b| {
         b.file_name()
             .unwrap_or_default()

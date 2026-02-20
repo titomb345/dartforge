@@ -22,6 +22,7 @@ export function DropboxFolderPicker({ onClose, blocking = false }: DropboxFolder
   // Load folders for the current path
   useEffect(() => {
     if (!accessToken) return;
+    const token: string = accessToken;
     let cancelled = false;
 
     async function load() {
@@ -29,8 +30,8 @@ export function DropboxFolderPicker({ onClose, blocking = false }: DropboxFolder
       setError(null);
       try {
         const [folderList, fileList] = await Promise.all([
-          listFolders(accessToken!, currentPath),
-          listFiles(accessToken!, currentPath),
+          listFolders(token, currentPath),
+          listFiles(token, currentPath),
         ]);
         if (cancelled) return;
         setFolders(folderList.sort((a, b) => a.name.localeCompare(b.name)));

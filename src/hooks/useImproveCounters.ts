@@ -134,17 +134,18 @@ export function useImproveCounters() {
     saveCounters(counters, activeCounterId);
   }, [counters, activeCounterId, saveCounters]);
 
+  // Derive a stable boolean for whether any counter is running
+  const hasRunning = counters.some((c) => c.status === 'running');
+
   // 1-second tick for live elapsed display
   useEffect(() => {
-    const hasRunning = counters.some((c) => c.status === 'running');
     if (!hasRunning) return;
     const id = setInterval(() => setTick((t) => t + 1), 1000);
     return () => clearInterval(id);
-  }, [counters.map((c) => c.status).join(',')]);
+  }, [hasRunning]);
 
   // Periodic save for running counters — flush elapsed into accumulatedMs
   useEffect(() => {
-    const hasRunning = counters.some((c) => c.status === 'running');
     if (!hasRunning || !loaded.current) return;
     const id = setInterval(() => {
       setCounters((prev) => {
@@ -160,7 +161,7 @@ export function useImproveCounters() {
       });
     }, SAVE_INTERVAL_MS);
     return () => clearInterval(id);
-  }, [counters.map((c) => c.status).join(',')]);
+  }, [hasRunning]);
 
   // --- CRUD ---
   const createCounter = useCallback((name: string): string => {

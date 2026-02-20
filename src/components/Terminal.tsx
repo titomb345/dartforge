@@ -126,7 +126,7 @@ export function Terminal({ terminalRef, inputRef, theme, display, onUpdateDispla
       term.dispose();
       terminalRef.current = null;
     };
-  }, [terminalRef, inputRef]);
+  }, [terminalRef]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Apply theme changes live
   useEffect(() => {

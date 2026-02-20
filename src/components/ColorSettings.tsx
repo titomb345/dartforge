@@ -173,7 +173,7 @@ export function ColorSettings({ theme, onUpdateColor, onResetColor, onReset, dis
   };
 
   return (
-    <div className="w-[280px] h-full bg-bg-primary border-l border-border-subtle flex flex-col overflow-hidden">
+    <div className="w-[360px] h-full bg-bg-primary border-l border-border-subtle flex flex-col overflow-hidden">
       {/* Header */}
       <div className="flex items-center justify-between px-3 py-2.5 border-b border-border-subtle">
         <span className="text-[13px] font-semibold text-text-heading">Appearance</span>

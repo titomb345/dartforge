@@ -1,21 +1,21 @@
-import { useRef, useState, useEffect, useCallback, useLayoutEffect } from 'react';
+import { useRef, useState, useEffect, useCallback, useLayoutEffect, useMemo } from 'react';
 import type { Terminal as XTerm } from '@xterm/xterm';
-import { getAppVersion, setWindowTitle, getPlatform } from './lib/platform';
+import { getAppVersion, setWindowTitle } from './lib/platform';
 import { Terminal } from './components/Terminal';
 import { CommandInput } from './components/CommandInput';
 import { Toolbar } from './components/Toolbar';
 import { ColorSettings } from './components/ColorSettings';
-import { DataDirSettings } from './components/DataDirSettings';
+import { SettingsPanel } from './components/SettingsPanel';
 import { SetupDialog } from './components/SetupDialog';
 import { SkillPanel } from './components/SkillPanel';
 import { ChatPanel } from './components/ChatPanel';
 import { CounterPanel } from './components/CounterPanel';
+import { NotesPanel } from './components/NotesPanel';
 import { GameClock } from './components/GameClock';
 import { StatusReadout } from './components/StatusReadout';
 import { HeartIcon, FocusIcon, FoodIcon, DropletIcon, AuraIcon, WeightIcon, BootIcon } from './components/icons';
 import { useMudConnection } from './hooks/useMudConnection';
 import { useTransport } from './contexts/TransportContext';
-import { useClassMode } from './hooks/useClassMode';
 import { useThemeColors } from './hooks/useThemeColors';
 import { useSkillTracker } from './hooks/useSkillTracker';
 import { useChatMessages } from './hooks/useChatMessages';
@@ -42,7 +42,20 @@ import { ChatProvider } from './contexts/ChatContext';
 import { ImproveCounterProvider } from './contexts/ImproveCounterContext';
 import { AliasProvider } from './contexts/AliasContext';
 import { AliasPanel } from './components/AliasPanel';
+import { TriggerProvider } from './contexts/TriggerContext';
+import { TriggerPanel } from './components/TriggerPanel';
+import { useTriggers } from './hooks/useTriggers';
+import { useSignatureMappings } from './hooks/useSignatureMappings';
+import { matchTriggers, expandTriggerBody, resetTriggerCooldowns } from './lib/triggerEngine';
 import { smartWrite } from './lib/terminalUtils';
+import { stripAnsi } from './lib/ansiUtils';
+import { SignatureProvider } from './contexts/SignatureContext';
+
+/** Commands to send automatically after login */
+const LOGIN_COMMANDS = ['hp', 'score'];
+
+/** Max recent output lines kept for tab completion */
+const MAX_RECENT_LINES = 500;
 
 /**
  * App gate — shows the setup dialog until a data location is configured,
@@ -74,6 +87,7 @@ function App() {
 function AppMain() {
   const terminalRef = useRef<XTerm | null>(null);
   const inputRef = useRef<HTMLTextAreaElement | null>(null);
+  const recentLinesRef = useRef<string[]>([]);
   const debugModeRef = useRef(false);
   const [debugMode, setDebugMode] = useState(false);
   const [activePanel, setActivePanel] = useState<Panel | null>(null);
@@ -85,20 +99,43 @@ function AppMain() {
   const [loggedIn, setLoggedIn] = useState(false);
   const statusBarRef = useRef<HTMLDivElement | null>(null);
   const [autoCompact, setAutoCompact] = useState(false);
-  const [twoRow, setTwoRow] = useState(false);
+
+  // Anti-idle state
+  const [antiIdleEnabled, setAntiIdleEnabled] = useState(false);
+  const [antiIdleCommand, setAntiIdleCommand] = useState('hp');
+  const [antiIdleMinutes, setAntiIdleMinutes] = useState(10);
 
   const dataStore = useDataStore();
   const settingsLoadedRef = useRef(false);
 
-  // Load compact mode + filter flags + panel layout from settings
+  // Load compact mode + filter flags + panel layout from settings (with validation)
   useEffect(() => {
     (async () => {
       const savedCompact = await dataStore.get<Record<string, boolean>>('settings.json', 'compactReadouts');
-      if (savedCompact != null) setCompactReadouts(savedCompact);
+      if (savedCompact != null && typeof savedCompact === 'object' && !Array.isArray(savedCompact)) {
+        setCompactReadouts(savedCompact);
+      }
       const savedFilters = await dataStore.get<FilterFlags>('settings.json', 'filteredStatuses');
-      if (savedFilters != null) setFilterFlags(savedFilters);
+      if (savedFilters != null && typeof savedFilters === 'object' && !Array.isArray(savedFilters)) {
+        setFilterFlags({ ...DEFAULT_FILTER_FLAGS, ...savedFilters });
+      }
       const savedLayout = await dataStore.get<PanelLayout>('settings.json', 'panelLayout');
-      if (savedLayout != null) setPanelLayout(savedLayout);
+      if (
+        savedLayout != null &&
+        typeof savedLayout === 'object' &&
+        Array.isArray(savedLayout.left) &&
+        Array.isArray(savedLayout.right)
+      ) {
+        setPanelLayout(savedLayout);
+      }
+      // Anti-idle settings
+      const savedAntiIdleEnabled = await dataStore.get<boolean>('settings.json', 'antiIdleEnabled');
+      if (savedAntiIdleEnabled != null) setAntiIdleEnabled(savedAntiIdleEnabled);
+      const savedAntiIdleCommand = await dataStore.get<string>('settings.json', 'antiIdleCommand');
+      if (savedAntiIdleCommand != null) setAntiIdleCommand(savedAntiIdleCommand);
+      const savedAntiIdleMinutes = await dataStore.get<number>('settings.json', 'antiIdleMinutes');
+      if (savedAntiIdleMinutes != null) setAntiIdleMinutes(savedAntiIdleMinutes);
+
       panelLayoutLoadedRef.current = true;
       settingsLoadedRef.current = true;
     })().catch(console.error);
@@ -167,6 +204,7 @@ function AppMain() {
   const isSkillsPinned = panelLayout.left.includes('skills') || panelLayout.right.includes('skills');
   const isChatPinned = panelLayout.left.includes('chat') || panelLayout.right.includes('chat');
   const isCounterPinned = panelLayout.left.includes('counter') || panelLayout.right.includes('counter');
+  const isNotesPinned = panelLayout.left.includes('notes') || panelLayout.right.includes('notes');
 
   // Persist panel layout
   useEffect(() => {
@@ -185,7 +223,7 @@ function AppMain() {
   }
 
   // Chat messages hook
-  const { messages: chatMessages, filters: chatFilters, mutedSenders, soundAlerts: chatSoundAlerts, newestFirst: chatNewestFirst, handleChatMessage, toggleFilter: toggleChatFilter, setAllFilters: setAllChatFilters, toggleSoundAlert: toggleChatSoundAlert, toggleNewestFirst: toggleChatNewestFirst, muteSender, unmuteSender } =
+  const { messages: chatMessages, filters: chatFilters, mutedSenders, soundAlerts: chatSoundAlerts, newestFirst: chatNewestFirst, handleChatMessage, toggleFilter: toggleChatFilter, setAllFilters: setAllChatFilters, toggleSoundAlert: toggleChatSoundAlert, toggleNewestFirst: toggleChatNewestFirst, muteSender, unmuteSender, updateSender } =
     useChatMessages();
   const handleChatMessageRef = useRef(handleChatMessage);
   handleChatMessageRef.current = handleChatMessage;
@@ -228,6 +266,52 @@ function AppMain() {
       onEncumbrance: (match) => { updateEncumbranceRef.current(match); },
       onMovement: (match) => { updateMovementRef.current(match); },
       onChat: (msg) => { handleChatMessageRef.current(msg); },
+      onLine: (stripped, raw) => {
+        if (triggerFiringRef.current) return;
+        const matches = matchTriggers(stripped, raw, mergedTriggersRef.current);
+        if (matches.length === 0) return;
+
+        let gag = false;
+        let highlight: string | null = null;
+
+        for (const match of matches) {
+          if (match.trigger.gag) gag = true;
+          if (match.trigger.highlight) highlight = match.trigger.highlight;
+
+          // Expand and execute trigger body asynchronously
+          if (match.trigger.body.trim()) {
+            const commands = expandTriggerBody(
+              match.trigger.body,
+              match,
+              activeCharacterRef.current,
+            );
+            triggerFiringRef.current = true;
+            (async () => {
+              try {
+                for (const cmd of commands) {
+                  switch (cmd.type) {
+                    case 'send':
+                      await sendCommandRef.current?.(cmd.text);
+                      break;
+                    case 'delay':
+                      await new Promise<void>((r) => setTimeout(r, cmd.ms));
+                      break;
+                    case 'echo':
+                      if (terminalRef.current) {
+                        smartWrite(terminalRef.current, `\x1b[36m${cmd.text}\x1b[0m\r\n`);
+                      }
+                      break;
+                  }
+                }
+              } finally {
+                triggerFiringRef.current = false;
+              }
+            })();
+          }
+        }
+
+        return { gag, highlight };
+      },
     });
   }
 
@@ -265,14 +349,13 @@ function AppMain() {
     };
   }, []);
 
-  // Responsive status bar: two-row layout when narrow, auto-compact when overflowing.
+  // Responsive status bar: auto-compact when overflowing.
   const autoCompactThresholdRef = useRef(0);
   useLayoutEffect(() => {
     const el = statusBarRef.current;
     if (!el) return;
     const observer = new ResizeObserver(() => {
       const width = el.clientWidth;
-      setTwoRow(width < 500);
       if (!autoCompact && el.scrollWidth > width) {
         autoCompactThresholdRef.current = el.scrollWidth;
         setAutoCompact(true);
@@ -290,11 +373,12 @@ function AppMain() {
 
   // Skill tracker — needs sendCommand ref (set after useMudConnection)
   const sendCommandRef = useRef<((cmd: string) => Promise<void>) | null>(null);
-  const { activeCharacter, skillData, setActiveCharacter, handleSkillMatch, showInlineImproves, toggleInlineImproves, updateSkillCount, deleteSkill } =
+  const { activeCharacter, skillData, setActiveCharacter, handleSkillMatch, showInlineImproves, toggleInlineImproves, addSkill, updateSkillCount, deleteSkill } =
     useSkillTracker(sendCommandRef, processorRef, terminalRef, dataStore);
 
   // Improve counter hook
-  const { handleCounterMatch, ...counterRest } = useImproveCounters();
+  const improveCounters = useImproveCounters();
+  const { handleCounterMatch } = improveCounters;
   const handleCounterMatchRef = useRef(handleCounterMatch);
   handleCounterMatchRef.current = handleCounterMatch;
 
@@ -308,6 +392,19 @@ function AppMain() {
   const activeCharacterRef = useRef(activeCharacter);
   activeCharacterRef.current = activeCharacter;
 
+  // Trigger system
+  const triggerState = useTriggers(dataStore, activeCharacter);
+  const { mergedTriggers } = triggerState;
+  const mergedTriggersRef = useRef(mergedTriggers);
+  mergedTriggersRef.current = mergedTriggers;
+  const triggerFiringRef = useRef(false);
+
+  // Signature mapping system
+  const signatureState = useSignatureMappings(dataStore, activeCharacter);
+  const { resolveSignature } = signatureState;
+  const resolveSignatureRef = useRef(resolveSignature);
+  resolveSignatureRef.current = resolveSignature;
+
   // Keep OutputFilter's activeCharacter in sync for chat own-message detection
   useEffect(() => {
     if (outputFilterRef.current) {
@@ -315,21 +412,33 @@ function AppMain() {
     }
   }, [activeCharacter]);
 
-  // Process output chunks through the skill detection pipeline
+  // Keep OutputFilter's signature resolver in sync
+  useEffect(() => {
+    if (outputFilterRef.current) {
+      outputFilterRef.current.signatureResolver = (msg) => resolveSignatureRef.current(msg);
+    }
+  }, []);
+
+  // Process output chunks through the skill detection pipeline + buffer for tab completion
   const onOutputChunk = useCallback((data: string) => {
-    const matches = processorRef.current!.processChunk(data);
+    const matches = processorRef.current?.processChunk(data);
+    if (!matches) return;
     for (const match of matches) {
       handleSkillMatch(match);
       handleCounterMatchRef.current(match);
+    }
+
+    // Buffer recent lines for tab completion
+    const stripped = stripAnsi(data);
+    const lines = stripped.split(/\r?\n/).filter((l) => l.trim());
+    if (lines.length > 0) {
+      recentLinesRef.current = [...lines, ...recentLinesRef.current].slice(0, MAX_RECENT_LINES);
     }
   }, [handleSkillMatch]);
 
   const onCharacterName = useCallback((name: string) => {
     setActiveCharacter(name);
   }, [setActiveCharacter]);
-
-  // Commands to send automatically after login
-  const LOGIN_COMMANDS = ['hp', 'score'];
 
   const onLogin = useCallback(() => {
     outputFilterRef.current?.startSync(LOGIN_COMMANDS.length + 2);
@@ -370,13 +479,13 @@ function AppMain() {
     }
   }, [sendCommand]);
 
-  // Clear logged-in state on disconnect
+  // Clear logged-in state and reset trigger cooldowns on disconnect
   useEffect(() => {
-    if (!connected) setLoggedIn(false);
+    if (!connected) {
+      setLoggedIn(false);
+      resetTriggerCooldowns();
+    }
   }, [connected]);
-
-  // Class mode hook preserved for future use
-  useClassMode();
 
   const toggleDebug = () => {
     const next = !debugMode;
@@ -388,15 +497,77 @@ function AppMain() {
     setFilterFlags((prev) => ({ ...prev, [key]: !prev[key] }));
   }, []);
 
+  // Anti-idle change handlers with persistence
+  const handleAntiIdleEnabledChange = useCallback((v: boolean) => {
+    setAntiIdleEnabled(v);
+    dataStore.set('settings.json', 'antiIdleEnabled', v).catch(console.error);
+  }, [dataStore]);
+  const handleAntiIdleCommandChange = useCallback((v: string) => {
+    setAntiIdleCommand(v);
+    dataStore.set('settings.json', 'antiIdleCommand', v).catch(console.error);
+  }, [dataStore]);
+  const handleAntiIdleMinutesChange = useCallback((v: number) => {
+    setAntiIdleMinutes(v);
+    dataStore.set('settings.json', 'antiIdleMinutes', v).catch(console.error);
+  }, [dataStore]);
+
+  // Anti-idle timer — sends command at interval when connected + logged in + enabled
+  const antiIdleEnabledRef = useRef(antiIdleEnabled);
+  antiIdleEnabledRef.current = antiIdleEnabled;
+  const antiIdleCommandRef = useRef(antiIdleCommand);
+  antiIdleCommandRef.current = antiIdleCommand;
+  const [antiIdleNextAt, setAntiIdleNextAt] = useState<number | null>(null);
+
+  useEffect(() => {
+    if (!connected || !loggedIn || !antiIdleEnabled) {
+      setAntiIdleNextAt(null);
+      return;
+    }
+    const ms = antiIdleMinutes * 60_000;
+    setAntiIdleNextAt(Date.now() + ms);
+    const id = setInterval(() => {
+      const cmd = antiIdleCommandRef.current;
+      if (sendCommandRef.current && antiIdleEnabledRef.current) {
+        sendCommandRef.current(cmd);
+        if (terminalRef.current) {
+          smartWrite(terminalRef.current, `\x1b[90m[anti-idle: ${cmd}]\x1b[0m\r\n`);
+        }
+      }
+      setAntiIdleNextAt(Date.now() + ms);
+    }, ms);
+    return () => { clearInterval(id); setAntiIdleNextAt(null); };
+  }, [connected, loggedIn, antiIdleEnabled, antiIdleMinutes]);
+
   const isDanger = (themeColor: string) =>
     themeColor === 'red' || themeColor === 'brightRed' || themeColor === 'magenta';
 
-  const skillTrackerValue = { activeCharacter, skillData, showInlineImproves, toggleInlineImproves, updateSkillCount, deleteSkill };
-  const chatValue = { messages: chatMessages, filters: chatFilters, mutedSenders, soundAlerts: chatSoundAlerts, newestFirst: chatNewestFirst, toggleFilter: toggleChatFilter, setAllFilters: setAllChatFilters, toggleSoundAlert: toggleChatSoundAlert, toggleNewestFirst: toggleChatNewestFirst, muteSender, unmuteSender };
-  const counterValue = { handleCounterMatch, ...counterRest };
+  const skillTrackerValue = useMemo(() => (
+    { activeCharacter, skillData, showInlineImproves, toggleInlineImproves, addSkill, updateSkillCount, deleteSkill }
+  ), [activeCharacter, skillData, showInlineImproves, toggleInlineImproves, addSkill, updateSkillCount, deleteSkill]);
+
+  const chatValue = useMemo(() => (
+    { messages: chatMessages, filters: chatFilters, mutedSenders, soundAlerts: chatSoundAlerts, newestFirst: chatNewestFirst, toggleFilter: toggleChatFilter, setAllFilters: setAllChatFilters, toggleSoundAlert: toggleChatSoundAlert, toggleNewestFirst: toggleChatNewestFirst, muteSender, unmuteSender, updateSender }
+  ), [chatMessages, chatFilters, mutedSenders, chatSoundAlerts, chatNewestFirst, toggleChatFilter, setAllChatFilters, toggleChatSoundAlert, toggleChatNewestFirst, muteSender, unmuteSender, updateSender]);
+
+  const counterValue = useMemo(() => improveCounters,
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- callbacks are stable (useCallback), only state values change
+    [improveCounters.counters, improveCounters.activeCounterId, improveCounters.periodLengthMinutes]);
+
+  // Toggle active counter: stopped→running, running→paused, paused→running
+  const toggleActiveCounter = useCallback(() => {
+    const { activeCounterId, counters, startCounter, pauseCounter, resumeCounter } = improveCounters;
+    if (!activeCounterId) return;
+    const counter = counters.find((c) => c.id === activeCounterId);
+    if (!counter) return;
+    if (counter.status === 'running') pauseCounter(activeCounterId);
+    else if (counter.status === 'paused') resumeCounter(activeCounterId);
+    else startCounter(activeCounterId);
+  }, [improveCounters]);
 
   return (
     <AliasProvider value={aliasState}>
+    <TriggerProvider value={triggerState}>
+    <SignatureProvider value={signatureState}>
     <SkillTrackerProvider value={skillTrackerValue}>
     <ChatProvider value={chatValue}>
     <ImproveCounterProvider value={counterValue}>
@@ -416,8 +587,13 @@ function AppMain() {
         showCounter={activePanel === 'counter'}
         onToggleCounter={() => togglePanel('counter')}
         counterPinned={isCounterPinned}
+        showNotes={activePanel === 'notes'}
+        onToggleNotes={() => togglePanel('notes')}
+        notesPinned={isNotesPinned}
         showAliases={activePanel === 'aliases'}
         onToggleAliases={() => togglePanel('aliases')}
+        showTriggers={activePanel === 'triggers'}
+        onToggleTriggers={() => togglePanel('triggers')}
         showSettings={activePanel === 'settings'}
         onToggleSettings={() => togglePanel('settings')}
       />
@@ -466,16 +642,21 @@ function AppMain() {
             onToggleDebug={toggleDebug}
           />
         </div>
-        {getPlatform() === 'tauri' && (
-          <div
-            className={cn(
-              'absolute top-0 right-0 bottom-0 z-[100] transition-transform duration-300 ease-in-out',
-              activePanel === 'settings' ? 'translate-x-0' : 'translate-x-full'
-            )}
-          >
-            <DataDirSettings />
-          </div>
-        )}
+        <div
+          className={cn(
+            'absolute top-0 right-0 bottom-0 z-[100] transition-transform duration-300 ease-in-out',
+            activePanel === 'settings' ? 'translate-x-0' : 'translate-x-full'
+          )}
+        >
+          <SettingsPanel
+            antiIdleEnabled={antiIdleEnabled}
+            antiIdleCommand={antiIdleCommand}
+            antiIdleMinutes={antiIdleMinutes}
+            onAntiIdleEnabledChange={handleAntiIdleEnabledChange}
+            onAntiIdleCommandChange={handleAntiIdleCommandChange}
+            onAntiIdleMinutesChange={handleAntiIdleMinutesChange}
+          />
+        </div>
         {/* Skills slide-out — only when NOT pinned */}
         {!isSkillsPinned && (
           <div
@@ -518,6 +699,20 @@ function AppMain() {
             />
           </div>
         )}
+        {/* Notes slide-out — only when NOT pinned */}
+        {!isNotesPinned && (
+          <div
+            className={cn(
+              'absolute top-0 right-0 bottom-0 z-[100] transition-transform duration-300 ease-in-out',
+              activePanel === 'notes' ? 'translate-x-0' : 'translate-x-full'
+            )}
+          >
+            <NotesPanel
+              mode="slideout"
+              onPin={(side) => pinPanel('notes', side)}
+            />
+          </div>
+        )}
         {/* Aliases slide-out — slideout only, no pinning */}
         <div
           className={cn(
@@ -527,16 +722,22 @@ function AppMain() {
         >
           <AliasPanel onClose={() => setActivePanel(null)} />
         </div>
+        {/* Triggers slide-out — slideout only, no pinning */}
+        <div
+          className={cn(
+            'absolute top-0 right-0 bottom-0 z-[100] transition-transform duration-300 ease-in-out',
+            activePanel === 'triggers' ? 'translate-x-0' : 'translate-x-full'
+          )}
+        >
+          <TriggerPanel onClose={() => setActivePanel(null)} />
+        </div>
       </div>
       {/* Bottom controls card — status bar + command input */}
       <div className="rounded-lg bg-bg-primary overflow-hidden">
       {/* Game status bar — vitals left, clock right */}
       <div
         ref={statusBarRef}
-        className={cn(
-          'flex items-center gap-1 px-1.5 py-0.5',
-          twoRow && 'flex-wrap'
-        )}
+        className="flex items-center gap-1 px-1.5 py-0.5"
         style={{ background: 'linear-gradient(to bottom, #1e1e1e, #1a1a1a)' }}
       >
         {loggedIn && (
@@ -646,7 +847,7 @@ function AppMain() {
             )}
           </>
         )}
-        <div className={cn('ml-auto', twoRow && 'basis-full flex justify-end')}>
+        <div className="ml-auto">
           <GameClock
             compact={autoCompact || !!compactReadouts.clock}
             onToggleCompact={() => toggleCompactReadout('clock')}
@@ -657,16 +858,25 @@ function AppMain() {
         ref={inputRef}
         onSend={handleSend}
         onReconnect={reconnect}
+        onToggleCounter={toggleActiveCounter}
         disabled={!connected}
         connected={connected}
         passwordMode={passwordMode}
         skipHistory={skipHistory}
+        recentLinesRef={recentLinesRef}
+        antiIdleEnabled={antiIdleEnabled}
+        antiIdleCommand={antiIdleCommand}
+        antiIdleMinutes={antiIdleMinutes}
+        antiIdleNextAt={antiIdleNextAt}
+        onToggleAntiIdle={() => handleAntiIdleEnabledChange(!antiIdleEnabled)}
       />
       </div>
     </div>
     </ImproveCounterProvider>
     </ChatProvider>
     </SkillTrackerProvider>
+    </SignatureProvider>
+    </TriggerProvider>
     </AliasProvider>
   );
 }

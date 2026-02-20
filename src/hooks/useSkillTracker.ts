@@ -258,6 +258,16 @@ export function useSkillTracker(
     }
   }, [sendCommandRef, processorRef, terminalRef]);
 
+  const addSkill = useCallback((skill: string, count = 0) => {
+    const lower = skill.toLowerCase();
+    const clamped = Math.max(0, Math.round(count));
+    setSkillData((prev) => {
+      if (prev.skills[lower]) return prev;
+      const record: SkillRecord = { skill: lower, count: clamped, lastImproveAt: new Date().toISOString() };
+      return { ...prev, skills: { ...prev.skills, [lower]: record } };
+    });
+  }, []);
+
   const updateSkillCount = useCallback((skill: string, newCount: number) => {
     const clamped = Math.max(0, Math.round(newCount));
     setSkillData((prev) => {
@@ -285,6 +295,7 @@ export function useSkillTracker(
     handleSkillMatch,
     showInlineImproves,
     toggleInlineImproves,
+    addSkill,
     updateSkillCount,
     deleteSkill,
   };

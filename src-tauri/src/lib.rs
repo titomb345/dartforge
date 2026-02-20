@@ -14,20 +14,20 @@ struct ConnectionState {
 fn spawn_connection(app: &tauri::AppHandle, state: &ConnectionState, startup_delay: bool) {
     // Drop old sender to signal the old connection to stop
     {
-        let mut tx = state.cmd_tx.lock().unwrap();
+        let mut tx = state.cmd_tx.lock().unwrap_or_else(|e| e.into_inner());
         *tx = None;
     }
 
     // Abort old task if still running
     {
-        let mut handle = state.task_handle.lock().unwrap();
+        let mut handle = state.task_handle.lock().unwrap_or_else(|e| e.into_inner());
         if let Some(h) = handle.take() {
             h.abort();
         }
     }
 
     let (tx, rx) = mpsc::channel::<String>(100);
-    *state.cmd_tx.lock().unwrap() = Some(tx);
+    *state.cmd_tx.lock().unwrap_or_else(|e| e.into_inner()) = Some(tx);
 
     let app_handle = app.clone();
     let join = tauri::async_runtime::spawn(async move {
@@ -38,7 +38,7 @@ fn spawn_connection(app: &tauri::AppHandle, state: &ConnectionState, startup_del
         connection::connect(app_handle, rx).await;
     });
 
-    *state.task_handle.lock().unwrap() = Some(join);
+    *state.task_handle.lock().unwrap_or_else(|e| e.into_inner()) = Some(join);
 }
 
 #[tauri::command]
@@ -106,6 +106,8 @@ pub fn run() {
             storage::get_active_data_dir,
             storage::read_data_file,
             storage::write_data_file,
+            storage::read_text_file,
+            storage::write_text_file,
             storage::copy_data_to_dir,
             storage::check_dir_valid,
             storage::create_backup,
@@ -115,8 +117,11 @@ pub fn run() {
         ])
         .setup(|app| {
             // Initialize storage state with default app data dir
-            let data_dir = app.path().app_data_dir().expect("Failed to get app data dir");
-            let _ = std::fs::create_dir_all(&data_dir);
+            let data_dir = app.path().app_data_dir()
+                .map_err(|e| format!("Failed to get app data dir: {e}"))?;
+            if let Err(e) = std::fs::create_dir_all(&data_dir) {
+                log::warn!("Failed to create data dir {}: {e}", data_dir.display());
+            }
             app.manage(storage::StorageState::new(data_dir));
             Ok(())
         })

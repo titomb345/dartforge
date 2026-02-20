@@ -48,14 +48,18 @@ export function useThemeColors() {
   // Load saved settings from store on mount
   useEffect(() => {
     if (!dataStore.ready) return;
+    let cancelled = false;
     (async () => {
       try {
         await migrateSettings(dataStore);
+        if (cancelled) return;
         const savedTheme = await dataStore.get<Partial<TerminalTheme>>(STORE_FILE, STORE_KEY);
+        if (cancelled) return;
         if (savedTheme) {
           setTheme({ ...DEFAULT_THEME, ...savedTheme });
         }
         const savedDisplay = await dataStore.get<Partial<DisplaySettings>>(STORE_FILE, DISPLAY_KEY);
+        if (cancelled) return;
         if (savedDisplay) {
           // If saved font is no longer available, fall back to default
           if (savedDisplay.fontFamily && !(FONT_OPTIONS as readonly string[]).includes(savedDisplay.fontFamily)) {
@@ -64,10 +68,11 @@ export function useThemeColors() {
           setDisplay({ ...DEFAULT_DISPLAY, ...savedDisplay });
         }
       } catch (e) {
-        console.error('Failed to load settings from store:', e);
+        if (!cancelled) console.error('Failed to load settings from store:', e);
       }
-      setLoaded(true);
+      if (!cancelled) setLoaded(true);
     })();
+    return () => { cancelled = true; };
   }, [dataStore.ready]);
 
   const updateColor = useCallback((key: ThemeColorKey, value: string) => {

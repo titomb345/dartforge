@@ -8,7 +8,7 @@ const COMBAT_SKILLS = new Set([
 ]);
 
 const MAGIC_SKILLS = new Set([
-  'channelling', 'inscription', 'language magic', 'magic theory', 'spell casting',
+  'channelling', 'inscription', 'magic theory', 'spell casting',
 ]);
 
 const SPELL_SKILLS = new Set([
@@ -62,7 +62,7 @@ export function getSkillCategory(skillName: string): SkillCategory {
   if (THIEF_SKILLS.has(lower)) return 'thief';
 
   // Auto-detect language skills (except "language magic" which is magic)
-  if (lower.startsWith('language ') && lower !== 'language magic') return 'language';
+  if (lower.startsWith('language ')) return 'language';
 
   return 'other';
 }

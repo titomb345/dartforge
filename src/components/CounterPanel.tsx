@@ -1,14 +1,9 @@
 import { useState, useRef, useEffect } from 'react';
 import { useImproveCounterContext } from '../contexts/ImproveCounterContext';
 import type { ImproveCounter } from '../types/counter';
-import type { DockSide } from '../types';
+import type { PinnablePanelProps } from '../types';
+import { panelRootClass } from '../lib/panelUtils';
 import {
-  PinIcon,
-  PinOffIcon,
-  ArrowLeftIcon,
-  ArrowRightIcon,
-  ChevronUpIcon,
-  ChevronDownIcon,
   PlayIcon,
   PauseIcon,
   StopIcon,
@@ -16,18 +11,10 @@ import {
   TrashIcon,
   RotateCcwIcon,
 } from './icons';
+import { PinMenuButton } from './PinMenuButton';
+import { PinnedControls } from './PinnedControls';
 
-interface CounterPanelProps {
-  mode?: 'slideout' | 'pinned';
-  onPin?: (side: DockSide) => void;
-  side?: DockSide;
-  onUnpin?: () => void;
-  onSwapSide?: () => void;
-  onMoveUp?: () => void;
-  onMoveDown?: () => void;
-  canMoveUp?: boolean;
-  canMoveDown?: boolean;
-}
+type CounterPanelProps = PinnablePanelProps;
 
 function formatCompactDuration(ms: number): string {
   const totalSeconds = Math.floor(ms / 1000);
@@ -136,7 +123,6 @@ export function CounterPanel({
     getSkillPeriodRate,
   } = useImproveCounterContext();
 
-  const [showPinMenu, setShowPinMenu] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState<string | null>(null);
   const [confirmClear, setConfirmClear] = useState<string | null>(null);
   const [editingPeriod, setEditingPeriod] = useState(false);
@@ -171,68 +157,22 @@ export function CounterPanel({
 
   // Pin controls (shared between header layouts)
   const pinControls = isPinned ? (
-    <>
-      {side === 'right' && onSwapSide && (
-        <HeaderBtn onClick={onSwapSide} title="Move to left side">
-          <ArrowLeftIcon size={9} />
-        </HeaderBtn>
-      )}
-      {canMoveUp && onMoveUp && (
-        <HeaderBtn onClick={onMoveUp} title="Move up">
-          <ChevronUpIcon size={9} />
-        </HeaderBtn>
-      )}
-      {canMoveDown && onMoveDown && (
-        <HeaderBtn onClick={onMoveDown} title="Move down">
-          <ChevronDownIcon size={9} />
-        </HeaderBtn>
-      )}
-      {onUnpin && (
-        <HeaderBtn onClick={onUnpin} title="Unpin panel">
-          <PinOffIcon size={11} />
-        </HeaderBtn>
-      )}
-      {side === 'left' && onSwapSide && (
-        <HeaderBtn onClick={onSwapSide} title="Move to right side">
-          <ArrowRightIcon size={9} />
-        </HeaderBtn>
-      )}
-    </>
+    <PinnedControls
+      side={side}
+      onSwapSide={onSwapSide}
+      canMoveUp={canMoveUp}
+      onMoveUp={onMoveUp}
+      canMoveDown={canMoveDown}
+      onMoveDown={onMoveDown}
+      onUnpin={onUnpin}
+    />
   ) : onPin ? (
-    <div className="relative">
-      <button
-        onClick={() => setShowPinMenu((v) => !v)}
-        title="Pin panel"
-        className="flex items-center rounded text-[10px] cursor-pointer px-1.5 py-[2px] transition-all duration-200 ease-in-out border bg-transparent border-border-dim text-text-dim hover:text-cyan hover:border-cyan/40"
-      >
-        <PinIcon size={10} />
-      </button>
-      {showPinMenu && (
-        <div className="absolute top-full right-0 mt-1 z-50 flex flex-col gap-0.5 bg-bg-secondary border border-border rounded-md p-1 shadow-lg min-w-[100px]">
-          <button
-            onClick={() => { onPin('left'); setShowPinMenu(false); }}
-            className="flex items-center gap-1.5 px-2 py-1 rounded text-[11px] text-text-label hover:bg-bg-primary hover:text-text-primary cursor-pointer transition-colors duration-100"
-          >
-            <ArrowLeftIcon size={9} /> Pin Left
-          </button>
-          <button
-            onClick={() => { onPin('right'); setShowPinMenu(false); }}
-            className="flex items-center gap-1.5 px-2 py-1 rounded text-[11px] text-text-label hover:bg-bg-primary hover:text-text-primary cursor-pointer transition-colors duration-100"
-          >
-            <ArrowRightIcon size={9} /> Pin Right
-          </button>
-        </div>
-      )}
-    </div>
+    <PinMenuButton onPin={onPin} />
   ) : null;
 
   return (
     <div
-      className={
-        isPinned
-          ? 'h-full flex flex-col overflow-hidden'
-          : 'w-[360px] h-full bg-bg-primary border-l border-border-subtle flex flex-col overflow-hidden'
-      }
+      className={panelRootClass(isPinned)}
     >
       {/* Row 1: Counter tabs + pin controls */}
       <div className="flex items-center gap-1 px-2 py-1.5 border-b border-border-subtle shrink-0">
@@ -402,26 +342,6 @@ export function CounterPanel({
         </div>
       )}
     </div>
-  );
-}
-
-function HeaderBtn({
-  onClick,
-  title,
-  children,
-}: {
-  onClick: () => void;
-  title: string;
-  children: React.ReactNode;
-}) {
-  return (
-    <button
-      onClick={onClick}
-      title={title}
-      className="flex items-center justify-center w-5 h-5 rounded-[3px] cursor-pointer text-text-dim hover:text-text-label transition-colors duration-150"
-    >
-      {children}
-    </button>
   );
 }
 

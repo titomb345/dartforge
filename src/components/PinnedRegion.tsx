@@ -3,6 +3,7 @@ import type { DockSide, PinnablePanel } from '../types';
 import { SkillPanel } from './SkillPanel';
 import { ChatPanel } from './ChatPanel';
 import { CounterPanel } from './CounterPanel';
+import { NotesPanel } from './NotesPanel';
 
 
 interface PinnedPanelRenderProps {
@@ -50,6 +51,20 @@ const PANEL_META: Record<PinnablePanel, {
   counter: {
     render: (props) => (
       <CounterPanel
+        mode="pinned"
+        side={props.side}
+        onUnpin={props.onUnpin}
+        onSwapSide={props.canSwapSide ? props.onSwapSide : undefined}
+        onMoveUp={props.onMoveUp}
+        onMoveDown={props.onMoveDown}
+        canMoveUp={props.canMoveUp}
+        canMoveDown={props.canMoveDown}
+      />
+    ),
+  },
+  notes: {
+    render: (props) => (
+      <NotesPanel
         mode="pinned"
         side={props.side}
         onUnpin={props.onUnpin}

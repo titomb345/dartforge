@@ -1,9 +1,13 @@
 import type { Alias, AliasMatchMode, ExpandedCommand, ExpansionResult } from '../types/alias';
 import { DIRECTIONS, OPPOSITE_DIRECTIONS } from './constants';
 import type { Direction } from './constants';
+import { splitCommands, parseDirective } from './commandUtils';
 
 /** Maximum nesting depth to prevent infinite alias recursion */
 const MAX_EXPANSION_DEPTH = 10;
+
+/** Cache compiled regex patterns to avoid re-compiling on every input */
+const regexCache = new Map<string, RegExp | null>();
 
 /** Build regex alternation from directions list (already sorted longest-first) */
 const DIR_PATTERN = DIRECTIONS.join('|');
@@ -13,28 +17,6 @@ const SPEEDWALK_SEGMENT_RE = new RegExp(`(\\d+)(${DIR_PATTERN})`, 'gi');
 
 /** Full speedwalk line: entire input must be direction groups, e.g., "3n2e4s" */
 const SPEEDWALK_LINE_RE = new RegExp(`^(?:\\d+(?:${DIR_PATTERN}))+$`, 'i');
-
-/**
- * Split a raw input string on unescaped semicolons.
- * `\;` is treated as a literal semicolon (not a separator).
- */
-function splitCommands(input: string): string[] {
-  const parts: string[] = [];
-  let current = '';
-  for (let i = 0; i < input.length; i++) {
-    if (input[i] === '\\' && input[i + 1] === ';') {
-      current += ';';
-      i++; // skip escaped semicolon
-    } else if (input[i] === ';') {
-      parts.push(current);
-      current = '';
-    } else {
-      current += input[i];
-    }
-  }
-  parts.push(current);
-  return parts;
-}
 
 /**
  * Expand a speedwalk pattern into individual direction commands.
@@ -147,49 +129,33 @@ function matchAlias(
           return { alias, args: restParts };
         }
         break;
-      case 'regex':
-        try {
-          const re = new RegExp(alias.pattern, 'i');
+      case 'regex': {
+        let re = regexCache.get(alias.pattern);
+        if (re === undefined) {
+          try {
+            re = new RegExp(alias.pattern, 'i');
+          } catch (e) {
+            console.warn(`[Alias] Invalid regex pattern "${alias.pattern}":`, e);
+            re = null;
+          }
+          regexCache.set(alias.pattern, re);
+        }
+        if (re) {
           const match = re.exec(trimmed);
           if (match) {
-            // Use capture groups as args, falling back to split remainder
             const args =
               match.length > 1
                 ? match.slice(1).map((g) => g ?? '')
                 : restParts;
             return { alias, args };
           }
-        } catch {
-          // Invalid regex — skip
         }
         break;
+      }
     }
   }
 
   return null;
-}
-
-/**
- * Parse special directives (#delay, #echo) from a command string.
- * Returns an ExpandedCommand.
- */
-function parseDirective(cmd: string): ExpandedCommand {
-  const trimmed = cmd.trim();
-
-  // #delay <ms>
-  const delayMatch = trimmed.match(/^#delay\s+(\d+)$/i);
-  if (delayMatch) {
-    return { type: 'delay', ms: parseInt(delayMatch[1], 10) };
-  }
-
-  // #echo <text>
-  const echoMatch = trimmed.match(/^#echo\s+(.+)$/i);
-  if (echoMatch) {
-    return { type: 'echo', text: echoMatch[1] };
-  }
-
-  // Plain send
-  return { type: 'send', text: trimmed };
 }
 
 /**

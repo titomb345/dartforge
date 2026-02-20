@@ -6,24 +6,29 @@ import { matchEncumbranceLine, type EncumbranceMatch } from './encumbrancePatter
 import { matchMovementLine, type MovementMatch } from './movementPatterns';
 import { matchChatLine } from './chatPatterns';
 import type { ChatMessage } from '../types/chat';
+import { stripAnsi } from './ansiUtils';
 
-/** Strip ANSI escape sequences for pattern matching */
-function stripAnsi(data: string): string {
-  return data.replace(/\x1b\[[0-9;]*[A-Za-z]/g, '');
-}
+/** Pre-compiled regexes for score block detection (avoid recompiling on every call) */
+const SCORE_NAME_RE = /^You are .+ the .+\.\s+You are a /;
+const SCORE_STATUS_RE = /^(Needs|Encumbrance|Concentration|Movement|Aura)\s*:/i;
 
 /**
  * Detect whether a stripped line belongs to a score block.
  * Score blocks contain: name/class, soul age, needs, encumbrance, movement, aura.
  */
 function isScoreBlockLine(stripped: string): boolean {
-  // "You are <Name> the <class>.  You are a <race>."
-  if (/^You are .+ the .+\.\s+You are a /.test(stripped)) return true;
-  // "Your soul's age is: ..."
+  if (SCORE_NAME_RE.test(stripped)) return true;
   if (stripped.startsWith("Your soul's age")) return true;
-  // Score-prefixed status lines: "Needs : ...", "Encumbrance : ...", etc.
-  if (/^(Needs|Encumbrance|Concentration|Movement|Aura)\s*:/i.test(stripped)) return true;
+  if (SCORE_STATUS_RE.test(stripped)) return true;
   return false;
+}
+
+/** Return value from the onLine callback — controls gag and highlight behavior */
+export interface LineCallbackResult {
+  /** If true, suppress this line from terminal output */
+  gag: boolean;
+  /** If set, wrap the line in this ANSI color code (e.g. "33" for yellow) */
+  highlight: string | null;
 }
 
 export interface OutputFilterCallbacks {
@@ -35,6 +40,8 @@ export interface OutputFilterCallbacks {
   onEncumbrance?: (match: EncumbranceMatch) => void;
   onMovement?: (match: MovementMatch) => void;
   onChat?: (msg: ChatMessage) => void;
+  /** Fired for every complete line with stripped + raw text. Return gag/highlight directives. */
+  onLine?: (stripped: string, raw: string) => LineCallbackResult | void;
 }
 
 /** Per-status filter flags — controls which status types get stripped from terminal. */
@@ -75,6 +82,8 @@ export class OutputFilter {
   filterFlags: FilterFlags = { ...DEFAULT_FILTER_FLAGS };
   /** Active character name for own-message detection in chat matching. */
   activeCharacter: string | null = null;
+  /** Optional resolver for anonymous tell/SZ signatures → player names. */
+  signatureResolver: ((messageBody: string) => { playerName: string; message: string } | null) | null = null;
 
   constructor(callbacks: OutputFilterCallbacks = {}) {
     this.callbacks = callbacks;
@@ -150,6 +159,13 @@ export class OutputFilter {
       // --- Chat detection (observational — never strips) ---
       const chatMatch = matchChatLine(stripped, this.activeCharacter);
       if (chatMatch) {
+        if (chatMatch.sender === 'Unknown' && this.signatureResolver) {
+          const resolved = this.signatureResolver(chatMatch.message);
+          if (resolved) {
+            chatMatch.sender = resolved.playerName;
+            chatMatch.message = resolved.message;
+          }
+        }
         this.callbacks.onChat?.(chatMatch);
       }
 
@@ -190,6 +206,16 @@ export class OutputFilter {
           (this.filterFlags.movement && movementMatch)
         )
       ) {
+        continue;
+      }
+
+      // --- Trigger / onLine callback ---
+      const lineResult = this.callbacks.onLine?.(stripped, segment);
+      if (lineResult?.gag) {
+        continue; // suppress this line from terminal output
+      }
+      if (lineResult?.highlight) {
+        output += `\x1b[${lineResult.highlight}m${segment}\x1b[0m`;
         continue;
       }
 

@@ -21,8 +21,9 @@ const DEFAULT_SOUND_ALERTS: ChatFilters = {
   sz: true,
 };
 
-// Shared Audio instance for chime playback
+// Shared Audio instances for chime playback
 const chimeAudio = new Audio('/chime1.wav');
+const chime2Audio = new Audio('/chime2.wav');
 
 export function useChatMessages() {
   const dataStore = useDataStore();
@@ -90,8 +91,9 @@ export function useChatMessages() {
       s[msg.type] &&
       !m.some((name) => name.toLowerCase() === msg.sender.toLowerCase())
     ) {
-      chimeAudio.currentTime = 0;
-      chimeAudio.play().catch(() => {});
+      const audio = msg.type === 'tell' || msg.type === 'sz' ? chime2Audio : chimeAudio;
+      audio.currentTime = 0;
+      audio.play().catch(() => {});
     }
 
     setMessages((prev) => {
@@ -132,6 +134,26 @@ export function useChatMessages() {
     setMessages([]);
   }, []);
 
+  // Retroactive resolution: scan existing Unknown-sender messages for a signature match
+  const updateSender = useCallback((signature: string, playerName: string) => {
+    setMessages((prev) => {
+      let changed = false;
+      const next = prev.map((msg) => {
+        if (msg.sender !== 'Unknown') return msg;
+        if (msg.message.endsWith(signature)) {
+          changed = true;
+          return {
+            ...msg,
+            sender: playerName,
+            message: msg.message.slice(0, -signature.length).trimEnd(),
+          };
+        }
+        return msg;
+      });
+      return changed ? next : prev;
+    });
+  }, []);
+
   return {
     messages,
     filters,
@@ -146,5 +168,6 @@ export function useChatMessages() {
     muteSender,
     unmuteSender,
     clearMessages,
+    updateSender,
   };
 }
