@@ -1,6 +1,8 @@
+import { useState } from 'react';
 import { IconButton } from './IconButton';
 import { DropboxButton } from './DropboxButton';
-import { PowerIcon, PaletteIcon, TrendingUpIcon, ChatIcon, CounterIcon, AliasIcon, TriggerIcon, NotesIcon, GearIcon } from './icons';
+import { CurrencyPopover } from './CurrencyPopover';
+import { PowerIcon, PaletteIcon, TrendingUpIcon, ChatIcon, CounterIcon, AliasIcon, TriggerIcon, NotesIcon, GearIcon, CoinIcon } from './icons';
 import { getPlatform } from '../lib/platform';
 import { cn } from '../lib/cn';
 
@@ -55,6 +57,7 @@ export function Toolbar({
   showSettings,
   onToggleSettings,
 }: ToolbarProps) {
+  const [showCurrency, setShowCurrency] = useState(false);
 
   return (
     <div className="flex items-center px-2.5 py-1 bg-bg-primary rounded-lg">
@@ -114,6 +117,16 @@ export function Toolbar({
           pinned={notesPinned}
           onClick={onToggleNotes}
         />
+        <div className="relative">
+          <IconButton
+            icon={<CoinIcon />}
+            title="Currency Converter"
+            accent="#cd7f32"
+            toggled={showCurrency}
+            onClick={() => setShowCurrency((v) => !v)}
+          />
+          <CurrencyPopover open={showCurrency} onClose={() => setShowCurrency(false)} />
+        </div>
         <div className="w-px h-[18px] bg-border-dim mx-1.5" />
         <IconButton
           icon={<AliasIcon />}

@@ -50,6 +50,7 @@ import { matchTriggers, expandTriggerBody, resetTriggerCooldowns } from './lib/t
 import { smartWrite } from './lib/terminalUtils';
 import { stripAnsi } from './lib/ansiUtils';
 import { SignatureProvider } from './contexts/SignatureContext';
+import { parseConvertCommand, formatConversion } from './lib/currency';
 
 /** Commands to send automatically after login */
 const LOGIN_COMMANDS = ['hp', 'score'];
@@ -458,6 +459,20 @@ function AppMain() {
 
   // Alias-expanded send: preprocesses input through the alias engine
   const handleSend = useCallback(async (rawInput: string) => {
+    // Built-in #convert command — intercept before alias expansion
+    if (/^#convert\b/i.test(rawInput.trim())) {
+      if (terminalRef.current) {
+        const parsed = parseConvertCommand(rawInput.trim());
+        if (typeof parsed === 'string') {
+          smartWrite(terminalRef.current, `\x1b[31m${parsed}\x1b[0m\r\n`);
+        } else {
+          const output = formatConversion(parsed.amount, parsed.denom, parsed.system, parsed.targetSystem);
+          smartWrite(terminalRef.current, `${output}\r\n`);
+        }
+      }
+      return;
+    }
+
     const result = expandInput(rawInput, mergedAliasesRef.current, {
       enableSpeedwalk: enableSpeedwalkRef.current,
       activeCharacter: activeCharacterRef.current,
