@@ -4,6 +4,7 @@ import { SkillPanel } from './SkillPanel';
 import { ChatPanel } from './ChatPanel';
 import { CounterPanel } from './CounterPanel';
 import { NotesPanel } from './NotesPanel';
+import { MapPanel } from './MapPanel';
 
 
 interface PinnedPanelRenderProps {
@@ -65,6 +66,20 @@ const PANEL_META: Record<PinnablePanel, {
   notes: {
     render: (props) => (
       <NotesPanel
+        mode="pinned"
+        side={props.side}
+        onUnpin={props.onUnpin}
+        onSwapSide={props.canSwapSide ? props.onSwapSide : undefined}
+        onMoveUp={props.onMoveUp}
+        onMoveDown={props.onMoveDown}
+        canMoveUp={props.canMoveUp}
+        canMoveDown={props.canMoveDown}
+      />
+    ),
+  },
+  map: {
+    render: (props) => (
+      <MapPanel
         mode="pinned"
         side={props.side}
         onUnpin={props.onUnpin}

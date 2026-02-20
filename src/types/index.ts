@@ -1,8 +1,8 @@
 export type ClassMode = 'mage' | 'fighter' | 'multi';
 
-export type Panel = 'appearance' | 'skills' | 'chat' | 'counter' | 'aliases' | 'triggers' | 'notes' | 'settings';
+export type Panel = 'appearance' | 'skills' | 'chat' | 'counter' | 'aliases' | 'triggers' | 'notes' | 'settings' | 'map';
 
-export type PinnablePanel = 'skills' | 'chat' | 'counter' | 'notes';
+export type PinnablePanel = 'skills' | 'chat' | 'counter' | 'notes' | 'map';
 export type DockSide = 'left' | 'right';
 
 export interface PanelLayout {

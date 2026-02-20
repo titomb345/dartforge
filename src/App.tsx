@@ -51,6 +51,9 @@ import { smartWrite } from './lib/terminalUtils';
 import { stripAnsi } from './lib/ansiUtils';
 import { SignatureProvider } from './contexts/SignatureContext';
 import { parseConvertCommand, formatConversion } from './lib/currency';
+import { useMapTracker } from './hooks/useMapTracker';
+import { MapProvider } from './contexts/MapContext';
+import { MapPanel } from './components/MapPanel';
 
 /** Commands to send automatically after login */
 const LOGIN_COMMANDS = ['hp', 'score'];
@@ -206,6 +209,7 @@ function AppMain() {
   const isChatPinned = panelLayout.left.includes('chat') || panelLayout.right.includes('chat');
   const isCounterPinned = panelLayout.left.includes('counter') || panelLayout.right.includes('counter');
   const isNotesPinned = panelLayout.left.includes('notes') || panelLayout.right.includes('notes');
+  const isMapPinned = panelLayout.left.includes('map') || panelLayout.right.includes('map');
 
   // Persist panel layout
   useEffect(() => {
@@ -268,6 +272,9 @@ function AppMain() {
       onMovement: (match) => { updateMovementRef.current(match); },
       onChat: (msg) => { handleChatMessageRef.current(msg); },
       onLine: (stripped, raw) => {
+        // Feed stripped lines to the room parser for map building
+        mapFeedLineRef.current(stripped);
+
         if (triggerFiringRef.current) return;
         const matches = matchTriggers(stripped, raw, mergedTriggersRef.current);
         if (matches.length === 0) return;
@@ -406,6 +413,13 @@ function AppMain() {
   const resolveSignatureRef = useRef(resolveSignature);
   resolveSignatureRef.current = resolveSignature;
 
+  // Map tracker
+  const mapTracker = useMapTracker(dataStore, activeCharacter);
+  const mapFeedLineRef = useRef(mapTracker.feedLine);
+  mapFeedLineRef.current = mapTracker.feedLine;
+  const mapTrackCommandRef = useRef(mapTracker.trackCommand);
+  mapTrackCommandRef.current = mapTracker.trackCommand;
+
   // Keep OutputFilter's activeCharacter in sync for chat own-message detection
   useEffect(() => {
     if (outputFilterRef.current) {
@@ -480,6 +494,7 @@ function AppMain() {
     for (const cmd of result.commands) {
       switch (cmd.type) {
         case 'send':
+          mapTrackCommandRef.current(cmd.text);
           await sendCommand(cmd.text);
           break;
         case 'delay':
@@ -586,6 +601,7 @@ function AppMain() {
     <SkillTrackerProvider value={skillTrackerValue}>
     <ChatProvider value={chatValue}>
     <ImproveCounterProvider value={counterValue}>
+    <MapProvider value={mapTracker}>
     <div className="flex flex-col h-screen bg-bg-canvas text-text-primary relative p-1 gap-1">
       <Toolbar
         connected={connected}
@@ -611,6 +627,9 @@ function AppMain() {
         onToggleTriggers={() => togglePanel('triggers')}
         showSettings={activePanel === 'settings'}
         onToggleSettings={() => togglePanel('settings')}
+        showMap={activePanel === 'map'}
+        onToggleMap={() => togglePanel('map')}
+        mapPinned={isMapPinned}
       />
       <div className="flex-1 overflow-hidden flex flex-row gap-1 relative">
         {/* Left pinned region */}
@@ -746,6 +765,25 @@ function AppMain() {
         >
           <TriggerPanel onClose={() => setActivePanel(null)} />
         </div>
+        {/* Map slide-out — only when NOT pinned */}
+        {!isMapPinned && (
+          <div
+            className={cn(
+              'absolute top-0 right-0 bottom-0 z-[100] transition-transform duration-300 ease-in-out',
+              activePanel === 'map' ? 'translate-x-0' : 'translate-x-full'
+            )}
+          >
+            <MapPanel
+              mode="slideout"
+              onPin={(side) => pinPanel('map', side)}
+              onWalkTo={async (directions) => {
+                for (const dir of directions) {
+                  await sendCommand(dir);
+                }
+              }}
+            />
+          </div>
+        )}
       </div>
       {/* Bottom controls card — status bar + command input */}
       <div className="rounded-lg bg-bg-primary overflow-hidden">
@@ -887,6 +925,7 @@ function AppMain() {
       />
       </div>
     </div>
+    </MapProvider>
     </ImproveCounterProvider>
     </ChatProvider>
     </SkillTrackerProvider>

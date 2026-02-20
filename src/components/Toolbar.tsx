@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { IconButton } from './IconButton';
 import { DropboxButton } from './DropboxButton';
 import { CurrencyPopover } from './CurrencyPopover';
-import { PowerIcon, PaletteIcon, TrendingUpIcon, ChatIcon, CounterIcon, AliasIcon, TriggerIcon, NotesIcon, GearIcon, CoinIcon } from './icons';
+import { PowerIcon, PaletteIcon, TrendingUpIcon, ChatIcon, CounterIcon, AliasIcon, TriggerIcon, NotesIcon, GearIcon, CoinIcon, MapIcon } from './icons';
 import { getPlatform } from '../lib/platform';
 import { cn } from '../lib/cn';
 
@@ -30,6 +30,9 @@ interface ToolbarProps {
   onToggleTriggers: () => void;
   showSettings: boolean;
   onToggleSettings: () => void;
+  showMap: boolean;
+  onToggleMap: () => void;
+  mapPinned?: boolean;
 }
 
 export function Toolbar({
@@ -56,6 +59,9 @@ export function Toolbar({
   onToggleTriggers,
   showSettings,
   onToggleSettings,
+  showMap,
+  onToggleMap,
+  mapPinned,
 }: ToolbarProps) {
   const [showCurrency, setShowCurrency] = useState(false);
 
@@ -116,6 +122,14 @@ export function Toolbar({
           toggled={showNotes}
           pinned={notesPinned}
           onClick={onToggleNotes}
+        />
+        <IconButton
+          icon={<MapIcon />}
+          title="Map"
+          accent="#e8a849"
+          toggled={showMap}
+          pinned={mapPinned}
+          onClick={onToggleMap}
         />
         <div className="relative">
           <IconButton
