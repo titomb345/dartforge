@@ -1,8 +1,9 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
 import {
   ALL_SYSTEMS,
-  findDenomination,
-  convert,
+  parseCoins,
+  toBase,
+  convertFromBase,
   type CoinBreakdown,
 } from '../lib/currency';
 
@@ -35,12 +36,11 @@ function BreakdownRow({ breakdown }: { breakdown: CoinBreakdown }) {
 }
 
 export function CurrencyPopover({ open, onClose }: CurrencyPopoverProps) {
-  const [amount, setAmount] = useState('1');
-  const [denomInput, setDenomInput] = useState('Su');
-  const [result, setResult] = useState<{ source: CoinBreakdown; targets: CoinBreakdown[] } | null>(null);
+  const [input, setInput] = useState('1 Su');
+  const [result, setResult] = useState<{ totalBase: number; breakdowns: CoinBreakdown[] } | null>(null);
   const [error, setError] = useState<string | null>(null);
   const popoverRef = useRef<HTMLDivElement>(null);
-  const amountRef = useRef<HTMLInputElement>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
 
   // Close on outside click
   useEffect(() => {
@@ -50,14 +50,13 @@ export function CurrencyPopover({ open, onClose }: CurrencyPopoverProps) {
         onClose();
       }
     };
-    // Delay to avoid the click that opened the popover from closing it
     const id = setTimeout(() => document.addEventListener('mousedown', handler), 0);
     return () => { clearTimeout(id); document.removeEventListener('mousedown', handler); };
   }, [open, onClose]);
 
-  // Focus amount input on open
+  // Focus input on open
   useEffect(() => {
-    if (open) amountRef.current?.select();
+    if (open) inputRef.current?.select();
   }, [open]);
 
   // Close on Escape
@@ -71,30 +70,30 @@ export function CurrencyPopover({ open, onClose }: CurrencyPopoverProps) {
   }, [open, onClose]);
 
   const doConvert = useCallback(() => {
-    const num = parseFloat(amount);
-    if (!num || num <= 0 || !isFinite(num)) {
-      setError('Enter a valid amount');
+    if (!input.trim()) {
+      setError(null);
       setResult(null);
       return;
     }
-    const found = findDenomination(denomInput);
-    if (!found) {
-      setError(`Unknown: "${denomInput}"`);
+    const parsed = parseCoins(input);
+    if (typeof parsed === 'string') {
+      setError(parsed);
       setResult(null);
       return;
     }
+    const totalBase = parsed.reduce((sum, e) => sum + toBase(e.amount, e.denom), 0);
+    const breakdowns = convertFromBase(totalBase);
     setError(null);
-    setResult(convert(num, found.denom, found.system));
-  }, [amount, denomInput]);
+    setResult({ totalBase, breakdowns });
+  }, [input]);
 
   // Auto-convert on input change
   useEffect(() => {
-    if (amount && denomInput) doConvert();
-  }, [amount, denomInput, doConvert]);
+    doConvert();
+  }, [doConvert]);
 
   if (!open) return null;
 
-  // Collect all denomination abbreviations grouped by system for the helper
   const denomOptions = ALL_SYSTEMS.map((sys) => ({
     system: sys,
     abbrs: sys.denominations.map((d) => d.abbr),
@@ -122,30 +121,19 @@ export function CurrencyPopover({ open, onClose }: CurrencyPopoverProps) {
         </span>
       </div>
 
-      {/* Input row */}
-      <div className="px-3 py-2.5 flex gap-2 items-end">
-        <div className="flex-1">
-          <label className="block text-[9px] text-text-dim uppercase tracking-wide mb-1">Amount</label>
-          <input
-            ref={amountRef}
-            type="number"
-            min="1"
-            step="1"
-            value={amount}
-            onChange={(e) => setAmount(e.target.value)}
-            className="w-full bg-bg-input border border-border-dim rounded px-2 py-1 text-[12px] font-mono text-text-primary focus:outline-none focus:border-[#cd7f32]/40 transition-colors"
-          />
-        </div>
-        <div className="w-[100px]">
-          <label className="block text-[9px] text-text-dim uppercase tracking-wide mb-1">Denomination</label>
-          <input
-            type="text"
-            value={denomInput}
-            onChange={(e) => setDenomInput(e.target.value)}
-            placeholder="Su, Ri, st..."
-            className="w-full bg-bg-input border border-border-dim rounded px-2 py-1 text-[12px] font-mono text-text-primary focus:outline-none focus:border-[#cd7f32]/40 transition-colors"
-          />
-        </div>
+      {/* Freeform input */}
+      <div className="px-3 py-2.5">
+        <label className="block text-[9px] text-text-dim uppercase tracking-wide mb-1">
+          Coins <span className="normal-case opacity-60">— e.g. 3Ri 5dn, 1su2g50mn</span>
+        </label>
+        <input
+          ref={inputRef}
+          type="text"
+          value={input}
+          onChange={(e) => setInput(e.target.value)}
+          placeholder="3Ri 5dn 100fs"
+          className="w-full bg-bg-input border border-border-dim rounded px-2 py-1.5 text-[12px] font-mono text-text-primary focus:outline-none focus:border-[#cd7f32]/40 transition-colors"
+        />
       </div>
 
       {/* Error */}
@@ -156,30 +144,17 @@ export function CurrencyPopover({ open, onClose }: CurrencyPopoverProps) {
       {/* Results */}
       {result && (
         <div className="px-3 pb-3">
-          {/* Source breakdown */}
-          {result.source.coins.length > 0 && (
-            <div className="mb-2">
-              <div className="text-[9px] text-text-dim uppercase tracking-wide mb-0.5">
-                {result.source.system.name}
-              </div>
-              <BreakdownRow breakdown={result.source} />
-              <div className="text-[9px] text-text-dim mt-0.5">
-                = {result.source.totalBase.toLocaleString()} base units
-              </div>
-            </div>
-          )}
+          <div className="text-[9px] text-text-dim mb-2">
+            = {result.totalBase.toLocaleString()} base units
+          </div>
 
-          {/* Divider */}
-          <div className="h-px mb-2" style={{ background: 'linear-gradient(to right, rgba(205,127,50,0.2), transparent)' }} />
-
-          {/* Target systems */}
           <div className="space-y-1.5">
-            {result.targets.map((t) => (
-              <div key={t.system.id}>
+            {result.breakdowns.map((bd) => (
+              <div key={bd.system.id}>
                 <div className="text-[9px] text-text-dim uppercase tracking-wide mb-0.5">
-                  {t.system.name}
+                  {bd.system.name}
                 </div>
-                <BreakdownRow breakdown={t} />
+                <BreakdownRow breakdown={bd} />
               </div>
             ))}
           </div>

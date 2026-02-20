@@ -50,7 +50,7 @@ import { matchTriggers, expandTriggerBody, resetTriggerCooldowns } from './lib/t
 import { smartWrite } from './lib/terminalUtils';
 import { stripAnsi } from './lib/ansiUtils';
 import { SignatureProvider } from './contexts/SignatureContext';
-import { parseConvertCommand, formatConversion } from './lib/currency';
+import { parseConvertCommand, formatMultiConversion } from './lib/currency';
 import { useMapTracker } from './hooks/useMapTracker';
 import { MapProvider } from './contexts/MapContext';
 import { MapPanel } from './components/MapPanel';
@@ -480,7 +480,7 @@ function AppMain() {
         if (typeof parsed === 'string') {
           smartWrite(terminalRef.current, `\x1b[31m${parsed}\x1b[0m\r\n`);
         } else {
-          const output = formatConversion(parsed.amount, parsed.denom, parsed.system, parsed.targetSystem);
+          const output = formatMultiConversion(parsed);
           smartWrite(terminalRef.current, `${output}\r\n`);
         }
       }

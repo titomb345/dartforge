@@ -186,50 +186,97 @@ export function convert(
 }
 
 // ---------------------------------------------------------------------------
-// Parsing
+// Parsing — freeform multi-denomination
 // ---------------------------------------------------------------------------
 
-export interface ParsedConvertCommand {
+export interface CoinEntry {
   amount: number;
   denom: Denomination;
   system: CurrencySystem;
+}
+
+export interface ParsedConvertCommand {
+  coins: CoinEntry[];
+  totalBase: number;
   targetSystem?: CurrencySystem;
+}
+
+/**
+ * Parse a freeform coin string into individual coin entries.
+ * Accepts formats like:
+ *   "3Ri"  "3 Ri"  "3ri 5dn"  "1su,2g"  "1ri1dn50fs"  "3 gold suns"
+ *
+ * Returns the parsed entries or an error string.
+ */
+export function parseCoins(input: string): CoinEntry[] | string {
+  const entries: CoinEntry[] = [];
+
+  // Strategy: use a regex to find all <number><denomination> pairs.
+  // The denomination can be 1-2 letter abbreviations or longer words.
+  // We try longest abbreviation matches first by sorting all known abbrs.
+  const allAbbrs = [...ABBR_MAP.keys()].sort((a, b) => b.length - a.length);
+  const abbrPattern = allAbbrs.map((a) => a.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('|');
+
+  // Match: <number> <optional whitespace> <abbreviation>
+  const regex = new RegExp(`(\\d+(?:\\.\\d+)?)\\s*(${abbrPattern})(?=[\\s,;+&]|\\d|$)`, 'gi');
+  let match;
+  while ((match = regex.exec(input)) !== null) {
+    const amount = parseFloat(match[1]);
+    if (amount <= 0 || !isFinite(amount)) continue;
+    const found = findDenomination(match[2]);
+    if (found) {
+      entries.push({ amount, denom: found.denom, system: found.system });
+    }
+  }
+
+  if (entries.length === 0) {
+    return `No coins found. Use format like: 3Ri 5dn, or 1su2g50mn`;
+  }
+
+  return entries;
 }
 
 /**
  * Parse a #convert command string.
  * Formats:
- *   #convert <amount> <denom>
- *   #convert <amount> <denom> to <system>
+ *   #convert <coins>
+ *   #convert <coins> to <system>
+ *
+ * Where <coins> is freeform: "3Ri", "1su 2g", "1ri1dn50fs", etc.
  */
 export function parseConvertCommand(input: string): ParsedConvertCommand | string {
   const trimmed = input.replace(/^#convert\s+/i, '').trim();
-  if (!trimmed) return 'Usage: #convert <amount> <denomination> [to <system>]';
+  if (!trimmed) return 'Usage: #convert <coins> [to <system>]  e.g. #convert 3Ri 5dn to ferdarchian';
 
   // Split on "to" for optional target
   const toMatch = trimmed.match(/^(.+?)\s+to\s+(.+)$/i);
   const coinPart = toMatch ? toMatch[1].trim() : trimmed;
   const targetPart = toMatch ? toMatch[2].trim() : undefined;
 
-  // Parse amount + denomination from coinPart
-  const coinMatch = coinPart.match(/^(\d+(?:\.\d+)?)\s*(.+)$/);
-  if (!coinMatch) return `Cannot parse "${coinPart}". Use: #convert <amount> <denomination>`;
+  const parsed = parseCoins(coinPart);
+  if (typeof parsed === 'string') return parsed;
 
-  const amount = parseFloat(coinMatch[1]);
-  if (amount <= 0 || !isFinite(amount)) return 'Amount must be a positive number.';
-
-  const denomStr = coinMatch[2].trim();
-  const found = findDenomination(denomStr);
-  if (!found) return `Unknown denomination "${denomStr}". Try abbreviations like Su, g, p, Ri, dn, st, Ry, etc.`;
+  const totalBase = parsed.reduce((sum, e) => sum + toBase(e.amount, e.denom), 0);
 
   let targetSystem: CurrencySystem | undefined;
   if (targetPart) {
-    const found2 = findSystem(targetPart);
-    if (!found2) return `Unknown currency system "${targetPart}". Try: ferdarchian, tirachian, easterling, adachian.`;
-    targetSystem = found2;
+    const found = findSystem(targetPart);
+    if (!found) return `Unknown currency system "${targetPart}". Try: ferdarchian, tirachian, easterling, adachian.`;
+    targetSystem = found;
   }
 
-  return { amount, denom: found.denom, system: found.system, targetSystem };
+  return { coins: parsed, totalBase, targetSystem };
+}
+
+/**
+ * Convert a total base amount to breakdowns in all (or a target) system.
+ */
+export function convertFromBase(
+  totalBase: number,
+  targetSystem?: CurrencySystem,
+): CoinBreakdown[] {
+  const systems = targetSystem ? [targetSystem] : ALL_SYSTEMS;
+  return systems.map((sys) => fromBase(totalBase, sys));
 }
 
 // ---------------------------------------------------------------------------
@@ -257,32 +304,26 @@ function formatCoinList(breakdown: CoinBreakdown): string {
 }
 
 /**
- * Format a full conversion result as ANSI-colored terminal output.
+ * Format a multi-coin conversion result as ANSI-colored terminal output.
  */
-export function formatConversion(
-  amount: number,
-  denom: Denomination,
-  sourceSystem: CurrencySystem,
-  targetSystem?: CurrencySystem,
+export function formatMultiConversion(
+  parsed: ParsedConvertCommand,
 ): string {
-  const { source, targets } = convert(amount, denom, sourceSystem, targetSystem);
   const lines: string[] = [];
 
-  const inputColor = METAL_ANSI[denom.metal];
-  const header = `${BOLD}${inputColor}${amount} ${amount === 1 ? denom.name : denom.plural}${RESET} ${DIM}(${sourceSystem.name})${RESET}`;
-
-  // Source breakdown (only if there's more than one denomination in the result)
-  if (source.coins.length > 1 || (source.coins.length === 1 && source.coins[0].denom.abbr !== denom.abbr)) {
-    lines.push(`${header} = ${formatCoinList(source)}`);
-  } else {
-    lines.push(header);
-  }
+  // Input summary
+  const inputParts = parsed.coins.map((e) => {
+    const color = METAL_ANSI[e.denom.metal];
+    return `${color}${e.amount} ${e.amount === 1 ? e.denom.name : e.denom.plural}${RESET} ${DIM}(${e.denom.abbr})${RESET}`;
+  });
+  lines.push(`${BOLD}${inputParts.join(`${DIM} + ${RESET}`)}${RESET}`);
 
   lines.push(`${DIM}${'─'.repeat(40)}${RESET}`);
-  lines.push(`${DIM}Base value: ${source.totalBase.toLocaleString()} units${RESET}`);
+  lines.push(`${DIM}Base value: ${parsed.totalBase.toLocaleString()} units${RESET}`);
 
-  for (const target of targets) {
-    lines.push(`${DIM}${target.system.name}:${RESET} ${formatCoinList(target)}`);
+  const breakdowns = convertFromBase(parsed.totalBase, parsed.targetSystem);
+  for (const bd of breakdowns) {
+    lines.push(`${DIM}${bd.system.name}:${RESET} ${formatCoinList(bd)}`);
   }
 
   return lines.join('\r\n');
