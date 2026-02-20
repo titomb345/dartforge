@@ -1,16 +1,6 @@
 import type { ReactNode } from 'react';
-import type { DockSide } from '../types';
+import { usePinnedControls } from '../contexts/PinnedControlsContext';
 import { PinOffIcon, ArrowLeftIcon, ArrowRightIcon, ChevronUpIcon, ChevronDownIcon } from './icons';
-
-interface PinnedControlsProps {
-  side?: DockSide;
-  onSwapSide?: () => void;
-  canMoveUp?: boolean;
-  onMoveUp?: () => void;
-  canMoveDown?: boolean;
-  onMoveDown?: () => void;
-  onUnpin?: () => void;
-}
 
 export function HeaderBtn({ onClick, title, children }: {
   onClick: () => void;
@@ -31,16 +21,14 @@ export function HeaderBtn({ onClick, title, children }: {
 /**
  * Shared pinned-mode controls for dockable panels:
  * swap side, move up/down, unpin.
+ * Reads all state from PinnedControlsContext.
  */
-export function PinnedControls({
-  side,
-  onSwapSide,
-  canMoveUp,
-  onMoveUp,
-  canMoveDown,
-  onMoveDown,
-  onUnpin,
-}: PinnedControlsProps) {
+export function PinnedControls() {
+  const ctx = usePinnedControls();
+  if (!ctx) return null;
+
+  const { side, onSwapSide, canMoveUp, onMoveUp, canMoveDown, onMoveDown, onUnpin } = ctx;
+
   return (
     <>
       {side === 'right' && onSwapSide && (

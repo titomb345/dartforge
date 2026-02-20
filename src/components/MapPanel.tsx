@@ -17,14 +17,6 @@ type MapPanelProps = PinnablePanelProps & {
 
 export function MapPanel({
   mode = 'slideout',
-  onPin,
-  side,
-  onUnpin,
-  onSwapSide,
-  onMoveUp,
-  onMoveDown,
-  canMoveUp,
-  canMoveDown,
   onWalkTo,
 }: MapPanelProps) {
   const isPinned = mode === 'pinned';
@@ -53,18 +45,10 @@ export function MapPanel({
   const currentRoom = currentRoomId ? getRoom(currentRoomId) : null;
 
   const pinControls = isPinned ? (
-    <PinnedControls
-      side={side}
-      onSwapSide={onSwapSide}
-      onUnpin={onUnpin}
-      onMoveUp={onMoveUp}
-      onMoveDown={onMoveDown}
-      canMoveUp={canMoveUp}
-      canMoveDown={canMoveDown}
-    />
-  ) : onPin ? (
-    <PinMenuButton onPin={onPin} />
-  ) : null;
+    <PinnedControls />
+  ) : (
+    <PinMenuButton panel="map" />
+  );
 
   const handleWalkTo = (_roomId: string, directions: Direction[]) => {
     if (onWalkTo) onWalkTo(directions);

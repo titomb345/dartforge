@@ -5,64 +5,20 @@ import { CurrencyPopover } from './CurrencyPopover';
 import { PowerIcon, PaletteIcon, TrendingUpIcon, ChatIcon, CounterIcon, AliasIcon, TriggerIcon, NotesIcon, GearIcon, CoinIcon, MapIcon } from './icons';
 import { getPlatform } from '../lib/platform';
 import { cn } from '../lib/cn';
+import { usePanelContext } from '../contexts/PanelLayoutContext';
 
 interface ToolbarProps {
   connected: boolean;
   onReconnect: () => void;
   onDisconnect: () => void;
-  showAppearance: boolean;
-  onToggleAppearance: () => void;
-  showSkills: boolean;
-  onToggleSkills: () => void;
-  skillsPinned?: boolean;
-  showChat: boolean;
-  onToggleChat: () => void;
-  chatPinned?: boolean;
-  showCounter: boolean;
-  onToggleCounter: () => void;
-  counterPinned?: boolean;
-  showNotes: boolean;
-  onToggleNotes: () => void;
-  notesPinned?: boolean;
-  showAliases: boolean;
-  onToggleAliases: () => void;
-  showTriggers: boolean;
-  onToggleTriggers: () => void;
-  showSettings: boolean;
-  onToggleSettings: () => void;
-  showMap: boolean;
-  onToggleMap: () => void;
-  mapPinned?: boolean;
 }
 
 export function Toolbar({
   connected,
   onReconnect,
   onDisconnect,
-  showAppearance,
-  onToggleAppearance,
-  showSkills,
-  onToggleSkills,
-  skillsPinned,
-  showChat,
-  onToggleChat,
-  chatPinned,
-  showCounter,
-  onToggleCounter,
-  counterPinned,
-  showNotes,
-  onToggleNotes,
-  notesPinned,
-  showAliases,
-  onToggleAliases,
-  showTriggers,
-  onToggleTriggers,
-  showSettings,
-  onToggleSettings,
-  showMap,
-  onToggleMap,
-  mapPinned,
 }: ToolbarProps) {
+  const { activePanel, togglePanel, isPinned } = usePanelContext();
   const [showCurrency, setShowCurrency] = useState(false);
 
   return (
@@ -95,41 +51,41 @@ export function Toolbar({
           icon={<ChatIcon />}
           title="Chat"
           accent="#8be9fd"
-          toggled={showChat}
-          pinned={chatPinned}
-          onClick={onToggleChat}
+          toggled={activePanel === 'chat'}
+          pinned={isPinned('chat')}
+          onClick={() => togglePanel('chat')}
         />
         <IconButton
           icon={<CounterIcon />}
           title="Counters"
           accent="#f59e0b"
-          toggled={showCounter}
-          pinned={counterPinned}
-          onClick={onToggleCounter}
+          toggled={activePanel === 'counter'}
+          pinned={isPinned('counter')}
+          onClick={() => togglePanel('counter')}
         />
         <IconButton
           icon={<TrendingUpIcon />}
           title="Skills"
           accent="#50fa7b"
-          toggled={showSkills}
-          pinned={skillsPinned}
-          onClick={onToggleSkills}
+          toggled={activePanel === 'skills'}
+          pinned={isPinned('skills')}
+          onClick={() => togglePanel('skills')}
         />
         <IconButton
           icon={<NotesIcon />}
           title="Notes"
           accent="#fbbf24"
-          toggled={showNotes}
-          pinned={notesPinned}
-          onClick={onToggleNotes}
+          toggled={activePanel === 'notes'}
+          pinned={isPinned('notes')}
+          onClick={() => togglePanel('notes')}
         />
         <IconButton
           icon={<MapIcon />}
           title="Map"
           accent="#e8a849"
-          toggled={showMap}
-          pinned={mapPinned}
-          onClick={onToggleMap}
+          toggled={activePanel === 'map'}
+          pinned={isPinned('map')}
+          onClick={() => togglePanel('map')}
         />
         <div className="relative">
           <IconButton
@@ -146,29 +102,29 @@ export function Toolbar({
           icon={<AliasIcon />}
           title="Aliases"
           accent="#a78bfa"
-          toggled={showAliases}
-          onClick={onToggleAliases}
+          toggled={activePanel === 'aliases'}
+          onClick={() => togglePanel('aliases')}
         />
         <IconButton
           icon={<TriggerIcon />}
           title="Triggers"
           accent="#ff79c6"
-          toggled={showTriggers}
-          onClick={onToggleTriggers}
+          toggled={activePanel === 'triggers'}
+          onClick={() => togglePanel('triggers')}
         />
         <IconButton
           icon={<PaletteIcon />}
           title="Appearance"
           accent="#8be9fd"
-          toggled={showAppearance}
-          onClick={onToggleAppearance}
+          toggled={activePanel === 'appearance'}
+          onClick={() => togglePanel('appearance')}
         />
         <IconButton
           icon={<GearIcon />}
           title="Settings"
           accent="#bd93f9"
-          toggled={showSettings}
-          onClick={onToggleSettings}
+          toggled={activePanel === 'settings'}
+          onClick={() => togglePanel('settings')}
         />
       </div>
     </div>

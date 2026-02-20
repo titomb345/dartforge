@@ -1,13 +1,19 @@
 import { useState } from 'react';
-import type { DockSide } from '../types';
+import type { PinnablePanel } from '../types';
+import { usePanelContext } from '../contexts/PanelLayoutContext';
 import { PinIcon, ArrowLeftIcon, ArrowRightIcon } from './icons';
 
 interface PinMenuButtonProps {
-  onPin: (side: DockSide) => void;
+  panel: PinnablePanel;
 }
 
-export function PinMenuButton({ onPin }: PinMenuButtonProps) {
+const MAX_PINNED = 3;
+
+export function PinMenuButton({ panel }: PinMenuButtonProps) {
+  const { layout, pinPanel } = usePanelContext();
   const [showMenu, setShowMenu] = useState(false);
+  const leftFull = layout.left.length >= MAX_PINNED;
+  const rightFull = layout.right.length >= MAX_PINNED;
 
   return (
     <div className="relative">
@@ -21,16 +27,26 @@ export function PinMenuButton({ onPin }: PinMenuButtonProps) {
       {showMenu && (
         <div className="absolute top-full right-0 mt-1 z-50 flex flex-col gap-0.5 bg-bg-secondary border border-border rounded-md p-1 shadow-lg min-w-[100px]">
           <button
-            onClick={() => { onPin('left'); setShowMenu(false); }}
-            className="flex items-center gap-1.5 px-2 py-1 rounded text-[11px] text-text-label hover:bg-bg-primary hover:text-text-primary cursor-pointer transition-colors duration-100"
+            onClick={() => { if (!leftFull) { pinPanel(panel, 'left'); setShowMenu(false); } }}
+            disabled={leftFull}
+            className={`flex items-center gap-1.5 px-2 py-1 rounded text-[11px] transition-colors duration-100 ${
+              leftFull
+                ? 'text-text-dim/40 cursor-not-allowed'
+                : 'text-text-label hover:bg-bg-primary hover:text-text-primary cursor-pointer'
+            }`}
           >
-            <ArrowLeftIcon size={9} /> Pin Left
+            <ArrowLeftIcon size={9} /> Pin Left{leftFull ? ' (full)' : ''}
           </button>
           <button
-            onClick={() => { onPin('right'); setShowMenu(false); }}
-            className="flex items-center gap-1.5 px-2 py-1 rounded text-[11px] text-text-label hover:bg-bg-primary hover:text-text-primary cursor-pointer transition-colors duration-100"
+            onClick={() => { if (!rightFull) { pinPanel(panel, 'right'); setShowMenu(false); } }}
+            disabled={rightFull}
+            className={`flex items-center gap-1.5 px-2 py-1 rounded text-[11px] transition-colors duration-100 ${
+              rightFull
+                ? 'text-text-dim/40 cursor-not-allowed'
+                : 'text-text-label hover:bg-bg-primary hover:text-text-primary cursor-pointer'
+            }`}
           >
-            <ArrowRightIcon size={9} /> Pin Right
+            <ArrowRightIcon size={9} /> Pin Right{rightFull ? ' (full)' : ''}
           </button>
         </div>
       )}

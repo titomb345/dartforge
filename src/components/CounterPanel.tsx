@@ -92,14 +92,6 @@ function InlineEdit({
 
 export function CounterPanel({
   mode = 'slideout',
-  onPin,
-  side,
-  onUnpin,
-  onSwapSide,
-  onMoveUp,
-  onMoveDown,
-  canMoveUp,
-  canMoveDown,
 }: CounterPanelProps) {
   const {
     counters,
@@ -157,18 +149,10 @@ export function CounterPanel({
 
   // Pin controls (shared between header layouts)
   const pinControls = isPinned ? (
-    <PinnedControls
-      side={side}
-      onSwapSide={onSwapSide}
-      canMoveUp={canMoveUp}
-      onMoveUp={onMoveUp}
-      canMoveDown={canMoveDown}
-      onMoveDown={onMoveDown}
-      onUnpin={onUnpin}
-    />
-  ) : onPin ? (
-    <PinMenuButton onPin={onPin} />
-  ) : null;
+    <PinnedControls />
+  ) : (
+    <PinMenuButton panel="counter" />
+  );
 
   return (
     <div

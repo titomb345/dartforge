@@ -14,14 +14,6 @@ function notesFileName(character: string): string {
 
 export function NotesPanel({
   mode = 'slideout',
-  onPin,
-  side,
-  onUnpin,
-  onSwapSide,
-  onMoveUp,
-  onMoveDown,
-  canMoveUp,
-  canMoveDown,
 }: NotesPanelProps) {
   const isPinned = mode === 'pinned';
   const dataStore = useDataStore();
@@ -78,18 +70,10 @@ export function NotesPanel({
   };
 
   const pinControls = isPinned ? (
-    <PinnedControls
-      side={side}
-      onSwapSide={onSwapSide}
-      canMoveUp={canMoveUp}
-      onMoveUp={onMoveUp}
-      canMoveDown={canMoveDown}
-      onMoveDown={onMoveDown}
-      onUnpin={onUnpin}
-    />
-  ) : onPin ? (
-    <PinMenuButton onPin={onPin} />
-  ) : null;
+    <PinnedControls />
+  ) : (
+    <PinMenuButton panel="notes" />
+  );
 
   return (
     <div className={panelRootClass(isPinned)}>

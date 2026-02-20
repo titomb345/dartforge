@@ -1,96 +1,19 @@
-import type React from 'react';
 import type { DockSide, PinnablePanel } from '../types';
+import { PinnedControlsProvider } from '../contexts/PinnedControlsContext';
 import { SkillPanel } from './SkillPanel';
 import { ChatPanel } from './ChatPanel';
 import { CounterPanel } from './CounterPanel';
 import { NotesPanel } from './NotesPanel';
 import { MapPanel } from './MapPanel';
 
-
-interface PinnedPanelRenderProps {
-  side: DockSide;
-  onUnpin: () => void;
-  onSwapSide: () => void;
-  canSwapSide: boolean;
-  onMoveUp?: () => void;
-  onMoveDown?: () => void;
-  canMoveUp: boolean;
-  canMoveDown: boolean;
-}
-
 const PANEL_META: Record<PinnablePanel, {
-  render: (props: PinnedPanelRenderProps) => React.JSX.Element;
+  render: () => React.JSX.Element;
 }> = {
-  skills: {
-    render: (props) => (
-      <SkillPanel
-        mode="pinned"
-        side={props.side}
-        onUnpin={props.onUnpin}
-        onSwapSide={props.canSwapSide ? props.onSwapSide : undefined}
-        onMoveUp={props.onMoveUp}
-        onMoveDown={props.onMoveDown}
-        canMoveUp={props.canMoveUp}
-        canMoveDown={props.canMoveDown}
-      />
-    ),
-  },
-  chat: {
-    render: (props) => (
-      <ChatPanel
-        mode="pinned"
-        side={props.side}
-        onUnpin={props.onUnpin}
-        onSwapSide={props.canSwapSide ? props.onSwapSide : undefined}
-        onMoveUp={props.onMoveUp}
-        onMoveDown={props.onMoveDown}
-        canMoveUp={props.canMoveUp}
-        canMoveDown={props.canMoveDown}
-      />
-    ),
-  },
-  counter: {
-    render: (props) => (
-      <CounterPanel
-        mode="pinned"
-        side={props.side}
-        onUnpin={props.onUnpin}
-        onSwapSide={props.canSwapSide ? props.onSwapSide : undefined}
-        onMoveUp={props.onMoveUp}
-        onMoveDown={props.onMoveDown}
-        canMoveUp={props.canMoveUp}
-        canMoveDown={props.canMoveDown}
-      />
-    ),
-  },
-  notes: {
-    render: (props) => (
-      <NotesPanel
-        mode="pinned"
-        side={props.side}
-        onUnpin={props.onUnpin}
-        onSwapSide={props.canSwapSide ? props.onSwapSide : undefined}
-        onMoveUp={props.onMoveUp}
-        onMoveDown={props.onMoveDown}
-        canMoveUp={props.canMoveUp}
-        canMoveDown={props.canMoveDown}
-      />
-    ),
-  },
-  map: {
-    render: (props) => (
-      <MapPanel
-        mode="pinned"
-        side={props.side}
-        onUnpin={props.onUnpin}
-        onSwapSide={props.canSwapSide ? props.onSwapSide : undefined}
-        onMoveUp={props.onMoveUp}
-        onMoveDown={props.onMoveDown}
-        canMoveUp={props.canMoveUp}
-        canMoveDown={props.canMoveDown}
-      />
-    ),
-  },
+  skills: { render: () => <SkillPanel mode="pinned" /> },
+  chat: { render: () => <ChatPanel mode="pinned" /> },
+  counter: { render: () => <CounterPanel mode="pinned" /> },
+  notes: { render: () => <NotesPanel mode="pinned" /> },
+  map: { render: () => <MapPanel mode="pinned" /> },
 };
 
 interface PinnedRegionProps {
@@ -119,16 +42,17 @@ export function PinnedRegion({ side, panels, otherSidePanelCount, onUnpin, onSwa
             key={panelId}
             className="flex-1 flex flex-col overflow-hidden min-h-0 rounded-lg bg-bg-primary"
           >
-            {render({
+            <PinnedControlsProvider value={{
               side,
               onUnpin: () => onUnpin(panelId),
-              onSwapSide: () => onSwapSide(panelId),
-              canSwapSide,
+              onSwapSide: canSwapSide ? () => onSwapSide(panelId) : undefined,
               onMoveUp: i > 0 ? () => onMovePanel(panelId, 'up') : undefined,
               onMoveDown: i < panels.length - 1 ? () => onMovePanel(panelId, 'down') : undefined,
               canMoveUp: i > 0,
               canMoveDown: i < panels.length - 1,
-            })}
+            }}>
+              {render()}
+            </PinnedControlsProvider>
           </div>
         );
       })}

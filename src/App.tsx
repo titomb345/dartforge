@@ -53,6 +53,7 @@ import { SignatureProvider } from './contexts/SignatureContext';
 import { parseConvertCommand, formatMultiConversion } from './lib/currency';
 import { useMapTracker } from './hooks/useMapTracker';
 import { MapProvider } from './contexts/MapContext';
+import { PanelProvider } from './contexts/PanelLayoutContext';
 import { MapPanel } from './components/MapPanel';
 
 /** Commands to send automatically after login */
@@ -602,34 +603,12 @@ function AppMain() {
     <ChatProvider value={chatValue}>
     <ImproveCounterProvider value={counterValue}>
     <MapProvider value={mapTracker}>
+    <PanelProvider layout={panelLayout} activePanel={activePanel} togglePanel={togglePanel} pinPanel={pinPanel}>
     <div className="flex flex-col h-screen bg-bg-canvas text-text-primary relative p-1 gap-1">
       <Toolbar
         connected={connected}
         onReconnect={reconnect}
         onDisconnect={disconnect}
-        showAppearance={activePanel === 'appearance'}
-        onToggleAppearance={() => togglePanel('appearance')}
-        showSkills={activePanel === 'skills'}
-        onToggleSkills={() => togglePanel('skills')}
-        skillsPinned={isSkillsPinned}
-        showChat={activePanel === 'chat'}
-        onToggleChat={() => togglePanel('chat')}
-        chatPinned={isChatPinned}
-        showCounter={activePanel === 'counter'}
-        onToggleCounter={() => togglePanel('counter')}
-        counterPinned={isCounterPinned}
-        showNotes={activePanel === 'notes'}
-        onToggleNotes={() => togglePanel('notes')}
-        notesPinned={isNotesPinned}
-        showAliases={activePanel === 'aliases'}
-        onToggleAliases={() => togglePanel('aliases')}
-        showTriggers={activePanel === 'triggers'}
-        onToggleTriggers={() => togglePanel('triggers')}
-        showSettings={activePanel === 'settings'}
-        onToggleSettings={() => togglePanel('settings')}
-        showMap={activePanel === 'map'}
-        onToggleMap={() => togglePanel('map')}
-        mapPinned={isMapPinned}
       />
       <div className="flex-1 overflow-hidden flex flex-row gap-1 relative">
         {/* Left pinned region */}
@@ -699,10 +678,7 @@ function AppMain() {
               activePanel === 'skills' ? 'translate-x-0' : 'translate-x-full'
             )}
           >
-            <SkillPanel
-              mode="slideout"
-              onPin={(side) => pinPanel('skills', side)}
-            />
+            <SkillPanel mode="slideout" />
           </div>
         )}
         {/* Chat slide-out — only when NOT pinned */}
@@ -713,10 +689,7 @@ function AppMain() {
               activePanel === 'chat' ? 'translate-x-0' : 'translate-x-full'
             )}
           >
-            <ChatPanel
-              mode="slideout"
-              onPin={(side) => pinPanel('chat', side)}
-            />
+            <ChatPanel mode="slideout" />
           </div>
         )}
         {/* Counter slide-out — only when NOT pinned */}
@@ -727,10 +700,7 @@ function AppMain() {
               activePanel === 'counter' ? 'translate-x-0' : 'translate-x-full'
             )}
           >
-            <CounterPanel
-              mode="slideout"
-              onPin={(side) => pinPanel('counter', side)}
-            />
+            <CounterPanel mode="slideout" />
           </div>
         )}
         {/* Notes slide-out — only when NOT pinned */}
@@ -741,10 +711,7 @@ function AppMain() {
               activePanel === 'notes' ? 'translate-x-0' : 'translate-x-full'
             )}
           >
-            <NotesPanel
-              mode="slideout"
-              onPin={(side) => pinPanel('notes', side)}
-            />
+            <NotesPanel mode="slideout" />
           </div>
         )}
         {/* Aliases slide-out — slideout only, no pinning */}
@@ -775,7 +742,6 @@ function AppMain() {
           >
             <MapPanel
               mode="slideout"
-              onPin={(side) => pinPanel('map', side)}
               onWalkTo={async (directions) => {
                 for (const dir of directions) {
                   await sendCommand(dir);
@@ -925,6 +891,7 @@ function AppMain() {
       />
       </div>
     </div>
+    </PanelProvider>
     </MapProvider>
     </ImproveCounterProvider>
     </ChatProvider>

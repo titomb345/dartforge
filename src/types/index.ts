@@ -13,14 +13,6 @@ export interface PanelLayout {
 /** Shared props for panels that support pinning/docking. */
 export interface PinnablePanelProps {
   mode?: 'slideout' | 'pinned';
-  onPin?: (side: DockSide) => void;
-  side?: DockSide;
-  onUnpin?: () => void;
-  onSwapSide?: () => void;
-  onMoveUp?: () => void;
-  onMoveDown?: () => void;
-  canMoveUp?: boolean;
-  canMoveDown?: boolean;
 }
 
 export type {

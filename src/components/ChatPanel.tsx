@@ -23,14 +23,6 @@ const CHAT_TYPE_LABELS: Record<ChatType, string> = {
 
 export function ChatPanel({
   mode = 'slideout',
-  onPin,
-  side,
-  onUnpin,
-  onSwapSide,
-  onMoveUp,
-  onMoveDown,
-  canMoveUp,
-  canMoveDown,
 }: PinnablePanelProps) {
   const { messages, filters, mutedSenders, soundAlerts, newestFirst, toggleFilter, setAllFilters, toggleSoundAlert, toggleNewestFirst, muteSender, unmuteSender, updateSender } = useChatContext();
   const { sortedMappings, createMapping } = useSignatureContext();
@@ -153,17 +145,9 @@ export function ChatPanel({
         </div>
         <div className="flex items-center gap-1.5">
           {isPinned ? (
-            <PinnedControls
-              side={side}
-              onSwapSide={onSwapSide}
-              canMoveUp={canMoveUp}
-              onMoveUp={onMoveUp}
-              canMoveDown={canMoveDown}
-              onMoveDown={onMoveDown}
-              onUnpin={onUnpin}
-            />
+            <PinnedControls />
           ) : (
-            onPin && <PinMenuButton onPin={onPin} />
+            <PinMenuButton panel="chat" />
           )}
         </div>
       </div>

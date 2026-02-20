@@ -14,6 +14,7 @@ import { FilterPill } from './FilterPill';
 import { MudInput, MudButton } from './shared';
 import { PinMenuButton } from './PinMenuButton';
 import { PinnedControls } from './PinnedControls';
+import { usePinnedControls } from '../contexts/PinnedControlsContext';
 
 const SETTINGS_FILE = 'settings.json';
 const SKILL_FILTER_KEY = 'skillPanelFilter';
@@ -246,15 +247,9 @@ function buildSubGroups(
 
 export function SkillPanel({
   mode = 'slideout',
-  onPin,
-  side,
-  onUnpin,
-  onSwapSide,
-  onMoveUp,
-  onMoveDown,
-  canMoveUp,
-  canMoveDown,
 }: SkillPanelProps) {
+  const pinnedCtx = usePinnedControls();
+  const side = pinnedCtx?.side;
   const { activeCharacter, skillData, addSkill } = useSkillTrackerContext();
   const dataStore = useDataStore();
   const [filter, setFilter] = useState<FilterValue>('all');
@@ -401,20 +396,12 @@ export function SkillPanel({
           {isPinned ? (
             <>
               {side === 'left' && <>{addButton}{sortButton}</>}
-              <PinnedControls
-                side={side}
-                onSwapSide={onSwapSide}
-                canMoveUp={canMoveUp}
-                onMoveUp={onMoveUp}
-                canMoveDown={canMoveDown}
-                onMoveDown={onMoveDown}
-                onUnpin={onUnpin}
-              />
+              <PinnedControls />
               {side === 'right' && <>{sortButton}{addButton}</>}
             </>
           ) : (
             <>
-              {onPin && <PinMenuButton onPin={onPin} />}
+              {!isPinned && <PinMenuButton panel="skills" />}
               {sortButton}
               {addButton}
             </>
