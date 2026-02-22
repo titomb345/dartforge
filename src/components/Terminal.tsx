@@ -5,6 +5,7 @@ import { WebLinksAddon } from '@xterm/addon-web-links';
 import '@xterm/xterm/css/xterm.css';
 import { getStartupSplash } from '../lib/splash';
 import type { DisplaySettings } from '../hooks/useThemeColors';
+import { useAppSettingsContext } from '../contexts/AppSettingsContext';
 
 interface TerminalProps {
   terminalRef: React.MutableRefObject<XTerm | null>;
@@ -19,6 +20,7 @@ export function Terminal({ terminalRef, inputRef, theme, display, onUpdateDispla
   const innerRef = useRef<HTMLDivElement>(null);
   const fitAddonRef = useRef<FitAddon | null>(null);
   const [isScrolledUp, setIsScrolledUp] = useState(false);
+  const { terminalScrollback } = useAppSettingsContext();
 
   useEffect(() => {
     if (!innerRef.current) return;
@@ -27,7 +29,7 @@ export function Terminal({ terminalRef, inputRef, theme, display, onUpdateDispla
       theme,
       fontFamily: `'${display.fontFamily}', monospace`,
       fontSize: display.fontSize,
-      scrollback: 10000,
+      scrollback: terminalScrollback,
       disableStdin: true,
       cursorBlink: false,
       cursorInactiveStyle: 'none',
@@ -60,13 +62,21 @@ export function Terminal({ terminalRef, inputRef, theme, display, onUpdateDispla
       term.write(getStartupSplash(term.cols));
     });
 
+    // Preserve terminal selection text when data arrives (writes can clear it)
+    let lastSelection = '';
+    const selDisposable = term.onSelectionChange(() => {
+      const sel = term.getSelection();
+      if (sel) lastSelection = sel;
+    });
+
     // Ctrl+C to copy terminal selection
     const handleKeyboard = (e: KeyboardEvent) => {
       if (e.ctrlKey && e.key === 'c') {
-        const sel = term.getSelection();
+        const sel = term.getSelection() || lastSelection;
         if (sel) {
           navigator.clipboard.writeText(sel);
           term.clearSelection();
+          lastSelection = '';
         }
         return;
       }
@@ -112,12 +122,13 @@ export function Terminal({ terminalRef, inputRef, theme, display, onUpdateDispla
     return () => {
       window.removeEventListener('keydown', handleKeyboard);
       observer.disconnect();
+      selDisposable.dispose();
       scrollDisposable.dispose();
       writeDisposable.dispose();
       term.dispose();
       terminalRef.current = null;
     };
-  }, [terminalRef, inputRef]);
+  }, [terminalRef]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Apply theme changes live
   useEffect(() => {

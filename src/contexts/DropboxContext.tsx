@@ -41,6 +41,7 @@ export function DropboxProvider({ children }: { children: ReactNode }) {
   const [folderPath, setFolderPath] = useState<string | null>(loadFolderPath);
   const tokensRef = useRef<DropboxTokens | null>(null);
   const popupRef = useRef<Window | null>(null);
+  const popupPollRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   // Ensure a valid access token, refreshing if needed
   const ensureToken = useCallback(async (tokens: DropboxTokens): Promise<string | null> => {
@@ -90,6 +91,11 @@ export function DropboxProvider({ children }: { children: ReactNode }) {
       if (event.origin !== window.location.origin) return;
       if (event.data?.type !== 'dropbox-oauth-callback') return;
 
+      // Clear popup poll timer — auth message received, no need to keep polling
+      if (popupPollRef.current) {
+        clearInterval(popupPollRef.current);
+        popupPollRef.current = null;
+      }
       popupRef.current = null;
 
       // User cancelled or Dropbox returned an error
@@ -174,17 +180,24 @@ export function DropboxProvider({ children }: { children: ReactNode }) {
 
     // Poll for popup closure — if the user closes the window manually
     // (clicks X) without completing auth, revert from 'connecting'
+    if (popupPollRef.current) clearInterval(popupPollRef.current);
     const pollTimer = setInterval(() => {
       if (popup.closed) {
         clearInterval(pollTimer);
+        popupPollRef.current = null;
         popupRef.current = null;
         // Only revert if we're still waiting (no message was received)
         setStatus((prev) => (prev === 'connecting' ? 'disconnected' : prev));
       }
     }, 500);
+    popupPollRef.current = pollTimer;
   }, []);
 
   const disconnect = useCallback(() => {
+    if (popupPollRef.current) {
+      clearInterval(popupPollRef.current);
+      popupPollRef.current = null;
+    }
     clearTokens();
     clearFolderPath();
     clearStorageMode();

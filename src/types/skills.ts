@@ -8,7 +8,7 @@ export interface SkillTier {
 }
 
 /** Skill category for grouping in the UI */
-export type SkillCategory = 'combat' | 'magic' | 'spells' | 'crafting' | 'language' | 'thief' | 'other';
+export type SkillCategory = 'combat' | 'magic' | 'spells' | 'crafting' | 'movement' | 'language' | 'thief' | 'pets' | 'other';
 
 /** Persisted record for one skill (category/subcategory derived at runtime) */
 export interface SkillRecord {

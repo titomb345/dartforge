@@ -71,7 +71,7 @@ export class WebSocketTransport implements MudTransport {
     } else {
       // WebSocket is down — re-establish it, then send reconnect once open
       this.openSocket();
-      this.ws!.addEventListener('open', () => {
+      this.ws?.addEventListener('open', () => {
         this.ws?.send(JSON.stringify({ type: 'reconnect' }));
       }, { once: true });
     }

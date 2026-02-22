@@ -1,6 +1,7 @@
 @import "tailwindcss";
 
 @theme {
+  --color-bg-canvas: #040404;
   --color-bg-primary: #0d0d0d;
   --color-bg-secondary: #1a1a1a;
   --color-bg-input: #111111;
@@ -20,6 +21,7 @@
   --color-cyan: #8be9fd;
   --color-purple: #a78bfa;
   --color-comment: #6272a4;
+  --color-red: #ef4444;
   --color-amber: #f59e0b;
   --color-reckoning-common: #f59e0b;
   --color-reckoning-adachian: #f472b6;
@@ -81,6 +83,12 @@
   border-color: color-mix(in srgb, var(--btn-accent) 25%, transparent);
   filter: drop-shadow(0 0 4px color-mix(in srgb, var(--btn-accent) 50%, transparent));
 }
+.icon-btn-pinned {
+  color: color-mix(in srgb, var(--btn-accent) 50%, transparent);
+  border-color: color-mix(in srgb, var(--btn-accent) 15%, transparent);
+  border-style: dashed;
+}
+
 
 /* Status readout — instrument gauge styling */
 .status-readout:hover {
@@ -122,4 +130,56 @@
 .resizing *::before,
 .resizing *::after {
   transition-duration: 0s !important;
+}
+
+/* ── Spotlight Overlay ───────────────────────────────────── */
+
+.spotlight-overlay {
+  opacity: 0;
+  transition: opacity 200ms ease-out;
+}
+.spotlight-overlay.spotlight-visible {
+  opacity: 1;
+}
+
+.spotlight-ring {
+  animation: spotlight-ring-pulse 2s ease-in-out infinite;
+}
+
+@keyframes spotlight-ring-pulse {
+  0%, 100% { box-shadow: 0 0 20px rgba(217, 175, 80, 0.2), inset 0 0 20px rgba(217, 175, 80, 0.1); }
+  50% { box-shadow: 0 0 30px rgba(217, 175, 80, 0.35), inset 0 0 30px rgba(217, 175, 80, 0.15); }
+}
+
+.spotlight-tooltip {
+  animation: spotlight-tooltip-in 200ms ease-out 100ms both;
+}
+
+@keyframes spotlight-tooltip-in {
+  from { opacity: 0; transform: translateY(4px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+/* ── Help Panel ──────────────────────────────────────────── */
+
+.help-kbd {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 20px;
+  height: 18px;
+  padding: 0 5px;
+  font-family: 'Cascadia Code', monospace;
+  font-size: 10px;
+  color: #d9af50;
+  background: rgba(217, 175, 80, 0.08);
+  border: 1px solid rgba(217, 175, 80, 0.2);
+  border-radius: 3px;
+  box-shadow: 0 1px 0 rgba(217, 175, 80, 0.15);
+}
+
+.show-me-btn:hover {
+  background: rgba(217, 175, 80, 0.15) !important;
+  border-color: rgba(217, 175, 80, 0.5) !important;
+  filter: drop-shadow(0 0 4px rgba(217, 175, 80, 0.25));
 }

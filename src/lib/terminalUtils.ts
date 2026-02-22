@@ -12,9 +12,9 @@ export function smartWrite(term: Terminal, data: string) {
   if (scrolledUp <= 0) {
     term.write(data);
   } else {
+    const savedViewport = buffer.viewportY;
     term.write(data, () => {
-      const newBase = term.buffer.active.baseY;
-      term.scrollToLine(newBase - scrolledUp);
+      term.scrollToLine(savedViewport);
     });
   }
 }

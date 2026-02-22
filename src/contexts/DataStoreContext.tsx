@@ -6,6 +6,8 @@ export interface DataStore {
   save(filename: string): Promise<void>;
   delete(filename: string, key: string): Promise<void>;
   keys(filename: string): Promise<string[]>;
+  readText(filename: string): Promise<string | null>;
+  writeText(filename: string, content: string): Promise<void>;
   flushAll(): Promise<void>;
   activeDataDir: string | null;
   ready: boolean;

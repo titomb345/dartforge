@@ -9,6 +9,46 @@ The `[Unreleased]` header controls automatic version bumping on merge:
 - `[Unreleased-minor]` → 0.1.0 → 0.2.0
 - `[Unreleased-major]` → 0.1.0 → 1.0.0
 
+## [Unreleased-major]
+
+### Added
+- Pinnable panel docking system — pin up to 3 panels per side (left/right) with reorder, swap-side, and resize controls
+- Responsive panel collapsing — auto-collapses pinned panels to icon strips on narrow windows with click-to-overlay access
+- Chat panel with color-coded message types (Say, Shout, OOC, Tell, SZ), sender muting, and anonymous tell identification
+- Improve counter panel with per-minute, per-period, and per-hour rate tracking
+- Notes panel with per-character auto-saving text notes
+- Allocations panel for combat and magic allocation tracking with inline editing
+- Currency converter panel with freeform multi-denomination input (e.g., "3ri 5dn")
+- Trigger system with substring, exact, and regex matching, gag/highlight actions, cooldowns, and sound alerts
+- Alias system with exact, prefix, and regex match modes, positional args ($1-$9, $*, $-), and speedwalk
+- Variable system with /var command and $varName substitution in aliases and triggers
+- Signature-to-player name mapping for identifying anonymous chat senders
+- Session logging with timestamped files and ANSI stripping
+- Anti-idle timer with configurable command and interval
+- Custom chime sound selection with file picker, preview, and reset
+- Taskbar flash alerts for chat messages (per-channel, toggleable in settings)
+- Persistent command history across sessions with deduplication
+- Interactive help guide with categorized feature documentation and spotlight tour
+- Tab completion from recent terminal output
+- Per-status-readout compact toggle (right-click) and drag-and-drop reorder
+- Per-status message filtering (click a readout to suppress its terminal messages)
+- Built-in commands: /convert, /var, /delay, /echo, /spam
+- Connect/disconnect splash screens with timestamps
+- Error boundary for graceful crash recovery
+- Numpad directional movement with customizable mappings
+
+### Changed
+- Panel system uses context providers (PanelContext, PinnedControlsContext) instead of prop drilling
+- Splash screens show connection/disconnection timestamps
+- Default notification settings are all off (user opts in per channel)
+- Strip prompts and board date conversion default to off
+
+### Fixed
+- Chat pattern matching for OOC spacing and tell quote variants
+- Terminal selection preserved when new data arrives
+- React StrictMode compliance for skill tracker side effects
+- Empty command submissions blocked during login prompts
+
 ## [0.4.0] - 2026-02-18
 
 ### Added

@@ -102,6 +102,13 @@ const LETTERS: Record<string, string[]> = {
     '██  ██',
     ' ████ ',
   ],
+  P: [
+    '████  ',
+    '██  ██',
+    '████  ',
+    '██    ',
+    '██    ',
+  ],
 };
 
 function buildGradientWord(word: string, colors: string[]): string[] {
@@ -130,91 +137,63 @@ function gradientBar(width: number): string {
   return bar + RESET;
 }
 
-function center(lines: string[], width: number): string[] {
+const LEFT_PAD = '  ';
+
+/** Left-align with padding only (for the bar) */
+function align(lines: string[]): string[] {
+  return lines.map((line) => LEFT_PAD + line);
+}
+
+/** Center text under the bar, then left-pad the whole thing */
+function centerUnderBar(lines: string[], barWidth: number): string[] {
   return lines.map((line) => {
     const visible = line.replace(/\x1b\[[0-9;]*m/g, '');
-    const pad = Math.max(0, Math.floor((width - visible.length) / 2));
-    return ' '.repeat(pad) + line;
+    const pad = Math.max(0, Math.floor((barWidth - visible.length) / 2));
+    return LEFT_PAD + ' '.repeat(pad) + line;
   });
 }
 
-export function getStartupSplash(cols: number): string {
+function mainSplash(cols: number, statusLine: string): string {
+  const barWidth = Math.min(cols - 4, 60);
   const logo = buildGradientWord('DARTMUD', GRADIENT);
   const bar = gradientBar(cols);
-  const year = `${DIM}-= 1991 - 2025 =-${RESET}`;
+  const year = `${DIM}-= 1991 - ${new Date().getFullYear()} =-${RESET}`;
   const welcome = `${DIM}Welcome to the Lands of Ferdarchi!${RESET}`;
   const lines = [
     '',
     '',
-    ...center([bar], cols),
+    ...align([bar]),
     '',
-    ...center(logo, cols),
+    ...centerUnderBar(logo, barWidth),
     '',
-    ...center([bar], cols),
+    ...align([bar]),
     '',
-    ...center([year], cols),
+    ...centerUnderBar([year], barWidth),
     '',
-    ...center([welcome], cols),
+    ...centerUnderBar([welcome], barWidth),
     '',
-    ...center([`${GREEN}Press Enter to connect${RESET}`], cols),
+    ...centerUnderBar([statusLine], barWidth),
     '',
     '',
   ];
   return lines.join('\r\n');
+}
+
+export function getStartupSplash(cols: number): string {
+  return mainSplash(cols, `${GREEN}Press Enter to connect${RESET}`);
 }
 
 export function getConnectingSplash(cols: number): string {
-  const logo = buildGradientWord('DARTMUD', GRADIENT);
-  const bar = gradientBar(cols);
-  const year = `${DIM}-= 1991 - 2025 =-${RESET}`;
-  const welcome = `${DIM}Welcome to the Lands of Ferdarchi!${RESET}`;
-  const lines = [
-    '',
-    '',
-    ...center([bar], cols),
-    '',
-    ...center(logo, cols),
-    '',
-    ...center([bar], cols),
-    '',
-    ...center([year], cols),
-    '',
-    ...center([welcome], cols),
-    '',
-    ...center([`${CYAN}Connecting...${RESET}`], cols),
-    '',
-    '',
-  ];
-  return lines.join('\r\n');
+  return mainSplash(cols, `${CYAN}Connecting...${RESET}`);
 }
 
 export function getConnectedSplash(cols: number): string {
-  const logo = buildGradientWord('DARTMUD', GRADIENT);
-  const bar = gradientBar(cols);
-  const year = `${DIM}-= 1991 - 2025 =-${RESET}`;
-  const welcome = `${DIM}Welcome to the Lands of Ferdarchi!${RESET}`;
-  const lines = [
-    '',
-    '',
-    ...center([bar], cols),
-    '',
-    ...center(logo, cols),
-    '',
-    ...center([bar], cols),
-    '',
-    ...center([year], cols),
-    '',
-    ...center([welcome], cols),
-    '',
-    ...center([`${BRIGHT_GREEN}Connected${RESET}`], cols),
-    '',
-    '',
-  ];
-  return lines.join('\r\n');
+  const time = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+  return mainSplash(cols, `${BRIGHT_GREEN}Connected at ${time}${RESET}`);
 }
 
-// Dark-to-bright red gradient for "DISCONNECTED" (12 letters)
-const RED_GRADIENT = [52, 88, 124, 160, 196, 196, 196, 196, 160, 124, 88, 52]
+// Dark-to-bright red gradient for "DROPPED" (7 letters)
+const RED_GRADIENT = [52, 88, 160, 196, 160, 88, 52]
   .map((n) => `\x1b[1;38;5;${n}m`);
 
 function redBar(cols: number): string {
@@ -229,18 +208,22 @@ function redBar(cols: number): string {
 }
 
 export function getDisconnectSplash(cols: number): string {
-  const logo = buildGradientWord('DISCONNECTED', RED_GRADIENT);
+  const barWidth = Math.min(cols - 4, 60);
+  const logo = buildGradientWord('DROPPED', RED_GRADIENT);
   const bar = redBar(cols);
+  const time = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
   const lines = [
     '',
     '',
-    ...center([bar], cols),
+    ...align([bar]),
     '',
-    ...center(logo, cols),
+    ...centerUnderBar(logo, barWidth),
     '',
-    ...center([bar], cols),
+    ...align([bar]),
     '',
-    ...center([`${GREEN}Press enter to reconnect.${RESET}`], cols),
+    ...centerUnderBar([`${DIM}Connection lost at ${time}${RESET}`], barWidth),
+    '',
+    ...centerUnderBar([`${GREEN}Press enter to reconnect.${RESET}`], barWidth),
     '',
     '',
   ];

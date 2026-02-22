@@ -1,4 +1,4 @@
-import { useRef, useState, useEffect, useCallback, type ReactNode } from 'react';
+import { useRef, useState, useEffect, useCallback, useMemo, type ReactNode } from 'react';
 import { invoke } from '@tauri-apps/api/core';
 import { load } from '@tauri-apps/plugin-store';
 import { DataStoreContext, type DataStore } from './DataStoreContext';
@@ -50,9 +50,14 @@ export function DataStoreProvider({ children }: { children: ReactNode }) {
     const resolved: string = await invoke('resolve_data_dir', { candidates });
     setActiveDataDir(resolved);
 
-    // Create session-start backup and prune old ones
-    await invoke('create_backup', { tag: 'session-start' });
-    await invoke('prune_backups', { keep: 30 });
+    // Check if auto-backups are enabled (read directly — settings context isn't mounted yet)
+    const settings: Record<string, unknown> | null = await invoke('read_data_file', { filename: 'settings.json' });
+    const backupsEnabled = settings?.autoBackupEnabled !== false; // default true
+
+    if (backupsEnabled) {
+      await invoke('create_backup', { tag: 'session-start' });
+      await invoke('prune_backups', { keep: 30 });
+    }
 
     setReady(true);
   }
@@ -75,11 +80,13 @@ export function DataStoreProvider({ children }: { children: ReactNode }) {
     setReady(true);
   }, []);
 
-  // Hourly auto-backup
+  // Hourly auto-backup (checks setting from cache each tick)
   useEffect(() => {
     if (!ready) return;
     const interval = setInterval(async () => {
       try {
+        const cache = cacheRef.current.get('settings.json');
+        if (cache && cache.autoBackupEnabled === false) return;
         await invoke('create_backup', { tag: 'auto' });
       } catch (e) {
         console.error('Auto-backup failed:', e);
@@ -163,6 +170,19 @@ export function DataStoreProvider({ children }: { children: ReactNode }) {
     return Object.keys(cache);
   }, [ensureLoaded]);
 
+  const readText = useCallback(async (filename: string): Promise<string | null> => {
+    const result: string | null = await invoke('read_text_file', { filename });
+    return result;
+  }, []);
+
+  const writeText = useCallback(async (filename: string, content: string): Promise<void> => {
+    try {
+      await invoke('write_text_file', { filename, content });
+    } catch (e) {
+      console.error(`Failed to write text file ${filename}:`, e);
+    }
+  }, []);
+
   const flushAll = useCallback(async (): Promise<void> => {
     // Cancel all debounce timers
     for (const timer of dirtyRef.current.values()) {
@@ -208,19 +228,21 @@ export function DataStoreProvider({ children }: { children: ReactNode }) {
     return resolved;
   }, [flushAll]);
 
-  const store: DataStore = {
+  const store: DataStore = useMemo(() => ({
     get,
     set,
     save,
     delete: del,
     keys,
+    readText,
+    writeText,
     flushAll,
     activeDataDir,
     ready,
     needsSetup,
     completeSetup,
     reloadFromDir,
-  };
+  }), [get, set, save, del, keys, readText, writeText, flushAll, activeDataDir, ready, needsSetup, completeSetup, reloadFromDir]);
 
   return (
     <DataStoreContext.Provider value={store}>

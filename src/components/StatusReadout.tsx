@@ -8,24 +8,28 @@ interface StatusReadoutProps {
   tooltip: string;
   glow?: boolean;
   compact?: boolean;
+  /** When true, hover always expands even if user-compacted (overflow mode) */
+  autoCompact?: boolean;
   filtered?: boolean;
   danger?: boolean;
   onClick?: () => void;
+  onToggleCompact?: () => void;
 }
 
-export function StatusReadout({ icon, label, color, tooltip, glow, compact, filtered, danger, onClick }: StatusReadoutProps) {
+export function StatusReadout({ icon, label, color, tooltip, glow, compact, autoCompact, filtered, danger, onClick, onToggleCompact }: StatusReadoutProps) {
   const [hovered, setHovered] = useState(false);
-  const showExpanded = !compact || hovered;
+  const showExpanded = !compact || (hovered && !!autoCompact);
 
   return (
     <button
       onClick={onClick}
+      onContextMenu={onToggleCompact ? (e) => { e.preventDefault(); onToggleCompact(); } : undefined}
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
       title={tooltip}
       className={cn(
         'status-readout relative flex items-center rounded-[3px] select-none border border-transparent transition-all duration-200',
-        onClick ? 'cursor-pointer' : 'cursor-default',
+        (onClick || onToggleCompact) ? 'cursor-pointer' : 'cursor-default',
         danger && !filtered && 'status-readout-danger'
       )}
       style={

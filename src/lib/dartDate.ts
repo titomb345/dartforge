@@ -299,3 +299,64 @@ export function getReckoningAccent(reckoning: Reckoning, secs?: number | null): 
   const monthIdx = queryMonth(secs ?? null, Reckoning.Thorpian) - 1;
   return THORPIAN_MONTH_COLORS[monthIdx] ?? '#8be9fd';
 }
+
+// ── Reverse conversion (in-game date → real-world date) ─────────
+
+/** Real-world month abbreviations for date formatting. */
+const REAL_MONTHS = [
+  'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+  'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
+];
+
+/** Pre-built lookup: lowercase month abbreviation → { reckoning, monthIdx } */
+const ABBREV_LOOKUP: Map<string, { reckoning: Reckoning; monthIdx: number }> = new Map();
+for (const r of [Reckoning.Common, Reckoning.Thorpian, Reckoning.Adachian]) {
+  const abbrevs = MONTH_NAMES_ABBREV[r];
+  for (let i = 0; i < abbrevs.length; i++) {
+    ABBREV_LOOKUP.set(abbrevs[i].toLowerCase(), { reckoning: r, monthIdx: i });
+  }
+}
+
+/**
+ * Convert an in-game date string to a real-world date string.
+ *
+ * Input format: "Sap  1, 605" or "Red 12, 1150" (abbreviation + day + year)
+ * Output format: "Sep 20, 2019" (Mon DD, YYYY)
+ *
+ * Returns null if the date string can't be parsed or the month abbreviation
+ * is unrecognized.
+ */
+export function convertDartmudDate(dateString: string): string | null {
+  // Split "Sap  1, 605" → ["Sap  1", "605"]
+  const commaIdx = dateString.indexOf(',');
+  if (commaIdx < 0) return null;
+
+  const datePart = dateString.substring(0, commaIdx).trim();
+  const yearStr = dateString.substring(commaIdx + 1).trim();
+  const year = parseInt(yearStr, 10);
+  if (isNaN(year)) return null;
+
+  // Split "Sap  1" → abbreviation + day (collapse multiple spaces)
+  const parts = datePart.split(/\s+/);
+  if (parts.length < 2) return null;
+  const abbrev = parts[0].toLowerCase();
+  const dayOfMonth = parseInt(parts[1], 10);
+  if (isNaN(dayOfMonth)) return null;
+
+  // Look up reckoning and month index from abbreviation
+  const lookup = ABBREV_LOOKUP.get(abbrev);
+  if (!lookup) return null;
+  const { reckoning, monthIdx } = lookup;
+
+  // Calculate Unix timestamp (seconds)
+  const yearTimestamp =
+    DATE_OFFSET[reckoning] + (year - YEAR_OFFSET[reckoning]) * YEAR_LENGTH[reckoning];
+  const monthTimestamp = yearTimestamp + monthIdx * MONTH_LENGTH[reckoning];
+  const timestamp = monthTimestamp + (dayOfMonth - 1) * COMMON_DAY;
+
+  // Convert to real-world date using local timezone
+  const d = new Date(timestamp * 1000);
+  const mo = REAL_MONTHS[d.getMonth()];
+  const da = String(d.getDate()).padStart(2, '0');
+  return `${mo} ${da}, ${d.getFullYear()}`;
+}
