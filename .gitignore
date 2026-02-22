@@ -18,7 +18,8 @@ proxy/target/
 *.swo
 
 # Claude
-.claude/settings.local.json
+.claude/
+**/.claude/
 
 # Plans (local brainstorming)
 .plans/
