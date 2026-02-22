@@ -19,7 +19,6 @@ The `[Unreleased]` header controls automatic version bumping on merge:
 - Notes panel with per-character auto-saving text notes
 - Allocations panel for combat and magic allocation tracking with inline editing
 - Currency converter panel with freeform multi-denomination input (e.g., "3ri 5dn")
-- Auto-mapper with hex grid renderer, terrain coloring, fog of war, and right-click-to-walk pathfinding
 - Trigger system with substring, exact, and regex matching, gag/highlight actions, cooldowns, and sound alerts
 - Alias system with exact, prefix, and regex match modes, positional args ($1-$9, $*, $-), and speedwalk
 - Variable system with /var command and $varName substitution in aliases and triggers
@@ -39,7 +38,6 @@ The `[Unreleased]` header controls automatic version bumping on merge:
 - Numpad directional movement with customizable mappings
 
 ### Changed
-- Settings migration system reset to single v1 baseline for clean installs
 - Panel system uses context providers (PanelContext, PinnedControlsContext) instead of prop drilling
 - Splash screens show connection/disconnection timestamps
 - Default notification settings are all off (user opts in per channel)
