@@ -1,6 +1,6 @@
 import type { DataStore } from '../contexts/DataStoreContext';
 
-export const CURRENT_VERSION = 17;
+export const CURRENT_VERSION = 18;
 
 /** Raw store contents — all keys are optional since older stores may lack them. */
 export type StoreData = Record<string, unknown>;
@@ -181,6 +181,12 @@ const MIGRATIONS: MigrationFn[] = [
   // v16 → v17: auto-backup toggle
   (data) => {
     if (!('autoBackupEnabled' in data)) data.autoBackupEnabled = true;
+    return data;
+  },
+  // v17 → v18: custom chime sound files
+  (data) => {
+    if (!('customChime1' in data)) data.customChime1 = null;
+    if (!('customChime2' in data)) data.customChime2 = null;
     return data;
   },
 ];

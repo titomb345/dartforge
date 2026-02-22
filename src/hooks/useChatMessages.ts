@@ -1,6 +1,7 @@
 import { useState, useCallback, useEffect, useRef } from 'react';
 import { useDataStore } from '../contexts/DataStoreContext';
 import type { ChatMessage, ChatType, ChatFilters } from '../types/chat';
+import type { Chimes } from './useCustomChimes';
 
 const SETTINGS_FILE = 'settings.json';
 const MAX_MESSAGES = 500;
@@ -21,11 +22,11 @@ const DEFAULT_SOUND_ALERTS: ChatFilters = {
   sz: true,
 };
 
-// Shared Audio instances for chime playback
-const chimeAudio = new Audio('/chime1.wav');
-const chime2Audio = new Audio('/chime2.wav');
-
-export function useChatMessages(maxMessages = MAX_MESSAGES, notificationsRef?: React.RefObject<ChatFilters | null>) {
+export function useChatMessages(
+  maxMessages = MAX_MESSAGES,
+  notificationsRef?: React.RefObject<ChatFilters | null>,
+  chimesRef?: React.RefObject<Chimes>,
+) {
   const dataStore = useDataStore();
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [filters, setFilters] = useState<ChatFilters>({ ...DEFAULT_FILTERS });
@@ -87,8 +88,10 @@ export function useChatMessages(maxMessages = MAX_MESSAGES, notificationsRef?: R
 
     // Sound alert
     const s = soundAlertsRef.current;
-    if (!msg.isOwn && s[msg.type] && !isMuted) {
-      const audio = msg.type === 'tell' || msg.type === 'sz' ? chime2Audio : chimeAudio;
+    if (!msg.isOwn && s[msg.type] && !isMuted && chimesRef?.current) {
+      const audio = msg.type === 'tell' || msg.type === 'sz'
+        ? chimesRef.current.chime2
+        : chimesRef.current.chime1;
       audio.currentTime = 0;
       audio.play().catch(() => {});
     }

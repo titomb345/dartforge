@@ -68,6 +68,7 @@ import { useResize } from './hooks/useResize';
 import { AllocLineParser, parseAllocCommand, applyAllocUpdates, MagicLineParser, parseMagicAllocCommand, applyMagicAllocUpdates } from './lib/allocPatterns';
 import { useAppSettings } from './hooks/useAppSettings';
 import { useSessionLogger } from './hooks/useSessionLogger';
+import { useCustomChimes } from './hooks/useCustomChimes';
 import { AppSettingsProvider } from './contexts/AppSettingsContext';
 
 /** Commands to send automatically after login */
@@ -254,11 +255,14 @@ function AppMain() {
     processorRef.current.registerMatcher(matchSkillLine);
   }
 
+  // Custom chime sounds
+  const { chimesRef } = useCustomChimes(appSettings.customChime1, appSettings.customChime2);
+
   // Chat messages hook
   const chatNotificationsRef = useRef(appSettings.chatNotifications);
   chatNotificationsRef.current = appSettings.chatNotifications;
   const { messages: chatMessages, filters: chatFilters, mutedSenders, soundAlerts: chatSoundAlerts, newestFirst: chatNewestFirst, handleChatMessage, toggleFilter: toggleChatFilter, setAllFilters: setAllChatFilters, toggleSoundAlert: toggleChatSoundAlert, toggleNewestFirst: toggleChatNewestFirst, muteSender, unmuteSender, updateSender } =
-    useChatMessages(appSettings.chatHistorySize, chatNotificationsRef);
+    useChatMessages(appSettings.chatHistorySize, chatNotificationsRef, chimesRef);
   const handleChatMessageRef = useLatestRef(handleChatMessage);
 
   // Status trackers

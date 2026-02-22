@@ -41,6 +41,11 @@ export interface AppSettingsState {
   chatNotifications: ChatFilters;
   updateChatNotifications: (v: ChatFilters) => void;
   toggleChatNotification: (type: keyof ChatFilters) => void;
+  // Custom chimes
+  customChime1: string | null;
+  customChime2: string | null;
+  updateCustomChime1: (v: string | null) => void;
+  updateCustomChime2: (v: string | null) => void;
 }
 
 const AppSettingsContext = createContext<AppSettingsState | null>(null);

@@ -115,6 +115,9 @@ pub fn run() {
             storage::restore_backup,
             storage::prune_backups,
             storage::append_to_log,
+            storage::import_sound_file,
+            storage::get_sound_base64,
+            storage::remove_custom_sound,
         ])
         .setup(|app| {
             // Initialize storage state with default app data dir

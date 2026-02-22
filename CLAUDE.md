@@ -53,6 +53,9 @@ dartforge/
 - `cargo clippy` — Lint Rust code
 - `cargo fmt` — Format Rust code
 
+## Code Quality Rules
+- **Fix ALL build errors and warnings immediately when seen.** Never dismiss them as "pre-existing" or defer them. If `tsc`, `cargo check`, or `cargo clippy` reports an issue, fix it right then and there — no exceptions.
+
 ## Code Style
 - **TypeScript**: Prettier — single quotes, semicolons, 100-char width
 - **Rust**: `cargo fmt` defaults

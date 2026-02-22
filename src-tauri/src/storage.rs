@@ -3,6 +3,7 @@ use std::io::{Read as _, Write as _};
 use std::path::{Path, PathBuf};
 use std::sync::Mutex;
 
+use base64::Engine as _;
 use serde::{Deserialize, Serialize};
 use tauri::Manager;
 
@@ -413,6 +414,129 @@ pub fn append_to_log(
     file.write_all(content.as_bytes())
         .map_err(|e| format!("Failed to write to log: {e}"))?;
 
+    Ok(())
+}
+
+/* ── Custom sound files ──────────────────────────────────── */
+
+const MAX_SOUND_SIZE: u64 = 5 * 1024 * 1024; // 5 MB
+const ALLOWED_SOUND_EXTENSIONS: &[&str] = &["wav", "mp3", "ogg", "webm"];
+
+fn validate_chime_id(chime_id: &str) -> Result<(), String> {
+    if chime_id != "chime1" && chime_id != "chime2" {
+        return Err(format!("Invalid chime id: {chime_id}"));
+    }
+    Ok(())
+}
+
+/// Find an existing custom sound file for a chime (any supported extension).
+fn find_custom_sound(sounds_dir: &Path, chime_id: &str) -> Option<PathBuf> {
+    for ext in ALLOWED_SOUND_EXTENSIONS {
+        let path = sounds_dir.join(format!("custom-{chime_id}.{ext}"));
+        if path.is_file() {
+            return Some(path);
+        }
+    }
+    None
+}
+
+#[tauri::command]
+pub fn import_sound_file(
+    source_path: String,
+    chime_id: String,
+    state: tauri::State<'_, StorageState>,
+) -> Result<String, String> {
+    validate_chime_id(&chime_id)?;
+
+    let source = PathBuf::from(&source_path);
+    if !source.is_file() {
+        return Err(format!("File not found: {source_path}"));
+    }
+
+    // Validate extension
+    let ext = source
+        .extension()
+        .and_then(|e| e.to_str())
+        .map(|e| e.to_lowercase())
+        .unwrap_or_default();
+    if !ALLOWED_SOUND_EXTENSIONS.contains(&ext.as_str()) {
+        return Err(format!(
+            "Unsupported audio format: .{ext}. Use wav, mp3, ogg, or webm."
+        ));
+    }
+
+    // Validate file size
+    let metadata = fs::metadata(&source).map_err(|e| format!("Cannot read file: {e}"))?;
+    if metadata.len() > MAX_SOUND_SIZE {
+        return Err(format!(
+            "File too large ({:.1} MB). Maximum is 5 MB.",
+            metadata.len() as f64 / (1024.0 * 1024.0)
+        ));
+    }
+
+    let sounds_dir = state.get_dir().join("sounds");
+    fs::create_dir_all(&sounds_dir)
+        .map_err(|e| format!("Failed to create sounds dir: {e}"))?;
+
+    let dest_name = format!("custom-{chime_id}.{ext}");
+    let dest = sounds_dir.join(&dest_name);
+
+    // Atomic write: copy to temp file then rename (before deleting old)
+    let tmp_dest = dest.with_extension(format!("{ext}.tmp"));
+    fs::copy(&source, &tmp_dest)
+        .map_err(|e| format!("Failed to copy sound file: {e}"))?;
+    fs::rename(&tmp_dest, &dest)
+        .map_err(|e| format!("Failed to finalize sound file: {e}"))?;
+
+    // Remove old custom sound only after new one is safely in place
+    // (it may have a different extension, e.g. old .mp3 replaced by new .wav)
+    if let Some(existing) = find_custom_sound(&sounds_dir, &chime_id) {
+        if existing != dest {
+            let _ = fs::remove_file(&existing);
+        }
+    }
+
+    Ok(dest_name)
+}
+
+#[tauri::command]
+pub fn get_sound_base64(
+    chime_id: String,
+    state: tauri::State<'_, StorageState>,
+) -> Option<String> {
+    validate_chime_id(&chime_id).ok()?;
+
+    let sounds_dir = state.get_dir().join("sounds");
+    let path = find_custom_sound(&sounds_dir, &chime_id)?;
+    let bytes = fs::read(&path).ok()?;
+    let b64 = base64::engine::general_purpose::STANDARD.encode(&bytes);
+
+    let ext = path
+        .extension()
+        .and_then(|e| e.to_str())
+        .unwrap_or("wav");
+    let mime = match ext {
+        "mp3" => "audio/mpeg",
+        "ogg" => "audio/ogg",
+        "webm" => "audio/webm",
+        _ => "audio/wav",
+    };
+
+    Some(format!("data:{mime};base64,{b64}"))
+}
+
+#[tauri::command]
+pub fn remove_custom_sound(
+    chime_id: String,
+    state: tauri::State<'_, StorageState>,
+) -> Result<(), String> {
+    validate_chime_id(&chime_id)?;
+
+    let sounds_dir = state.get_dir().join("sounds");
+    if let Some(path) = find_custom_sound(&sounds_dir, &chime_id) {
+        fs::remove_file(&path)
+            .map_err(|e| format!("Failed to remove custom sound: {e}"))?;
+    }
     Ok(())
 }
 

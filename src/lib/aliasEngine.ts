@@ -110,7 +110,6 @@ function matchAlias(
   if (!trimmed) return null;
 
   const parts = trimmed.split(/\s+/);
-  const firstWord = parts[0].toLowerCase();
   const restParts = parts.slice(1);
 
   // Sort by specificity so exact matches always win over prefix over regex

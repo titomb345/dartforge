@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, type ReactNode } from 'react';
-import { TimerIcon, FolderIcon, TrashIcon, CheckCircleIcon, ClockIcon, ChevronDownSmallIcon, FilterIcon, GearIcon, ChatIcon, NotesIcon, RotateCcwIcon, Volume2Icon } from './icons';
+import { TimerIcon, FolderIcon, TrashIcon, CheckCircleIcon, ClockIcon, ChevronDownSmallIcon, FilterIcon, GearIcon, NotesIcon, RotateCcwIcon, Volume2Icon, PlayIcon } from './icons';
 import { DEFAULT_NUMPAD_MAPPINGS } from '../hooks/useAppSettings';
 import { MudInput } from './shared';
 import { cn } from '../lib/cn';
@@ -154,6 +154,7 @@ export function SettingsPanel() {
     sessionLoggingEnabled, updateSessionLoggingEnabled,
     numpadMappings, updateNumpadMappings,
     chatNotifications, toggleChatNotification,
+    customChime1, customChime2, updateCustomChime1, updateCustomChime2,
   } = settings;
   const isTauri = getPlatform() === 'tauri';
 
@@ -171,7 +172,6 @@ export function SettingsPanel() {
           icon={<TimerIcon size={13} />}
           title="Anti-Idle"
           accent="#bd93f9"
-          defaultOpen
         >
           <FieldRow label="Enabled">
             <ToggleSwitch
@@ -218,7 +218,6 @@ export function SettingsPanel() {
           icon={<FilterIcon size={13} />}
           title="Output"
           accent="#50fa7b"
-          defaultOpen
         >
           <FieldRow label="Convert board dates">
             <ToggleSwitch
@@ -364,6 +363,16 @@ export function SettingsPanel() {
         {/* Numpad Mappings */}
         <NumpadSection mappings={numpadMappings} onChange={updateNumpadMappings} />
 
+        {/* Custom Sounds — Tauri only */}
+        {isTauri && (
+          <CustomSoundsSection
+            customChime1={customChime1}
+            customChime2={customChime2}
+            updateCustomChime1={updateCustomChime1}
+            updateCustomChime2={updateCustomChime2}
+          />
+        )}
+
         {/* Notifications */}
         <SettingsSection
           icon={<Volume2Icon size={13} />}
@@ -456,6 +465,165 @@ function NumpadSection({ mappings, onChange }: { mappings: Record<string, string
         <RotateCcwIcon size={9} />
         Reset to defaults
       </button>
+    </SettingsSection>
+  );
+}
+
+/* ── Custom Sounds Section (Tauri-only) ───────────────────── */
+
+const CHIME_BTN = cn(
+  'flex items-center gap-1 px-2 py-0.5 rounded',
+  'text-[9px] font-mono text-text-dim border border-border-dim',
+  'hover:text-text-label hover:border-border-subtle transition-colors cursor-pointer',
+);
+
+function ChimePicker({
+  label,
+  chimeId,
+  customFileName,
+  onUpdate,
+}: {
+  label: string;
+  chimeId: 'chime1' | 'chime2';
+  customFileName: string | null;
+  onUpdate: (v: string | null) => void;
+}) {
+  const [previewing, setPreviewing] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const previewRef = useRef<HTMLAudioElement | null>(null);
+
+  const handleChoose = async () => {
+    if (!openDialog || !invoke) return;
+    setError(null);
+    try {
+      const selected = await openDialog({
+        filters: [{ name: 'Audio', extensions: ['wav', 'mp3', 'ogg', 'webm'] }],
+        multiple: false,
+        title: `Select ${label} sound`,
+      });
+      if (!selected || typeof selected !== 'string') return;
+
+      const destName = await invoke('import_sound_file', {
+        sourcePath: selected,
+        chimeId,
+      }) as string;
+
+      // Store the original filename for display
+      const parts = selected.replace(/\\/g, '/').split('/');
+      onUpdate(parts[parts.length - 1] || destName);
+    } catch (e) {
+      setError(String(e));
+    }
+  };
+
+  const handlePreview = async () => {
+    // Stop any in-flight preview first
+    if (previewRef.current) {
+      previewRef.current.pause();
+      previewRef.current.src = '';
+      previewRef.current = null;
+    }
+    setPreviewing(true);
+    try {
+      let url: string;
+      if (customFileName && invoke) {
+        const dataUrl = await invoke('get_sound_base64', { chimeId }) as string | null;
+        url = dataUrl || `/${chimeId}.wav`;
+      } else {
+        url = `/${chimeId}.wav`;
+      }
+      const audio = new Audio(url);
+      previewRef.current = audio;
+      const done = () => { previewRef.current = null; setPreviewing(false); };
+      audio.onended = done;
+      audio.onerror = done;
+      audio.play().catch(done);
+    } catch {
+      previewRef.current = null;
+      setPreviewing(false);
+    }
+  };
+
+  const handleReset = async () => {
+    setError(null);
+    try {
+      if (invoke) await invoke('remove_custom_sound', { chimeId });
+      onUpdate(null);
+    } catch (e) {
+      setError(String(e));
+    }
+  };
+
+  return (
+    <div className="space-y-1.5">
+      <div className="flex items-center gap-2">
+        <span className="text-[10px] font-mono text-text-dim uppercase tracking-wide flex-1">
+          {label}
+        </span>
+        <span className="text-[9px] font-mono text-text-dim truncate max-w-[120px]" title={customFileName || 'Default'}>
+          {customFileName || 'Default'}
+        </span>
+      </div>
+      <div className="flex items-center gap-1">
+        <button onClick={handleChoose} className={CHIME_BTN}>
+          <FolderIcon size={9} />
+          Choose
+        </button>
+        <button
+          onClick={handlePreview}
+          disabled={previewing}
+          className={cn(CHIME_BTN, previewing && 'opacity-40 pointer-events-none')}
+        >
+          <PlayIcon size={9} />
+          Preview
+        </button>
+        {customFileName && (
+          <button onClick={handleReset} className={CHIME_BTN}>
+            <RotateCcwIcon size={9} />
+            Reset
+          </button>
+        )}
+      </div>
+      {error && (
+        <div className="text-[9px] font-mono text-red-400 leading-relaxed">{error}</div>
+      )}
+    </div>
+  );
+}
+
+function CustomSoundsSection({
+  customChime1,
+  customChime2,
+  updateCustomChime1,
+  updateCustomChime2,
+}: {
+  customChime1: string | null;
+  customChime2: string | null;
+  updateCustomChime1: (v: string | null) => void;
+  updateCustomChime2: (v: string | null) => void;
+}) {
+  return (
+    <SettingsSection
+      icon={<Volume2Icon size={13} />}
+      title="Custom Sounds"
+      accent="#50fa7b"
+    >
+      <ChimePicker
+        label="General Chat"
+        chimeId="chime1"
+        customFileName={customChime1}
+        onUpdate={updateCustomChime1}
+      />
+      <div className="border-t border-border-dim" />
+      <ChimePicker
+        label="Tells & SZ"
+        chimeId="chime2"
+        customFileName={customChime2}
+        onUpdate={updateCustomChime2}
+      />
+      <div className="text-[9px] text-text-dim font-mono leading-relaxed mt-1">
+        Choose custom audio files for chat alert sounds. Supports WAV, MP3, OGG, and WebM (max 5 MB).
+      </div>
     </SettingsSection>
   );
 }
