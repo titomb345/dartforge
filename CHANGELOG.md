@@ -9,7 +9,7 @@ The `[Unreleased]` header controls automatic version bumping on merge:
 - `[Unreleased-minor]` → 0.1.0 → 0.2.0
 - `[Unreleased-major]` → 0.1.0 → 1.0.0
 
-## [Unreleased-major]
+## [1.0.0] - 2026-02-22
 
 ### Added
 - Pinnable panel docking system — pin up to 3 panels per side (left/right) with reorder, swap-side, and resize controls
