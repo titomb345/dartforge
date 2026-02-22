@@ -1,5 +1,5 @@
 import { createContext, useContext } from 'react';
-import type { DockSide } from '../types';
+import type { DockSide, PinnablePanel } from '../types';
 
 export interface PinnedControlsValue {
   side: DockSide;
@@ -9,6 +9,8 @@ export interface PinnedControlsValue {
   onMoveDown?: () => void;
   onSwapSide?: () => void;
   onUnpin: () => void;
+  otherSidePanels?: PinnablePanel[];
+  onSwapWith?: (target: PinnablePanel) => void;
 }
 
 const PinnedControlsContext = createContext<PinnedControlsValue | null>(null);

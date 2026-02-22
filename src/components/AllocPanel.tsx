@@ -6,7 +6,7 @@ import { ALLOC_SLOTS, POINTS_PER_LIMB, SLOT_SHORT, MAGIC_SLOTS, MAGIC_POINTS, MA
 import { calcNull, calcArcane } from '../lib/allocPatterns';
 import { PinMenuButton } from './PinMenuButton';
 import { PinnedControls } from './PinnedControls';
-import { ChevronLeftIcon, ChevronRightSmallIcon, PlusIcon, TrashIcon, CopyIcon, CheckIcon } from './icons';
+import { ChevronLeftIcon, ChevronRightSmallIcon, PlusIcon, TrashIcon, CopyIcon, CheckIcon, AllocIcon } from './icons';
 import { cn } from '../lib/cn';
 
 type AllocPanelProps = PinnablePanelProps;
@@ -893,7 +893,7 @@ export function AllocPanel({ mode = 'slideout' }: AllocPanelProps) {
       }>
       {/* Header */}
       <div className="flex items-center justify-between px-3 py-2.5 border-b border-border-subtle shrink-0">
-        <span className="text-[13px] font-semibold text-text-heading">Allocations</span>
+        <span className="text-[13px] font-semibold text-text-heading flex items-center gap-1.5"><AllocIcon size={12} /> Allocations</span>
         <div className="flex items-center gap-1.5">
           {isPinned ? <PinnedControls /> : <PinMenuButton panel="alloc" />}
         </div>

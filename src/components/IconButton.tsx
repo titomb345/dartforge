@@ -8,6 +8,8 @@ interface IconButtonProps {
   toggled?: boolean;
   pinned?: boolean;
   accent?: string;
+  helpId?: string;
+  panelId?: string;
   onClick: () => void;
 }
 
@@ -18,6 +20,8 @@ export function IconButton({
   toggled,
   pinned,
   accent = '#8be9fd',
+  helpId,
+  panelId,
   onClick,
 }: IconButtonProps) {
   const on = toggled === true;
@@ -28,6 +32,8 @@ export function IconButton({
       onClick={onClick}
       disabled={disabled || isPinned}
       title={isPinned ? `${title} (pinned)` : title}
+      data-help-id={helpId}
+      data-panel={panelId}
       className={cn(
         'icon-btn flex items-center justify-center w-[30px] h-[30px] p-0 rounded-[6px]',
         'select-none leading-none transition-all duration-200 ease-in-out border',

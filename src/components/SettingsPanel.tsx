@@ -162,7 +162,7 @@ export function SettingsPanel() {
     <div className="w-[360px] h-full bg-bg-primary border-l border-border-subtle flex flex-col overflow-hidden">
       {/* Header */}
       <div className="flex items-center px-3 py-2.5 border-b border-border-subtle">
-        <span className="text-[13px] font-semibold text-text-heading">Settings</span>
+        <span className="text-[13px] font-semibold text-text-heading flex items-center gap-1.5"><GearIcon size={12} /> Settings</span>
       </div>
 
       {/* Scrollable sections */}

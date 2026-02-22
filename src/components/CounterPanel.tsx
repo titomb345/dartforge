@@ -10,6 +10,7 @@ import {
   PlusIcon,
   TrashIcon,
   RotateCcwIcon,
+  CounterIcon,
 } from './icons';
 import { PinMenuButton } from './PinMenuButton';
 import { PinnedControls } from './PinnedControls';
@@ -160,7 +161,7 @@ export function CounterPanel({
     >
       {/* Header */}
       <div className="flex items-center justify-between px-3 py-2.5 border-b border-border-subtle shrink-0">
-        <span className="text-[13px] font-semibold text-text-heading">Counters</span>
+        <span className="text-[13px] font-semibold text-text-heading flex items-center gap-1.5"><CounterIcon size={12} /> Counters</span>
         <div className="flex items-center gap-1.5">
           {pinControls}
         </div>

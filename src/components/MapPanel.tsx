@@ -7,6 +7,7 @@ import type { PinnablePanelProps } from '../types';
 import { panelRootClass } from '../lib/panelUtils';
 import { PinnedControls } from './PinnedControls';
 import { PinMenuButton } from './PinMenuButton';
+import { MapIcon } from './icons';
 import { MapCanvas } from './MapCanvas';
 import { useMapContext } from '../contexts/MapContext';
 import { TERRAIN_LABELS } from '../lib/hexTerrainPatterns';
@@ -59,8 +60,8 @@ export function MapPanel({
     <div className={panelRootClass(isPinned)} style={!isPinned ? { width: 480 } : undefined}>
       {/* Header */}
       <div className="flex items-center justify-between px-3 py-2.5 border-b border-border-subtle shrink-0">
-        <span className="text-[13px] font-semibold text-text-heading truncate">
-          Map
+        <span className="text-[13px] font-semibold text-text-heading truncate flex items-center gap-1.5">
+          <MapIcon size={12} /> Map
           {currentRoom && (
             <span className="text-text-dim font-normal ml-1.5">
               — {TERRAIN_LABELS[currentRoom.terrain] ?? 'Hex'} ({currentRoom.coords.q}, {currentRoom.coords.r})
@@ -109,7 +110,7 @@ export function MapPanel({
       </div>
 
       {/* Canvas body */}
-      <div ref={bodyRef} className="flex-1 overflow-hidden">
+      <div ref={bodyRef} data-help-id="map-canvas" className="flex-1 overflow-hidden">
         {size.width > 0 && size.height > 0 && (
           <MapCanvas
             width={size.width}

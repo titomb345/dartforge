@@ -46,6 +46,9 @@ export interface AppSettingsState {
   customChime2: string | null;
   updateCustomChime1: (v: string | null) => void;
   updateCustomChime2: (v: string | null) => void;
+  // Help guide
+  hasSeenGuide: boolean;
+  updateHasSeenGuide: (v: boolean) => void;
 }
 
 const AppSettingsContext = createContext<AppSettingsState | null>(null);

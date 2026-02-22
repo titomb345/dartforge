@@ -61,6 +61,9 @@ export function useAppSettings() {
   const [customChime1, setCustomChime1] = useState<string | null>(null);
   const [customChime2, setCustomChime2] = useState<string | null>(null);
 
+  // Help guide
+  const [hasSeenGuide, setHasSeenGuide] = useState(false);
+
   // Load from settings
   useEffect(() => {
     if (!dataStore.ready) return;
@@ -104,6 +107,8 @@ export function useAppSettings() {
       if (savedCustomChime1 !== undefined) setCustomChime1(savedCustomChime1);
       const savedCustomChime2 = await dataStore.get<string | null>(SETTINGS_FILE, 'customChime2');
       if (savedCustomChime2 !== undefined) setCustomChime2(savedCustomChime2);
+      const savedHasSeenGuide = await dataStore.get<boolean>(SETTINGS_FILE, 'hasSeenGuide');
+      if (savedHasSeenGuide != null) setHasSeenGuide(savedHasSeenGuide);
 
       loaded.current = true;
     })().catch(console.error);
@@ -199,6 +204,11 @@ export function useAppSettings() {
     persist('customChime2', v);
   }, [persist]);
 
+  const updateHasSeenGuide = useCallback((v: boolean) => {
+    setHasSeenGuide(v);
+    persist('hasSeenGuide', v);
+  }, [persist]);
+
   const toggleChatNotification = useCallback(async (type: keyof ChatFilters) => {
     // Request permission when enabling a notification for the first time
     const current = chatNotifications[type];
@@ -237,5 +247,7 @@ export function useAppSettings() {
     chatNotifications, updateChatNotifications, toggleChatNotification,
     // Custom chimes
     customChime1, customChime2, updateCustomChime1, updateCustomChime2,
+    // Help guide
+    hasSeenGuide, updateHasSeenGuide,
   };
 }

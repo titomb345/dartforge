@@ -4,7 +4,7 @@ import { useSignatureContext } from '../contexts/SignatureContext';
 import type { ChatType } from '../types/chat';
 import type { PinnablePanelProps } from '../types';
 import { panelRootClass } from '../lib/panelUtils';
-import { SortAscIcon, SortDescIcon } from './icons';
+import { SortAscIcon, SortDescIcon, ChatIcon } from './icons';
 import { FilterPill } from './FilterPill';
 import { PinMenuButton } from './PinMenuButton';
 import { PinnedControls } from './PinnedControls';
@@ -134,7 +134,7 @@ export function ChatPanel({
       {/* Header */}
       <div className="flex items-center justify-between px-3 py-2.5 border-b border-border-subtle shrink-0">
         <div className="flex items-center gap-1.5">
-          <span className="text-[13px] font-semibold text-text-heading">Chat</span>
+          <span className="text-[13px] font-semibold text-text-heading flex items-center gap-1.5"><ChatIcon size={12} /> Chat</span>
           <button
             onClick={toggleNewestFirst}
             title={newestFirst ? 'Newest first (click for oldest first)' : 'Oldest first (click for newest first)'}
@@ -153,7 +153,7 @@ export function ChatPanel({
       </div>
 
       {/* Filter pills + management badges */}
-      <div className="flex items-center gap-1 px-2 py-2 border-b border-border-subtle flex-wrap shrink-0">
+      <div data-help-id="chat-filters" className="flex items-center gap-1 px-2 py-2 border-b border-border-subtle flex-wrap shrink-0">
         <FilterPill label="All" active={allActive && !exclusiveFilter} onClick={toggleAll} />
         {(Object.keys(CHAT_TYPE_LABELS) as ChatType[]).map((type) => (
           <FilterPill

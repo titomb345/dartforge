@@ -130,8 +130,11 @@ export function expandTriggerBody(
 
   // $line = full stripped line
   result = result.split('$line').join(match.line);
+  // $Me = capitalized character name — before $me to avoid partial match
+  const charName = activeCharacter ?? '';
+  result = result.split('$Me').join(charName.charAt(0).toUpperCase() + charName.slice(1));
   // $me = active character
-  result = result.split('$me').join(activeCharacter ?? '');
+  result = result.split('$me').join(charName);
   // $0 = full regex match or matched substring
   result = result.split('$0').join(match.captures[0] ?? '');
   // $1–$9 = capture groups

@@ -13,7 +13,7 @@ import { ChatPanel } from './components/ChatPanel';
 import { CounterPanel } from './components/CounterPanel';
 import { NotesPanel } from './components/NotesPanel';
 import { GameClock } from './components/GameClock';
-import { StatusReadout } from './components/StatusReadout';
+import { SortableStatusBar, DEFAULT_STATUS_BAR_ORDER, type StatusReadoutKey, type ReadoutConfig } from './components/SortableStatusBar';
 import { HeartIcon, FocusIcon, FoodIcon, DropletIcon, AuraIcon, WeightIcon, BootIcon } from './components/icons';
 import { useMudConnection } from './hooks/useMudConnection';
 import { useTransport } from './contexts/TransportContext';
@@ -30,7 +30,7 @@ import { useAura } from './hooks/useAura';
 import { useEncumbrance } from './hooks/useEncumbrance';
 import { useMovement } from './hooks/useMovement';
 import { useDataStore } from './contexts/DataStoreContext';
-import { buildXtermTheme, type ThemeColorKey } from './lib/defaultTheme';
+import { buildXtermTheme } from './lib/defaultTheme';
 import { OutputProcessor } from './lib/outputProcessor';
 import { expandInput } from './lib/aliasEngine';
 import { executeCommands, type CommandRunner } from './lib/commandUtils';
@@ -38,6 +38,7 @@ import { OutputFilter, DEFAULT_FILTER_FLAGS, type FilterFlags } from './lib/outp
 import { matchSkillLine } from './lib/skillPatterns';
 import type { Panel, PanelLayout, PinnablePanel, DockSide } from './types';
 import { PinnedRegion } from './components/PinnedRegion';
+import { CollapsedPanelStrip } from './components/CollapsedPanelStrip';
 import { SlideOut } from './components/SlideOut';
 import { SkillTrackerProvider } from './contexts/SkillTrackerContext';
 import { ChatProvider } from './contexts/ChatContext';
@@ -65,11 +66,15 @@ import { AllocPanel } from './components/AllocPanel';
 import { CurrencyPanel } from './components/CurrencyPanel';
 import { ResizeHandle } from './components/ResizeHandle';
 import { useResize } from './hooks/useResize';
+import { useViewportBudget, MIN_TERMINAL_WIDTH } from './hooks/useViewportBudget';
 import { AllocLineParser, parseAllocCommand, applyAllocUpdates, MagicLineParser, parseMagicAllocCommand, applyMagicAllocUpdates } from './lib/allocPatterns';
 import { useAppSettings } from './hooks/useAppSettings';
 import { useSessionLogger } from './hooks/useSessionLogger';
 import { useCustomChimes } from './hooks/useCustomChimes';
 import { AppSettingsProvider } from './contexts/AppSettingsContext';
+import { SpotlightProvider } from './contexts/SpotlightContext';
+import { SpotlightOverlay } from './components/SpotlightOverlay';
+import { HelpPanel } from './components/HelpPanel';
 
 /** Commands to send automatically after login */
 const LOGIN_COMMANDS = ['hp', 'score', 'show combat allocation:all', 'show magic allocation'];
@@ -117,6 +122,7 @@ function AppMain() {
   const panelLayoutLoadedRef = useRef(false);
   const [compactReadouts, setCompactReadouts] = useState<Record<string, boolean>>({});
   const [filterFlags, setFilterFlags] = useState<FilterFlags>({ ...DEFAULT_FILTER_FLAGS });
+  const [statusBarOrder, setStatusBarOrder] = useState<StatusReadoutKey[]>([...DEFAULT_STATUS_BAR_ORDER]);
   const [loggedIn, setLoggedIn] = useState(false);
   const statusBarRef = useRef<HTMLDivElement | null>(null);
   const [autoCompact, setAutoCompact] = useState(false);
@@ -154,6 +160,10 @@ function AppMain() {
       const savedWidths = await dataStore.get<{ left: number; right: number }>('settings.json', 'pinnedWidths');
       if (savedWidths != null && typeof savedWidths.left === 'number' && typeof savedWidths.right === 'number') {
         setPinnedWidths(savedWidths);
+      }
+      const savedStatusOrder = await dataStore.get<StatusReadoutKey[]>('settings.json', 'statusBarOrder');
+      if (Array.isArray(savedStatusOrder) && savedStatusOrder.length > 0) {
+        setStatusBarOrder(savedStatusOrder);
       }
 
       panelLayoutLoadedRef.current = true;
@@ -200,6 +210,24 @@ function AppMain() {
     });
   }, []);
 
+  const swapPanelsWith = useCallback((panel: PinnablePanel, target: PinnablePanel) => {
+    setPanelLayout((prev) => {
+      const panelOnLeft = prev.left.includes(panel);
+      const targetOnLeft = prev.left.includes(target);
+      if (panelOnLeft === targetOnLeft) return prev;
+      const newLeft = [...prev.left];
+      const newRight = [...prev.right];
+      if (panelOnLeft) {
+        newLeft[newLeft.indexOf(panel)] = target;
+        newRight[newRight.indexOf(target)] = panel;
+      } else {
+        newRight[newRight.indexOf(panel)] = target;
+        newLeft[newLeft.indexOf(target)] = panel;
+      }
+      return { left: newLeft, right: newRight };
+    });
+  }, []);
+
   const movePanel = useCallback((panel: PinnablePanel, direction: 'up' | 'down') => {
     setPanelLayout((prev) => {
       const moveSide = (arr: PinnablePanel[]): PinnablePanel[] => {
@@ -233,15 +261,20 @@ function AppMain() {
     dataStore.set('settings.json', 'pinnedWidths', pinnedWidths).catch(console.error);
   }, [pinnedWidths]);
 
-  // Resize hooks for pinned regions
+  // Viewport-aware panel width budget
+  const budget = useViewportBudget(pinnedWidths, panelLayout);
+
+  // Resize hooks for pinned regions (dynamic max from budget)
   const leftResize = useResize({
     side: 'left',
     initialWidth: pinnedWidths.left,
+    max: budget.maxLeftWidth,
     onWidthChange: useCallback((w: number) => setPinnedWidths((p) => ({ ...p, left: w })), []),
   });
   const rightResize = useResize({
     side: 'right',
     initialWidth: pinnedWidths.right,
+    max: budget.maxRightWidth,
     onWidthChange: useCallback((w: number) => setPinnedWidths((p) => ({ ...p, right: w })), []),
   });
 
@@ -297,8 +330,8 @@ function AppMain() {
       onMovement: (match) => { updateMovementRef.current(match); },
       onChat: (msg) => { handleChatMessageRef.current(msg); },
       onLine: (stripped, raw) => {
-        // Feed stripped lines to the room parser for map building
-        mapFeedLineRef.current(stripped);
+        // TODO: Re-enable when automapper is ready
+        // mapFeedLineRef.current(stripped);
 
         // Feed to allocation parser
         const allocResult = allocParserRef.current?.feedLine(stripped);
@@ -322,6 +355,11 @@ function AppMain() {
         for (const match of matches) {
           if (match.trigger.gag) gag = true;
           if (match.trigger.highlight) highlight = match.trigger.highlight;
+          if (match.trigger.soundAlert && chimesRef.current) {
+            const audio = chimesRef.current.chime1;
+            audio.currentTime = 0;
+            audio.play().catch(() => {});
+          }
 
           // Expand and execute trigger body asynchronously
           if (match.trigger.body.trim()) {
@@ -459,8 +497,9 @@ function AppMain() {
 
   // Map tracker
   const mapTracker = useMapTracker(dataStore, activeCharacter);
-  const mapFeedLineRef = useLatestRef(mapTracker.feedLine);
-  const mapTrackCommandRef = useLatestRef(mapTracker.trackCommand);
+  // TODO: Re-enable when automapper is ready
+  // const mapFeedLineRef = useLatestRef(mapTracker.feedLine);
+  // const mapTrackCommandRef = useLatestRef(mapTracker.trackCommand);
 
   // Allocation tracker
   const allocState = useAllocations(sendCommandRef, dataStore, activeCharacter);
@@ -645,7 +684,8 @@ function AppMain() {
     });
     await executeCommands(result.commands, {
       send: async (text) => {
-        mapTrackCommandRef.current(text);
+        // TODO: Re-enable when automapper is ready
+        // mapTrackCommandRef.current(text);
         await sendCommand(text);
         // Update live allocs directly from outgoing set commands
         const parsed = parseAllocCommand(text);
@@ -696,6 +736,11 @@ function AppMain() {
     setFilterFlags((prev) => ({ ...prev, [key]: !prev[key] }));
   }, []);
 
+  const reorderStatusBar = useCallback((newOrder: StatusReadoutKey[]) => {
+    setStatusBarOrder(newOrder);
+    dataStore.set('settings.json', 'statusBarOrder', newOrder).catch(console.error);
+  }, [dataStore]);
+
   // Anti-idle timer — sends command at interval when connected + logged in + enabled
   const antiIdleEnabledRef = useLatestRef(antiIdleEnabled);
   const antiIdleCommandRef = useLatestRef(antiIdleCommand);
@@ -721,30 +766,22 @@ function AppMain() {
     return () => { clearInterval(id); setAntiIdleNextAt(null); };
   }, [connected, loggedIn, antiIdleEnabled, antiIdleMinutes]);
 
-  const isDanger = (tc: string) => tc === 'red' || tc === 'brightRed' || tc === 'magenta';
+  // First-launch: auto-open Guide panel
+  useEffect(() => {
+    if (!settingsLoadedRef.current || appSettings.hasSeenGuide) return;
+    const timer = setTimeout(() => setActivePanel('help'), 500);
+    return () => clearTimeout(timer);
+  }, [appSettings.hasSeenGuide]);
 
-  const renderReadout = (
-    key: string,
-    data: { label: string; themeColor: ThemeColorKey; severity: number } | null,
-    icon: React.ReactNode,
-    tooltip: string,
-    filterKey?: keyof FilterFlags,
-  ) => data && (
-    <StatusReadout
-      key={key}
-      icon={icon}
-      label={data.label}
-      color={theme[data.themeColor]}
-      tooltip={tooltip}
-      glow={data.severity <= 1}
-      danger={isDanger(data.themeColor)}
-      compact={autoCompact || !!compactReadouts[key]}
-      autoCompact={autoCompact}
-      filtered={filterKey ? filterFlags[filterKey] : undefined}
-      onClick={filterKey ? () => toggleFilter(filterKey) : undefined}
-      onToggleCompact={() => toggleCompactReadout(key)}
-    />
-  );
+  const readoutConfigs: ReadoutConfig[] = useMemo(() => [
+    { id: 'health', data: health, icon: <HeartIcon size={11} />, tooltip: (d) => d.message ?? '' },
+    { id: 'concentration', data: concentration, icon: <FocusIcon size={11} />, tooltip: (d) => d.message ?? '', filterKey: 'concentration' },
+    { id: 'aura', data: aura, icon: <AuraIcon size={11} />, tooltip: (d) => d.key === 'none' ? 'You have no aura.' : `Your aura appears to be ${d.descriptor}.`, filterKey: 'aura' },
+    { id: 'hunger', data: hunger, icon: <FoodIcon size={11} />, tooltip: (d) => `You are ${d.descriptor}.`, filterKey: 'hunger' },
+    { id: 'thirst', data: thirst, icon: <DropletIcon size={11} />, tooltip: (d) => `You are ${d.descriptor}.`, filterKey: 'thirst' },
+    { id: 'encumbrance', data: encumbrance, icon: <WeightIcon size={11} />, tooltip: (d) => d.descriptor ?? '', filterKey: 'encumbrance' },
+    { id: 'movement', data: movement, icon: <BootIcon size={11} />, tooltip: (d) => d.descriptor ?? '', filterKey: 'movement' },
+  ], [health, concentration, aura, hunger, thirst, encumbrance, movement]);
 
   const skillTrackerValue = useMemo(() => (
     { activeCharacter, skillData, showInlineImproves, toggleInlineImproves, addSkill, updateSkillCount, deleteSkill }
@@ -781,6 +818,7 @@ function AppMain() {
     <MapProvider value={mapTracker}>
     <AllocProvider value={allocState}>
     <PanelProvider layout={panelLayout} activePanel={activePanel} togglePanel={togglePanel} pinPanel={pinPanel}>
+    <SpotlightProvider>
     <div className="flex flex-col h-screen bg-bg-canvas text-text-primary relative p-1 gap-1">
       <Toolbar
         connected={connected}
@@ -788,38 +826,117 @@ function AppMain() {
         onDisconnect={() => { disconnect(); requestAnimationFrame(() => inputRef.current?.focus()); }}
       />
       <div className="flex-1 overflow-hidden flex flex-row gap-1 relative">
-        {/* Left pinned region */}
-        <PinnedRegion
-          side="left"
-          panels={panelLayout.left}
-          width={pinnedWidths.left}
-          otherSidePanelCount={panelLayout.right.length}
-          onUnpin={unpinPanel}
-          onSwapSide={swapPanelSide}
-          onMovePanel={movePanel}
-        />
-        {panelLayout.left.length > 0 && (
-          <ResizeHandle side="left" onMouseDown={leftResize.handleMouseDown} isDragging={leftResize.isDragging} />
-        )}
+        {/* Left pinned region — full, collapsed strip, or hidden */}
+        {budget.effectiveLeftWidth > 0 ? (
+          <>
+            <PinnedRegion
+              side="left"
+              panels={panelLayout.left}
+              width={budget.effectiveLeftWidth}
+              otherSidePanels={panelLayout.right}
+              onUnpin={unpinPanel}
+              onSwapSide={swapPanelSide}
+              onSwapWith={swapPanelsWith}
+              onMovePanel={movePanel}
+            />
+            {panelLayout.left.length > 0 && (
+              <ResizeHandle side="left" onMouseDown={leftResize.handleMouseDown} isDragging={leftResize.isDragging} constrained={budget.effectiveLeftWidth < pinnedWidths.left} />
+            )}
+          </>
+        ) : budget.leftCollapsed && panelLayout.left.length > 0 ? (
+          <CollapsedPanelStrip
+            side="left"
+            panels={panelLayout.left}
+            panelWidth={pinnedWidths.left}
+            otherSidePanels={panelLayout.right}
+            onUnpin={unpinPanel}
+            onSwapSide={swapPanelSide}
+            onSwapWith={swapPanelsWith}
+            onMovePanel={movePanel}
+          />
+        ) : null}
 
-        {/* Center: Terminal */}
-        <div className="flex-1 overflow-hidden flex flex-col rounded-lg">
-          <Terminal terminalRef={terminalRef} inputRef={inputRef} theme={xtermTheme} display={display} onUpdateDisplay={updateDisplay} />
+        {/* Center: Terminal + bottom controls */}
+        <div className="flex-1 overflow-hidden flex flex-col gap-1" style={{ minWidth: MIN_TERMINAL_WIDTH }}>
+          <div className="flex-1 overflow-hidden rounded-lg flex flex-col">
+            <Terminal terminalRef={terminalRef} inputRef={inputRef} theme={xtermTheme} display={display} onUpdateDisplay={updateDisplay} />
+          </div>
+          {/* Status bar + command input */}
+          <div className="rounded-lg bg-bg-primary overflow-hidden shrink-0">
+            <div
+              ref={statusBarRef}
+              data-help-id="status-bar"
+              className="flex items-center gap-1 px-1.5 py-0.5"
+              style={{ background: 'linear-gradient(to bottom, #1e1e1e, #1a1a1a)' }}
+            >
+              {loggedIn && (
+                <SortableStatusBar
+                  items={readoutConfigs}
+                  order={statusBarOrder}
+                  onReorder={reorderStatusBar}
+                  theme={theme}
+                  autoCompact={autoCompact}
+                  compactReadouts={compactReadouts}
+                  filterFlags={filterFlags}
+                  toggleFilter={toggleFilter}
+                  toggleCompactReadout={toggleCompactReadout}
+                />
+              )}
+              <div className="ml-auto">
+                <GameClock
+                  compact={autoCompact || !!compactReadouts.clock}
+                  onToggleCompact={() => toggleCompactReadout('clock')}
+                />
+              </div>
+            </div>
+            <CommandInput
+              ref={inputRef}
+              onSend={handleSend}
+              onReconnect={reconnect}
+              onToggleCounter={toggleActiveCounter}
+              disabled={!connected}
+              connected={connected}
+              passwordMode={passwordMode}
+              skipHistory={skipHistory}
+              recentLinesRef={recentLinesRef}
+              antiIdleEnabled={antiIdleEnabled}
+              antiIdleCommand={antiIdleCommand}
+              antiIdleMinutes={antiIdleMinutes}
+              antiIdleNextAt={antiIdleNextAt}
+              onToggleAntiIdle={() => updateAntiIdleEnabled(!antiIdleEnabled)}
+            />
+          </div>
         </div>
 
-        {panelLayout.right.length > 0 && (
-          <ResizeHandle side="right" onMouseDown={rightResize.handleMouseDown} isDragging={rightResize.isDragging} />
-        )}
-        {/* Right pinned region */}
-        <PinnedRegion
-          side="right"
-          panels={panelLayout.right}
-          width={pinnedWidths.right}
-          otherSidePanelCount={panelLayout.left.length}
-          onUnpin={unpinPanel}
-          onSwapSide={swapPanelSide}
-          onMovePanel={movePanel}
-        />
+        {/* Right pinned region — full, collapsed strip, or hidden */}
+        {budget.effectiveRightWidth > 0 ? (
+          <>
+            {panelLayout.right.length > 0 && (
+              <ResizeHandle side="right" onMouseDown={rightResize.handleMouseDown} isDragging={rightResize.isDragging} constrained={budget.effectiveRightWidth < pinnedWidths.right} />
+            )}
+            <PinnedRegion
+              side="right"
+              panels={panelLayout.right}
+              width={budget.effectiveRightWidth}
+              otherSidePanels={panelLayout.left}
+              onUnpin={unpinPanel}
+              onSwapSide={swapPanelSide}
+              onSwapWith={swapPanelsWith}
+              onMovePanel={movePanel}
+            />
+          </>
+        ) : budget.rightCollapsed && panelLayout.right.length > 0 ? (
+          <CollapsedPanelStrip
+            side="right"
+            panels={panelLayout.right}
+            panelWidth={pinnedWidths.right}
+            otherSidePanels={panelLayout.left}
+            onUnpin={unpinPanel}
+            onSwapSide={swapPanelSide}
+            onSwapWith={swapPanelsWith}
+            onMovePanel={movePanel}
+          />
+        ) : null}
 
         {/* Slide-out overlays */}
         <SlideOut panel="appearance">
@@ -875,51 +992,13 @@ function AppMain() {
         <SlideOut panel="currency" pinnable="currency">
           <CurrencyPanel mode="slideout" />
         </SlideOut>
-      </div>
-      {/* Bottom controls card — status bar + command input */}
-      <div className="rounded-lg bg-bg-primary overflow-hidden">
-      {/* Game status bar — vitals left, clock right */}
-      <div
-        ref={statusBarRef}
-        className="flex items-center gap-1 px-1.5 py-0.5"
-        style={{ background: 'linear-gradient(to bottom, #1e1e1e, #1a1a1a)' }}
-      >
-        {loggedIn && (
-          <>
-            {renderReadout('health', health, <HeartIcon size={11} />, health?.message ?? '')}
-            {renderReadout('concentration', concentration, <FocusIcon size={11} />, concentration?.message ?? '', 'concentration')}
-            {renderReadout('aura', aura, <AuraIcon size={11} />, aura?.key === 'none' ? 'You have no aura.' : `Your aura appears to be ${aura?.descriptor}.`, 'aura')}
-            {renderReadout('hunger', hunger, <FoodIcon size={11} />, `You are ${hunger?.descriptor}.`, 'hunger')}
-            {renderReadout('thirst', thirst, <DropletIcon size={11} />, `You are ${thirst?.descriptor}.`, 'thirst')}
-            {renderReadout('encumbrance', encumbrance, <WeightIcon size={11} />, encumbrance?.descriptor ?? '', 'encumbrance')}
-            {renderReadout('movement', movement, <BootIcon size={11} />, movement?.descriptor ?? '', 'movement')}
-          </>
-        )}
-        <div className="ml-auto">
-          <GameClock
-            compact={autoCompact || !!compactReadouts.clock}
-            onToggleCompact={() => toggleCompactReadout('clock')}
-          />
-        </div>
-      </div>
-      <CommandInput
-        ref={inputRef}
-        onSend={handleSend}
-        onReconnect={reconnect}
-        onToggleCounter={toggleActiveCounter}
-        disabled={!connected}
-        connected={connected}
-        passwordMode={passwordMode}
-        skipHistory={skipHistory}
-        recentLinesRef={recentLinesRef}
-        antiIdleEnabled={antiIdleEnabled}
-        antiIdleCommand={antiIdleCommand}
-        antiIdleMinutes={antiIdleMinutes}
-        antiIdleNextAt={antiIdleNextAt}
-        onToggleAntiIdle={() => updateAntiIdleEnabled(!antiIdleEnabled)}
-      />
+        <SlideOut panel="help">
+          <HelpPanel />
+        </SlideOut>
       </div>
     </div>
+    <SpotlightOverlay />
+    </SpotlightProvider>
     </PanelProvider>
     </AllocProvider>
     </MapProvider>

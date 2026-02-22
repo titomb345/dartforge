@@ -3,6 +3,7 @@ import type { PinnablePanelProps } from '../types';
 import { panelRootClass } from '../lib/panelUtils';
 import { PinMenuButton } from './PinMenuButton';
 import { PinnedControls } from './PinnedControls';
+import { NotesIcon } from './icons';
 import { useDataStore } from '../contexts/DataStoreContext';
 import { useSkillTrackerContext } from '../contexts/SkillTrackerContext';
 
@@ -79,8 +80,8 @@ export function NotesPanel({
     <div className={panelRootClass(isPinned)}>
       {/* Header */}
       <div className="flex items-center justify-between px-3 py-2.5 border-b border-border-subtle shrink-0">
-        <span className="text-[13px] font-semibold text-text-heading">
-          Notes{activeCharacter ? ` — ${activeCharacter.charAt(0).toUpperCase() + activeCharacter.slice(1)}` : ''}
+        <span className="text-[13px] font-semibold text-text-heading flex items-center gap-1.5">
+          <NotesIcon size={12} /> Notes{activeCharacter ? ` — ${activeCharacter.charAt(0).toUpperCase() + activeCharacter.slice(1)}` : ''}
         </span>
         <div className="flex items-center gap-1.5 shrink-0">
           {pinControls}

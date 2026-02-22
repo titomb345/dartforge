@@ -32,6 +32,7 @@ export function GameClock({ compact, onToggleCompact }: GameClockProps) {
       onClick={cycleReckoning}
       onContextMenu={onToggleCompact ? (e) => { e.preventDefault(); onToggleCompact(); } : undefined}
       title={`${timeOfDay}\n${allDates}`}
+      data-help-id="game-clock"
       className="game-clock relative flex items-center gap-2.5 h-[20px] rounded-[3px] select-none cursor-pointer border border-transparent transition-all duration-300"
       style={
         {

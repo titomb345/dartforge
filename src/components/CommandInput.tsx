@@ -89,6 +89,8 @@ export const CommandInput = forwardRef<HTMLTextAreaElement, CommandInputProps>(
     const { commandHistorySize, numpadMappings } = useAppSettingsContext();
     const numpadRef = useRef(numpadMappings);
     numpadRef.current = numpadMappings;
+    const toggleCounterRef = useRef(onToggleCounter);
+    toggleCounterRef.current = onToggleCounter;
     const [value, setValue] = useState('');
     const [history, setHistory] = useState<string[]>([]);
     const historyIndexRef = useRef(-1);
@@ -174,9 +176,9 @@ export const CommandInput = forwardRef<HTMLTextAreaElement, CommandInputProps>(
         }
 
         // Numpad * — toggle active improve counter
-        if (e.code === 'NumpadMultiply' && onToggleCounter) {
+        if (e.code === 'NumpadMultiply' && toggleCounterRef.current) {
           e.preventDefault();
-          onToggleCounter();
+          toggleCounterRef.current();
           return;
         }
 
@@ -288,7 +290,7 @@ export const CommandInput = forwardRef<HTMLTextAreaElement, CommandInputProps>(
     );
 
     return (
-      <div className="flex items-start px-2.5 py-1.5 border-t border-border-subtle transition-[border-color] duration-300 ease-in-out">
+      <div data-help-id="command-input" className="flex items-start px-2.5 py-1.5 border-t border-border-subtle transition-[border-color] duration-300 ease-in-out">
         {/* Prompt / line count */}
         <span
           className={cn(

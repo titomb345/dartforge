@@ -24,12 +24,15 @@ export function SlideOut({ panel, pinnable, children }: SlideOutProps) {
   useEffect(() => {
     if (!isOpen) return;
     const handler = (e: MouseEvent) => {
+      // Ignore clicks on the spotlight overlay (portal on document.body)
+      if ((e.target as Element)?.closest?.('.spotlight-overlay')) return;
       if (panelRef.current && !panelRef.current.contains(e.target as Node)) {
         togglePanel(panel);
-        // If the outside click landed on a toolbar button, swallow the
-        // subsequent click so the button's onClick doesn't reopen the panel.
-        // We intentionally let non-button clicks (e.g. terminal) pass through.
-        if ((e.target as Element)?.closest?.('button')) {
+        // Only swallow the click if it landed on THIS panel's own toolbar button,
+        // to prevent the toggle from immediately re-opening it. Clicks on other
+        // panel buttons pass through so they open the new panel in one click.
+        const targetBtn = (e.target as Element)?.closest?.('button[data-panel]');
+        if (targetBtn && targetBtn.getAttribute('data-panel') === panel) {
           document.addEventListener('click', (ev) => ev.stopPropagation(), {
             capture: true,
             once: true,

@@ -3,7 +3,7 @@ import { useVariableContext } from '../contexts/VariableContext';
 import { useSkillTrackerContext } from '../contexts/SkillTrackerContext';
 import { charDisplayName } from '../lib/panelUtils';
 import type { Variable, VariableId, VariableScope } from '../types/variable';
-import { TrashIcon, PlusIcon } from './icons';
+import { TrashIcon, PlusIcon, VariableIcon } from './icons';
 import { FilterPill } from './FilterPill';
 import { MudInput, MudButton } from './shared';
 
@@ -263,7 +263,7 @@ export function VariablePanel({ onClose }: VariablePanelProps) {
     <div className="w-[400px] h-full bg-bg-primary border-l border-border-subtle flex flex-col overflow-hidden">
       {/* Header */}
       <div className="flex items-center justify-between px-3 py-2.5 border-b border-border-subtle shrink-0">
-        <span className="text-[13px] font-semibold text-text-heading">{titleText}</span>
+        <span className="text-[13px] font-semibold text-text-heading flex items-center gap-1.5"><VariableIcon size={12} /> {titleText}</span>
         <div className="flex items-center gap-1.5">
           <button
             onClick={() => {

@@ -9,7 +9,7 @@ import {
   getSkillCategory, getSkillSubcategory,
   CATEGORY_LABELS, CATEGORY_ORDER, SUBCATEGORY_ORDER,
 } from '../lib/skillCategories';
-import { TrashIcon } from './icons';
+import { TrashIcon, TrendingUpIcon } from './icons';
 import { FilterPill } from './FilterPill';
 import { MudInput, MudButton } from './shared';
 import { PinMenuButton } from './PinMenuButton';
@@ -391,7 +391,7 @@ export function SkillPanel({
     <div className={panelRootClass(isPinned)}>
       {/* Header */}
       <div className="flex items-center justify-between px-3 py-2.5 border-b border-border-subtle shrink-0">
-        <span className="text-[13px] font-semibold text-text-heading">{titleText}</span>
+        <span className="text-[13px] font-semibold text-text-heading flex items-center gap-1.5"><TrendingUpIcon size={12} /> {titleText}</span>
         <div className="flex items-center gap-1.5">
           {isPinned ? (
             <>

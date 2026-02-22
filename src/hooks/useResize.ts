@@ -11,7 +11,7 @@ interface UseResizeOptions {
 export function useResize({
   side,
   initialWidth,
-  min = 200,
+  min = 300,
   max = 600,
   onWidthChange,
 }: UseResizeOptions) {

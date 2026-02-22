@@ -1,6 +1,6 @@
 import type { DataStore } from '../contexts/DataStoreContext';
 
-export const CURRENT_VERSION = 18;
+export const CURRENT_VERSION = 20;
 
 /** Raw store contents — all keys are optional since older stores may lack them. */
 export type StoreData = Record<string, unknown>;
@@ -187,6 +187,18 @@ const MIGRATIONS: MigrationFn[] = [
   (data) => {
     if (!('customChime1' in data)) data.customChime1 = null;
     if (!('customChime2' in data)) data.customChime2 = null;
+    return data;
+  },
+  // v18 → v19: help guide seen flag
+  (data) => {
+    if (!('hasSeenGuide' in data)) data.hasSeenGuide = false;
+    return data;
+  },
+  // v19 → v20: status bar readout order
+  (data) => {
+    if (!('statusBarOrder' in data)) {
+      data.statusBarOrder = ['health', 'concentration', 'aura', 'hunger', 'thirst', 'encumbrance', 'movement'];
+    }
     return data;
   },
 ];

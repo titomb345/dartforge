@@ -6,7 +6,7 @@ import { matchTriggers, expandTriggerBody } from '../lib/triggerEngine';
 import { useFilteredGroups } from '../lib/useFilteredGroups';
 import { charDisplayName } from '../lib/panelUtils';
 import type { Trigger, TriggerId, TriggerMatchMode, TriggerScope } from '../types/trigger';
-import { TrashIcon, PlusIcon, ChevronDownIcon, ChevronUpIcon } from './icons';
+import { TrashIcon, PlusIcon, ChevronDownIcon, ChevronUpIcon, TriggerIcon } from './icons';
 import { FilterPill } from './FilterPill';
 import { MudInput, MudTextarea, MudButton } from './shared';
 import { SyntaxHelpTable } from './SyntaxHelpTable';
@@ -22,14 +22,43 @@ const MATCH_MODE_LABELS: Record<TriggerMatchMode, string> = {
   regex: 'Regex',
 };
 
-const HIGHLIGHT_PRESETS: { label: string; code: string }[] = [
-  { label: 'Yellow', code: '33' },
-  { label: 'Red', code: '31' },
-  { label: 'Green', code: '32' },
-  { label: 'Cyan', code: '36' },
-  { label: 'Magenta', code: '35' },
-  { label: 'Bright White', code: '1;37' },
+const HIGHLIGHT_PRESETS: { label: string; code: string; hex: string }[] = [
+  { label: 'Yellow', code: '33', hex: '#ffff00' },
+  { label: 'Red', code: '31', hex: '#ff5555' },
+  { label: 'Green', code: '32', hex: '#50fa7b' },
+  { label: 'Cyan', code: '36', hex: '#8be9fd' },
+  { label: 'Magenta', code: '35', hex: '#ff79c6' },
+  { label: 'White', code: '1;37', hex: '#ffffff' },
 ];
+
+const PRESET_CODES = new Set(HIGHLIGHT_PRESETS.map((p) => p.code));
+
+/** Convert hex fg/bg to an ANSI 24-bit color code string. */
+function hexToAnsi(fg: string | null, bg: string | null): string | null {
+  const parts: string[] = [];
+  if (fg) {
+    const r = parseInt(fg.slice(1, 3), 16), g = parseInt(fg.slice(3, 5), 16), b = parseInt(fg.slice(5, 7), 16);
+    parts.push(`38;2;${r};${g};${b}`);
+  }
+  if (bg) {
+    const r = parseInt(bg.slice(1, 3), 16), g = parseInt(bg.slice(3, 5), 16), b = parseInt(bg.slice(5, 7), 16);
+    parts.push(`48;2;${r};${g};${b}`);
+  }
+  return parts.length > 0 ? parts.join(';') : null;
+}
+
+/** Parse an ANSI code string back to hex fg/bg values. Returns null for non-24-bit codes. */
+function ansiToHex(code: string): { fg: string | null; bg: string | null } | null {
+  const fgMatch = code.match(/38;2;(\d+);(\d+);(\d+)/);
+  const bgMatch = code.match(/48;2;(\d+);(\d+);(\d+)/);
+  if (!fgMatch && !bgMatch) return null;
+  const toHex = (r: string, g: string, b: string) =>
+    '#' + [r, g, b].map((v) => parseInt(v).toString(16).padStart(2, '0')).join('');
+  return {
+    fg: fgMatch ? toHex(fgMatch[1], fgMatch[2], fgMatch[3]) : null,
+    bg: bgMatch ? toHex(bgMatch[1], bgMatch[2], bgMatch[3]) : null,
+  };
+}
 
 // --- Trigger Row ---
 
@@ -123,7 +152,8 @@ const TRIGGER_HELP_ROWS: HelpRow[] = [
   { token: '$0', desc: 'The matched text (full match for regex, matched portion for substring)' },
   { token: '$1 $2 .. $9', desc: 'Regex capture groups', example: "Pattern: (\\w+) tells you '(.+)'  →  $1 = name, $2 = message" },
   { token: '$line', desc: 'The full matched line (ANSI-stripped)' },
-  { token: '$me', desc: 'Your active character name' },
+  { token: '$me', desc: 'Your active character name (lowercase)' },
+  { token: '$Me', desc: 'Your active character name (Capitalized)' },
   { token: '$varName', desc: 'User-defined variable (set via /var)', example: '/var target goblin  \u2192  $target = goblin' },
   { token: ';', desc: 'Command separator — sends multiple commands', example: '/echo Alert!;say hello' },
   { token: '\\;', desc: 'Literal semicolon (not a separator)' },
@@ -182,6 +212,14 @@ function TriggerEditor({
   const [gag, setGag] = useState(trigger?.gag ?? false);
   const [highlight, setHighlight] = useState<string | null>(trigger?.highlight ?? null);
   const [soundAlert, setSoundAlert] = useState(trigger?.soundAlert ?? false);
+
+  // Custom highlight color state
+  const initCustom = trigger?.highlight && !PRESET_CODES.has(trigger.highlight) ? ansiToHex(trigger.highlight) : null;
+  const [customMode, setCustomMode] = useState(initCustom !== null);
+  const [customFg, setCustomFg] = useState<string>(initCustom?.fg ?? '#ffffff');
+  const [customBg, setCustomBg] = useState<string>(initCustom?.bg ?? '#000000');
+  const [customFgEnabled, setCustomFgEnabled] = useState(initCustom?.fg !== null && initCustom !== null);
+  const [customBgEnabled, setCustomBgEnabled] = useState(initCustom?.bg !== null && initCustom !== null);
   const [testInput, setTestInput] = useState('');
   const [showHelp, setShowHelp] = useState(false);
   const patternRef = useRef<HTMLInputElement>(null);
@@ -227,6 +265,13 @@ function TriggerEditor({
 
   const canSave = pattern.trim().length > 0;
 
+  const handleFieldKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter' && canSave) {
+      e.preventDefault();
+      onSave({ pattern: pattern.trim(), matchMode, body, group: group.trim() || 'General', cooldownMs, gag, highlight, soundAlert }, scope, trigger?.id);
+    }
+  };
+
   return (
     <div className="border border-[#ff79c6]/30 rounded-lg mx-2 my-2 bg-bg-secondary overflow-hidden">
       {/* Editor header */}
@@ -261,6 +306,7 @@ function TriggerEditor({
               accent="pink"
               value={pattern}
               onChange={(e) => setPattern(e.target.value)}
+              onKeyDown={handleFieldKeyDown}
               placeholder="e.g., You are hungry"
               className="w-full"
             />
@@ -313,6 +359,7 @@ function TriggerEditor({
               accent="pink"
               value={group}
               onChange={(e) => setGroup(e.target.value)}
+              onKeyDown={handleFieldKeyDown}
               placeholder="General"
               className="w-full"
             />
@@ -356,6 +403,7 @@ function TriggerEditor({
                 step={100}
                 value={cooldownMs}
                 onChange={(e) => setCooldownMs(Math.max(0, parseInt(e.target.value) || 0))}
+                onKeyDown={handleFieldKeyDown}
                 className="w-full"
               />
               <span className="text-[9px] text-text-dim shrink-0">ms</span>
@@ -392,7 +440,7 @@ function TriggerEditor({
           <label className="text-[10px] text-text-dim mb-0.5 block">Highlight</label>
           <div className="flex items-center gap-1 flex-wrap">
             <button
-              onClick={() => setHighlight(null)}
+              onClick={() => { setHighlight(null); setCustomMode(false); }}
               className={`text-[9px] font-mono px-2 py-0.5 rounded border cursor-pointer transition-colors duration-150 ${
                 highlight === null
                   ? 'text-text-label border-[#ff79c6]/40 bg-[#ff79c6]/10'
@@ -404,19 +452,114 @@ function TriggerEditor({
             {HIGHLIGHT_PRESETS.map((preset) => (
               <button
                 key={preset.code}
-                onClick={() => setHighlight(preset.code)}
+                onClick={() => { setHighlight(preset.code); setCustomMode(false); }}
                 className={`text-[9px] font-mono px-2 py-0.5 rounded border cursor-pointer transition-colors duration-150 ${
-                  highlight === preset.code
+                  !customMode && highlight === preset.code
                     ? 'border-[#ff79c6]/40 bg-[#ff79c6]/10'
                     : 'border-border-dim bg-transparent hover:text-text-label'
                 }`}
-                style={{ color: highlight === preset.code ? undefined : undefined }}
-                title={`ANSI code: ${preset.code}`}
+                style={{ color: preset.hex }}
               >
                 {preset.label}
               </button>
             ))}
+            <button
+              onClick={() => {
+                setCustomMode(true);
+                // Pre-fill from current preset if active
+                if (highlight && PRESET_CODES.has(highlight)) {
+                  const preset = HIGHLIGHT_PRESETS.find((p) => p.code === highlight);
+                  if (preset) { setCustomFg(preset.hex); setCustomFgEnabled(true); }
+                }
+                // Apply current custom state
+                const code = hexToAnsi(customFgEnabled ? customFg : null, customBgEnabled ? customBg : null);
+                setHighlight(code);
+              }}
+              className={`text-[9px] font-mono px-2 py-0.5 rounded border cursor-pointer transition-colors duration-150 ${
+                customMode
+                  ? 'text-[#ff79c6] border-[#ff79c6]/40 bg-[#ff79c6]/10'
+                  : 'text-text-dim border-border-dim bg-transparent hover:text-text-label'
+              }`}
+            >
+              Custom
+            </button>
           </div>
+
+          {/* Custom fg/bg color pickers */}
+          {customMode && (
+            <div className="mt-2 flex flex-col gap-2">
+              <div className="flex gap-3">
+                {/* Foreground */}
+                <div className="flex items-center gap-1.5">
+                  <button
+                    onClick={() => {
+                      const next = !customFgEnabled;
+                      setCustomFgEnabled(next);
+                      setHighlight(hexToAnsi(next ? customFg : null, customBgEnabled ? customBg : null));
+                    }}
+                    className={`text-[8px] font-mono px-1.5 py-px rounded border cursor-pointer transition-colors duration-150 ${
+                      customFgEnabled
+                        ? 'text-[#ff79c6] border-[#ff79c6]/40 bg-[#ff79c6]/10'
+                        : 'text-text-dim border-border-dim'
+                    }`}
+                  >
+                    FG
+                  </button>
+                  <input
+                    type="color"
+                    value={customFg}
+                    onChange={(e) => {
+                      setCustomFg(e.target.value);
+                      if (customFgEnabled) setHighlight(hexToAnsi(e.target.value, customBgEnabled ? customBg : null));
+                    }}
+                    className="w-5 h-5 rounded border border-border-dim cursor-pointer bg-transparent p-0"
+                    style={{ opacity: customFgEnabled ? 1 : 0.3 }}
+                  />
+                  <span className="text-[9px] font-mono text-text-dim" style={{ opacity: customFgEnabled ? 1 : 0.4 }}>{customFg}</span>
+                </div>
+                {/* Background */}
+                <div className="flex items-center gap-1.5">
+                  <button
+                    onClick={() => {
+                      const next = !customBgEnabled;
+                      setCustomBgEnabled(next);
+                      setHighlight(hexToAnsi(customFgEnabled ? customFg : null, next ? customBg : null));
+                    }}
+                    className={`text-[8px] font-mono px-1.5 py-px rounded border cursor-pointer transition-colors duration-150 ${
+                      customBgEnabled
+                        ? 'text-[#ff79c6] border-[#ff79c6]/40 bg-[#ff79c6]/10'
+                        : 'text-text-dim border-border-dim'
+                    }`}
+                  >
+                    BG
+                  </button>
+                  <input
+                    type="color"
+                    value={customBg}
+                    onChange={(e) => {
+                      setCustomBg(e.target.value);
+                      if (customBgEnabled) setHighlight(hexToAnsi(customFgEnabled ? customFg : null, e.target.value));
+                    }}
+                    className="w-5 h-5 rounded border border-border-dim cursor-pointer bg-transparent p-0"
+                    style={{ opacity: customBgEnabled ? 1 : 0.3 }}
+                  />
+                  <span className="text-[9px] font-mono text-text-dim" style={{ opacity: customBgEnabled ? 1 : 0.4 }}>{customBg}</span>
+                </div>
+              </div>
+              {/* Preview */}
+              {(customFgEnabled || customBgEnabled) && (
+                <div
+                  className="px-2 py-1 rounded border border-border-dim text-[10px] font-mono"
+                  style={{
+                    color: customFgEnabled ? customFg : undefined,
+                    backgroundColor: customBgEnabled ? customBg : undefined,
+                  }}
+                >
+                  The quick brown fox jumps over the lazy dog
+                </div>
+              )}
+            </div>
+          )}
         </div>
 
         {/* Live preview */}
@@ -506,7 +649,7 @@ export function TriggerPanel({ onClose }: TriggerPanelProps) {
     <div className="w-[420px] h-full bg-bg-primary border-l border-border-subtle flex flex-col overflow-hidden">
       {/* Header */}
       <div className="flex items-center justify-between px-3 py-2.5 border-b border-border-subtle shrink-0">
-        <span className="text-[13px] font-semibold text-text-heading">{titleText}</span>
+        <span className="text-[13px] font-semibold text-text-heading flex items-center gap-1.5"><TriggerIcon size={12} /> {titleText}</span>
         <div className="flex items-center gap-1.5">
           <button
             onClick={() => {

@@ -75,8 +75,11 @@ function substituteArgs(body: string, args: string[], options?: SubstitutionOpti
   result = result.replace(/\$-/g, allButLast);
   // Replace $! (last arg)
   result = result.replace(/\$!/g, lastArg);
+  // Replace $Me (capitalized character name) — before $me to avoid partial match
+  const charName = options?.activeCharacter ?? '';
+  result = result.split('$Me').join(charName.charAt(0).toUpperCase() + charName.slice(1));
   // Replace $me (active character name)
-  result = result.split('$me').join(options?.activeCharacter ?? '');
+  result = result.split('$me').join(charName);
   // Replace $opposite1..$opposite9 (direction reversal)
   for (let i = 1; i <= 9; i++) {
     result = result.split(`$opposite${i}`).join(getOppositeDirection(args[i - 1] ?? ''));

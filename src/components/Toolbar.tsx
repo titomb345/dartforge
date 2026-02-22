@@ -1,6 +1,6 @@
 import { IconButton } from './IconButton';
 import { DropboxButton } from './DropboxButton';
-import { PowerIcon, PaletteIcon, TrendingUpIcon, ChatIcon, CounterIcon, AliasIcon, TriggerIcon, VariableIcon, NotesIcon, GearIcon, CoinIcon, MapIcon, AllocIcon } from './icons';
+import { PowerIcon, PaletteIcon, TrendingUpIcon, ChatIcon, CounterIcon, AliasIcon, TriggerIcon, VariableIcon, NotesIcon, GearIcon, CoinIcon, /* MapIcon, */ AllocIcon, HelpIcon } from './icons';
 import { getPlatform } from '../lib/platform';
 import { cn } from '../lib/cn';
 import { usePanelContext } from '../contexts/PanelLayoutContext';
@@ -23,6 +23,7 @@ export function Toolbar({
       <button
         onClick={connected ? onDisconnect : onReconnect}
         title={connected ? 'Disconnect' : 'Reconnect'}
+        data-help-id="toolbar-power"
         className={cn(
           'flex items-center justify-center w-[30px] h-[30px] p-0 rounded-[6px]',
           'select-none leading-none transition-all duration-300 ease-in-out border cursor-pointer',
@@ -38,7 +39,6 @@ export function Toolbar({
       >
         <PowerIcon />
       </button>
-      <div className="w-px h-[18px] bg-border-dim mx-1.5" />
 
       <div className="flex-1" />
 
@@ -48,6 +48,8 @@ export function Toolbar({
           icon={<ChatIcon />}
           title="Chat"
           accent="#8be9fd"
+          helpId="toolbar-chat"
+          panelId="chat"
           toggled={activePanel === 'chat'}
           pinned={isPinned('chat')}
           onClick={() => togglePanel('chat')}
@@ -56,6 +58,8 @@ export function Toolbar({
           icon={<CounterIcon />}
           title="Counters"
           accent="#f59e0b"
+          helpId="toolbar-counters"
+          panelId="counter"
           toggled={activePanel === 'counter'}
           pinned={isPinned('counter')}
           onClick={() => togglePanel('counter')}
@@ -64,6 +68,8 @@ export function Toolbar({
           icon={<TrendingUpIcon />}
           title="Skills"
           accent="#50fa7b"
+          helpId="toolbar-skills"
+          panelId="skills"
           toggled={activePanel === 'skills'}
           pinned={isPinned('skills')}
           onClick={() => togglePanel('skills')}
@@ -72,22 +78,30 @@ export function Toolbar({
           icon={<NotesIcon />}
           title="Notes"
           accent="#fbbf24"
+          helpId="toolbar-notes"
+          panelId="notes"
           toggled={activePanel === 'notes'}
           pinned={isPinned('notes')}
           onClick={() => togglePanel('notes')}
         />
+        {/* TODO: Re-enable when automapper is ready
         <IconButton
           icon={<MapIcon />}
           title="Map"
           accent="#e8a849"
+          helpId="toolbar-map"
+          panelId="map"
           toggled={activePanel === 'map'}
           pinned={isPinned('map')}
           onClick={() => togglePanel('map')}
         />
+        */}
         <IconButton
           icon={<AllocIcon />}
           title="Allocations"
           accent="#e06c75"
+          helpId="toolbar-alloc"
+          panelId="alloc"
           toggled={activePanel === 'alloc'}
           pinned={isPinned('alloc')}
           onClick={() => togglePanel('alloc')}
@@ -96,6 +110,8 @@ export function Toolbar({
           icon={<CoinIcon />}
           title="Currency Converter"
           accent="#cd7f32"
+          helpId="toolbar-currency"
+          panelId="currency"
           toggled={activePanel === 'currency'}
           pinned={isPinned('currency')}
           onClick={() => togglePanel('currency')}
@@ -105,6 +121,8 @@ export function Toolbar({
           icon={<AliasIcon />}
           title="Aliases"
           accent="#a78bfa"
+          helpId="toolbar-aliases"
+          panelId="aliases"
           toggled={activePanel === 'aliases'}
           onClick={() => togglePanel('aliases')}
         />
@@ -112,6 +130,8 @@ export function Toolbar({
           icon={<TriggerIcon />}
           title="Triggers"
           accent="#ff79c6"
+          helpId="toolbar-triggers"
+          panelId="triggers"
           toggled={activePanel === 'triggers'}
           onClick={() => togglePanel('triggers')}
         />
@@ -119,13 +139,17 @@ export function Toolbar({
           icon={<VariableIcon />}
           title="Variables"
           accent="#4ade80"
+          helpId="toolbar-variables"
+          panelId="variables"
           toggled={activePanel === 'variables'}
           onClick={() => togglePanel('variables')}
         />
+        <div className="w-px h-[18px] bg-border-dim mx-1.5" />
         <IconButton
           icon={<PaletteIcon />}
           title="Appearance"
           accent="#8be9fd"
+          panelId="appearance"
           toggled={activePanel === 'appearance'}
           onClick={() => togglePanel('appearance')}
         />
@@ -133,8 +157,19 @@ export function Toolbar({
           icon={<GearIcon />}
           title="Settings"
           accent="#bd93f9"
+          panelId="settings"
           toggled={activePanel === 'settings'}
           onClick={() => togglePanel('settings')}
+        />
+        <div className="w-px h-[18px] bg-border-dim mx-1.5" />
+        <IconButton
+          icon={<HelpIcon />}
+          title="Guide"
+          accent="#d9af50"
+          helpId="toolbar-help"
+          panelId="help"
+          toggled={activePanel === 'help'}
+          onClick={() => togglePanel('help')}
         />
       </div>
     </div>

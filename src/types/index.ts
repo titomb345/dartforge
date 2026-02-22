@@ -1,6 +1,6 @@
 export type ClassMode = 'mage' | 'fighter' | 'multi';
 
-export type Panel = 'appearance' | 'skills' | 'chat' | 'counter' | 'aliases' | 'triggers' | 'variables' | 'notes' | 'settings' | 'map' | 'alloc' | 'currency';
+export type Panel = 'appearance' | 'skills' | 'chat' | 'counter' | 'aliases' | 'triggers' | 'variables' | 'notes' | 'settings' | 'map' | 'alloc' | 'currency' | 'help';
 
 export type PinnablePanel = 'skills' | 'chat' | 'counter' | 'notes' | 'map' | 'alloc' | 'currency';
 export type DockSide = 'left' | 'right';

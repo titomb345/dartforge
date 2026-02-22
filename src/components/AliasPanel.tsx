@@ -6,7 +6,7 @@ import { expandInput } from '../lib/aliasEngine';
 import { useFilteredGroups } from '../lib/useFilteredGroups';
 import { charDisplayName } from '../lib/panelUtils';
 import type { Alias, AliasId, AliasMatchMode, AliasScope } from '../types/alias';
-import { TrashIcon, PlusIcon, ChevronDownIcon, ChevronUpIcon } from './icons';
+import { TrashIcon, PlusIcon, ChevronDownIcon, ChevronUpIcon, AliasIcon } from './icons';
 import { FilterPill } from './FilterPill';
 import { MudInput, MudTextarea, MudButton } from './shared';
 import { SyntaxHelpTable } from './SyntaxHelpTable';
@@ -108,7 +108,8 @@ const ALIAS_HELP_ROWS: HelpRow[] = [
   { token: '$-', desc: 'All arguments except the last' },
   { token: '$!', desc: 'The last argument only' },
   { token: '$opposite1..9', desc: 'Opposite direction of $N arg', example: 'door n  \u2192  $opposite1 = s' },
-  { token: '$me', desc: 'Your active character name' },
+  { token: '$me', desc: 'Your active character name (lowercase)' },
+  { token: '$Me', desc: 'Your active character name (Capitalized)' },
   { token: '$varName', desc: 'User-defined variable (set via /var)', example: '/var target goblin  \u2192  $target = goblin' },
   { token: ';', desc: 'Command separator \u2014 sends multiple commands', example: 'kill $1;loot corpse' },
   { token: '\\;', desc: 'Literal semicolon (not a separator)' },
@@ -193,6 +194,13 @@ function AliasEditor({
 
   const canSave = pattern.trim().length > 0 && body.trim().length > 0;
 
+  const handleFieldKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter' && canSave) {
+      e.preventDefault();
+      onSave({ pattern: pattern.trim(), matchMode, body, group: group.trim() || 'General' }, scope, alias?.id);
+    }
+  };
+
   return (
     <div className="border border-[#a78bfa]/30 rounded-lg mx-2 my-2 bg-bg-secondary overflow-hidden">
       {/* Editor header */}
@@ -227,6 +235,7 @@ function AliasEditor({
               accent="purple"
               value={pattern}
               onChange={(e) => setPattern(e.target.value)}
+              onKeyDown={handleFieldKeyDown}
               placeholder="e.g., aa"
               className="w-full"
             />
@@ -279,6 +288,7 @@ function AliasEditor({
               accent="purple"
               value={group}
               onChange={(e) => setGroup(e.target.value)}
+              onKeyDown={handleFieldKeyDown}
               placeholder="General"
               className="w-full"
             />
@@ -389,7 +399,7 @@ export function AliasPanel({ onClose }: AliasPanelProps) {
     <div className="w-[400px] h-full bg-bg-primary border-l border-border-subtle flex flex-col overflow-hidden">
       {/* Header */}
       <div className="flex items-center justify-between px-3 py-2.5 border-b border-border-subtle shrink-0">
-        <span className="text-[13px] font-semibold text-text-heading">{titleText}</span>
+        <span className="text-[13px] font-semibold text-text-heading flex items-center gap-1.5"><AliasIcon size={12} /> {titleText}</span>
         <div className="flex items-center gap-1.5">
           <button
             onClick={() => {
