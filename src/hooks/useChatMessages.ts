@@ -25,7 +25,7 @@ const DEFAULT_SOUND_ALERTS: ChatFilters = {
 const chimeAudio = new Audio('/chime1.wav');
 const chime2Audio = new Audio('/chime2.wav');
 
-export function useChatMessages() {
+export function useChatMessages(maxMessages = MAX_MESSAGES, notificationsRef?: React.RefObject<ChatFilters | null>) {
   const dataStore = useDataStore();
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [filters, setFilters] = useState<ChatFilters>({ ...DEFAULT_FILTERS });
@@ -82,23 +82,33 @@ export function useChatMessages() {
   }, [newestFirst]);
 
   const handleChatMessage = useCallback((msg: ChatMessage) => {
-    // Check if this message qualifies for a sound alert
-    // Only filtered by muted senders and per-type sound toggle (not by chat panel visibility)
     const m = mutedSendersRef.current;
+    const isMuted = m.some((name) => name.toLowerCase() === msg.sender.toLowerCase());
+
+    // Sound alert
     const s = soundAlertsRef.current;
-    if (
-      !msg.isOwn &&
-      s[msg.type] &&
-      !m.some((name) => name.toLowerCase() === msg.sender.toLowerCase())
-    ) {
+    if (!msg.isOwn && s[msg.type] && !isMuted) {
       const audio = msg.type === 'tell' || msg.type === 'sz' ? chime2Audio : chimeAudio;
       audio.currentTime = 0;
       audio.play().catch(() => {});
     }
 
+    // Desktop notification when window is unfocused
+    const n = notificationsRef?.current;
+    if (n && !msg.isOwn && n[msg.type] && !isMuted && document.hidden) {
+      try {
+        if (typeof Notification !== 'undefined' && Notification.permission === 'granted') {
+          new Notification(`${msg.sender} (${msg.type})`, {
+            body: msg.message,
+            tag: `dartforge-chat-${msg.type}`,
+          });
+        }
+      } catch { /* ignore */ }
+    }
+
     setMessages((prev) => {
       const next = [...prev, msg];
-      return next.length > MAX_MESSAGES ? next.slice(-MAX_MESSAGES) : next;
+      return next.length > maxMessages ? next.slice(-maxMessages) : next;
     });
   }, []);
 

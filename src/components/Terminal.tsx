@@ -5,6 +5,7 @@ import { WebLinksAddon } from '@xterm/addon-web-links';
 import '@xterm/xterm/css/xterm.css';
 import { getStartupSplash } from '../lib/splash';
 import type { DisplaySettings } from '../hooks/useThemeColors';
+import { useAppSettingsContext } from '../contexts/AppSettingsContext';
 
 interface TerminalProps {
   terminalRef: React.MutableRefObject<XTerm | null>;
@@ -19,6 +20,7 @@ export function Terminal({ terminalRef, inputRef, theme, display, onUpdateDispla
   const innerRef = useRef<HTMLDivElement>(null);
   const fitAddonRef = useRef<FitAddon | null>(null);
   const [isScrolledUp, setIsScrolledUp] = useState(false);
+  const { terminalScrollback } = useAppSettingsContext();
 
   useEffect(() => {
     if (!innerRef.current) return;
@@ -27,7 +29,7 @@ export function Terminal({ terminalRef, inputRef, theme, display, onUpdateDispla
       theme,
       fontFamily: `'${display.fontFamily}', monospace`,
       fontSize: display.fontSize,
-      scrollback: 10000,
+      scrollback: terminalScrollback,
       disableStdin: true,
       cursorBlink: false,
       cursorInactiveStyle: 'none',

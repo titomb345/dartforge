@@ -168,7 +168,8 @@ export function useMudConnection(
                   : afterBanner;
                 if (filteredAfter) {
                   let afterOutput = debugModeRef.current ? annotateAnsi(filteredAfter) : filteredAfter;
-                  if (payload.ga) {
+                  const shouldStrip = outputFilterRef?.current?.stripPrompts ?? true;
+                  if (payload.ga && shouldStrip) {
                     afterOutput = stripPrompt(afterOutput);
                   } else if (endsWithPrompt(filteredAfter)) {
                     afterOutput += '\n';
@@ -188,7 +189,8 @@ export function useMudConnection(
                 : rawBuffer;
               if (filteredBuffer) {
                 let flushOutput = debugModeRef.current ? annotateAnsi(filteredBuffer) : filteredBuffer;
-                if (payload.ga) {
+                const shouldStrip2 = outputFilterRef?.current?.stripPrompts ?? true;
+                if (payload.ga && shouldStrip2) {
                   flushOutput = stripPrompt(flushOutput);
                 } else if (endsWithPrompt(filteredBuffer)) {
                   flushOutput += '\n';
@@ -206,7 +208,8 @@ export function useMudConnection(
             : payload.data;
           if (filtered) {
             let output = debugModeRef.current ? annotateAnsi(filtered) : filtered;
-            if (payload.ga) {
+            const shouldStrip3 = outputFilterRef?.current?.stripPrompts ?? true;
+            if (payload.ga && shouldStrip3) {
               output = stripPrompt(output);
             } else if (endsWithPrompt(filtered)) {
               output += '\n';

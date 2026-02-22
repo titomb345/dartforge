@@ -3,6 +3,8 @@
  *
  * Design: "Explorer's Chart" — dark background, muted earthy terrain colors,
  * hand-drawn map feel, current room glow, fog of war.
+ *
+ * Hex-only: renders wilderness hexes with terrain-based coloring and 6-direction exits.
  */
 
 import { useRef, useEffect, useCallback, useState } from 'react';
@@ -17,28 +19,50 @@ import {
   directionLabel,
 } from '../lib/hexUtils';
 import type { MapRoom, MapGraph } from '../lib/mapGraph';
+import { TERRAIN_LABELS, type HexTerrainType } from '../lib/hexTerrainPatterns';
 
 // ---------------------------------------------------------------------------
 // Design tokens
 // ---------------------------------------------------------------------------
 
-const HEX_SIZE = 32; // radius in pixels
+const HEX_SIZE = 32;
 const BG_COLOR = '#0f0e0d';
 const GRID_COLOR = 'rgba(80, 70, 55, 0.12)';
 const CURRENT_ROOM_GLOW = '#e8a849';
 const CURRENT_ROOM_FILL = 'rgba(232, 168, 73, 0.25)';
-const ROOM_FILL: Record<MapRoom['terrain'], string> = {
-  indoor: 'rgba(90, 80, 65, 0.35)',
-  wilderness: 'rgba(65, 90, 55, 0.35)',
-  city: 'rgba(120, 100, 70, 0.35)',
+
+/** Terrain fill colors */
+const TERRAIN_FILL: Record<HexTerrainType, string> = {
+  plains: 'rgba(120, 130, 60, 0.35)',
+  mountains: 'rgba(130, 115, 95, 0.40)',
+  water: 'rgba(60, 100, 160, 0.35)',
+  ocean: 'rgba(30, 60, 130, 0.40)',
+  farmland: 'rgba(180, 160, 70, 0.30)',
+  woods: 'rgba(40, 100, 45, 0.40)',
+  hills: 'rgba(170, 145, 100, 0.35)',
+  swamp: 'rgba(70, 100, 60, 0.35)',
+  desert: 'rgba(190, 170, 110, 0.30)',
+  wasteland: 'rgba(90, 65, 50, 0.35)',
+  snow: 'rgba(180, 200, 220, 0.30)',
   unknown: 'rgba(70, 70, 70, 0.25)',
 };
-const ROOM_STROKE: Record<MapRoom['terrain'], string> = {
-  indoor: 'rgba(140, 125, 100, 0.6)',
-  wilderness: 'rgba(100, 140, 85, 0.6)',
-  city: 'rgba(180, 155, 100, 0.6)',
+
+/** Terrain stroke colors */
+const TERRAIN_STROKE: Record<HexTerrainType, string> = {
+  plains: 'rgba(140, 160, 80, 0.6)',
+  mountains: 'rgba(160, 140, 115, 0.6)',
+  water: 'rgba(80, 130, 200, 0.6)',
+  ocean: 'rgba(50, 80, 170, 0.6)',
+  farmland: 'rgba(200, 180, 90, 0.5)',
+  woods: 'rgba(60, 130, 65, 0.6)',
+  hills: 'rgba(190, 165, 120, 0.5)',
+  swamp: 'rgba(90, 120, 75, 0.5)',
+  desert: 'rgba(210, 190, 130, 0.5)',
+  wasteland: 'rgba(120, 90, 70, 0.5)',
+  snow: 'rgba(200, 215, 235, 0.5)',
   unknown: 'rgba(100, 100, 100, 0.4)',
 };
+
 const EXIT_LINE_COLOR = 'rgba(120, 105, 80, 0.35)';
 const LABEL_COLOR = 'rgba(200, 185, 160, 0.85)';
 const LABEL_FONT = '9px "Courier New", monospace';
@@ -266,7 +290,7 @@ function drawBackgroundGrid(
   ctx.strokeStyle = GRID_COLOR;
   ctx.lineWidth = 0.5;
   const spacing = 60 * zoom;
-  if (spacing < 8) return; // too zoomed out
+  if (spacing < 8) return;
 
   const startX = cx % spacing;
   const startY = cy % spacing;
@@ -306,7 +330,8 @@ function drawExitLines(ctx: CanvasRenderingContext2D, room: MapRoom, graph: MapG
     if (dir in room.exits && !room.exits[dir]) {
       const offset = getDirectionOffset(dir);
       const stubLen = HEX_SIZE * 0.6;
-      const dx = offset.dq * 1.5 + offset.dr * (-0.5); // approximate direction
+      // Convert axial offset to approximate pixel direction
+      const dx = offset.dq * 1.5 + offset.dr * (-0.5);
       const dy = offset.dr * Math.sqrt(3) * 0.5 + offset.dq * Math.sqrt(3) * 0.25;
       const len = Math.sqrt(dx * dx + dy * dy) || 1;
 
@@ -338,18 +363,20 @@ function drawHex(
   }
   ctx.closePath();
 
-  // Fill
+  // Fill with terrain color
   if (isCurrent) {
     ctx.fillStyle = CURRENT_ROOM_FILL;
   } else if (showFog && room.visitCount <= 1) {
     ctx.fillStyle = 'rgba(40, 38, 35, 0.3)';
   } else {
-    ctx.fillStyle = ROOM_FILL[room.terrain];
+    ctx.fillStyle = TERRAIN_FILL[room.terrain] ?? TERRAIN_FILL.unknown;
   }
   ctx.fill();
 
-  // Stroke
-  ctx.strokeStyle = isCurrent ? CURRENT_ROOM_GLOW : ROOM_STROKE[room.terrain];
+  // Stroke with terrain color
+  ctx.strokeStyle = isCurrent
+    ? CURRENT_ROOM_GLOW
+    : (TERRAIN_STROKE[room.terrain] ?? TERRAIN_STROKE.unknown);
   ctx.lineWidth = isCurrent ? 2 : 1;
   ctx.stroke();
 }
@@ -369,29 +396,20 @@ function drawCurrentGlow(ctx: CanvasRenderingContext2D, room: MapRoom) {
 }
 
 function drawLabel(ctx: CanvasRenderingContext2D, room: MapRoom) {
-  if (!room.name) return;
   const { x, y } = hexToPixel(room.coords.q, room.coords.r, HEX_SIZE);
+  const label = TERRAIN_LABELS[room.terrain] ?? '?';
 
   ctx.font = LABEL_FONT;
   ctx.fillStyle = LABEL_COLOR;
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
-
-  // Truncate name to fit hex
-  const maxWidth = HEX_SIZE * 1.6;
-  let label = room.name;
-  while (ctx.measureText(label).width > maxWidth && label.length > 3) {
-    label = label.slice(0, -1);
-  }
-  if (label !== room.name) label += '…';
-
   ctx.fillText(label, x, y);
 }
 
 function drawCompassRose(ctx: CanvasRenderingContext2D, w: number, h: number) {
-  const cx = w - 30;
-  const cy = h - 30;
-  const r = 16;
+  const cx = w - 40;
+  const cy = h - 40;
+  const r = 22;
 
   ctx.save();
   ctx.globalAlpha = 0.3;
@@ -403,7 +421,30 @@ function drawCompassRose(ctx: CanvasRenderingContext2D, w: number, h: number) {
   ctx.lineWidth = 1;
   ctx.stroke();
 
-  // N indicator
+  // Direction labels for all 6 hex directions
+  ctx.font = '7px monospace';
+  ctx.fillStyle = TOOLTIP_TEXT;
+  ctx.globalAlpha = 0.5;
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+
+  // N/S along vertical axis, NE/NW/SE/SW at 60-degree angles
+  const dirs: { label: string; angle: number }[] = [
+    { label: 'N', angle: -Math.PI / 2 },
+    { label: 'NE', angle: -Math.PI / 6 },
+    { label: 'SE', angle: Math.PI / 6 },
+    { label: 'S', angle: Math.PI / 2 },
+    { label: 'SW', angle: (5 * Math.PI) / 6 },
+    { label: 'NW', angle: -(5 * Math.PI) / 6 },
+  ];
+
+  for (const { label, angle } of dirs) {
+    const lx = cx + (r + 8) * Math.cos(angle);
+    const ly = cy + (r + 8) * Math.sin(angle);
+    ctx.fillText(label, lx, ly);
+  }
+
+  // N indicator triangle
   ctx.beginPath();
   ctx.moveTo(cx, cy - r + 2);
   ctx.lineTo(cx - 3, cy - r + 8);
@@ -412,14 +453,6 @@ function drawCompassRose(ctx: CanvasRenderingContext2D, w: number, h: number) {
   ctx.fillStyle = '#e8a849';
   ctx.globalAlpha = 0.6;
   ctx.fill();
-
-  // N label
-  ctx.font = '8px monospace';
-  ctx.fillStyle = TOOLTIP_TEXT;
-  ctx.globalAlpha = 0.5;
-  ctx.textAlign = 'center';
-  ctx.textBaseline = 'middle';
-  ctx.fillText('N', cx, cy - r - 6);
 
   ctx.restore();
 }
@@ -444,13 +477,15 @@ function RoomTooltip({
   isCurrent: boolean;
 }) {
   const tipW = 220;
-  const tipH = 100; // approximate
+  const tipH = 100;
   const tx = x + tipW > containerWidth ? x - tipW - 8 : x + 8;
   const ty = y + tipH > containerHeight ? containerHeight - tipH - 8 : y + 8;
 
   const exits = Object.entries(room.exits)
     .filter(([, target]) => target)
     .map(([dir]) => directionLabel(dir as Direction));
+
+  const terrainLabel = TERRAIN_LABELS[room.terrain] ?? 'Unknown';
 
   return (
     <div
@@ -465,10 +500,16 @@ function RoomTooltip({
       }}
     >
       <div className="text-[11px] font-semibold mb-1" style={{ color: isCurrent ? CURRENT_ROOM_GLOW : TOOLTIP_TEXT }}>
-        {room.name || 'Wilderness'}
+        {terrainLabel}
+        <span className="font-normal opacity-50 ml-1.5">
+          ({room.coords.q}, {room.coords.r})
+        </span>
       </div>
-      {room.brief && (
-        <div className="text-[9px] opacity-60 mb-1 line-clamp-2">{room.brief}</div>
+      {room.description && (
+        <div className="text-[9px] opacity-60 mb-1 line-clamp-2">{room.description}</div>
+      )}
+      {room.landmarks.length > 0 && (
+        <div className="text-[9px] opacity-50 mb-1 italic">{room.landmarks[0]}</div>
       )}
       {exits.length > 0 && (
         <div className="text-[9px] opacity-50">

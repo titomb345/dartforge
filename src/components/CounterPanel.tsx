@@ -158,7 +158,14 @@ export function CounterPanel({
     <div
       className={panelRootClass(isPinned)}
     >
-      {/* Row 1: Counter tabs + pin controls */}
+      {/* Header */}
+      <div className="flex items-center justify-between px-3 py-2.5 border-b border-border-subtle shrink-0">
+        <span className="text-[13px] font-semibold text-text-heading">Counters</span>
+        <div className="flex items-center gap-1.5">
+          {pinControls}
+        </div>
+      </div>
+      {/* Counter tabs */}
       <div className="flex items-center gap-1 px-2 py-1.5 border-b border-border-subtle shrink-0">
         <div className="flex items-center gap-1 flex-1 min-w-0 overflow-x-auto">
           {counters.map((c) => (
@@ -182,9 +189,6 @@ export function CounterPanel({
           >
             <PlusIcon size={8} />
           </button>
-        </div>
-        <div className="flex items-center gap-1 shrink-0 ml-1">
-          {pinControls}
         </div>
       </div>
 

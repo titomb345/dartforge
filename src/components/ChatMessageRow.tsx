@@ -1,5 +1,6 @@
 import type { ChatMessage } from '../types/chat';
 import { VolumeOffIcon } from './icons';
+import { useAppSettingsContext } from '../contexts/AppSettingsContext';
 
 /** Color-coded badges for non-common languages */
 const LANG_COLORS: Record<string, string> = {
@@ -30,8 +31,8 @@ const LANG_COLORS: Record<string, string> = {
 
 const DEFAULT_LANG_COLOR = '#888';
 
-function formatTime(date: Date): string {
-  return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false });
+function formatTime(date: Date, hour12: boolean): string {
+  return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12 });
 }
 
 function LanguageBadge({ language }: { language: string }) {
@@ -63,6 +64,7 @@ export function ChatMessageRow({
   onMute?: (sender: string) => void;
   onIdentify?: (msgId: number) => void;
 }) {
+  const { timestampFormat } = useAppSettingsContext();
   const badge = TYPE_BADGES[msg.type];
   const knownSender = msg.sender !== 'Unknown';
 
@@ -70,7 +72,7 @@ export function ChatMessageRow({
     <div className="group flex items-start gap-1.5 px-2 py-0.5 hover:bg-bg-secondary/50 transition-colors duration-100 min-w-0">
       {/* Timestamp */}
       <span className="text-[10px] text-text-dim font-mono shrink-0 pt-px select-none">
-        {formatTime(msg.timestamp)}
+        {formatTime(msg.timestamp, timestampFormat === '12h')}
       </span>
 
       <div className="flex-1 min-w-0">

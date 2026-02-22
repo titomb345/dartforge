@@ -1,10 +1,13 @@
 /**
- * Movement tracker — detects direction commands and tracks pending movement.
+ * Movement tracker — detects hex direction commands and tracks pending movement.
  *
- * The flow:
- * 1. User sends a command → check if it's a direction
- * 2. If direction, record as "pending movement"
- * 3. When a room is parsed, the pending movement links the previous room to the new one
+ * Only tracks the 6 hex directions: n, s, ne, nw, se, sw.
+ * All other commands (enter, back, look, etc.) are ignored.
+ *
+ * Flow:
+ * 1. User sends a command → check if it's a hex direction
+ * 2. If hex direction, record as "pending movement"
+ * 3. When a hex room is parsed, the pending movement links the previous room to the new one
  * 4. If movement fails ("no exit in that direction"), clear pending movement
  */
 
@@ -24,12 +27,13 @@ export class MovementTracker {
   private static MAX_AGE = 10_000;
 
   /**
-   * Call when a command is sent to the MUD. Returns true if it was a direction.
+   * Call when a command is sent to the MUD.
+   * Only records hex direction commands; ignores everything else.
    */
   trackCommand(command: string): boolean {
     const trimmed = command.trim().toLowerCase();
 
-    // Single-word direction commands
+    // Only single-word hex direction commands
     const dir = parseDirection(trimmed);
     if (dir && this.currentRoomId) {
       this.pending = {
@@ -40,17 +44,11 @@ export class MovementTracker {
       return true;
     }
 
-    // "look" command — not a movement, but we need to know about it
-    // so the room parser doesn't create a false link
-    if (trimmed === 'look' || trimmed === 'l') {
-      this.pending = null;
-    }
-
     return false;
   }
 
   /**
-   * Call when a room is successfully parsed.
+   * Call when a hex room is successfully parsed.
    * Returns the pending movement if there was one (so the caller can link rooms).
    */
   onRoomParsed(newRoomId: string): PendingMovement | null {

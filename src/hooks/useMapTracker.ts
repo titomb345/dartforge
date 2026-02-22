@@ -1,10 +1,10 @@
 /**
  * useMapTracker — React hook that ties the room parser, movement tracker,
- * and map graph together. Manages persistence.
+ * and map graph together for hex-only wilderness mapping.
  */
 
 import { useRef, useState, useCallback, useEffect } from 'react';
-import { RoomParser, type ParsedRoom } from '../lib/roomParser';
+import { RoomParser, type ParsedHexRoom } from '../lib/roomParser';
 import { MovementTracker } from '../lib/movementTracker';
 import {
   type MapGraph,
@@ -12,7 +12,7 @@ import {
   createGraph,
   upsertRoom,
   linkRooms,
-  makeRoomId,
+  makeHexRoomId,
   assignCoords,
   findPath,
   serializeGraph,
@@ -88,59 +88,51 @@ export function useMapTracker(
     });
   }, []);
 
-  // Handle parsed room
-  const handleRoom = useCallback((parsed: ParsedRoom) => {
+  // Handle parsed hex room
+  const handleHexRoom = useCallback((parsed: ParsedHexRoom) => {
     const graph = graphRef.current;
     const tracker = movementTracker.current;
 
-    // Generate room ID
-    const exitDirStrings = parsed.exitDirections.map(String);
-    const roomId = makeRoomId(
-      parsed.name || parsed.brief,
-      [...exitDirStrings, ...parsed.namedExits],
-    );
+    // Get pending movement
+    const prevRoomId = tracker.getCurrentRoomId();
+    const movement = prevRoomId ? tracker.onRoomParsed('') : null; // pass empty, we'll set it below
 
-    // Determine coordinates
-    const movement = tracker.onRoomParsed(roomId);
     let coords: HexCoord;
+    let roomId: string;
 
-    if (graph.rooms[roomId]) {
-      // Room already known — use existing coords
-      coords = graph.rooms[roomId].coords;
-    } else if (movement && graph.rooms[movement.fromRoomId]) {
-      // New room reached by movement — assign coords relative to source
-      const { coords: newCoords, collision } = assignCoords(
-        graph,
-        graph.rooms[movement.fromRoomId],
-        movement.direction,
-      );
-      if (collision && collision !== roomId) {
-        // Coordinate collision — offset slightly
-        coords = { q: newCoords.q, r: newCoords.r + 1, z: newCoords.z };
+    if (movement && graph.rooms[movement.fromRoomId]) {
+      // We have a movement direction + known previous hex → compute new coords
+      const fromRoom = graph.rooms[movement.fromRoomId];
+      const { coords: newCoords, collision } = assignCoords(graph, fromRoom, movement.direction);
+
+      if (collision) {
+        // Room already exists at this position — revisit it
+        coords = newCoords;
+        roomId = collision;
       } else {
         coords = newCoords;
+        roomId = makeHexRoomId(coords.q, coords.r);
       }
+    } else if (prevRoomId && graph.rooms[prevRoomId]) {
+      // No movement context (look/survey) — stay at current position
+      coords = graph.rooms[prevRoomId].coords;
+      roomId = prevRoomId;
     } else {
-      // No movement context — first room or look command; default to origin
-      coords = { q: 0, r: 0, z: 0 };
+      // First hex room ever — place at origin
+      coords = { q: 0, r: 0 };
+      roomId = makeHexRoomId(0, 0);
     }
 
     // Upsert room
-    upsertRoom(
-      graph,
-      roomId,
-      parsed.name,
-      parsed.brief,
-      parsed.exitDirections,
-      parsed.namedExits,
-      parsed.terrain,
-      coords,
-    );
+    upsertRoom(graph, roomId, coords, parsed.terrain, parsed.description, parsed.landmarks);
 
     // Link rooms if we moved
-    if (movement && graph.rooms[movement.fromRoomId]) {
+    if (movement && graph.rooms[movement.fromRoomId] && movement.fromRoomId !== roomId) {
       linkRooms(graph, movement.fromRoomId, roomId, movement.direction);
     }
+
+    // Update tracker's current room to the actual room ID
+    tracker.setCurrentRoom(roomId);
 
     graph.currentRoomId = roomId;
     syncState();
@@ -151,13 +143,11 @@ export function useMapTracker(
   if (!parserRef.current) {
     parserRef.current = new RoomParser((event) => {
       switch (event.type) {
-        case 'room':
-          handleRoom(event.room);
+        case 'hex-room':
+          handleHexRoom(event.room);
           break;
         case 'move-failed':
           movementTracker.current.onMoveFailed();
-          break;
-        case 'look':
           break;
       }
     });

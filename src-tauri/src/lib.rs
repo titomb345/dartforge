@@ -114,6 +114,7 @@ pub fn run() {
             storage::list_backups,
             storage::restore_backup,
             storage::prune_backups,
+            storage::append_to_log,
         ])
         .setup(|app| {
             // Initialize storage state with default app data dir

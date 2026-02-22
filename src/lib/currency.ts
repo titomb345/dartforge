@@ -204,24 +204,35 @@ export interface ParsedConvertCommand {
 /**
  * Parse a freeform coin string into individual coin entries.
  * Accepts formats like:
- *   "3Ri"  "3 Ri"  "3ri 5dn"  "1su,2g"  "1ri1dn50fs"  "3 gold suns"
+ *   "3Ri"  "3 Ri"  "3ri 5dn"  "1su,2g"  "1ri1dn50fs"
+ *   "3 gold suns"  "1,000 rials"  "2 dirhams, 500 fuls"
+ *
+ * Numbers can contain commas (e.g. 1,000). Denominations can be
+ * abbreviations, full names ("gold rial"), or short names ("rial").
  *
  * Returns the parsed entries or an error string.
  */
 export function parseCoins(input: string): CoinEntry[] | string {
   const entries: CoinEntry[] = [];
 
-  // Strategy: use a regex to find all <number><denomination> pairs.
-  // The denomination can be 1-2 letter abbreviations or longer words.
-  // We try longest abbreviation matches first by sorting all known abbrs.
-  const allAbbrs = [...ABBR_MAP.keys()].sort((a, b) => b.length - a.length);
-  const abbrPattern = allAbbrs.map((a) => a.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('|');
+  // Collect all known denomination identifiers (names + abbreviations),
+  // deduplicate, and sort longest-first so the regex is greedy.
+  const allKeys = [...new Set([...NAME_MAP.keys(), ...ABBR_MAP.keys()])].sort(
+    (a, b) => b.length - a.length,
+  );
+  const denomPattern = allKeys
+    .map((k) => k.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'))
+    .join('|');
 
-  // Match: <number> <optional whitespace> <abbreviation>
-  const regex = new RegExp(`(\\d+(?:\\.\\d+)?)\\s*(${abbrPattern})(?=[\\s,;+&]|\\d|$)`, 'gi');
+  // Match: <number with optional commas> <optional whitespace> <denomination>
+  // Negative letter lookahead prevents partial word matches (e.g. "ri" inside "rial")
+  const regex = new RegExp(
+    `(\\d{1,3}(?:,\\d{3})*(?:\\.\\d+)?)\\s*(${denomPattern})(?![a-zA-Z])`,
+    'gi',
+  );
   let match;
   while ((match = regex.exec(input)) !== null) {
-    const amount = parseFloat(match[1]);
+    const amount = parseFloat(match[1].replace(/,/g, ''));
     if (amount <= 0 || !isFinite(amount)) continue;
     const found = findDenomination(match[2]);
     if (found) {
@@ -230,7 +241,7 @@ export function parseCoins(input: string): CoinEntry[] | string {
   }
 
   if (entries.length === 0) {
-    return `No coins found. Use format like: 3Ri 5dn, or 1su2g50mn`;
+    return `No coins found. Use format like: 3Ri 5dn, 3 rials, or 1,000 gold suns`;
   }
 
   return entries;
@@ -242,7 +253,7 @@ export function parseCoins(input: string): CoinEntry[] | string {
  *   #convert <coins>
  *   #convert <coins> to <system>
  *
- * Where <coins> is freeform: "3Ri", "1su 2g", "1ri1dn50fs", etc.
+ * Where <coins> is freeform: "3Ri", "1su 2g", "1ri1dn50fs", "3 rials", "1,000 gold suns", etc.
  */
 export function parseConvertCommand(input: string): ParsedConvertCommand | string {
   const trimmed = input.replace(/^#convert\s+/i, '').trim();

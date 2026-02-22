@@ -17,13 +17,13 @@ export function useFilteredGroups<T extends Groupable>(
 ) {
   const groups = useMemo(() => {
     const set = new Set<string>();
-    for (const item of items) set.add(item.group || 'General');
+    for (const item of items) set.add((item.group || 'General').toLowerCase());
     return [...set].sort();
   }, [items]);
 
   const filtered = useMemo(() => {
     let list = items;
-    if (groupFilter) list = list.filter((item) => (item.group || 'General') === groupFilter);
+    if (groupFilter) list = list.filter((item) => (item.group || 'General').toLowerCase() === groupFilter.toLowerCase());
     if (searchText) {
       const lower = searchText.toLowerCase();
       list = list.filter(
@@ -39,7 +39,7 @@ export function useFilteredGroups<T extends Groupable>(
   const grouped = useMemo(() => {
     const map = new Map<string, T[]>();
     for (const item of filtered) {
-      const g = item.group || 'General';
+      const g = (item.group || 'General').toLowerCase();
       if (!map.has(g)) map.set(g, []);
       map.get(g)!.push(item);
     }

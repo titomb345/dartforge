@@ -50,9 +50,14 @@ export function DataStoreProvider({ children }: { children: ReactNode }) {
     const resolved: string = await invoke('resolve_data_dir', { candidates });
     setActiveDataDir(resolved);
 
-    // Create session-start backup and prune old ones
-    await invoke('create_backup', { tag: 'session-start' });
-    await invoke('prune_backups', { keep: 30 });
+    // Check if auto-backups are enabled (read directly — settings context isn't mounted yet)
+    const settings: Record<string, unknown> | null = await invoke('read_data_file', { filename: 'settings.json' });
+    const backupsEnabled = settings?.autoBackupEnabled !== false; // default true
+
+    if (backupsEnabled) {
+      await invoke('create_backup', { tag: 'session-start' });
+      await invoke('prune_backups', { keep: 30 });
+    }
 
     setReady(true);
   }
@@ -75,11 +80,13 @@ export function DataStoreProvider({ children }: { children: ReactNode }) {
     setReady(true);
   }, []);
 
-  // Hourly auto-backup
+  // Hourly auto-backup (checks setting from cache each tick)
   useEffect(() => {
     if (!ready) return;
     const interval = setInterval(async () => {
       try {
+        const cache = cacheRef.current.get('settings.json');
+        if (cache && cache.autoBackupEnabled === false) return;
         await invoke('create_backup', { tag: 'auto' });
       } catch (e) {
         console.error('Auto-backup failed:', e);

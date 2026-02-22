@@ -7,6 +7,7 @@ const FOCUS_COLORS = {
   red: 'focus:border-red/40',
   purple: 'focus:border-[#a78bfa]/40',
   pink: 'focus:border-[#ff79c6]/40',
+  green: 'focus:border-[#4ade80]/40',
 } as const;
 
 const BTN_ACCENT = {
@@ -14,6 +15,7 @@ const BTN_ACCENT = {
   red: 'bg-red/15 border-red/30 text-red hover:bg-red/25',
   purple: 'bg-[#a78bfa]/10 border-[#a78bfa]/40 text-[#a78bfa] hover:bg-[#a78bfa]/20',
   pink: 'bg-[#ff79c6]/10 border-[#ff79c6]/40 text-[#ff79c6] hover:bg-[#ff79c6]/20',
+  green: 'bg-[#4ade80]/10 border-[#4ade80]/40 text-[#4ade80] hover:bg-[#4ade80]/20',
 } as const;
 
 const SIZE_CLASSES = {

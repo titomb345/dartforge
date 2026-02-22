@@ -1,4 +1,5 @@
 import { useRef, useState, useEffect, useCallback, useLayoutEffect, useMemo } from 'react';
+import { useLatestRef } from './hooks/useLatestRef';
 import type { Terminal as XTerm } from '@xterm/xterm';
 import { getAppVersion, setWindowTitle } from './lib/platform';
 import { Terminal } from './components/Terminal';
@@ -21,6 +22,7 @@ import { useSkillTracker } from './hooks/useSkillTracker';
 import { useChatMessages } from './hooks/useChatMessages';
 import { useImproveCounters } from './hooks/useImproveCounters';
 import { useAliases } from './hooks/useAliases';
+import { useVariables } from './hooks/useVariables';
 import { useConcentration } from './hooks/useConcentration';
 import { useHealth } from './hooks/useHealth';
 import { useNeeds } from './hooks/useNeeds';
@@ -28,19 +30,21 @@ import { useAura } from './hooks/useAura';
 import { useEncumbrance } from './hooks/useEncumbrance';
 import { useMovement } from './hooks/useMovement';
 import { useDataStore } from './contexts/DataStoreContext';
-import { buildXtermTheme } from './lib/defaultTheme';
+import { buildXtermTheme, type ThemeColorKey } from './lib/defaultTheme';
 import { OutputProcessor } from './lib/outputProcessor';
 import { expandInput } from './lib/aliasEngine';
+import { executeCommands, type CommandRunner } from './lib/commandUtils';
 import { OutputFilter, DEFAULT_FILTER_FLAGS, type FilterFlags } from './lib/outputFilter';
 import { matchSkillLine } from './lib/skillPatterns';
-import { cn } from './lib/cn';
-
 import type { Panel, PanelLayout, PinnablePanel, DockSide } from './types';
 import { PinnedRegion } from './components/PinnedRegion';
+import { SlideOut } from './components/SlideOut';
 import { SkillTrackerProvider } from './contexts/SkillTrackerContext';
 import { ChatProvider } from './contexts/ChatContext';
 import { ImproveCounterProvider } from './contexts/ImproveCounterContext';
 import { AliasProvider } from './contexts/AliasContext';
+import { VariableProvider } from './contexts/VariableContext';
+import { VariablePanel } from './components/VariablePanel';
 import { AliasPanel } from './components/AliasPanel';
 import { TriggerProvider } from './contexts/TriggerContext';
 import { TriggerPanel } from './components/TriggerPanel';
@@ -55,9 +59,19 @@ import { useMapTracker } from './hooks/useMapTracker';
 import { MapProvider } from './contexts/MapContext';
 import { PanelProvider } from './contexts/PanelLayoutContext';
 import { MapPanel } from './components/MapPanel';
+import { useAllocations } from './hooks/useAllocations';
+import { AllocProvider } from './contexts/AllocContext';
+import { AllocPanel } from './components/AllocPanel';
+import { CurrencyPanel } from './components/CurrencyPanel';
+import { ResizeHandle } from './components/ResizeHandle';
+import { useResize } from './hooks/useResize';
+import { AllocLineParser, parseAllocCommand, applyAllocUpdates, MagicLineParser, parseMagicAllocCommand, applyMagicAllocUpdates } from './lib/allocPatterns';
+import { useAppSettings } from './hooks/useAppSettings';
+import { useSessionLogger } from './hooks/useSessionLogger';
+import { AppSettingsProvider } from './contexts/AppSettingsContext';
 
 /** Commands to send automatically after login */
-const LOGIN_COMMANDS = ['hp', 'score'];
+const LOGIN_COMMANDS = ['hp', 'score', 'show combat allocation:all', 'show magic allocation'];
 
 /** Max recent output lines kept for tab completion */
 const MAX_RECENT_LINES = 500;
@@ -98,6 +112,7 @@ function AppMain() {
   const [activePanel, setActivePanel] = useState<Panel | null>(null);
   const togglePanel = (panel: Panel) => setActivePanel((v) => v === panel ? null : panel);
   const [panelLayout, setPanelLayout] = useState<PanelLayout>({ left: [], right: [] });
+  const [pinnedWidths, setPinnedWidths] = useState<{ left: number; right: number }>({ left: 320, right: 320 });
   const panelLayoutLoadedRef = useRef(false);
   const [compactReadouts, setCompactReadouts] = useState<Record<string, boolean>>({});
   const [filterFlags, setFilterFlags] = useState<FilterFlags>({ ...DEFAULT_FILTER_FLAGS });
@@ -105,10 +120,12 @@ function AppMain() {
   const statusBarRef = useRef<HTMLDivElement | null>(null);
   const [autoCompact, setAutoCompact] = useState(false);
 
-  // Anti-idle state
-  const [antiIdleEnabled, setAntiIdleEnabled] = useState(false);
-  const [antiIdleCommand, setAntiIdleCommand] = useState('hp');
-  const [antiIdleMinutes, setAntiIdleMinutes] = useState(10);
+  const appSettings = useAppSettings();
+  const {
+    antiIdleEnabled, antiIdleCommand, antiIdleMinutes,
+    updateAntiIdleEnabled,
+    boardDatesEnabled, stripPromptsEnabled,
+  } = appSettings;
 
   const dataStore = useDataStore();
   const settingsLoadedRef = useRef(false);
@@ -133,13 +150,10 @@ function AppMain() {
       ) {
         setPanelLayout(savedLayout);
       }
-      // Anti-idle settings
-      const savedAntiIdleEnabled = await dataStore.get<boolean>('settings.json', 'antiIdleEnabled');
-      if (savedAntiIdleEnabled != null) setAntiIdleEnabled(savedAntiIdleEnabled);
-      const savedAntiIdleCommand = await dataStore.get<string>('settings.json', 'antiIdleCommand');
-      if (savedAntiIdleCommand != null) setAntiIdleCommand(savedAntiIdleCommand);
-      const savedAntiIdleMinutes = await dataStore.get<number>('settings.json', 'antiIdleMinutes');
-      if (savedAntiIdleMinutes != null) setAntiIdleMinutes(savedAntiIdleMinutes);
+      const savedWidths = await dataStore.get<{ left: number; right: number }>('settings.json', 'pinnedWidths');
+      if (savedWidths != null && typeof savedWidths.left === 'number' && typeof savedWidths.right === 'number') {
+        setPinnedWidths(savedWidths);
+      }
 
       panelLayoutLoadedRef.current = true;
       settingsLoadedRef.current = true;
@@ -206,17 +220,29 @@ function AppMain() {
     });
   }, []);
 
-  const isSkillsPinned = panelLayout.left.includes('skills') || panelLayout.right.includes('skills');
-  const isChatPinned = panelLayout.left.includes('chat') || panelLayout.right.includes('chat');
-  const isCounterPinned = panelLayout.left.includes('counter') || panelLayout.right.includes('counter');
-  const isNotesPinned = panelLayout.left.includes('notes') || panelLayout.right.includes('notes');
-  const isMapPinned = panelLayout.left.includes('map') || panelLayout.right.includes('map');
-
   // Persist panel layout
   useEffect(() => {
     if (!panelLayoutLoadedRef.current) return;
     dataStore.set('settings.json', 'panelLayout', panelLayout).catch(console.error);
   }, [panelLayout]);
+
+  // Persist pinned panel widths
+  useEffect(() => {
+    if (!panelLayoutLoadedRef.current) return;
+    dataStore.set('settings.json', 'pinnedWidths', pinnedWidths).catch(console.error);
+  }, [pinnedWidths]);
+
+  // Resize hooks for pinned regions
+  const leftResize = useResize({
+    side: 'left',
+    initialWidth: pinnedWidths.left,
+    onWidthChange: useCallback((w: number) => setPinnedWidths((p) => ({ ...p, left: w })), []),
+  });
+  const rightResize = useResize({
+    side: 'right',
+    initialWidth: pinnedWidths.right,
+    onWidthChange: useCallback((w: number) => setPinnedWidths((p) => ({ ...p, right: w })), []),
+  });
 
   const { theme, updateColor, resetColor, display, updateDisplay, resetDisplay, resetAll } = useThemeColors();
   const xtermTheme = buildXtermTheme(theme);
@@ -229,37 +255,31 @@ function AppMain() {
   }
 
   // Chat messages hook
+  const chatNotificationsRef = useRef(appSettings.chatNotifications);
+  chatNotificationsRef.current = appSettings.chatNotifications;
   const { messages: chatMessages, filters: chatFilters, mutedSenders, soundAlerts: chatSoundAlerts, newestFirst: chatNewestFirst, handleChatMessage, toggleFilter: toggleChatFilter, setAllFilters: setAllChatFilters, toggleSoundAlert: toggleChatSoundAlert, toggleNewestFirst: toggleChatNewestFirst, muteSender, unmuteSender, updateSender } =
-    useChatMessages();
-  const handleChatMessageRef = useRef(handleChatMessage);
-  handleChatMessageRef.current = handleChatMessage;
+    useChatMessages(appSettings.chatHistorySize, chatNotificationsRef);
+  const handleChatMessageRef = useLatestRef(handleChatMessage);
 
   // Status trackers
   const { concentration, updateConcentration } = useConcentration();
-  const updateConcentrationRef = useRef(updateConcentration);
-  updateConcentrationRef.current = updateConcentration;
+  const updateConcentrationRef = useLatestRef(updateConcentration);
 
   const { health, updateHealth } = useHealth();
-  const updateHealthRef = useRef(updateHealth);
-  updateHealthRef.current = updateHealth;
+  const updateHealthRef = useLatestRef(updateHealth);
 
   const { hunger, thirst, updateHunger, updateThirst } = useNeeds();
-  const updateHungerRef = useRef(updateHunger);
-  updateHungerRef.current = updateHunger;
-  const updateThirstRef = useRef(updateThirst);
-  updateThirstRef.current = updateThirst;
+  const updateHungerRef = useLatestRef(updateHunger);
+  const updateThirstRef = useLatestRef(updateThirst);
 
   const { aura, updateAura } = useAura();
-  const updateAuraRef = useRef(updateAura);
-  updateAuraRef.current = updateAura;
+  const updateAuraRef = useLatestRef(updateAura);
 
   const { encumbrance, updateEncumbrance } = useEncumbrance();
-  const updateEncumbranceRef = useRef(updateEncumbrance);
-  updateEncumbranceRef.current = updateEncumbrance;
+  const updateEncumbranceRef = useLatestRef(updateEncumbrance);
 
   const { movement, updateMovement } = useMovement();
-  const updateMovementRef = useRef(updateMovement);
-  updateMovementRef.current = updateMovement;
+  const updateMovementRef = useLatestRef(updateMovement);
 
   const outputFilterRef = useRef<OutputFilter | null>(null);
   if (!outputFilterRef.current) {
@@ -275,6 +295,18 @@ function AppMain() {
       onLine: (stripped, raw) => {
         // Feed stripped lines to the room parser for map building
         mapFeedLineRef.current(stripped);
+
+        // Feed to allocation parser
+        const allocResult = allocParserRef.current?.feedLine(stripped);
+        if (allocResult) {
+          handleAllocParseRef.current(allocResult);
+        }
+
+        // Feed to magic allocation parser
+        const magicResult = magicParserRef.current?.feedLine(stripped);
+        if (magicResult) {
+          handleMagicParseRef.current(magicResult);
+        }
 
         if (triggerFiringRef.current) return;
         const matches = matchTriggers(stripped, raw, mergedTriggersRef.current);
@@ -293,25 +325,12 @@ function AppMain() {
               match.trigger.body,
               match,
               activeCharacterRef.current,
+              mergedVariablesRef.current,
             );
             triggerFiringRef.current = true;
             (async () => {
               try {
-                for (const cmd of commands) {
-                  switch (cmd.type) {
-                    case 'send':
-                      await sendCommandRef.current?.(cmd.text);
-                      break;
-                    case 'delay':
-                      await new Promise<void>((r) => setTimeout(r, cmd.ms));
-                      break;
-                    case 'echo':
-                      if (terminalRef.current) {
-                        smartWrite(terminalRef.current, `\x1b[36m${cmd.text}\x1b[0m\r\n`);
-                      }
-                      break;
-                  }
-                }
+                await executeCommands(commands, triggerRunnerRef.current);
               } finally {
                 triggerFiringRef.current = false;
               }
@@ -333,6 +352,20 @@ function AppMain() {
     if (!settingsLoadedRef.current) return;
     dataStore.set('settings.json', 'filteredStatuses', filterFlags).catch(console.error);
   }, [filterFlags]);
+
+  // Keep board date conversion in sync with OutputFilter
+  useEffect(() => {
+    if (outputFilterRef.current) {
+      outputFilterRef.current.boardDatesEnabled = boardDatesEnabled;
+    }
+  }, [boardDatesEnabled]);
+
+  // Keep prompt stripping in sync with OutputFilter
+  useEffect(() => {
+    if (outputFilterRef.current) {
+      outputFilterRef.current.stripPrompts = stripPromptsEnabled;
+    }
+  }, [stripPromptsEnabled]);
 
   // Persist per-readout compact state
   useEffect(() => {
@@ -388,38 +421,64 @@ function AppMain() {
   // Improve counter hook
   const improveCounters = useImproveCounters();
   const { handleCounterMatch } = improveCounters;
-  const handleCounterMatchRef = useRef(handleCounterMatch);
-  handleCounterMatchRef.current = handleCounterMatch;
+  const handleCounterMatchRef = useLatestRef(handleCounterMatch);
 
   // Alias system
   const aliasState = useAliases(dataStore, activeCharacter);
   const { mergedAliases, enableSpeedwalk } = aliasState;
-  const mergedAliasesRef = useRef(mergedAliases);
-  mergedAliasesRef.current = mergedAliases;
-  const enableSpeedwalkRef = useRef(enableSpeedwalk);
-  enableSpeedwalkRef.current = enableSpeedwalk;
-  const activeCharacterRef = useRef(activeCharacter);
-  activeCharacterRef.current = activeCharacter;
+  const mergedAliasesRef = useLatestRef(mergedAliases);
+  const enableSpeedwalkRef = useLatestRef(enableSpeedwalk);
+  const activeCharacterRef = useLatestRef(activeCharacter);
+
+  // Variable system
+  const variableState = useVariables(dataStore, activeCharacter);
+  const { mergedVariables, setVariable: setVar, deleteVariableByName } = variableState;
+  const mergedVariablesRef = useLatestRef(mergedVariables);
+  const setVarRef = useLatestRef(setVar);
+  const deleteVariableByNameRef = useLatestRef(deleteVariableByName);
 
   // Trigger system
   const triggerState = useTriggers(dataStore, activeCharacter);
   const { mergedTriggers } = triggerState;
-  const mergedTriggersRef = useRef(mergedTriggers);
-  mergedTriggersRef.current = mergedTriggers;
+  const mergedTriggersRef = useLatestRef(mergedTriggers);
   const triggerFiringRef = useRef(false);
+  const triggerRunnerRef = useRef<CommandRunner>({
+    send: async () => {},
+    echo: () => {},
+    expand: () => [],
+  });
 
   // Signature mapping system
   const signatureState = useSignatureMappings(dataStore, activeCharacter);
   const { resolveSignature } = signatureState;
-  const resolveSignatureRef = useRef(resolveSignature);
-  resolveSignatureRef.current = resolveSignature;
+  const resolveSignatureRef = useLatestRef(resolveSignature);
 
   // Map tracker
   const mapTracker = useMapTracker(dataStore, activeCharacter);
-  const mapFeedLineRef = useRef(mapTracker.feedLine);
-  mapFeedLineRef.current = mapTracker.feedLine;
-  const mapTrackCommandRef = useRef(mapTracker.trackCommand);
-  mapTrackCommandRef.current = mapTracker.trackCommand;
+  const mapFeedLineRef = useLatestRef(mapTracker.feedLine);
+  const mapTrackCommandRef = useLatestRef(mapTracker.trackCommand);
+
+  // Allocation tracker
+  const allocState = useAllocations(sendCommandRef, dataStore, activeCharacter);
+  const handleAllocParseRef = useLatestRef(allocState.handleAllocParse);
+  const handleMagicParseRef = useLatestRef(allocState.handleMagicParse);
+  const liveAllocationsRef = useLatestRef(allocState.data.liveAllocations);
+  const liveMagicAllocRef = useLatestRef(allocState.magicData.liveAllocation);
+  const allocParserRef = useRef<AllocLineParser | null>(null);
+  if (!allocParserRef.current) {
+    allocParserRef.current = new AllocLineParser();
+  }
+  const magicParserRef = useRef<MagicLineParser | null>(null);
+  if (!magicParserRef.current) {
+    magicParserRef.current = new MagicLineParser();
+  }
+
+  // Wire up deferred flush so the parser can fire handleAllocParse via timeout.
+  useEffect(() => {
+    allocParserRef.current?.setFlushCallback((result) => {
+      handleAllocParseRef.current(result);
+    });
+  }, []);
 
   // Keep OutputFilter's activeCharacter in sync for chat own-message detection
   useEffect(() => {
@@ -435,8 +494,14 @@ function AppMain() {
     }
   }, []);
 
+  // Session logging ref (populated after useMudConnection provides passwordMode)
+  const logOutputRef = useRef<((data: string) => void) | null>(null);
+  const logCommandRef = useRef<((cmd: string) => void) | null>(null);
+
   // Process output chunks through the skill detection pipeline + buffer for tab completion
   const onOutputChunk = useCallback((data: string) => {
+    logOutputRef.current?.(data);
+
     const matches = processorRef.current?.processChunk(data);
     if (!matches) return;
     for (const match of matches) {
@@ -457,7 +522,7 @@ function AppMain() {
   }, [setActiveCharacter]);
 
   const onLogin = useCallback(() => {
-    outputFilterRef.current?.startSync(LOGIN_COMMANDS.length + 2);
+    outputFilterRef.current?.startSync();
     for (const cmd of LOGIN_COMMANDS) {
       sendCommandRef.current?.(cmd);
     }
@@ -469,13 +534,49 @@ function AppMain() {
   const { connected, passwordMode, skipHistory, sendCommand, reconnect, disconnect } =
     useMudConnection(terminalRef, debugModeRef, transport, onOutputChunk, onCharacterName, outputFilterRef, onLogin);
 
+  // Session logger
+  const { logOutput, logCommand } = useSessionLogger(appSettings.sessionLoggingEnabled, passwordMode, appSettings.timestampFormat);
+  logOutputRef.current = logOutput;
+  logCommandRef.current = logCommand;
+
   // Keep sendCommand ref up to date for login commands
   sendCommandRef.current = sendCommand;
 
+  // Keep trigger runner in sync for use in the output filter closure
+  triggerRunnerRef.current = {
+    send: async (text) => { await sendCommandRef.current?.(text); },
+    echo: (text) => {
+      if (terminalRef.current) {
+        smartWrite(terminalRef.current, `\x1b[36m${text}\x1b[0m\r\n`);
+      }
+    },
+    expand: (input) => expandInput(input, mergedAliasesRef.current, {
+      enableSpeedwalk: enableSpeedwalkRef.current,
+      activeCharacter: activeCharacterRef.current,
+      variables: mergedVariablesRef.current,
+    }).commands,
+  };
+
+  // Command echo ref (used in handleSend callback)
+  const commandEchoRef = useLatestRef(appSettings.commandEchoEnabled);
+  const passwordModeRef = useLatestRef(passwordMode);
+
   // Alias-expanded send: preprocesses input through the alias engine
   const handleSend = useCallback(async (rawInput: string) => {
-    // Built-in #convert command — intercept before alias expansion
-    if (/^#convert\b/i.test(rawInput.trim())) {
+    // Command echo — write dimmed line to terminal before processing
+    if (commandEchoRef.current && terminalRef.current && rawInput.trim()) {
+      if (passwordModeRef.current) {
+        smartWrite(terminalRef.current, '\x1b[90m> ******\x1b[0m\r\n');
+      } else {
+        smartWrite(terminalRef.current, `\x1b[90m> ${rawInput}\x1b[0m\r\n`);
+      }
+    }
+
+    // Session logging — log sent command
+    if (rawInput.trim()) logCommandRef.current?.(rawInput);
+
+    // Built-in /convert command — intercept before alias expansion
+    if (/^\/convert\b/i.test(rawInput.trim())) {
       if (terminalRef.current) {
         const parsed = parseConvertCommand(rawInput.trim());
         if (typeof parsed === 'string') {
@@ -488,26 +589,89 @@ function AppMain() {
       return;
     }
 
+    // Built-in /var command — manage user variables
+    if (/^\/var\b/i.test(rawInput.trim())) {
+      const varInput = rawInput.trim().slice(4).trim();
+      if (terminalRef.current) {
+        if (!varInput) {
+          // /var — list all variables
+          const vars = mergedVariablesRef.current.filter((v) => v.enabled);
+          if (vars.length === 0) {
+            smartWrite(terminalRef.current, '\x1b[36mNo variables set.\x1b[0m\r\n');
+          } else {
+            smartWrite(terminalRef.current, '\x1b[36m--- Variables ---\x1b[0m\r\n');
+            for (const v of vars) {
+              smartWrite(terminalRef.current, `\x1b[36m  $${v.name} = ${v.value}\x1b[0m\r\n`);
+            }
+          }
+        } else if (varInput.startsWith('-d ')) {
+          // /var -d <name> — delete variable
+          const name = varInput.slice(3).trim();
+          if (deleteVariableByNameRef.current(name)) {
+            smartWrite(terminalRef.current, `\x1b[36mDeleted variable $${name}\x1b[0m\r\n`);
+          } else {
+            smartWrite(terminalRef.current, `\x1b[31mVariable "$${name}" not found.\x1b[0m\r\n`);
+          }
+        } else {
+          // /var <name> <value> or /var -g <name> <value>
+          let scope: 'character' | 'global' = 'character';
+          let rest = varInput;
+          if (rest.startsWith('-g ')) {
+            scope = 'global';
+            rest = rest.slice(3).trim();
+          }
+          const spaceIdx = rest.indexOf(' ');
+          if (spaceIdx === -1) {
+            smartWrite(terminalRef.current, `\x1b[31mUsage: /var <name> <value>  |  /var -g <name> <value>  |  /var -d <name>  |  /var\x1b[0m\r\n`);
+          } else {
+            const name = rest.slice(0, spaceIdx);
+            const value = rest.slice(spaceIdx + 1);
+            setVarRef.current(name, value, scope);
+            smartWrite(terminalRef.current, `\x1b[36m$${name} = ${value} (${scope})\x1b[0m\r\n`);
+          }
+        }
+      }
+      return;
+    }
+
     const result = expandInput(rawInput, mergedAliasesRef.current, {
       enableSpeedwalk: enableSpeedwalkRef.current,
       activeCharacter: activeCharacterRef.current,
+      variables: mergedVariablesRef.current,
     });
-    for (const cmd of result.commands) {
-      switch (cmd.type) {
-        case 'send':
-          mapTrackCommandRef.current(cmd.text);
-          await sendCommand(cmd.text);
-          break;
-        case 'delay':
-          await new Promise<void>((r) => setTimeout(r, cmd.ms));
-          break;
-        case 'echo':
-          if (terminalRef.current) {
-            smartWrite(terminalRef.current, `\x1b[36m${cmd.text}\x1b[0m\r\n`);
-          }
-          break;
-      }
-    }
+    await executeCommands(result.commands, {
+      send: async (text) => {
+        mapTrackCommandRef.current(text);
+        await sendCommand(text);
+        // Update live allocs directly from outgoing set commands
+        const parsed = parseAllocCommand(text);
+        if (parsed) {
+          const base = liveAllocationsRef.current[parsed.limb]
+            ?? { bonus: 0, daring: 0, speed: 0, aiming: 0, parry: 0, control: 0 };
+          const updated = applyAllocUpdates(base, parsed.updates);
+          handleAllocParseRef.current({
+            limbs: [{ limb: parsed.limb, alloc: updated, null: 0 }],
+          });
+        }
+        // Update live magic allocs from outgoing set magic allocation commands
+        const parsedMagic = parseMagicAllocCommand(text);
+        if (parsedMagic) {
+          const base = liveMagicAllocRef.current;
+          const updated = applyMagicAllocUpdates(base, parsedMagic.updates, parsedMagic.reset);
+          handleMagicParseRef.current({ alloc: updated, arcane: 0 });
+        }
+      },
+      echo: (text) => {
+        if (terminalRef.current) {
+          smartWrite(terminalRef.current, `\x1b[36m${text}\x1b[0m\r\n`);
+        }
+      },
+      expand: (input) => expandInput(input, mergedAliasesRef.current, {
+        enableSpeedwalk: enableSpeedwalkRef.current,
+        activeCharacter: activeCharacterRef.current,
+        variables: mergedVariablesRef.current,
+      }).commands,
+    });
   }, [sendCommand]);
 
   // Clear logged-in state and reset trigger cooldowns on disconnect
@@ -528,25 +692,9 @@ function AppMain() {
     setFilterFlags((prev) => ({ ...prev, [key]: !prev[key] }));
   }, []);
 
-  // Anti-idle change handlers with persistence
-  const handleAntiIdleEnabledChange = useCallback((v: boolean) => {
-    setAntiIdleEnabled(v);
-    dataStore.set('settings.json', 'antiIdleEnabled', v).catch(console.error);
-  }, [dataStore]);
-  const handleAntiIdleCommandChange = useCallback((v: string) => {
-    setAntiIdleCommand(v);
-    dataStore.set('settings.json', 'antiIdleCommand', v).catch(console.error);
-  }, [dataStore]);
-  const handleAntiIdleMinutesChange = useCallback((v: number) => {
-    setAntiIdleMinutes(v);
-    dataStore.set('settings.json', 'antiIdleMinutes', v).catch(console.error);
-  }, [dataStore]);
-
   // Anti-idle timer — sends command at interval when connected + logged in + enabled
-  const antiIdleEnabledRef = useRef(antiIdleEnabled);
-  antiIdleEnabledRef.current = antiIdleEnabled;
-  const antiIdleCommandRef = useRef(antiIdleCommand);
-  antiIdleCommandRef.current = antiIdleCommand;
+  const antiIdleEnabledRef = useLatestRef(antiIdleEnabled);
+  const antiIdleCommandRef = useLatestRef(antiIdleCommand);
   const [antiIdleNextAt, setAntiIdleNextAt] = useState<number | null>(null);
 
   useEffect(() => {
@@ -569,8 +717,30 @@ function AppMain() {
     return () => { clearInterval(id); setAntiIdleNextAt(null); };
   }, [connected, loggedIn, antiIdleEnabled, antiIdleMinutes]);
 
-  const isDanger = (themeColor: string) =>
-    themeColor === 'red' || themeColor === 'brightRed' || themeColor === 'magenta';
+  const isDanger = (tc: string) => tc === 'red' || tc === 'brightRed' || tc === 'magenta';
+
+  const renderReadout = (
+    key: string,
+    data: { label: string; themeColor: ThemeColorKey; severity: number } | null,
+    icon: React.ReactNode,
+    tooltip: string,
+    filterKey?: keyof FilterFlags,
+  ) => data && (
+    <StatusReadout
+      key={key}
+      icon={icon}
+      label={data.label}
+      color={theme[data.themeColor]}
+      tooltip={tooltip}
+      glow={data.severity <= 1}
+      danger={isDanger(data.themeColor)}
+      compact={autoCompact || !!compactReadouts[key]}
+      autoCompact={autoCompact}
+      filtered={filterKey ? filterFlags[filterKey] : undefined}
+      onClick={filterKey ? () => toggleFilter(filterKey) : undefined}
+      onToggleCompact={() => toggleCompactReadout(key)}
+    />
+  );
 
   const skillTrackerValue = useMemo(() => (
     { activeCharacter, skillData, showInlineImproves, toggleInlineImproves, addSkill, updateSkillCount, deleteSkill }
@@ -596,6 +766,8 @@ function AppMain() {
   }, [improveCounters]);
 
   return (
+    <AppSettingsProvider value={appSettings}>
+    <VariableProvider value={variableState}>
     <AliasProvider value={aliasState}>
     <TriggerProvider value={triggerState}>
     <SignatureProvider value={signatureState}>
@@ -603,46 +775,50 @@ function AppMain() {
     <ChatProvider value={chatValue}>
     <ImproveCounterProvider value={counterValue}>
     <MapProvider value={mapTracker}>
+    <AllocProvider value={allocState}>
     <PanelProvider layout={panelLayout} activePanel={activePanel} togglePanel={togglePanel} pinPanel={pinPanel}>
     <div className="flex flex-col h-screen bg-bg-canvas text-text-primary relative p-1 gap-1">
       <Toolbar
         connected={connected}
-        onReconnect={reconnect}
-        onDisconnect={disconnect}
+        onReconnect={() => { reconnect(); requestAnimationFrame(() => inputRef.current?.focus()); }}
+        onDisconnect={() => { disconnect(); requestAnimationFrame(() => inputRef.current?.focus()); }}
       />
       <div className="flex-1 overflow-hidden flex flex-row gap-1 relative">
         {/* Left pinned region */}
         <PinnedRegion
           side="left"
           panels={panelLayout.left}
+          width={pinnedWidths.left}
           otherSidePanelCount={panelLayout.right.length}
           onUnpin={unpinPanel}
           onSwapSide={swapPanelSide}
           onMovePanel={movePanel}
         />
+        {panelLayout.left.length > 0 && (
+          <ResizeHandle side="left" onMouseDown={leftResize.handleMouseDown} isDragging={leftResize.isDragging} />
+        )}
 
         {/* Center: Terminal */}
         <div className="flex-1 overflow-hidden flex flex-col rounded-lg">
           <Terminal terminalRef={terminalRef} inputRef={inputRef} theme={xtermTheme} display={display} onUpdateDisplay={updateDisplay} />
         </div>
 
+        {panelLayout.right.length > 0 && (
+          <ResizeHandle side="right" onMouseDown={rightResize.handleMouseDown} isDragging={rightResize.isDragging} />
+        )}
         {/* Right pinned region */}
         <PinnedRegion
           side="right"
           panels={panelLayout.right}
+          width={pinnedWidths.right}
           otherSidePanelCount={panelLayout.left.length}
           onUnpin={unpinPanel}
           onSwapSide={swapPanelSide}
           onMovePanel={movePanel}
         />
 
-        {/* Slide-out overlays — anchored to right edge of window */}
-        <div
-          className={cn(
-            'absolute top-0 right-0 bottom-0 z-[100] transition-transform duration-300 ease-in-out',
-            activePanel === 'appearance' ? 'translate-x-0' : 'translate-x-full'
-          )}
-        >
+        {/* Slide-out overlays */}
+        <SlideOut panel="appearance">
           <ColorSettings
             theme={theme}
             onUpdateColor={updateColor}
@@ -654,102 +830,47 @@ function AppMain() {
             debugMode={debugMode}
             onToggleDebug={toggleDebug}
           />
-        </div>
-        <div
-          className={cn(
-            'absolute top-0 right-0 bottom-0 z-[100] transition-transform duration-300 ease-in-out',
-            activePanel === 'settings' ? 'translate-x-0' : 'translate-x-full'
-          )}
-        >
-          <SettingsPanel
-            antiIdleEnabled={antiIdleEnabled}
-            antiIdleCommand={antiIdleCommand}
-            antiIdleMinutes={antiIdleMinutes}
-            onAntiIdleEnabledChange={handleAntiIdleEnabledChange}
-            onAntiIdleCommandChange={handleAntiIdleCommandChange}
-            onAntiIdleMinutesChange={handleAntiIdleMinutesChange}
-          />
-        </div>
-        {/* Skills slide-out — only when NOT pinned */}
-        {!isSkillsPinned && (
-          <div
-            className={cn(
-              'absolute top-0 right-0 bottom-0 z-[100] transition-transform duration-300 ease-in-out',
-              activePanel === 'skills' ? 'translate-x-0' : 'translate-x-full'
-            )}
-          >
-            <SkillPanel mode="slideout" />
-          </div>
-        )}
-        {/* Chat slide-out — only when NOT pinned */}
-        {!isChatPinned && (
-          <div
-            className={cn(
-              'absolute top-0 right-0 bottom-0 z-[100] transition-transform duration-300 ease-in-out',
-              activePanel === 'chat' ? 'translate-x-0' : 'translate-x-full'
-            )}
-          >
-            <ChatPanel mode="slideout" />
-          </div>
-        )}
-        {/* Counter slide-out — only when NOT pinned */}
-        {!isCounterPinned && (
-          <div
-            className={cn(
-              'absolute top-0 right-0 bottom-0 z-[100] transition-transform duration-300 ease-in-out',
-              activePanel === 'counter' ? 'translate-x-0' : 'translate-x-full'
-            )}
-          >
-            <CounterPanel mode="slideout" />
-          </div>
-        )}
-        {/* Notes slide-out — only when NOT pinned */}
-        {!isNotesPinned && (
-          <div
-            className={cn(
-              'absolute top-0 right-0 bottom-0 z-[100] transition-transform duration-300 ease-in-out',
-              activePanel === 'notes' ? 'translate-x-0' : 'translate-x-full'
-            )}
-          >
-            <NotesPanel mode="slideout" />
-          </div>
-        )}
-        {/* Aliases slide-out — slideout only, no pinning */}
-        <div
-          className={cn(
-            'absolute top-0 right-0 bottom-0 z-[100] transition-transform duration-300 ease-in-out',
-            activePanel === 'aliases' ? 'translate-x-0' : 'translate-x-full'
-          )}
-        >
+        </SlideOut>
+        <SlideOut panel="settings">
+          <SettingsPanel />
+        </SlideOut>
+        <SlideOut panel="skills" pinnable="skills">
+          <SkillPanel mode="slideout" />
+        </SlideOut>
+        <SlideOut panel="chat" pinnable="chat">
+          <ChatPanel mode="slideout" />
+        </SlideOut>
+        <SlideOut panel="counter" pinnable="counter">
+          <CounterPanel mode="slideout" />
+        </SlideOut>
+        <SlideOut panel="notes" pinnable="notes">
+          <NotesPanel mode="slideout" />
+        </SlideOut>
+        <SlideOut panel="aliases">
           <AliasPanel onClose={() => setActivePanel(null)} />
-        </div>
-        {/* Triggers slide-out — slideout only, no pinning */}
-        <div
-          className={cn(
-            'absolute top-0 right-0 bottom-0 z-[100] transition-transform duration-300 ease-in-out',
-            activePanel === 'triggers' ? 'translate-x-0' : 'translate-x-full'
-          )}
-        >
+        </SlideOut>
+        <SlideOut panel="triggers">
           <TriggerPanel onClose={() => setActivePanel(null)} />
-        </div>
-        {/* Map slide-out — only when NOT pinned */}
-        {!isMapPinned && (
-          <div
-            className={cn(
-              'absolute top-0 right-0 bottom-0 z-[100] transition-transform duration-300 ease-in-out',
-              activePanel === 'map' ? 'translate-x-0' : 'translate-x-full'
-            )}
-          >
-            <MapPanel
-              mode="slideout"
-              onWalkTo={async (directions) => {
-                for (const dir of directions) {
-                  await sendCommand(dir);
-                }
-              }}
-            />
-          </div>
-        )}
+        </SlideOut>
+        <SlideOut panel="variables">
+          <VariablePanel onClose={() => setActivePanel(null)} />
+        </SlideOut>
+        <SlideOut panel="map" pinnable="map">
+          <MapPanel
+            mode="slideout"
+            onWalkTo={async (directions) => {
+              for (const dir of directions) {
+                await sendCommand(dir);
+              }
+            }}
+          />
+        </SlideOut>
+        <SlideOut panel="alloc" pinnable="alloc">
+          <AllocPanel mode="slideout" />
+        </SlideOut>
+        <SlideOut panel="currency" pinnable="currency">
+          <CurrencyPanel mode="slideout" />
+        </SlideOut>
       </div>
       {/* Bottom controls card — status bar + command input */}
       <div className="rounded-lg bg-bg-primary overflow-hidden">
@@ -761,109 +882,13 @@ function AppMain() {
       >
         {loggedIn && (
           <>
-            {health && (
-              <StatusReadout
-                icon={<HeartIcon size={11} />}
-                label={health.label}
-                color={theme[health.themeColor]}
-                tooltip={health.message}
-                glow={health.severity <= 1}
-                danger={isDanger(health.themeColor)}
-                compact={autoCompact || !!compactReadouts.health}
-                autoCompact={autoCompact}
-                onToggleCompact={() => toggleCompactReadout('health')}
-              />
-            )}
-            {concentration && (
-              <StatusReadout
-                icon={<FocusIcon size={11} />}
-                label={concentration.label}
-                color={theme[concentration.themeColor]}
-                tooltip={concentration.message}
-                glow={concentration.severity <= 1}
-                danger={isDanger(concentration.themeColor)}
-                compact={autoCompact || !!compactReadouts.concentration}
-                autoCompact={autoCompact}
-                filtered={filterFlags.concentration}
-                onClick={() => toggleFilter('concentration')}
-                onToggleCompact={() => toggleCompactReadout('concentration')}
-              />
-            )}
-            {aura && (
-              <StatusReadout
-                icon={<AuraIcon size={11} />}
-                label={aura.label}
-                color={theme[aura.themeColor]}
-                tooltip={aura.key === 'none' ? 'You have no aura.' : `Your aura appears to be ${aura.descriptor}.`}
-                glow={aura.severity <= 1}
-                danger={isDanger(aura.themeColor)}
-                compact={autoCompact || !!compactReadouts.aura}
-                autoCompact={autoCompact}
-                filtered={filterFlags.aura}
-                onClick={() => toggleFilter('aura')}
-                onToggleCompact={() => toggleCompactReadout('aura')}
-              />
-            )}
-            {hunger && (
-              <StatusReadout
-                icon={<FoodIcon size={11} />}
-                label={hunger.label}
-                color={theme[hunger.themeColor]}
-                tooltip={`You are ${hunger.descriptor}.`}
-                glow={hunger.severity <= 1}
-                danger={isDanger(hunger.themeColor)}
-                compact={autoCompact || !!compactReadouts.hunger}
-                autoCompact={autoCompact}
-                filtered={filterFlags.hunger}
-                onClick={() => toggleFilter('hunger')}
-                onToggleCompact={() => toggleCompactReadout('hunger')}
-              />
-            )}
-            {thirst && (
-              <StatusReadout
-                icon={<DropletIcon size={11} />}
-                label={thirst.label}
-                color={theme[thirst.themeColor]}
-                tooltip={`You are ${thirst.descriptor}.`}
-                glow={thirst.severity <= 1}
-                danger={isDanger(thirst.themeColor)}
-                compact={autoCompact || !!compactReadouts.thirst}
-                autoCompact={autoCompact}
-                filtered={filterFlags.thirst}
-                onClick={() => toggleFilter('thirst')}
-                onToggleCompact={() => toggleCompactReadout('thirst')}
-              />
-            )}
-            {encumbrance && (
-              <StatusReadout
-                icon={<WeightIcon size={11} />}
-                label={encumbrance.label}
-                color={theme[encumbrance.themeColor]}
-                tooltip={encumbrance.descriptor}
-                glow={encumbrance.severity <= 1}
-                danger={isDanger(encumbrance.themeColor)}
-                compact={autoCompact || !!compactReadouts.encumbrance}
-                autoCompact={autoCompact}
-                filtered={filterFlags.encumbrance}
-                onClick={() => toggleFilter('encumbrance')}
-                onToggleCompact={() => toggleCompactReadout('encumbrance')}
-              />
-            )}
-            {movement && (
-              <StatusReadout
-                icon={<BootIcon size={11} />}
-                label={movement.label}
-                color={theme[movement.themeColor]}
-                tooltip={movement.descriptor}
-                glow={movement.severity <= 1}
-                danger={isDanger(movement.themeColor)}
-                compact={autoCompact || !!compactReadouts.movement}
-                autoCompact={autoCompact}
-                filtered={filterFlags.movement}
-                onClick={() => toggleFilter('movement')}
-                onToggleCompact={() => toggleCompactReadout('movement')}
-              />
-            )}
+            {renderReadout('health', health, <HeartIcon size={11} />, health?.message ?? '')}
+            {renderReadout('concentration', concentration, <FocusIcon size={11} />, concentration?.message ?? '', 'concentration')}
+            {renderReadout('aura', aura, <AuraIcon size={11} />, aura?.key === 'none' ? 'You have no aura.' : `Your aura appears to be ${aura?.descriptor}.`, 'aura')}
+            {renderReadout('hunger', hunger, <FoodIcon size={11} />, `You are ${hunger?.descriptor}.`, 'hunger')}
+            {renderReadout('thirst', thirst, <DropletIcon size={11} />, `You are ${thirst?.descriptor}.`, 'thirst')}
+            {renderReadout('encumbrance', encumbrance, <WeightIcon size={11} />, encumbrance?.descriptor ?? '', 'encumbrance')}
+            {renderReadout('movement', movement, <BootIcon size={11} />, movement?.descriptor ?? '', 'movement')}
           </>
         )}
         <div className="ml-auto">
@@ -887,11 +912,12 @@ function AppMain() {
         antiIdleCommand={antiIdleCommand}
         antiIdleMinutes={antiIdleMinutes}
         antiIdleNextAt={antiIdleNextAt}
-        onToggleAntiIdle={() => handleAntiIdleEnabledChange(!antiIdleEnabled)}
+        onToggleAntiIdle={() => updateAntiIdleEnabled(!antiIdleEnabled)}
       />
       </div>
     </div>
     </PanelProvider>
+    </AllocProvider>
     </MapProvider>
     </ImproveCounterProvider>
     </ChatProvider>
@@ -899,6 +925,8 @@ function AppMain() {
     </SignatureProvider>
     </TriggerProvider>
     </AliasProvider>
+    </VariableProvider>
+    </AppSettingsProvider>
   );
 }
 

@@ -1,6 +1,6 @@
 import type { DataStore } from '../contexts/DataStoreContext';
 
-export const CURRENT_VERSION = 12;
+export const CURRENT_VERSION = 17;
 
 /** Raw store contents — all keys are optional since older stores may lack them. */
 export type StoreData = Record<string, unknown>;
@@ -132,6 +132,55 @@ const MIGRATIONS: MigrationFn[] = [
     if (!('antiIdleMinutes' in data)) {
       data.antiIdleMinutes = 10;
     }
+    return data;
+  },
+  // v12 → v13: initialize prompt stripping setting
+  (data) => {
+    if (!('stripPromptsEnabled' in data)) {
+      data.stripPromptsEnabled = true;
+    }
+    return data;
+  },
+  // v13 → v14: hex-only automapper — flag old map data for reset
+  // Map data lives in per-character files (map-<name>.json), not settings.json.
+  // We set a flag so the map loader knows to discard incompatible old data.
+  (data) => {
+    data.mapSchemaVersion = 2;
+    return data;
+  },
+  // v14 → v15: initialize pinned panel widths
+  (data) => {
+    if (!('pinnedWidths' in data)) {
+      data.pinnedWidths = { left: 320, right: 320 };
+    }
+    return data;
+  },
+  // v15 → v16: new settings (buffers, timestamp format, command echo, session logging, numpad, notifications)
+  (data) => {
+    if (!('terminalScrollback' in data)) data.terminalScrollback = 10000;
+    if (!('commandHistorySize' in data)) data.commandHistorySize = 500;
+    if (!('chatHistorySize' in data)) data.chatHistorySize = 500;
+    if (!('timestampFormat' in data)) data.timestampFormat = '12h';
+    if (!('commandEchoEnabled' in data)) data.commandEchoEnabled = false;
+    if (!('sessionLoggingEnabled' in data)) data.sessionLoggingEnabled = false;
+    if (!('numpadMappings' in data)) {
+      data.numpadMappings = {
+        Numpad7: 'nw', Numpad8: 'n', Numpad9: 'ne',
+        Numpad4: 'w', Numpad5: 'd', Numpad6: 'e',
+        Numpad1: 'sw', Numpad2: 's', Numpad3: 'se',
+        Numpad0: 'u', NumpadAdd: 'back',
+      };
+    }
+    if (!('chatNotifications' in data)) {
+      data.chatNotifications = {
+        say: false, shout: false, ooc: false, tell: true, sz: true,
+      };
+    }
+    return data;
+  },
+  // v16 → v17: auto-backup toggle
+  (data) => {
+    if (!('autoBackupEnabled' in data)) data.autoBackupEnabled = true;
     return data;
   },
 ];

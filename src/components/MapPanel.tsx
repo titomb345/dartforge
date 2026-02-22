@@ -9,6 +9,7 @@ import { PinnedControls } from './PinnedControls';
 import { PinMenuButton } from './PinMenuButton';
 import { MapCanvas } from './MapCanvas';
 import { useMapContext } from '../contexts/MapContext';
+import { TERRAIN_LABELS } from '../lib/hexTerrainPatterns';
 import type { Direction } from '../lib/hexUtils';
 
 type MapPanelProps = PinnablePanelProps & {
@@ -57,16 +58,16 @@ export function MapPanel({
   return (
     <div className={panelRootClass(isPinned)} style={!isPinned ? { width: 480 } : undefined}>
       {/* Header */}
-      <div className="flex items-center gap-1 px-2 py-1.5 border-b border-border-subtle shrink-0">
-        <span className="text-[11px] font-semibold text-text-heading flex-1 truncate">
+      <div className="flex items-center justify-between px-3 py-2.5 border-b border-border-subtle shrink-0">
+        <span className="text-[13px] font-semibold text-text-heading truncate">
           Map
           {currentRoom && (
             <span className="text-text-dim font-normal ml-1.5">
-              — {currentRoom.name || 'Wilderness'}
+              — {TERRAIN_LABELS[currentRoom.terrain] ?? 'Hex'} ({currentRoom.coords.q}, {currentRoom.coords.r})
             </span>
           )}
         </span>
-        <div className="flex items-center gap-1 shrink-0">
+        <div className="flex items-center gap-1.5 shrink-0">
           {pinControls}
         </div>
       </div>
@@ -95,7 +96,7 @@ export function MapPanel({
           Fog
         </button>
         <div className="flex-1" />
-        <span className="text-text-dim">{roomCount} rooms</span>
+        <span className="text-text-dim">{roomCount} hexes</span>
         {roomCount > 0 && (
           <button
             onClick={clearMap}

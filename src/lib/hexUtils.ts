@@ -1,35 +1,38 @@
 /**
- * Hex grid math — flat-top axial coordinate system.
+ * Hex grid math — flat-top axial coordinate system for DartMUD wilderness.
  *
- * DartMUD uses a hex-based world with 8 compass directions (N, NE, E, SE, S, SW, W, NW)
- * plus up/down. The hex grid is flat-top, where the natural 6 neighbors are
- * E, W, NE, NW, SE, SW. N and S map to two-hex vertical jumps.
+ * DartMUD hexes use 6 directions only: N, S, NE, NW, SE, SW (no east/west).
+ * N and S are direct hex neighbors (single-step), not two-step jumps.
  *
  * Axial coordinates (q, r):
- *   q = column (east-west), r = row (diagonal)
+ *   q = column, r = row (diagonal)
+ *
+ * Offsets:
+ *   n:  ( 0, -1)    s:  ( 0, +1)
+ *   ne: (+1, -1)    sw: (-1, +1)
+ *   se: (+1,  0)    nw: (-1,  0)
  */
 
 export interface HexCoord {
   q: number;
   r: number;
-  z: number; // vertical layer (for up/down)
 }
 
-/** All movement directions the MUD supports */
-export type Direction = 'n' | 'ne' | 'e' | 'se' | 's' | 'sw' | 'w' | 'nw' | 'u' | 'd';
+/** The 6 hex movement directions DartMUD supports */
+export type Direction = 'n' | 's' | 'ne' | 'nw' | 'se' | 'sw';
 
 /** Full direction names → short codes */
 const DIR_ALIASES: Record<string, Direction> = {
-  north: 'n', northeast: 'ne', east: 'e', southeast: 'se',
-  south: 's', southwest: 'sw', west: 'w', northwest: 'nw',
-  up: 'u', down: 'd',
-  n: 'n', ne: 'ne', e: 'e', se: 'se',
-  s: 's', sw: 'sw', w: 'w', nw: 'nw',
-  u: 'u', d: 'd',
+  north: 'n', south: 's',
+  northeast: 'ne', northwest: 'nw',
+  southeast: 'se', southwest: 'sw',
+  n: 'n', s: 's',
+  ne: 'ne', nw: 'nw',
+  se: 'se', sw: 'sw',
 };
 
 /**
- * Parse a string into a Direction, or null if not a direction.
+ * Parse a string into a Direction, or null if not a hex direction.
  */
 export function parseDirection(input: string): Direction | null {
   return DIR_ALIASES[input.toLowerCase().trim()] ?? null;
@@ -38,35 +41,24 @@ export function parseDirection(input: string): Direction | null {
 /**
  * Axial offset for each direction on a flat-top hex grid.
  *
- * Flat-top hex neighbors (6 natural):
- *   E:  (+1,  0)    W:  (-1,  0)
- *   NE: (+1, -1)    NW: ( 0, -1)
- *   SE: ( 0, +1)    SW: (-1, +1)
- *
- * N and S are not natural flat-top neighbors. We map them to
- * vertical two-step offsets to keep the grid consistent:
- *   N:  ( 0, -2)    S:  ( 0, +2)
- *
- * Up/Down change the z-layer.
+ *   n:  ( 0, -1)    s:  ( 0, +1)
+ *   ne: (+1, -1)    sw: (-1, +1)
+ *   se: (+1,  0)    nw: (-1,  0)
  */
-const DIR_OFFSETS: Record<Direction, { dq: number; dr: number; dz: number }> = {
-  e:  { dq:  1, dr:  0, dz: 0 },
-  w:  { dq: -1, dr:  0, dz: 0 },
-  ne: { dq:  1, dr: -1, dz: 0 },
-  nw: { dq:  0, dr: -1, dz: 0 },
-  se: { dq:  0, dr:  1, dz: 0 },
-  sw: { dq: -1, dr:  1, dz: 0 },
-  n:  { dq:  0, dr: -2, dz: 0 },
-  s:  { dq:  0, dr:  2, dz: 0 },
-  u:  { dq:  0, dr:  0, dz: 1 },
-  d:  { dq:  0, dr:  0, dz: -1 },
+const DIR_OFFSETS: Record<Direction, { dq: number; dr: number }> = {
+  n:  { dq:  0, dr: -1 },
+  s:  { dq:  0, dr:  1 },
+  ne: { dq:  1, dr: -1 },
+  sw: { dq: -1, dr:  1 },
+  se: { dq:  1, dr:  0 },
+  nw: { dq: -1, dr:  0 },
 };
 
 /** Opposite direction mapping */
 const OPPOSITE: Record<Direction, Direction> = {
-  n: 's', s: 'n', e: 'w', w: 'e',
-  ne: 'sw', sw: 'ne', nw: 'se', se: 'nw',
-  u: 'd', d: 'u',
+  n: 's', s: 'n',
+  ne: 'sw', sw: 'ne',
+  nw: 'se', se: 'nw',
 };
 
 export function oppositeDirection(dir: Direction): Direction {
@@ -81,14 +73,13 @@ export function applyDirection(coord: HexCoord, dir: Direction): HexCoord {
   return {
     q: coord.q + offset.dq,
     r: coord.r + offset.dr,
-    z: coord.z + offset.dz,
   };
 }
 
 /**
  * Get offset for a direction.
  */
-export function getDirectionOffset(dir: Direction): { dq: number; dr: number; dz: number } {
+export function getDirectionOffset(dir: Direction): { dq: number; dr: number } {
   return DIR_OFFSETS[dir];
 }
 
@@ -155,25 +146,20 @@ export function hexCorners(cx: number, cy: number, size: number): { x: number; y
  * Create a coordinate key for use as a map key.
  */
 export function coordKey(coord: HexCoord): string {
-  return `${coord.q},${coord.r},${coord.z}`;
-}
-
-export function coordKeyQR(q: number, r: number, z: number): string {
-  return `${q},${r},${z}`;
+  return `${coord.q},${coord.r}`;
 }
 
 /**
  * Direction label for display.
  */
 const DIR_LABELS: Record<Direction, string> = {
-  n: 'N', ne: 'NE', e: 'E', se: 'SE',
-  s: 'S', sw: 'SW', w: 'W', nw: 'NW',
-  u: 'Up', d: 'Down',
+  n: 'N', ne: 'NE', se: 'SE',
+  s: 'S', sw: 'SW', nw: 'NW',
 };
 
 export function directionLabel(dir: Direction): string {
   return DIR_LABELS[dir];
 }
 
-/** All compass directions (excluding up/down) for rendering exit lines */
-export const COMPASS_DIRECTIONS: Direction[] = ['n', 'ne', 'e', 'se', 's', 'sw', 'w', 'nw'];
+/** All 6 hex compass directions for rendering exit lines */
+export const COMPASS_DIRECTIONS: Direction[] = ['n', 'ne', 'se', 's', 'sw', 'nw'];

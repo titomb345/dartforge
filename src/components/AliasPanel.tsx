@@ -1,5 +1,6 @@
 import { useCallback, useRef, useState, useEffect, useMemo } from 'react';
 import { useAliasContext } from '../contexts/AliasContext';
+import { useVariableContext } from '../contexts/VariableContext';
 import { useSkillTrackerContext } from '../contexts/SkillTrackerContext';
 import { expandInput } from '../lib/aliasEngine';
 import { useFilteredGroups } from '../lib/useFilteredGroups';
@@ -108,10 +109,11 @@ const ALIAS_HELP_ROWS: HelpRow[] = [
   { token: '$!', desc: 'The last argument only' },
   { token: '$opposite1..9', desc: 'Opposite direction of $N arg', example: 'door n  \u2192  $opposite1 = s' },
   { token: '$me', desc: 'Your active character name' },
+  { token: '$varName', desc: 'User-defined variable (set via /var)', example: '/var target goblin  \u2192  $target = goblin' },
   { token: ';', desc: 'Command separator \u2014 sends multiple commands', example: 'kill $1;loot corpse' },
   { token: '\\;', desc: 'Literal semicolon (not a separator)' },
-  { token: '#delay <ms>', desc: 'Pause between commands (milliseconds)', example: 'cast shield;#delay 1500;cast armor' },
-  { token: '#echo <text>', desc: 'Print text locally (not sent to MUD)', example: '#echo --- Starting combo ---' },
+  { token: '/delay <ms>', desc: 'Pause between commands (milliseconds)', example: 'cast shield;/delay 1500;cast armor' },
+  { token: '/echo <text>', desc: 'Print text locally (not sent to MUD)', example: '/echo --- Starting combo ---' },
 ];
 
 const ALIAS_HELP_FOOTER = (
@@ -146,6 +148,7 @@ function AliasEditor({
   ) => void;
   onCancel: () => void;
 }) {
+  const { mergedVariables } = useVariableContext();
   const [pattern, setPattern] = useState(alias?.pattern ?? '');
   const [matchMode, setMatchMode] = useState<AliasMatchMode>(alias?.matchMode ?? 'prefix');
   const [body, setBody] = useState(alias?.body ?? '');
@@ -174,7 +177,7 @@ function AliasEditor({
       updatedAt: '',
     };
     try {
-      const result = expandInput(testInput, [tempAlias], { activeCharacter });
+      const result = expandInput(testInput, [tempAlias], { activeCharacter, variables: mergedVariables });
       return result.commands
         .map((cmd) => {
           if (cmd.type === 'send') return cmd.text;
@@ -186,7 +189,7 @@ function AliasEditor({
     } catch {
       return '[expansion error]';
     }
-  }, [testInput, pattern, matchMode, body, activeCharacter]);
+  }, [testInput, pattern, matchMode, body, activeCharacter, mergedVariables]);
 
   const canSave = pattern.trim().length > 0 && body.trim().length > 0;
 

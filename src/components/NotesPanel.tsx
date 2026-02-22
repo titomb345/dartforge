@@ -78,11 +78,11 @@ export function NotesPanel({
   return (
     <div className={panelRootClass(isPinned)}>
       {/* Header */}
-      <div className="flex items-center gap-1 px-2 py-1.5 border-b border-border-subtle shrink-0">
-        <span className="text-[11px] font-semibold text-text-heading flex-1">
+      <div className="flex items-center justify-between px-3 py-2.5 border-b border-border-subtle shrink-0">
+        <span className="text-[13px] font-semibold text-text-heading">
           Notes{activeCharacter ? ` — ${activeCharacter.charAt(0).toUpperCase() + activeCharacter.slice(1)}` : ''}
         </span>
-        <div className="flex items-center gap-1 shrink-0">
+        <div className="flex items-center gap-1.5 shrink-0">
           {pinControls}
         </div>
       </div>

@@ -388,6 +388,35 @@ pub fn restore_backup(
 }
 
 #[tauri::command]
+pub fn append_to_log(
+    subdir: String,
+    filename: String,
+    content: String,
+    state: tauri::State<'_, StorageState>,
+) -> Result<(), String> {
+    validate_filename(&filename)?;
+    // Validate subdir: only allow simple directory names
+    if subdir.contains("..") || subdir.contains('/') || subdir.contains('\\') || subdir.contains('\0') || subdir.is_empty() {
+        return Err(format!("Invalid subdirectory: {subdir}"));
+    }
+
+    let dir = state.get_dir().join(&subdir);
+    fs::create_dir_all(&dir).map_err(|e| format!("Failed to create log dir: {e}"))?;
+    let path = dir.join(&filename);
+
+    use std::fs::OpenOptions;
+    let mut file = OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open(&path)
+        .map_err(|e| format!("Failed to open log file: {e}"))?;
+    file.write_all(content.as_bytes())
+        .map_err(|e| format!("Failed to write to log: {e}"))?;
+
+    Ok(())
+}
+
+#[tauri::command]
 pub fn prune_backups(keep: usize, state: tauri::State<'_, StorageState>) -> Result<usize, String> {
     let backup_dir = state.get_dir().join("backups");
     let Ok(entries) = fs::read_dir(&backup_dir) else {

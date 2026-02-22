@@ -1,8 +1,10 @@
 import { useState, useEffect, useRef, type ReactNode } from 'react';
-import { TimerIcon, FolderIcon, TrashIcon, CheckCircleIcon, ClockIcon, ChevronDownSmallIcon } from './icons';
+import { TimerIcon, FolderIcon, TrashIcon, CheckCircleIcon, ClockIcon, ChevronDownSmallIcon, FilterIcon, GearIcon, ChatIcon, NotesIcon, RotateCcwIcon, Volume2Icon } from './icons';
+import { DEFAULT_NUMPAD_MAPPINGS } from '../hooks/useAppSettings';
 import { MudInput } from './shared';
 import { cn } from '../lib/cn';
 import { useDataStore } from '../contexts/DataStoreContext';
+import { useAppSettingsContext } from '../contexts/AppSettingsContext';
 import { getPlatform } from '../lib/platform';
 
 /* ── Tauri imports (lazy) ─────────────────────────────────── */
@@ -135,23 +137,24 @@ interface BackupEntry {
 
 /* ── Main Panel ───────────────────────────────────────────── */
 
-interface SettingsPanelProps {
-  antiIdleEnabled: boolean;
-  antiIdleCommand: string;
-  antiIdleMinutes: number;
-  onAntiIdleEnabledChange: (v: boolean) => void;
-  onAntiIdleCommandChange: (v: string) => void;
-  onAntiIdleMinutesChange: (v: number) => void;
-}
-
-export function SettingsPanel({
-  antiIdleEnabled,
-  antiIdleCommand,
-  antiIdleMinutes,
-  onAntiIdleEnabledChange,
-  onAntiIdleCommandChange,
-  onAntiIdleMinutesChange,
-}: SettingsPanelProps) {
+export function SettingsPanel() {
+  const settings = useAppSettingsContext();
+  const {
+    antiIdleEnabled, antiIdleCommand, antiIdleMinutes,
+    updateAntiIdleEnabled: onAntiIdleEnabledChange,
+    updateAntiIdleCommand: onAntiIdleCommandChange,
+    updateAntiIdleMinutes: onAntiIdleMinutesChange,
+    boardDatesEnabled, updateBoardDatesEnabled: onBoardDatesEnabledChange,
+    stripPromptsEnabled, updateStripPromptsEnabled: onStripPromptsEnabledChange,
+    commandEchoEnabled, updateCommandEchoEnabled,
+    terminalScrollback, updateTerminalScrollback,
+    commandHistorySize, updateCommandHistorySize,
+    chatHistorySize, updateChatHistorySize,
+    timestampFormat, updateTimestampFormat,
+    sessionLoggingEnabled, updateSessionLoggingEnabled,
+    numpadMappings, updateNumpadMappings,
+    chatNotifications, toggleChatNotification,
+  } = settings;
   const isTauri = getPlatform() === 'tauri';
 
   return (
@@ -210,6 +213,177 @@ export function SettingsPanel({
           </div>
         </SettingsSection>
 
+        {/* Output transformations */}
+        <SettingsSection
+          icon={<FilterIcon size={13} />}
+          title="Output"
+          accent="#50fa7b"
+          defaultOpen
+        >
+          <FieldRow label="Convert board dates">
+            <ToggleSwitch
+              checked={boardDatesEnabled}
+              onChange={onBoardDatesEnabledChange}
+              accent="#50fa7b"
+            />
+          </FieldRow>
+          <div className="text-[9px] text-text-dim font-mono leading-relaxed mt-1">
+            Replace in-game bulletin board dates with real-world dates.
+          </div>
+          <FieldRow label="Strip prompts">
+            <ToggleSwitch
+              checked={stripPromptsEnabled}
+              onChange={onStripPromptsEnabledChange}
+              accent="#50fa7b"
+            />
+          </FieldRow>
+          <div className="text-[9px] text-text-dim font-mono leading-relaxed mt-1">
+            Remove the server prompt (&gt;) from terminal output.
+          </div>
+          <FieldRow label="Command echo">
+            <ToggleSwitch
+              checked={commandEchoEnabled}
+              onChange={updateCommandEchoEnabled}
+              accent="#50fa7b"
+            />
+          </FieldRow>
+          <div className="text-[9px] text-text-dim font-mono leading-relaxed mt-1">
+            Show your sent commands as dimmed lines in the terminal.
+          </div>
+        </SettingsSection>
+
+        {/* Buffers */}
+        <SettingsSection
+          icon={<GearIcon size={13} />}
+          title="Buffers"
+          accent="#8be9fd"
+        >
+          <FieldRow label="Scrollback">
+            <div className="flex items-center gap-1.5">
+              <MudInput
+                accent="cyan"
+                size="sm"
+                type="number"
+                min={1000}
+                max={100000}
+                value={terminalScrollback}
+                onChange={(e) => {
+                  const v = parseInt(e.target.value, 10);
+                  if (!isNaN(v) && v >= 1000 && v <= 100000) updateTerminalScrollback(v);
+                }}
+                className="w-[72px] text-center"
+              />
+              <span className="text-[10px] font-mono text-text-dim">lines</span>
+            </div>
+          </FieldRow>
+          <div className="text-[9px] text-text-dim font-mono leading-relaxed mt-1">
+            Terminal scrollback history. Takes effect on next session.
+          </div>
+          <FieldRow label="Command history">
+            <div className="flex items-center gap-1.5">
+              <MudInput
+                accent="cyan"
+                size="sm"
+                type="number"
+                min={50}
+                max={5000}
+                value={commandHistorySize}
+                onChange={(e) => {
+                  const v = parseInt(e.target.value, 10);
+                  if (!isNaN(v) && v >= 50 && v <= 5000) updateCommandHistorySize(v);
+                }}
+                className="w-[72px] text-center"
+              />
+              <span className="text-[10px] font-mono text-text-dim">cmds</span>
+            </div>
+          </FieldRow>
+          <FieldRow label="Chat history">
+            <div className="flex items-center gap-1.5">
+              <MudInput
+                accent="cyan"
+                size="sm"
+                type="number"
+                min={50}
+                max={5000}
+                value={chatHistorySize}
+                onChange={(e) => {
+                  const v = parseInt(e.target.value, 10);
+                  if (!isNaN(v) && v >= 50 && v <= 5000) updateChatHistorySize(v);
+                }}
+                className="w-[72px] text-center"
+              />
+              <span className="text-[10px] font-mono text-text-dim">msgs</span>
+            </div>
+          </FieldRow>
+        </SettingsSection>
+
+        {/* Timestamps */}
+        <SettingsSection
+          icon={<ClockIcon size={13} />}
+          title="Timestamps"
+          accent="#ff79c6"
+        >
+          <FieldRow label="Timestamp format">
+            <div className="flex gap-1">
+              {(['12h', '24h'] as const).map((fmt) => (
+                <button
+                  key={fmt}
+                  onClick={() => updateTimestampFormat(fmt)}
+                  className={cn(
+                    'text-[10px] font-mono px-2 py-0.5 rounded border cursor-pointer transition-colors',
+                    timestampFormat === fmt
+                      ? 'text-pink border-pink/40 bg-pink/10'
+                      : 'text-text-dim border-border-dim hover:border-pink/30',
+                  )}
+                >
+                  {fmt}
+                </button>
+              ))}
+            </div>
+          </FieldRow>
+        </SettingsSection>
+
+        {/* Session Logging */}
+        <SettingsSection
+          icon={<NotesIcon size={13} />}
+          title="Session Logging"
+          accent="#f1fa8c"
+        >
+          <FieldRow label="Enable logging">
+            <ToggleSwitch
+              checked={sessionLoggingEnabled}
+              onChange={updateSessionLoggingEnabled}
+              accent="#f1fa8c"
+            />
+          </FieldRow>
+          <div className="text-[9px] text-text-dim font-mono leading-relaxed mt-1">
+            Logs session output (ANSI stripped) and your commands to the sessions/ folder in your data directory.
+          </div>
+        </SettingsSection>
+
+        {/* Numpad Mappings */}
+        <NumpadSection mappings={numpadMappings} onChange={updateNumpadMappings} />
+
+        {/* Notifications */}
+        <SettingsSection
+          icon={<Volume2Icon size={13} />}
+          title="Notifications"
+          accent="#ffb86c"
+        >
+          {(['say', 'shout', 'ooc', 'tell', 'sz'] as const).map((type) => (
+            <FieldRow key={type} label={type.toUpperCase()}>
+              <ToggleSwitch
+                checked={chatNotifications[type]}
+                onChange={() => toggleChatNotification(type)}
+                accent="#ffb86c"
+              />
+            </FieldRow>
+          ))}
+          <div className="text-[9px] text-text-dim font-mono leading-relaxed mt-1">
+            Desktop notifications when the window is unfocused.
+          </div>
+        </SettingsSection>
+
         {/* Data Location — Tauri only */}
         {isTauri && <DataLocationSection />}
 
@@ -217,6 +391,72 @@ export function SettingsPanel({
         {isTauri && <BackupsSection />}
       </div>
     </div>
+  );
+}
+
+/* ── Numpad Mappings Section ──────────────────────────────── */
+
+const NUMPAD_GRID = [
+  [{ key: 'Numpad7', label: '7' }, { key: 'Numpad8', label: '8' }, { key: 'Numpad9', label: '9' }],
+  [{ key: 'Numpad4', label: '4' }, { key: 'Numpad5', label: '5' }, { key: 'Numpad6', label: '6' }],
+  [{ key: 'Numpad1', label: '1' }, { key: 'Numpad2', label: '2' }, { key: 'Numpad3', label: '3' }],
+];
+const NUMPAD_BOTTOM = [
+  { key: 'Numpad0', label: '0', span: 2 },
+  { key: 'NumpadAdd', label: '+', span: 1 },
+];
+
+function NumpadSection({ mappings, onChange }: { mappings: Record<string, string>; onChange: (v: Record<string, string>) => void }) {
+  const updateKey = (key: string, value: string) => {
+    onChange({ ...mappings, [key]: value });
+  };
+
+  return (
+    <SettingsSection
+      icon={<GearIcon size={13} />}
+      title="Numpad Mappings"
+      accent="#6272a4"
+    >
+      <div className="grid grid-cols-3 gap-1">
+        {NUMPAD_GRID.flat().map(({ key, label }) => (
+          <div key={key} className="flex flex-col items-center gap-0.5">
+            <span className="text-[9px] font-mono text-text-dim">{label}</span>
+            <MudInput
+              accent="purple"
+              size="sm"
+              value={mappings[key] ?? ''}
+              onChange={(e) => updateKey(key, e.target.value)}
+              className="w-full text-center text-[10px]"
+            />
+          </div>
+        ))}
+      </div>
+      <div className="grid grid-cols-3 gap-1 mt-1">
+        {NUMPAD_BOTTOM.map(({ key, label, span }) => (
+          <div key={key} className="flex flex-col items-center gap-0.5" style={{ gridColumn: `span ${span}` }}>
+            <span className="text-[9px] font-mono text-text-dim">{label}</span>
+            <MudInput
+              accent="purple"
+              size="sm"
+              value={mappings[key] ?? ''}
+              onChange={(e) => updateKey(key, e.target.value)}
+              className="w-full text-center text-[10px]"
+            />
+          </div>
+        ))}
+      </div>
+      <button
+        onClick={() => onChange({ ...DEFAULT_NUMPAD_MAPPINGS })}
+        className={cn(
+          'w-full flex items-center justify-center gap-1.5 px-2 py-1 rounded mt-1',
+          'text-[10px] font-mono text-text-dim border border-border-dim',
+          'hover:text-text-label hover:border-border-subtle transition-colors cursor-pointer'
+        )}
+      >
+        <RotateCcwIcon size={9} />
+        Reset to defaults
+      </button>
+    </SettingsSection>
   );
 }
 
@@ -347,6 +587,7 @@ function DataLocationSection() {
 /* ── Backups Section (Tauri-only) ─────────────────────────── */
 
 function BackupsSection() {
+  const { autoBackupEnabled, updateAutoBackupEnabled } = useAppSettingsContext();
   const dataStore = useDataStore();
   const [backups, setBackups] = useState<BackupEntry[]>([]);
   const [status, setStatus] = useState<string | null>(null);
@@ -422,6 +663,17 @@ function BackupsSection() {
       title="Backups"
       accent="#f59e0b"
     >
+      <FieldRow label="Auto-backup">
+        <ToggleSwitch
+          checked={autoBackupEnabled}
+          onChange={updateAutoBackupEnabled}
+          accent="#f59e0b"
+        />
+      </FieldRow>
+      <div className="text-[9px] text-text-dim font-mono leading-relaxed mt-1">
+        Automatically creates backups at session start and every hour.
+      </div>
+
       {status && (
         <div className="text-[10px] text-cyan font-mono mb-1">{status}</div>
       )}

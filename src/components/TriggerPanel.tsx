@@ -1,5 +1,6 @@
 import { useCallback, useRef, useState, useEffect, useMemo } from 'react';
 import { useTriggerContext } from '../contexts/TriggerContext';
+import { useVariableContext } from '../contexts/VariableContext';
 import { useSkillTrackerContext } from '../contexts/SkillTrackerContext';
 import { matchTriggers, expandTriggerBody } from '../lib/triggerEngine';
 import { useFilteredGroups } from '../lib/useFilteredGroups';
@@ -123,10 +124,11 @@ const TRIGGER_HELP_ROWS: HelpRow[] = [
   { token: '$1 $2 .. $9', desc: 'Regex capture groups', example: "Pattern: (\\w+) tells you '(.+)'  →  $1 = name, $2 = message" },
   { token: '$line', desc: 'The full matched line (ANSI-stripped)' },
   { token: '$me', desc: 'Your active character name' },
-  { token: ';', desc: 'Command separator — sends multiple commands', example: '#echo Alert!;say hello' },
+  { token: '$varName', desc: 'User-defined variable (set via /var)', example: '/var target goblin  \u2192  $target = goblin' },
+  { token: ';', desc: 'Command separator — sends multiple commands', example: '/echo Alert!;say hello' },
   { token: '\\;', desc: 'Literal semicolon (not a separator)' },
-  { token: '#delay <ms>', desc: 'Pause between commands (milliseconds)', example: '#delay 1000;cast heal' },
-  { token: '#echo <text>', desc: 'Print text locally (not sent to MUD)', example: '#echo [TRIGGER] Combat started' },
+  { token: '/delay <ms>', desc: 'Pause between commands (milliseconds)', example: '/delay 1000;cast heal' },
+  { token: '/echo <text>', desc: 'Print text locally (not sent to MUD)', example: '/echo [TRIGGER] Combat started' },
 ];
 
 const TRIGGER_HELP_FOOTER = (
@@ -170,6 +172,7 @@ function TriggerEditor({
   ) => void;
   onCancel: () => void;
 }) {
+  const { mergedVariables } = useVariableContext();
   const [pattern, setPattern] = useState(trigger?.pattern ?? '');
   const [matchMode, setMatchMode] = useState<TriggerMatchMode>(trigger?.matchMode ?? 'substring');
   const [body, setBody] = useState(trigger?.body ?? '');
@@ -207,7 +210,7 @@ function TriggerEditor({
     try {
       const matches = matchTriggers(testInput, testInput, [tempTrigger]);
       if (matches.length === 0) return { matched: false, text: 'No match' };
-      const commands = expandTriggerBody(body, matches[0], activeCharacter);
+      const commands = expandTriggerBody(body, matches[0], activeCharacter, mergedVariables);
       const text = commands
         .map((cmd) => {
           if (cmd.type === 'send') return cmd.text;
@@ -220,7 +223,7 @@ function TriggerEditor({
     } catch {
       return { matched: false, text: '[error]' };
     }
-  }, [testInput, pattern, matchMode, body, activeCharacter]);
+  }, [testInput, pattern, matchMode, body, activeCharacter, mergedVariables]);
 
   const canSave = pattern.trim().length > 0;
 
@@ -296,7 +299,7 @@ function TriggerEditor({
             accent="pink"
             value={body}
             onChange={(e) => setBody(e.target.value)}
-            placeholder="#echo [ALERT] $line"
+            placeholder="/echo [ALERT] $line"
             rows={3}
             className="w-full"
           />

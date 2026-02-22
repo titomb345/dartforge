@@ -14,7 +14,7 @@ export interface Alias {
   pattern: string;
   /** How pattern is matched: exact word, prefix (allows arguments), or regex */
   matchMode: AliasMatchMode;
-  /** The expansion body. Supports $1, $2, $*, ;, #delay, #echo, etc. */
+  /** The expansion body. Supports $1, $2, $*, ;, /delay, /echo, etc. */
   body: string;
   /** Whether this alias is active */
   enabled: boolean;
@@ -30,7 +30,8 @@ export interface Alias {
 export type ExpandedCommand =
   | { type: 'send'; text: string }
   | { type: 'delay'; ms: number }
-  | { type: 'echo'; text: string };
+  | { type: 'echo'; text: string }
+  | { type: 'spam'; count: number; command: string };
 
 /** Result of expanding a single user command through the alias engine */
 export interface ExpansionResult {

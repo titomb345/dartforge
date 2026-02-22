@@ -1,8 +1,9 @@
 /**
- * Map graph — rooms, edges, coordinate assignment, and pathfinding.
+ * Map graph — hex-only rooms, edges, coordinate assignment, and pathfinding.
  */
 
-import { type HexCoord, type Direction, applyDirection, coordKey, oppositeDirection } from './hexUtils';
+import { type HexCoord, type Direction, applyDirection, coordKey, oppositeDirection, COMPASS_DIRECTIONS } from './hexUtils';
+import type { HexTerrainType } from './hexTerrainPatterns';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -10,12 +11,11 @@ import { type HexCoord, type Direction, applyDirection, coordKey, oppositeDirect
 
 export interface MapRoom {
   id: string;
-  name: string;
-  brief: string;
-  exits: Partial<Record<Direction, string>>; // direction → target room id
-  namedExits: string[];                      // non-compass named exits (e.g. "path", "door")
   coords: HexCoord;
-  terrain: 'indoor' | 'wilderness' | 'city' | 'unknown';
+  terrain: HexTerrainType;
+  description: string;
+  landmarks: string[];
+  exits: Partial<Record<Direction, string>>; // direction → target room id
   notes: string;
   lastVisited: number;
   visitCount: number;
@@ -31,21 +31,10 @@ export interface MapGraph {
 // ---------------------------------------------------------------------------
 
 /**
- * Generate a stable room ID from name + sorted exit directions.
- * This deduplicates rooms that share name and exit layout.
+ * Generate a stable room ID from hex coordinates.
  */
-export function makeRoomId(name: string, exitDirs: string[]): string {
-  const normalized = name.toLowerCase().trim();
-  const exits = [...exitDirs].sort().join(',');
-  return simpleHash(`${normalized}|${exits}`);
-}
-
-function simpleHash(str: string): string {
-  let h = 0;
-  for (let i = 0; i < str.length; i++) {
-    h = ((h << 5) - h + str.charCodeAt(i)) | 0;
-  }
-  return (h >>> 0).toString(36);
+export function makeHexRoomId(q: number, r: number): string {
+  return `hex:${q},${r}`;
 }
 
 // ---------------------------------------------------------------------------
@@ -58,26 +47,30 @@ export function createGraph(): MapGraph {
 
 /**
  * Add or update a room in the graph. If the room already exists,
- * updates lastVisited and visitCount. Returns the room.
+ * updates lastVisited, visitCount, terrain, and description.
+ * Auto-populates all 6 hex directions as potential exits.
  */
 export function upsertRoom(
   graph: MapGraph,
   id: string,
-  name: string,
-  brief: string,
-  exitDirs: Direction[],
-  namedExits: string[],
-  terrain: MapRoom['terrain'],
   coords: HexCoord,
+  terrain: HexTerrainType,
+  description: string,
+  landmarks: string[],
 ): MapRoom {
   const existing = graph.rooms[id];
   if (existing) {
     existing.lastVisited = Date.now();
     existing.visitCount += 1;
-    // Update exits if we have new info
-    for (const dir of exitDirs) {
+    existing.terrain = terrain;
+    existing.description = description;
+    if (landmarks.length > 0) {
+      existing.landmarks = landmarks;
+    }
+    // Ensure all 6 directions exist as potential exits
+    for (const dir of COMPASS_DIRECTIONS) {
       if (!(dir in existing.exits)) {
-        existing.exits[dir] = undefined as unknown as string; // placeholder — linked later
+        existing.exits[dir] = undefined as unknown as string;
       }
     }
     return existing;
@@ -85,18 +78,17 @@ export function upsertRoom(
 
   const room: MapRoom = {
     id,
-    name,
-    brief,
-    exits: {},
-    namedExits,
     coords,
     terrain,
+    description,
+    landmarks,
+    exits: {},
     notes: '',
     lastVisited: Date.now(),
     visitCount: 1,
   };
-  // Initialize exits as empty (targets linked later)
-  for (const dir of exitDirs) {
+  // Initialize all 6 hex directions as potential exits
+  for (const dir of COMPASS_DIRECTIONS) {
     room.exits[dir] = undefined as unknown as string;
   }
   graph.rooms[id] = room;
@@ -104,7 +96,7 @@ export function upsertRoom(
 }
 
 /**
- * Link two rooms by direction. Sets the edge from→to and optionally
+ * Link two rooms by direction. Sets the edge from→to and
  * the reverse edge to→from.
  */
 export function linkRooms(
@@ -118,12 +110,7 @@ export function linkRooms(
   if (!from || !to) return;
 
   from.exits[direction] = toId;
-
-  // Set reverse link if the target has the opposite direction as an exit
-  const opposite = oppositeDirection(direction);
-  if (opposite in to.exits) {
-    to.exits[opposite] = fromId;
-  }
+  to.exits[oppositeDirection(direction)] = fromId;
 }
 
 // ---------------------------------------------------------------------------
@@ -131,9 +118,8 @@ export function linkRooms(
 // ---------------------------------------------------------------------------
 
 /**
- * Assign coordinates to a new room based on the previous room and movement direction.
- * Returns the new coordinates. If there's a collision at the expected position,
- * returns the colliding room's ID.
+ * Compute new coordinates from a source room and movement direction.
+ * If a room already exists at the target coordinates, returns its ID as collision.
  */
 export function assignCoords(
   graph: MapGraph,
@@ -195,7 +181,7 @@ export function findPath(graph: MapGraph, fromId: string, toId: string): PathRes
     }
   }
 
-  return null; // No path found
+  return null;
 }
 
 // ---------------------------------------------------------------------------
@@ -212,5 +198,15 @@ export function serializeGraph(graph: MapGraph): SerializedMapGraph {
 }
 
 export function deserializeGraph(data: SerializedMapGraph): MapGraph {
-  return { rooms: data.rooms ?? {}, currentRoomId: data.currentRoomId ?? null };
+  const rooms = data.rooms ?? {};
+
+  // Detect old-format map data (pre-hex-only). Old rooms use hash-based IDs,
+  // new rooms use "hex:q,r" format. If any room ID doesn't start with "hex:",
+  // discard all data and start fresh.
+  const roomIds = Object.keys(rooms);
+  if (roomIds.length > 0 && roomIds.some((id) => !id.startsWith('hex:'))) {
+    return { rooms: {}, currentRoomId: null };
+  }
+
+  return { rooms, currentRoomId: data.currentRoomId ?? null };
 }

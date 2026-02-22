@@ -9,6 +9,7 @@ import {
 } from 'react';
 import { cn } from '../lib/cn';
 import { TimerIcon } from './icons';
+import { useAppSettingsContext } from '../contexts/AppSettingsContext';
 
 interface CommandInputProps {
   onSend: (command: string) => void;
@@ -26,7 +27,6 @@ interface CommandInputProps {
   onToggleAntiIdle?: () => void;
 }
 
-const MAX_HISTORY = 500;
 const LINE_HEIGHT = 20;
 const MAX_LINES = 8;
 const MAX_HEIGHT = LINE_HEIGHT * MAX_LINES;
@@ -86,6 +86,9 @@ function formatCountdown(remainingMs: number): string {
 
 export const CommandInput = forwardRef<HTMLTextAreaElement, CommandInputProps>(
   ({ onSend, onReconnect, onToggleCounter, disabled, connected, passwordMode, skipHistory, recentLinesRef, antiIdleEnabled, antiIdleCommand, antiIdleMinutes, antiIdleNextAt, onToggleAntiIdle }, ref) => {
+    const { commandHistorySize, numpadMappings } = useAppSettingsContext();
+    const numpadRef = useRef(numpadMappings);
+    numpadRef.current = numpadMappings;
     const [value, setValue] = useState('');
     const [history, setHistory] = useState<string[]>([]);
     const historyIndexRef = useRef(-1);
@@ -146,7 +149,7 @@ export const CommandInput = forwardRef<HTMLTextAreaElement, CommandInputProps>(
       if (!passwordMode && !skipHistory) {
         const trimmed = value.trim();
         if (trimmed) {
-          setHistory((prev) => [trimmed, ...prev].slice(0, MAX_HISTORY));
+          setHistory((prev) => [trimmed, ...prev].slice(0, commandHistorySize));
         }
       }
       historyIndexRef.current = -1;
@@ -163,7 +166,7 @@ export const CommandInput = forwardRef<HTMLTextAreaElement, CommandInputProps>(
         }
 
         // Numpad movement — send direction immediately regardless of input state
-        const numpadDir = NUMPAD_DIRECTIONS[e.code];
+        const numpadDir = numpadRef.current[e.code] ?? NUMPAD_DIRECTIONS[e.code];
         if (numpadDir) {
           e.preventDefault();
           onSend(numpadDir);

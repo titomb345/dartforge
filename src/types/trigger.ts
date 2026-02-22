@@ -14,7 +14,7 @@ export interface Trigger {
   pattern: string;
   /** How pattern is matched against output lines */
   matchMode: TriggerMatchMode;
-  /** The response body. Supports $0, $1–$9, $line, $me, ;, #delay, #echo */
+  /** The response body. Supports $0, $1–$9, $line, $me, ;, /delay, /echo */
   body: string;
   /** Whether this trigger is active */
   enabled: boolean;
