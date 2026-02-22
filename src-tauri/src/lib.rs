@@ -6,6 +6,7 @@ mod storage;
 use std::sync::Mutex;
 use tauri::{Emitter, Manager};
 use tokio::sync::mpsc;
+
 struct ConnectionState {
     cmd_tx: Mutex<Option<mpsc::Sender<String>>>,
     task_handle: Mutex<Option<tauri::async_runtime::JoinHandle<()>>>,

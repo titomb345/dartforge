@@ -1,7 +1,7 @@
 import { useRef, useState, useEffect, useCallback, useLayoutEffect, useMemo } from 'react';
 import { useLatestRef } from './hooks/useLatestRef';
 import type { Terminal as XTerm } from '@xterm/xterm';
-import { getAppVersion, setWindowTitle } from './lib/platform';
+import { getPlatform, getAppVersion, setWindowTitle, alertUser } from './lib/platform';
 import { Terminal } from './components/Terminal';
 import { CommandInput } from './components/CommandInput';
 import { Toolbar } from './components/Toolbar';
@@ -136,6 +136,7 @@ function AppMain() {
 
   const dataStore = useDataStore();
   const settingsLoadedRef = useRef(false);
+  const [commandHistory, setCommandHistory] = useState<string[]>([]);
 
   // Load compact mode + filter flags + panel layout from settings (with validation)
   useEffect(() => {
@@ -164,6 +165,11 @@ function AppMain() {
       const savedStatusOrder = await dataStore.get<StatusReadoutKey[]>('settings.json', 'statusBarOrder');
       if (Array.isArray(savedStatusOrder) && savedStatusOrder.length > 0) {
         setStatusBarOrder(savedStatusOrder);
+      }
+
+      const savedHistory = await dataStore.get<string[]>('settings.json', 'commandHistory');
+      if (Array.isArray(savedHistory)) {
+        setCommandHistory(savedHistory);
       }
 
       panelLayoutLoadedRef.current = true;
@@ -415,6 +421,20 @@ function AppMain() {
     dataStore.set('settings.json', 'compactReadouts', compactReadouts).catch(console.error);
   }, [compactReadouts]);
 
+  // Clear taskbar flash when window regains focus
+  useEffect(() => {
+    const handleFocus = async () => {
+      if (getPlatform() === 'tauri') {
+        try {
+          const { getCurrentWindow } = await import('@tauri-apps/api/window');
+          await getCurrentWindow().requestUserAttention(null);
+        } catch { /* ignore */ }
+      }
+    };
+    window.addEventListener('focus', handleFocus);
+    return () => window.removeEventListener('focus', handleFocus);
+  }, []);
+
   // Suppress transitions during active window resize to prevent breakpoint flash
   useEffect(() => {
     let timeoutId: ReturnType<typeof setTimeout>;
@@ -604,6 +624,11 @@ function AppMain() {
   const commandEchoRef = useLatestRef(appSettings.commandEchoEnabled);
   const passwordModeRef = useLatestRef(passwordMode);
 
+  const handleHistoryChange = useCallback((history: string[]) => {
+    setCommandHistory(history);
+    dataStore.set('settings.json', 'commandHistory', history).then(() => dataStore.save('settings.json')).catch(console.error);
+  }, [dataStore]);
+
   // Alias-expanded send: preprocesses input through the alias engine
   const handleSend = useCallback(async (rawInput: string) => {
     // Command echo — write dimmed line to terminal before processing
@@ -617,6 +642,22 @@ function AppMain() {
 
     // Session logging — log sent command
     if (rawInput.trim()) logCommandRef.current?.(rawInput);
+
+    // Built-in /notify test command — fires a test notification to debug the backend
+    if (/^\/notify\b/i.test(rawInput.trim())) {
+      const msg = rawInput.trim().slice(7).trim() || 'Test notification from DartForge';
+      if (terminalRef.current) {
+        smartWrite(terminalRef.current, `\x1b[36mSending test notification...\x1b[0m\r\n`);
+      }
+      alertUser('DartForge', msg)
+        .then(() => {
+          if (terminalRef.current) smartWrite(terminalRef.current, `\x1b[32mNotification sent (no error).\x1b[0m\r\n`);
+        })
+        .catch((e) => {
+          if (terminalRef.current) smartWrite(terminalRef.current, `\x1b[31mNotification error: ${e}\x1b[0m\r\n`);
+        });
+      return;
+    }
 
     // Built-in /convert command — intercept before alias expansion
     if (/^\/convert\b/i.test(rawInput.trim())) {
@@ -904,6 +945,8 @@ function AppMain() {
               antiIdleMinutes={antiIdleMinutes}
               antiIdleNextAt={antiIdleNextAt}
               onToggleAntiIdle={() => updateAntiIdleEnabled(!antiIdleEnabled)}
+              initialHistory={commandHistory}
+              onHistoryChange={handleHistoryChange}
             />
           </div>
         </div>

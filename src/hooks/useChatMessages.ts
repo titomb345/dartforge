@@ -1,5 +1,6 @@
 import { useState, useCallback, useEffect, useRef } from 'react';
 import { useDataStore } from '../contexts/DataStoreContext';
+import { alertUser } from '../lib/platform';
 import type { ChatMessage, ChatType, ChatFilters } from '../types/chat';
 import type { Chimes } from './useCustomChimes';
 
@@ -98,15 +99,12 @@ export function useChatMessages(
 
     // Desktop notification when window is unfocused
     const n = notificationsRef?.current;
-    if (n && !msg.isOwn && n[msg.type] && !isMuted && document.hidden) {
-      try {
-        if (typeof Notification !== 'undefined' && Notification.permission === 'granted') {
-          new Notification(`${msg.sender} (${msg.type})`, {
-            body: msg.message,
-            tag: `dartforge-chat-${msg.type}`,
-          });
-        }
-      } catch { /* ignore */ }
+    if (n && !msg.isOwn && n[msg.type] && !isMuted && !document.hasFocus()) {
+      alertUser(
+        `${msg.sender} (${msg.type})`,
+        msg.message,
+        `dartforge-chat-${msg.type}`,
+      );
     }
 
     setMessages((prev) => {

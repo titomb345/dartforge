@@ -1,5 +1,6 @@
 import { useState, useCallback, useEffect, useRef } from 'react';
 import { useDataStore } from '../contexts/DataStoreContext';
+import { getPlatform } from '../lib/platform';
 import type { ChatFilters } from '../types/chat';
 
 const SETTINGS_FILE = 'settings.json';
@@ -12,7 +13,7 @@ export const DEFAULT_NUMPAD_MAPPINGS: Record<string, string> = {
 };
 
 const DEFAULT_NOTIFICATIONS: ChatFilters = {
-  say: false, shout: false, ooc: false, tell: true, sz: true,
+  say: false, shout: false, ooc: false, tell: false, sz: false,
 };
 
 export type TimestampFormat = '12h' | '24h';
@@ -29,8 +30,8 @@ export function useAppSettings() {
   const [antiIdleMinutes, setAntiIdleMinutes] = useState(10);
 
   // Output transforms
-  const [boardDatesEnabled, setBoardDatesEnabled] = useState(true);
-  const [stripPromptsEnabled, setStripPromptsEnabled] = useState(true);
+  const [boardDatesEnabled, setBoardDatesEnabled] = useState(false);
+  const [stripPromptsEnabled, setStripPromptsEnabled] = useState(false);
 
   /* ── New settings ──────────────────────────────────────── */
 
@@ -210,11 +211,13 @@ export function useAppSettings() {
   }, [persist]);
 
   const toggleChatNotification = useCallback(async (type: keyof ChatFilters) => {
-    // Request permission when enabling a notification for the first time
+    // On web, request browser notification permission when enabling for the first time
     const current = chatNotifications[type];
-    if (!current && typeof Notification !== 'undefined' && Notification.permission === 'default') {
-      const result = await Notification.requestPermission();
-      if (result !== 'granted') return; // user denied, don't enable
+    if (!current && getPlatform() === 'web') {
+      if (typeof Notification !== 'undefined' && Notification.permission === 'default') {
+        const result = await Notification.requestPermission();
+        if (result !== 'granted') return;
+      }
     }
     setChatNotifications((prev) => {
       const next = { ...prev, [type]: !prev[type] };

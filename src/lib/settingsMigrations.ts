@@ -1,6 +1,13 @@
 import type { DataStore } from '../contexts/DataStoreContext';
 
-export const CURRENT_VERSION = 20;
+/**
+ * Settings schema version.
+ *
+ * v1.0 launch reset: collapsed 20 pre-release migrations into a single
+ * baseline. Existing beta users (version > 1) are normalized to 1 so
+ * future migrations apply correctly to everyone.
+ */
+export const CURRENT_VERSION = 1;
 
 /** Raw store contents — all keys are optional since older stores may lack them. */
 export type StoreData = Record<string, unknown>;
@@ -9,160 +16,83 @@ type MigrationFn = (data: StoreData) => StoreData;
 
 /**
  * Ordered migration functions. MIGRATIONS[n] migrates version n → n+1.
- * The v0→v1 migration is a no-op — it just stamps the version on pre-versioning installs.
  */
 const MIGRATIONS: MigrationFn[] = [
-  // v0 → v1: no-op, stamps _version on existing installs
-  (data) => data,
-  // v1 → v2: initialize skill tracking settings
+  // v0 → v1: Baseline defaults for v1.0 launch
+  // Sets all settings to their default values if not already present.
   (data) => {
-    if (!('activeCharacter' in data)) {
-      data.activeCharacter = null;
+    // Skill tracking
+    if (!('activeCharacter' in data)) data.activeCharacter = null;
+    if (!('showInlineImproves' in data)) data.showInlineImproves = false;
+
+    // Status bar filtering & compact readouts
+    if (!('filteredStatuses' in data)) {
+      data.filteredStatuses = {
+        concentration: false, hunger: false, thirst: false,
+        aura: false, encumbrance: false, movement: false,
+      };
     }
-    if (!('showInlineImproves' in data)) {
-      data.showInlineImproves = false;
+    if (!('compactReadouts' in data)) {
+      data.compactReadouts = {
+        health: false, concentration: false, aura: false,
+        hunger: false, thirst: false, encumbrance: false,
+        movement: false, clock: false,
+      };
     }
-    return data;
-  },
-  // v2 → v3: initialize compact mode setting
-  (data) => {
-    if (!('compactMode' in data)) {
-      data.compactMode = false;
+    if (!('statusBarOrder' in data)) {
+      data.statusBarOrder = ['health', 'concentration', 'aura', 'hunger', 'thirst', 'encumbrance', 'movement'];
     }
-    return data;
-  },
-  // v3 → v4: per-status filtering replaces compact mode toggle
-  (data) => {
-    const wasCompact = data.compactMode === true;
-    delete data.compactMode;
-    data.compactBar = false;
-    data.filteredStatuses = {
-      concentration: wasCompact,
-      hunger: wasCompact,
-      thirst: wasCompact,
-      aura: wasCompact,
-      encumbrance: wasCompact,
-      movement: wasCompact,
-    };
-    return data;
-  },
-  // v4 → v5: initialize panel docking layout
-  (data) => {
-    if (!('panelLayout' in data)) {
-      data.panelLayout = { left: [], right: [] };
-    }
-    return data;
-  },
-  // v5 → v6: initialize chat panel settings
-  (data) => {
-    if (!('chatMutedSenders' in data)) {
-      data.chatMutedSenders = [];
-    }
+
+    // Panel docking
+    if (!('panelLayout' in data)) data.panelLayout = { left: [], right: [] };
+    if (!('pinnedWidths' in data)) data.pinnedWidths = { left: 320, right: 320 };
+
+    // Chat
+    if (!('chatMutedSenders' in data)) data.chatMutedSenders = [];
     if (!('chatFilters' in data)) {
-      data.chatFilters = {
-        say: false,
-        shout: false,
-        ooc: true,
-        tell: true,
-        sz: true,
-      };
+      data.chatFilters = { say: false, shout: false, ooc: true, tell: true, sz: true };
     }
-    return data;
-  },
-  // v6 → v7: initialize counter period length setting
-  (data) => {
-    if (!('counterPeriodLength' in data)) {
-      data.counterPeriodLength = 10;
-    }
-    return data;
-  },
-  // v7 → v8: replace global compactBar with per-readout compactReadouts
-  (data) => {
-    const wasCompact = data.compactBar === true;
-    delete data.compactBar;
-    data.compactReadouts = {
-      health: wasCompact,
-      concentration: wasCompact,
-      aura: wasCompact,
-      hunger: wasCompact,
-      thirst: wasCompact,
-      encumbrance: wasCompact,
-      movement: wasCompact,
-      clock: false,
-    };
-    return data;
-  },
-  // v8 → v9: initialize alias settings
-  (data) => {
-    // globalAliases moved from settings.json to aliases.json — clean up if present
-    delete data.globalAliases;
-    if (!('enableSpeedwalk' in data)) {
-      data.enableSpeedwalk = true;
-    }
-    return data;
-  },
-  // v9 → v10: initialize chat sound alert settings
-  (data) => {
     if (!('chatSoundAlerts' in data)) {
-      data.chatSoundAlerts = {
-        say: true,
-        shout: true,
-        ooc: true,
-        tell: true,
-        sz: true,
-      };
+      data.chatSoundAlerts = { say: true, shout: true, ooc: true, tell: true, sz: true };
     }
-    return data;
-  },
-  // v10 → v11: initialize trigger system settings
-  (data) => {
-    if (!('triggersEnabled' in data)) {
-      data.triggersEnabled = true;
+    if (!('chatNotifications' in data)) {
+      data.chatNotifications = { say: false, shout: false, ooc: false, tell: false, sz: false };
     }
-    return data;
-  },
-  // v11 → v12: initialize anti-idle settings
-  (data) => {
-    if (!('antiIdleEnabled' in data)) {
-      data.antiIdleEnabled = false;
-    }
-    if (!('antiIdleCommand' in data)) {
-      data.antiIdleCommand = 'hp';
-    }
-    if (!('antiIdleMinutes' in data)) {
-      data.antiIdleMinutes = 10;
-    }
-    return data;
-  },
-  // v12 → v13: initialize prompt stripping setting
-  (data) => {
-    if (!('stripPromptsEnabled' in data)) {
-      data.stripPromptsEnabled = true;
-    }
-    return data;
-  },
-  // v13 → v14: hex-only automapper — flag old map data for reset
-  // Map data lives in per-character files (map-<name>.json), not settings.json.
-  // We set a flag so the map loader knows to discard incompatible old data.
-  (data) => {
-    data.mapSchemaVersion = 2;
-    return data;
-  },
-  // v14 → v15: initialize pinned panel widths
-  (data) => {
-    if (!('pinnedWidths' in data)) {
-      data.pinnedWidths = { left: 320, right: 320 };
-    }
-    return data;
-  },
-  // v15 → v16: new settings (buffers, timestamp format, command echo, session logging, numpad, notifications)
-  (data) => {
+
+    // Counters
+    if (!('counterPeriodLength' in data)) data.counterPeriodLength = 10;
+
+    // Aliases & triggers
+    if (!('enableSpeedwalk' in data)) data.enableSpeedwalk = true;
+    if (!('triggersEnabled' in data)) data.triggersEnabled = true;
+    // Clean up legacy key if present
+    delete data.globalAliases;
+
+    // Anti-idle
+    if (!('antiIdleEnabled' in data)) data.antiIdleEnabled = false;
+    if (!('antiIdleCommand' in data)) data.antiIdleCommand = 'hp';
+    if (!('antiIdleMinutes' in data)) data.antiIdleMinutes = 10;
+
+    // Output transforms
+    if (!('boardDatesEnabled' in data)) data.boardDatesEnabled = false;
+    if (!('stripPromptsEnabled' in data)) data.stripPromptsEnabled = false;
+
+    // Map
+    if (!('mapSchemaVersion' in data)) data.mapSchemaVersion = 2;
+
+    // Buffer sizes
     if (!('terminalScrollback' in data)) data.terminalScrollback = 10000;
     if (!('commandHistorySize' in data)) data.commandHistorySize = 500;
     if (!('chatHistorySize' in data)) data.chatHistorySize = 500;
+
+    // Display
     if (!('timestampFormat' in data)) data.timestampFormat = '12h';
     if (!('commandEchoEnabled' in data)) data.commandEchoEnabled = false;
+
+    // Session logging
     if (!('sessionLoggingEnabled' in data)) data.sessionLoggingEnabled = false;
+
+    // Numpad
     if (!('numpadMappings' in data)) {
       data.numpadMappings = {
         Numpad7: 'nw', Numpad8: 'n', Numpad9: 'ne',
@@ -171,34 +101,21 @@ const MIGRATIONS: MigrationFn[] = [
         Numpad0: 'u', NumpadAdd: 'back',
       };
     }
-    if (!('chatNotifications' in data)) {
-      data.chatNotifications = {
-        say: false, shout: false, ooc: false, tell: true, sz: true,
-      };
-    }
-    return data;
-  },
-  // v16 → v17: auto-backup toggle
-  (data) => {
+
+    // Backups
     if (!('autoBackupEnabled' in data)) data.autoBackupEnabled = true;
-    return data;
-  },
-  // v17 → v18: custom chime sound files
-  (data) => {
+
+    // Custom chimes
     if (!('customChime1' in data)) data.customChime1 = null;
     if (!('customChime2' in data)) data.customChime2 = null;
-    return data;
-  },
-  // v18 → v19: help guide seen flag
-  (data) => {
+
+    // Help guide
     if (!('hasSeenGuide' in data)) data.hasSeenGuide = false;
-    return data;
-  },
-  // v19 → v20: status bar readout order
-  (data) => {
-    if (!('statusBarOrder' in data)) {
-      data.statusBarOrder = ['health', 'concentration', 'aura', 'hunger', 'thirst', 'encumbrance', 'movement'];
-    }
+
+    // Clean up obsolete keys from pre-release migrations
+    delete data.compactMode;
+    delete data.compactBar;
+
     return data;
   },
 ];
@@ -210,7 +127,15 @@ const SETTINGS_FILE = 'settings.json';
  * then write the updated `_version` back.
  */
 export async function migrateSettings(dataStore: DataStore): Promise<void> {
-  const version = (await dataStore.get<number>(SETTINGS_FILE, '_version')) ?? 0;
+  let version = (await dataStore.get<number>(SETTINGS_FILE, '_version')) ?? 0;
+
+  // v1.0 reset: beta users had version 2–20 from pre-release migrations.
+  // Normalize them to CURRENT_VERSION so future migrations apply correctly.
+  if (version > CURRENT_VERSION) {
+    await dataStore.set(SETTINGS_FILE, '_version', CURRENT_VERSION);
+    await dataStore.save(SETTINGS_FILE);
+    return; // existing user, already has all settings
+  }
 
   if (version >= CURRENT_VERSION) return;
 

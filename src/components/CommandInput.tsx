@@ -25,6 +25,8 @@ interface CommandInputProps {
   antiIdleMinutes?: number;
   antiIdleNextAt?: number | null;
   onToggleAntiIdle?: () => void;
+  initialHistory?: string[];
+  onHistoryChange?: (history: string[]) => void;
 }
 
 const LINE_HEIGHT = 20;
@@ -85,14 +87,17 @@ function formatCountdown(remainingMs: number): string {
 }
 
 export const CommandInput = forwardRef<HTMLTextAreaElement, CommandInputProps>(
-  ({ onSend, onReconnect, onToggleCounter, disabled, connected, passwordMode, skipHistory, recentLinesRef, antiIdleEnabled, antiIdleCommand, antiIdleMinutes, antiIdleNextAt, onToggleAntiIdle }, ref) => {
+  ({ onSend, onReconnect, onToggleCounter, disabled, connected, passwordMode, skipHistory, recentLinesRef, antiIdleEnabled, antiIdleCommand, antiIdleMinutes, antiIdleNextAt, onToggleAntiIdle, initialHistory, onHistoryChange }, ref) => {
     const { commandHistorySize, numpadMappings } = useAppSettingsContext();
     const numpadRef = useRef(numpadMappings);
     numpadRef.current = numpadMappings;
     const toggleCounterRef = useRef(onToggleCounter);
     toggleCounterRef.current = onToggleCounter;
+    const onHistoryChangeRef = useRef(onHistoryChange);
+    onHistoryChangeRef.current = onHistoryChange;
     const [value, setValue] = useState('');
-    const [history, setHistory] = useState<string[]>([]);
+    const [history, setHistory] = useState<string[]>(initialHistory ?? []);
+    const historyLoadedRef = useRef(false);
     const historyIndexRef = useRef(-1);
     const searchPrefixRef = useRef('');
     const internalRef = useRef<HTMLTextAreaElement | null>(null);
@@ -108,6 +113,14 @@ export const CommandInput = forwardRef<HTMLTextAreaElement, CommandInputProps>(
       },
       [ref]
     );
+
+    // Sync persisted history when it arrives from async load
+    useEffect(() => {
+      if (!historyLoadedRef.current && initialHistory && initialHistory.length > 0) {
+        historyLoadedRef.current = true;
+        setHistory(initialHistory);
+      }
+    }, [initialHistory]);
 
     // Anti-idle countdown tick
     const [, setCountdownTick] = useState(0);
@@ -151,14 +164,18 @@ export const CommandInput = forwardRef<HTMLTextAreaElement, CommandInputProps>(
       if (!passwordMode && !skipHistory) {
         const trimmed = value.trim();
         if (trimmed) {
-          setHistory((prev) => [trimmed, ...prev].slice(0, commandHistorySize));
+          setHistory((prev) => {
+            const next = [trimmed, ...prev.filter((h) => h !== trimmed)].slice(0, commandHistorySize);
+            onHistoryChangeRef.current?.(next);
+            return next;
+          });
         }
       }
       historyIndexRef.current = -1;
       searchPrefixRef.current = '';
       tabStateRef.current = null;
       setValue('');
-    }, [value, onSend, passwordMode, skipHistory]);
+    }, [value, onSend, passwordMode, skipHistory, commandHistorySize]);
 
     const handleKeyDown = useCallback(
       (e: KeyboardEvent<HTMLTextAreaElement>) => {

@@ -389,7 +389,7 @@ export function SettingsPanel() {
             </FieldRow>
           ))}
           <div className="text-[9px] text-text-dim font-mono leading-relaxed mt-1">
-            Desktop notifications when the window is unfocused.
+            Flashes the taskbar icon when a message arrives while DartForge is unfocused.
           </div>
         </SettingsSection>
 

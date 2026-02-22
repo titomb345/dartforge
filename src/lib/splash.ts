@@ -188,7 +188,8 @@ export function getConnectingSplash(cols: number): string {
 }
 
 export function getConnectedSplash(cols: number): string {
-  return mainSplash(cols, `${BRIGHT_GREEN}Connected${RESET}`);
+  const time = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+  return mainSplash(cols, `${BRIGHT_GREEN}Connected at ${time}${RESET}`);
 }
 
 // Dark-to-bright red gradient for "DROPPED" (7 letters)
@@ -210,6 +211,7 @@ export function getDisconnectSplash(cols: number): string {
   const barWidth = Math.min(cols - 4, 60);
   const logo = buildGradientWord('DROPPED', RED_GRADIENT);
   const bar = redBar(cols);
+  const time = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
   const lines = [
     '',
     '',
@@ -218,6 +220,8 @@ export function getDisconnectSplash(cols: number): string {
     ...centerUnderBar(logo, barWidth),
     '',
     ...align([bar]),
+    '',
+    ...centerUnderBar([`${DIM}Connection lost at ${time}${RESET}`], barWidth),
     '',
     ...centerUnderBar([`${GREEN}Press enter to reconnect.${RESET}`], barWidth),
     '',

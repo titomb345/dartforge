@@ -297,8 +297,8 @@ export const HELP_CATEGORIES: HelpCategory[] = [
         description: 'DartMUD anonymizes some senders. The "Sigs" section in Chat maps message signatures to known player names, so future messages show the real name.',
       },
       {
-        title: 'Desktop Notifications',
-        description: 'Enable per-channel desktop notifications in Settings > Notifications. Fires when the window is unfocused.',
+        title: 'Taskbar Alerts',
+        description: 'Enable per-channel taskbar alerts in Settings > Notifications. When a message arrives while the window is unfocused, the taskbar icon flashes to get your attention. The flash clears when you switch back to DartForge.',
       },
     ],
   },
