@@ -25,6 +25,7 @@ The `[Unreleased]` header controls automatic version bumping on merge:
 - Status readout danger flash is now severity-based per status type instead of color-based, giving each indicator its own flash threshold
 - Tuned status indicator colors across all types: removed magenta, adjusted red/yellow thresholds to better match in-game severity
 - Brightened low-contrast aura colors (indigo, violet, blue, red ranges) for readability on dark backgrounds
+- Settings panel now uses accordion behavior (only one section open at a time), matching the guide panel
 
 ### Fixed
 - Removed click-outside-to-close behavior on slide-out panels — panels now stay open until explicitly closed via the × button or toolbar toggle
