@@ -20,10 +20,10 @@ import { StatusReadout } from './StatusReadout';
 import type { ThemeColorKey } from '../lib/defaultTheme';
 import type { FilterFlags } from '../lib/outputFilter';
 
-export type StatusReadoutKey = 'health' | 'concentration' | 'aura' | 'hunger' | 'thirst' | 'encumbrance' | 'movement';
+export type StatusReadoutKey = 'health' | 'concentration' | 'aura' | 'hunger' | 'thirst' | 'encumbrance' | 'movement' | 'alignment';
 
 export const DEFAULT_STATUS_BAR_ORDER: StatusReadoutKey[] = [
-  'health', 'concentration', 'aura', 'hunger', 'thirst', 'encumbrance', 'movement',
+  'health', 'concentration', 'aura', 'hunger', 'thirst', 'encumbrance', 'movement', 'alignment',
 ];
 
 export interface ReadoutData {

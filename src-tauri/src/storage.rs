@@ -192,6 +192,19 @@ pub fn write_text_file(
 }
 
 #[tauri::command]
+pub fn delete_text_file(
+    filename: String,
+    state: tauri::State<'_, StorageState>,
+) -> Result<(), String> {
+    validate_filename(&filename)?;
+    let path = state.get_dir().join(&filename);
+    if path.exists() {
+        fs::remove_file(&path).map_err(|e| format!("Failed to delete {filename}: {e}"))?;
+    }
+    Ok(())
+}
+
+#[tauri::command]
 pub fn copy_data_to_dir(
     target_dir: String,
     state: tauri::State<'_, StorageState>,

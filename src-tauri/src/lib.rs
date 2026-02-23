@@ -109,6 +109,7 @@ pub fn run() {
             storage::write_data_file,
             storage::read_text_file,
             storage::write_text_file,
+            storage::delete_text_file,
             storage::copy_data_to_dir,
             storage::check_dir_valid,
             storage::create_backup,

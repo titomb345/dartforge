@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef, type ReactNode } from 'react';
-import { TimerIcon, FolderIcon, TrashIcon, CheckCircleIcon, ClockIcon, ChevronDownSmallIcon, FilterIcon, GearIcon, NotesIcon, RotateCcwIcon, Volume2Icon, PlayIcon, AlignmentIcon } from './icons';
+import { TimerIcon, FolderIcon, TrashIcon, CheckCircleIcon, ClockIcon, ChevronDownSmallIcon, FilterIcon, GearIcon, NotesIcon, RotateCcwIcon, Volume2Icon, PlayIcon, AlignmentIcon, CounterIcon } from './icons';
 import { DEFAULT_NUMPAD_MAPPINGS } from '../hooks/useAppSettings';
-import { MudInput } from './shared';
+import { MudInput, MudTextarea } from './shared';
 import { cn } from '../lib/cn';
 import { useDataStore } from '../contexts/DataStoreContext';
 import { useAppSettingsContext } from '../contexts/AppSettingsContext';
@@ -163,6 +163,10 @@ export function SettingsPanel() {
     numpadMappings, updateNumpadMappings,
     chatNotifications, toggleChatNotification,
     customChime1, customChime2, updateCustomChime1, updateCustomChime2,
+    counterHotThreshold, counterColdThreshold,
+    updateCounterHotThreshold, updateCounterColdThreshold,
+    postSyncEnabled, postSyncCommands,
+    updatePostSyncEnabled, updatePostSyncCommands,
   } = settings;
   const isTauri = getPlatform() === 'tauri';
 
@@ -267,6 +271,40 @@ export function SettingsPanel() {
           </div>
         </SettingsSection>
 
+        {/* Post-Sync Commands */}
+        <SettingsSection
+          icon={<PlayIcon size={13} />}
+          title="Post-Sync Commands"
+          accent="#ff79c6"
+          open={openSection === 'post-sync'}
+          onToggle={() => toggle('post-sync')}
+        >
+          <FieldRow label="Enabled">
+            <ToggleSwitch
+              checked={postSyncEnabled}
+              onChange={updatePostSyncEnabled}
+              accent="#ff79c6"
+            />
+          </FieldRow>
+          <FieldRow label="Commands" dimmed={!postSyncEnabled}>
+            <div className="w-full" />
+          </FieldRow>
+          <div className={cn(!postSyncEnabled && 'opacity-40 pointer-events-none')}>
+            <MudTextarea
+              accent="pink"
+              size="sm"
+              value={postSyncCommands}
+              onChange={(e) => updatePostSyncCommands(e.target.value)}
+              placeholder="inventory;who;/echo Ready!"
+              rows={3}
+              className="w-full"
+            />
+          </div>
+          <div className="text-[9px] text-text-dim font-mono leading-relaxed mt-1">
+            Sent after login sync. Supports semicolons, aliases, /delay, /echo, /spam, /var.
+          </div>
+        </SettingsSection>
+
         {/* Output transformations */}
         <SettingsSection
           icon={<FilterIcon size={13} />}
@@ -304,6 +342,60 @@ export function SettingsPanel() {
           </FieldRow>
           <div className="text-[9px] text-text-dim font-mono leading-relaxed mt-1">
             Show your sent commands as dimmed lines in the terminal.
+          </div>
+        </SettingsSection>
+
+        {/* Counters */}
+        <SettingsSection
+          icon={<CounterIcon size={13} />}
+          title="Counters"
+          accent="#f59e0b"
+          open={openSection === 'counters'}
+          onToggle={() => toggle('counters')}
+        >
+          <FieldRow label="Hot threshold">
+            <div className="flex items-center gap-1.5">
+              <MudInput
+                accent="purple"
+                size="sm"
+                type="number"
+                min={0}
+                max={99}
+                step={0.5}
+                value={counterHotThreshold}
+                onChange={(e) => {
+                  const v = parseFloat(e.target.value);
+                  if (!isNaN(v) && v >= 0 && v <= 99) updateCounterHotThreshold(v);
+                }}
+                className="w-[56px] text-center"
+              />
+              <span className="text-[10px] font-mono text-text-dim">/pd</span>
+            </div>
+          </FieldRow>
+          <div className="text-[9px] text-text-dim font-mono leading-relaxed mt-1">
+            Skills at or above this rate glow warm. Set to 0 to disable.
+          </div>
+          <FieldRow label="Cold threshold">
+            <div className="flex items-center gap-1.5">
+              <MudInput
+                accent="cyan"
+                size="sm"
+                type="number"
+                min={0}
+                max={99}
+                step={0.5}
+                value={counterColdThreshold}
+                onChange={(e) => {
+                  const v = parseFloat(e.target.value);
+                  if (!isNaN(v) && v >= 0 && v <= 99) updateCounterColdThreshold(v);
+                }}
+                className="w-[56px] text-center"
+              />
+              <span className="text-[10px] font-mono text-text-dim">/pd</span>
+            </div>
+          </FieldRow>
+          <div className="text-[9px] text-text-dim font-mono leading-relaxed mt-1">
+            Skills at or below this rate (but &gt; 0) glow cool. Set to 0 to disable.
           </div>
         </SettingsSection>
 

@@ -14,7 +14,7 @@ import { CounterPanel } from './components/CounterPanel';
 import { NotesPanel } from './components/NotesPanel';
 import { GameClock } from './components/GameClock';
 import { SortableStatusBar, DEFAULT_STATUS_BAR_ORDER, type StatusReadoutKey, type ReadoutConfig } from './components/SortableStatusBar';
-import { HeartIcon, FocusIcon, FoodIcon, DropletIcon, AuraIcon, WeightIcon, BootIcon } from './components/icons';
+import { HeartIcon, FocusIcon, FoodIcon, DropletIcon, AuraIcon, WeightIcon, BootIcon, AlignmentIcon } from './components/icons';
 import { useMudConnection } from './hooks/useMudConnection';
 import { useTransport } from './contexts/TransportContext';
 import { useThemeColors } from './hooks/useThemeColors';
@@ -29,6 +29,7 @@ import { useNeeds } from './hooks/useNeeds';
 import { useAura } from './hooks/useAura';
 import { useEncumbrance } from './hooks/useEncumbrance';
 import { useMovement } from './hooks/useMovement';
+import { useAlignment } from './hooks/useAlignment';
 import { useDataStore } from './contexts/DataStoreContext';
 import { buildXtermTheme } from './lib/defaultTheme';
 import { OutputProcessor } from './lib/outputProcessor';
@@ -77,7 +78,7 @@ import { SpotlightOverlay } from './components/SpotlightOverlay';
 import { HelpPanel } from './components/HelpPanel';
 
 /** Commands to send automatically after login */
-const LOGIN_COMMANDS = ['hp', 'score', 'show combat allocation:all', 'show magic allocation'];
+const LOGIN_COMMANDS = ['hp', 'score', 'show combat allocation:all', 'show magic allocation', 'show alignment'];
 
 /** Max recent output lines kept for tab completion */
 const MAX_RECENT_LINES = 500;
@@ -131,7 +132,9 @@ function AppMain() {
   const {
     antiIdleEnabled, antiIdleCommand, antiIdleMinutes,
     updateAntiIdleEnabled,
+    alignmentTrackingEnabled, alignmentTrackingMinutes,
     boardDatesEnabled, stripPromptsEnabled,
+    postSyncEnabled, postSyncCommands,
   } = appSettings;
 
   const dataStore = useDataStore();
@@ -324,6 +327,9 @@ function AppMain() {
   const { movement, updateMovement } = useMovement();
   const updateMovementRef = useLatestRef(updateMovement);
 
+  const { alignment, updateAlignment } = useAlignment();
+  const updateAlignmentRef = useLatestRef(updateAlignment);
+
   const outputFilterRef = useRef<OutputFilter | null>(null);
   if (!outputFilterRef.current) {
     outputFilterRef.current = new OutputFilter({
@@ -334,6 +340,7 @@ function AppMain() {
       onAura: (match) => { updateAuraRef.current(match); },
       onEncumbrance: (match) => { updateEncumbranceRef.current(match); },
       onMovement: (match) => { updateMovementRef.current(match); },
+      onAlignment: (match) => { updateAlignmentRef.current(match); },
       onChat: (msg) => { handleChatMessageRef.current(msg); },
       onLine: (stripped, raw) => {
         // TODO: Re-enable when automapper is ready
@@ -369,10 +376,16 @@ function AppMain() {
 
           // Expand and execute trigger body asynchronously
           if (match.trigger.body.trim()) {
-            const commands = expandTriggerBody(
+            const raw = expandTriggerBody(
               match.trigger.body,
               match,
               activeCharacterRef.current,
+            );
+            // Re-expand send commands through the alias engine so aliases work in trigger bodies
+            const commands = raw.flatMap((cmd) =>
+              cmd.type === 'send'
+                ? triggerRunnerRef.current.expand(cmd.text)
+                : [cmd],
             );
             triggerFiringRef.current = true;
             (async () => {
@@ -631,6 +644,25 @@ function AppMain() {
     getVariables: () => mergedVariablesRef.current,
   };
 
+  // Post-sync commands — fire user-configured commands after login sync completes
+  useEffect(() => {
+    if (!outputFilterRef.current) return;
+    outputFilterRef.current.onSyncEnd = () => {
+      if (!postSyncEnabledRef.current) return;
+      const raw = postSyncCommandsRef.current.trim();
+      if (!raw) return;
+      if (terminalRef.current) {
+        smartWrite(terminalRef.current, '\x1b[90m[post-sync commands]\x1b[0m\r\n');
+      }
+      const result = expandInput(raw, mergedAliasesRef.current, {
+        enableSpeedwalk: enableSpeedwalkRef.current,
+        activeCharacter: activeCharacterRef.current,
+      });
+      executeCommands(result.commands, triggerRunnerRef.current);
+    };
+    return () => { if (outputFilterRef.current) outputFilterRef.current.onSyncEnd = null; };
+  }, []);
+
   // Command echo ref (used in handleSend callback)
   const commandEchoRef = useLatestRef(appSettings.commandEchoEnabled);
   const passwordModeRef = useLatestRef(passwordMode);
@@ -817,6 +849,10 @@ function AppMain() {
     dataStore.set('settings.json', 'statusBarOrder', newOrder).catch(console.error);
   }, [dataStore]);
 
+  // Post-sync commands
+  const postSyncEnabledRef = useLatestRef(postSyncEnabled);
+  const postSyncCommandsRef = useLatestRef(postSyncCommands);
+
   // Anti-idle timer — sends command at interval when connected + logged in + enabled
   const antiIdleEnabledRef = useLatestRef(antiIdleEnabled);
   const antiIdleCommandRef = useLatestRef(antiIdleCommand);
@@ -842,6 +878,29 @@ function AppMain() {
     return () => { clearInterval(id); setAntiIdleNextAt(null); };
   }, [connected, loggedIn, antiIdleEnabled, antiIdleMinutes]);
 
+  // Alignment tracking timer — polls "show alignment" at interval when enabled
+  const alignmentTrackingEnabledRef = useLatestRef(alignmentTrackingEnabled);
+  const [alignmentNextAt, setAlignmentNextAt] = useState<number | null>(null);
+
+  useEffect(() => {
+    if (!connected || !loggedIn || !alignmentTrackingEnabled) {
+      setAlignmentNextAt(null);
+      return;
+    }
+    const ms = alignmentTrackingMinutes * 60_000;
+    setAlignmentNextAt(Date.now() + ms);
+    const id = setInterval(() => {
+      if (sendCommandRef.current && alignmentTrackingEnabledRef.current) {
+        sendCommandRef.current('show alignment');
+        if (terminalRef.current && !outputFilterRef.current?.filterFlags.alignment) {
+          smartWrite(terminalRef.current, `\x1b[90m[alignment sync]\x1b[0m\r\n`);
+        }
+      }
+      setAlignmentNextAt(Date.now() + ms);
+    }, ms);
+    return () => { clearInterval(id); setAlignmentNextAt(null); };
+  }, [connected, loggedIn, alignmentTrackingEnabled, alignmentTrackingMinutes]);
+
   // First-launch: auto-open Guide panel
   useEffect(() => {
     if (!settingsLoadedRef.current || appSettings.hasSeenGuide) return;
@@ -857,7 +916,8 @@ function AppMain() {
     { id: 'thirst', data: thirst, icon: <DropletIcon size={11} />, tooltip: (d) => `You are ${d.descriptor}.`, filterKey: 'thirst', dangerThreshold: 6 },
     { id: 'encumbrance', data: encumbrance, icon: <WeightIcon size={11} />, tooltip: (d) => d.descriptor ?? '', filterKey: 'encumbrance', dangerThreshold: 5 },
     { id: 'movement', data: movement, icon: <BootIcon size={11} />, tooltip: (d) => d.descriptor ?? '', filterKey: 'movement', dangerThreshold: 6 },
-  ], [health, concentration, aura, hunger, thirst, encumbrance, movement]);
+    { id: 'alignment', data: alignment, icon: <AlignmentIcon size={11} />, tooltip: (d) => d.key === 'none' ? "You don't feel strongly about anything." : `${d.label}`, filterKey: 'alignment', dangerThreshold: 99 },
+  ], [health, concentration, aura, hunger, thirst, encumbrance, movement, alignment]);
 
   const skillTrackerValue = useMemo(() => (
     { activeCharacter, skillData, showInlineImproves, toggleInlineImproves, addSkill, updateSkillCount, deleteSkill }
@@ -980,6 +1040,9 @@ function AppMain() {
               antiIdleMinutes={antiIdleMinutes}
               antiIdleNextAt={antiIdleNextAt}
               onToggleAntiIdle={() => updateAntiIdleEnabled(!antiIdleEnabled)}
+              alignmentTrackingEnabled={alignmentTrackingEnabled}
+              alignmentTrackingMinutes={alignmentTrackingMinutes}
+              alignmentNextAt={alignmentNextAt}
               initialHistory={commandHistory}
               onHistoryChange={handleHistoryChange}
             />

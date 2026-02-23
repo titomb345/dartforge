@@ -91,8 +91,8 @@ export function useImproveCounters() {
           const resumed = savedCounters.map((raw) => {
             const c = migrateCounter(raw as ImproveCounter & Record<string, unknown>);
             if (c.status === 'running' && c.lastResumedAt) {
-              const gap = now - c.lastResumedAt;
-              const updated = { ...c, accumulatedMs: c.accumulatedMs + gap, lastResumedAt: now };
+              // Don't add offline gap — only count time while app is open
+              const updated = { ...c, lastResumedAt: now };
               // Check if period expired during gap
               if (updated.periodStartAt) {
                 const periodElapsed = now - updated.periodStartAt;

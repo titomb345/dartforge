@@ -10,6 +10,11 @@ export interface AppSettingsState {
   updateAntiIdleEnabled: (v: boolean) => void;
   updateAntiIdleCommand: (v: string) => void;
   updateAntiIdleMinutes: (v: number) => void;
+  // Alignment tracking
+  alignmentTrackingEnabled: boolean;
+  alignmentTrackingMinutes: number;
+  updateAlignmentTrackingEnabled: (v: boolean) => void;
+  updateAlignmentTrackingMinutes: (v: number) => void;
   // Output transforms
   boardDatesEnabled: boolean;
   stripPromptsEnabled: boolean;
@@ -46,9 +51,19 @@ export interface AppSettingsState {
   customChime2: string | null;
   updateCustomChime1: (v: string | null) => void;
   updateCustomChime2: (v: string | null) => void;
+  // Counter thresholds
+  counterHotThreshold: number;
+  counterColdThreshold: number;
+  updateCounterHotThreshold: (v: number) => void;
+  updateCounterColdThreshold: (v: number) => void;
   // Help guide
   hasSeenGuide: boolean;
   updateHasSeenGuide: (v: boolean) => void;
+  // Post-sync commands
+  postSyncEnabled: boolean;
+  postSyncCommands: string;
+  updatePostSyncEnabled: (v: boolean) => void;
+  updatePostSyncCommands: (v: string) => void;
 }
 
 const AppSettingsContext = createContext<AppSettingsState | null>(null);

@@ -318,6 +318,14 @@ export const HELP_CATEGORIES: HelpCategory[] = [
         helpId: 'toolbar-counters',
       },
       {
+        title: 'Hot & Cold Skills',
+        description: 'Skills improving quickly glow amber, slow ones glow icy blue. Configure the rate thresholds in Settings > Counters.',
+      },
+      {
+        title: 'Alignment Tracking',
+        description: 'Automatically polls your alignment at a configurable interval. Displays alignment and conviction in the status bar. Also prevents idle disconnect. Enable in Settings > Alignment Tracking.',
+      },
+      {
         title: 'Allocation Tracking',
         description: 'Combat and magic allocations auto-parse from "show combat allocation:all" and "show magic allocation" output. Edit values inline.',
         helpId: 'toolbar-alloc',

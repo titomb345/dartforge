@@ -388,6 +388,10 @@ export function DropboxDataStoreProvider({ children }: { children: ReactNode }) 
     }
   }, []);
 
+  const deleteText = useCallback(async (filename: string): Promise<void> => {
+    localStorage.removeItem(PREFIX + filename);
+  }, []);
+
   const flushAll = useCallback(async (): Promise<void> => {
     // Flush localStorage
     for (const timer of dirtyRef.current.values()) clearTimeout(timer);
@@ -422,7 +426,7 @@ export function DropboxDataStoreProvider({ children }: { children: ReactNode }) 
   const activeDataDir = storageMode === 'dropbox' && accessToken && folderPath ? 'dropbox' : 'localStorage';
 
   const store: DataStore = useMemo(() => ({
-    get, set, save, delete: del, keys, readText, writeText, flushAll,
+    get, set, save, delete: del, keys, readText, writeText, deleteText, flushAll,
     activeDataDir,
     ready,
     needsSetup: false,

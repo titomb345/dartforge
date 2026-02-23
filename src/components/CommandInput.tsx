@@ -8,7 +8,7 @@ import {
   forwardRef,
 } from 'react';
 import { cn } from '../lib/cn';
-import { TimerIcon } from './icons';
+import { TimerIcon, AlignmentIcon } from './icons';
 import { useAppSettingsContext } from '../contexts/AppSettingsContext';
 
 interface CommandInputProps {
@@ -25,6 +25,9 @@ interface CommandInputProps {
   antiIdleMinutes?: number;
   antiIdleNextAt?: number | null;
   onToggleAntiIdle?: () => void;
+  alignmentTrackingEnabled?: boolean;
+  alignmentTrackingMinutes?: number;
+  alignmentNextAt?: number | null;
   initialHistory?: string[];
   onHistoryChange?: (history: string[]) => void;
 }
@@ -87,7 +90,7 @@ function formatCountdown(remainingMs: number): string {
 }
 
 export const CommandInput = forwardRef<HTMLTextAreaElement, CommandInputProps>(
-  ({ onSend, onReconnect, onToggleCounter, disabled, connected, passwordMode, skipHistory, recentLinesRef, antiIdleEnabled, antiIdleCommand, antiIdleMinutes, antiIdleNextAt, onToggleAntiIdle, initialHistory, onHistoryChange }, ref) => {
+  ({ onSend, onReconnect, onToggleCounter, disabled, connected, passwordMode, skipHistory, recentLinesRef, antiIdleEnabled, antiIdleCommand, antiIdleMinutes, antiIdleNextAt, onToggleAntiIdle, alignmentTrackingEnabled, alignmentTrackingMinutes, alignmentNextAt, initialHistory, onHistoryChange }, ref) => {
     const { commandHistorySize, numpadMappings } = useAppSettingsContext();
     const numpadRef = useRef(numpadMappings);
     numpadRef.current = numpadMappings;
@@ -122,13 +125,13 @@ export const CommandInput = forwardRef<HTMLTextAreaElement, CommandInputProps>(
       }
     }, [initialHistory]);
 
-    // Anti-idle countdown tick
+    // Anti-idle / alignment tracking countdown tick
     const [, setCountdownTick] = useState(0);
     useEffect(() => {
-      if (!antiIdleNextAt) return;
+      if (!antiIdleNextAt && !alignmentNextAt) return;
       const id = setInterval(() => setCountdownTick((t) => t + 1), 1000);
       return () => clearInterval(id);
-    }, [antiIdleNextAt]);
+    }, [antiIdleNextAt, alignmentNextAt]);
 
     // Re-focus when window regains focus
     useEffect(() => {
@@ -338,8 +341,19 @@ export const CommandInput = forwardRef<HTMLTextAreaElement, CommandInputProps>(
           )}
         />
 
-        {/* Anti-idle quick toggle */}
-        {onToggleAntiIdle && (
+        {/* Alignment tracking indicator (takes priority over anti-idle when active) */}
+        {alignmentTrackingEnabled ? (
+          <span
+            title={`Alignment tracking: every ${alignmentTrackingMinutes}m`}
+            className="flex items-center gap-1 px-1.5 py-1 rounded border text-[9px] font-mono self-center shrink-0 ml-1 text-[#80e080] border-[#80e080]/30 bg-[#80e080]/8"
+            style={{ filter: 'drop-shadow(0 0 3px rgba(128, 224, 128, 0.25))' }}
+          >
+            <AlignmentIcon size={9} />
+            <span>{alignmentNextAt
+              ? formatCountdown(alignmentNextAt - Date.now())
+              : `${alignmentTrackingMinutes}m`}</span>
+          </span>
+        ) : onToggleAntiIdle && (
           <button
             onClick={onToggleAntiIdle}
             title={antiIdleEnabled ? `Anti-idle: "${antiIdleCommand}" every ${antiIdleMinutes}m (click to disable)` : 'Anti-idle off (click to enable)'}
