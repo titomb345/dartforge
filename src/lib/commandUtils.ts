@@ -14,8 +14,9 @@ export function splitCommands(input: string): string[] {
       current += ';';
       i++; // skip escaped semicolon
     } else if (input[i] === ';') {
-      // /spam consumes the rest of the line (semicolons included)
-      if (/^\/spam\s+\d+\s/i.test(current.trim())) {
+      const ct = current.trim();
+      // /spam and /var consume the rest of the line (semicolons included)
+      if (/^\/spam\s+\d+\s/i.test(ct) || /^\/var\s+(-g\s+)?\S+\s/i.test(ct)) {
         current += ';';
       } else {
         parts.push(current);
@@ -154,9 +155,18 @@ export async function executeCommands(
 
   for (const cmd of commands) {
     switch (cmd.type) {
-      case 'send':
-        await runner.send(ev(cmd.text));
+      case 'send': {
+        const expanded = ev(cmd.text);
+        // If variable expansion changed the text (e.g., $reattackAction → /spam 1 k demon;sf),
+        // re-process through the pipeline so directives are executed, not sent raw to the MUD.
+        if (expanded !== cmd.text) {
+          const reExpanded = runner.expand(expanded);
+          await executeCommands(reExpanded, runner, spamDepth, overrides);
+        } else {
+          await runner.send(expanded);
+        }
         break;
+      }
       case 'delay':
         await new Promise<void>((r) => setTimeout(r, cmd.ms));
         break;

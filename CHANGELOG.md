@@ -28,6 +28,9 @@ The `[Unreleased]` header controls automatic version bumping on merge:
 
 ### Fixed
 - Removed click-outside-to-close behavior on slide-out panels — panels now stay open until explicitly closed via the × button or toolbar toggle
+- Prefix aliases with `$*` now capture the full argument string including semicolons (e.g., `rea /spam 1 k demon;sf` no longer splits on `;` before alias consumption)
+- `/var` values now preserve semicolons (treated as rest-of-line, like `/spam`)
+- Variables that expand to directives (e.g., `$reattackAction` → `/spam 1 k demon;sf`) are now re-processed through the command pipeline instead of being sent raw to the MUD
 - Alias and trigger preview now properly expands `/spam` commands, showing all repeated commands instead of blank lines
 - Skill category lists updated to use actual in-game skill names (underscores, apostrophes, `language#` prefix) so skills are correctly grouped
 - `language#magic` now properly categorized under both Magic and Language via multi-category skill support

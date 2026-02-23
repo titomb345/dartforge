@@ -227,11 +227,40 @@ function expandSegment(
 }
 
 /**
+ * Find the position of the next unescaped semicolon or newline in the input.
+ * Respects /spam and /var which consume the rest of the line.
+ * Returns -1 if none found.
+ */
+function findNextSplit(input: string): number {
+  for (let i = 0; i < input.length; i++) {
+    if (input[i] === '\\' && input[i + 1] === ';') {
+      i++; // skip escaped semicolon
+    } else if (input[i] === ';') {
+      const before = input.slice(0, i).trim();
+      // /spam and /var consume the rest of the line (semicolons included)
+      if (/^\/spam\s+\d+\s/i.test(before) || /^\/var\s+(-g\s+)?\S+\s/i.test(before)) {
+        continue;
+      }
+      return i;
+    } else if (input[i] === '\r') {
+      continue;
+    } else if (input[i] === '\n') {
+      return i;
+    }
+  }
+  return -1;
+}
+
+/**
  * Main entry point: expand raw user input through the alias system.
  *
- * Handles semicolon splitting, alias matching, variable substitution,
- * speedwalk expansion, special directives, and nested alias expansion
- * with recursion protection.
+ * Processes the input left-to-right, trying prefix alias matching BEFORE
+ * semicolon splitting so that prefix aliases with $* capture the full
+ * argument string (including semicolons). Falls back to semicolon splitting
+ * when no prefix alias matches.
+ *
+ * Also handles speedwalk expansion, special directives, and nested alias
+ * expansion with recursion protection.
  */
 export function expandInput(
   input: string,
@@ -243,20 +272,38 @@ export function expandInput(
     activeCharacter: options?.activeCharacter,
   };
 
-  // Split on semicolons first
-  const segments = splitCommands(input);
   const commands: ExpandedCommand[] = [];
+  let remaining = input;
 
-  for (const segment of segments) {
-    const trimmed = segment.trim();
-    if (trimmed === '' && segments.length === 1) {
-      // Single empty input — send as-is (e.g., pressing Enter with no text)
-      commands.push({ type: 'send', text: '' });
-      continue;
+  while (remaining.length > 0) {
+    const trimmed = remaining.trim();
+    if (!trimmed) break;
+
+    // Try matching the full remaining text against a prefix alias BEFORE
+    // splitting on semicolons. This ensures prefix aliases with $* capture
+    // everything after the trigger (including semicolons in arguments).
+    const fullMatch = matchAlias(trimmed, aliases);
+    if (fullMatch && fullMatch.alias.matchMode === 'prefix' && fullMatch.args.length > 0) {
+      // Prefix alias with arguments — it consumes the rest of the line
+      commands.push(...expandSegment(trimmed, aliases, enableSpeedwalk, 0, subOptions));
+      break;
     }
-    if (trimmed === '') continue;
 
-    commands.push(...expandSegment(trimmed, aliases, enableSpeedwalk, 0, subOptions));
+    // No prefix alias match on the full remaining text.
+    // Extract the next command up to the first unescaped semicolon/newline.
+    const splitPos = findNextSplit(remaining);
+    if (splitPos === -1) {
+      // No semicolons — process the rest as a single segment
+      commands.push(...expandSegment(trimmed, aliases, enableSpeedwalk, 0, subOptions));
+      break;
+    }
+
+    const segment = remaining.slice(0, splitPos).trim();
+    remaining = remaining.slice(splitPos + 1);
+
+    if (segment) {
+      commands.push(...expandSegment(segment, aliases, enableSpeedwalk, 0, subOptions));
+    }
   }
 
   // If no commands produced, send the raw input
