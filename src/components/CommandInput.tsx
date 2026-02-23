@@ -10,6 +10,7 @@ import {
 import { cn } from '../lib/cn';
 import { TimerIcon, AlignmentIcon } from './icons';
 import { useAppSettingsContext } from '../contexts/AppSettingsContext';
+import { useSpotlight } from '../contexts/SpotlightContext';
 
 interface ActiveTimerBadge {
   id: string;
@@ -99,6 +100,7 @@ function formatCountdown(remainingMs: number): string {
 export const CommandInput = forwardRef<HTMLTextAreaElement, CommandInputProps>(
   ({ onSend, onReconnect, onToggleCounter, disabled, connected, passwordMode, skipHistory, recentLinesRef, antiIdleEnabled, antiIdleCommand, antiIdleMinutes, antiIdleNextAt, alignmentTrackingEnabled, alignmentTrackingMinutes, alignmentNextAt, activeTimers, onToggleTimer, initialHistory, onHistoryChange }, ref) => {
     const { commandHistorySize, numpadMappings, showTimerBadges } = useAppSettingsContext();
+    const { active: spotlightActive } = useSpotlight();
     const numpadRef = useRef(numpadMappings);
     numpadRef.current = numpadMappings;
     const toggleCounterRef = useRef(onToggleCounter);
@@ -437,6 +439,18 @@ export const CommandInput = forwardRef<HTMLTextAreaElement, CommandInputProps>(
             </>
           );
         })()}
+
+        {/* Demo timer badge when spotlight is active but no real badges are visible */}
+        {spotlightActive?.helpId === 'command-input' && !hasActiveTimers && !antiIdleEnabled && !alignmentTrackingEnabled && (
+          <span
+            className="flex items-center gap-1 px-1.5 py-1 rounded border text-[9px] font-mono self-center shrink-0 ml-1 text-[#f97316] border-[#f97316]/30 bg-[#f97316]/8 opacity-75"
+            style={{ filter: 'drop-shadow(0 0 3px rgba(249, 115, 22, 0.25))' }}
+          >
+            <TimerIcon size={8} />
+            <span>heal</span>
+            <span>0:25</span>
+          </span>
+        )}
       </div>
     );
   }

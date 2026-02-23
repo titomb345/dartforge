@@ -109,6 +109,11 @@ export const HELP_CATEGORIES: HelpCategory[] = [
         description: 'Convert between and list all DartMUD currency systems. Supports freeform input like "3ri 5dn" or "1 gold sun 2g".',
         helpId: 'toolbar-currency',
       },
+      {
+        title: 'Timers Panel',
+        description: 'Create repeating timers that execute commands at set intervals. Supports full alias/trigger body syntax including semicolons, /delay, /echo, /spam, and /var. Character-scoped or Global.',
+        helpId: 'toolbar-timers',
+      },
     ],
   },
   {
@@ -164,6 +169,11 @@ export const HELP_CATEGORIES: HelpCategory[] = [
         interaction: 'double-click',
       },
       {
+        title: 'Terminal Context Menu',
+        description: 'Right-click the terminal for quick actions: copy, gag a line, add a line to triggers, save selected text to notes, search, and font size controls.',
+        interaction: 'right-click',
+      },
+      {
         title: 'Cycle Game Clock',
         description: 'Click the game clock in the bottom-right to cycle between different reckoning systems (Ferdarchian, Tirachian, etc.).',
         helpId: 'game-clock',
@@ -213,6 +223,11 @@ export const HELP_CATEGORIES: HelpCategory[] = [
         title: 'Copy from Terminal',
         description: 'Select text in the terminal, then copy it to clipboard.',
         kbd: ['Ctrl', 'C'],
+      },
+      {
+        title: 'Terminal Search',
+        description: 'Search for text in the terminal output. Use Enter / Shift+Enter to jump between matches.',
+        kbd: ['Ctrl', 'F'],
       },
       {
         title: 'Terminal Font Zoom',
