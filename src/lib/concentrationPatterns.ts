@@ -23,7 +23,7 @@ export const CONCENTRATION_LEVELS: ConcentrationLevel[] = [
   { key: 'daob', label: 'Distracted', message: "You're distracted and off balance.", themeColor: 'red', severity: 5 },
   { key: 'shot', label: 'Shot to Hell', message: "Your concentration is shot to hell.", themeColor: 'red', severity: 6 },
   { key: 'tctrn', label: 'Too Confused', message: "You're too confused to remember your name.", themeColor: 'red', severity: 7 },
-  { key: 'unconscious', label: 'Unconscious', message: 'You fall unconscious!', themeColor: 'magenta', severity: 8 },
+  { key: 'unconscious', label: 'Unconscious', message: 'You fall unconscious!', themeColor: 'red', severity: 8 },
 ];
 
 /** Result from matching a concentration line */

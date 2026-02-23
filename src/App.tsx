@@ -850,13 +850,13 @@ function AppMain() {
   }, [appSettings.hasSeenGuide]);
 
   const readoutConfigs: ReadoutConfig[] = useMemo(() => [
-    { id: 'health', data: health, icon: <HeartIcon size={11} />, tooltip: (d) => d.message ?? '' },
-    { id: 'concentration', data: concentration, icon: <FocusIcon size={11} />, tooltip: (d) => d.message ?? '', filterKey: 'concentration' },
-    { id: 'aura', data: aura, icon: <AuraIcon size={11} />, tooltip: (d) => d.key === 'none' ? 'You have no aura.' : `Your aura appears to be ${d.descriptor}.`, filterKey: 'aura' },
-    { id: 'hunger', data: hunger, icon: <FoodIcon size={11} />, tooltip: (d) => `You are ${d.descriptor}.`, filterKey: 'hunger' },
-    { id: 'thirst', data: thirst, icon: <DropletIcon size={11} />, tooltip: (d) => `You are ${d.descriptor}.`, filterKey: 'thirst' },
-    { id: 'encumbrance', data: encumbrance, icon: <WeightIcon size={11} />, tooltip: (d) => d.descriptor ?? '', filterKey: 'encumbrance' },
-    { id: 'movement', data: movement, icon: <BootIcon size={11} />, tooltip: (d) => d.descriptor ?? '', filterKey: 'movement' },
+    { id: 'health', data: health, icon: <HeartIcon size={11} />, tooltip: (d) => d.message ?? '', dangerThreshold: 5 },
+    { id: 'concentration', data: concentration, icon: <FocusIcon size={11} />, tooltip: (d) => d.message ?? '', filterKey: 'concentration', dangerThreshold: 6 },
+    { id: 'aura', data: aura, icon: <AuraIcon size={11} />, tooltip: (d) => d.key === 'none' ? 'You have no aura.' : `Your aura appears to be ${d.descriptor}.`, filterKey: 'aura', dangerThreshold: 99 },
+    { id: 'hunger', data: hunger, icon: <FoodIcon size={11} />, tooltip: (d) => `You are ${d.descriptor}.`, filterKey: 'hunger', dangerThreshold: 6 },
+    { id: 'thirst', data: thirst, icon: <DropletIcon size={11} />, tooltip: (d) => `You are ${d.descriptor}.`, filterKey: 'thirst', dangerThreshold: 6 },
+    { id: 'encumbrance', data: encumbrance, icon: <WeightIcon size={11} />, tooltip: (d) => d.descriptor ?? '', filterKey: 'encumbrance', dangerThreshold: 5 },
+    { id: 'movement', data: movement, icon: <BootIcon size={11} />, tooltip: (d) => d.descriptor ?? '', filterKey: 'movement', dangerThreshold: 6 },
   ], [health, concentration, aura, hunger, thirst, encumbrance, movement]);
 
   const skillTrackerValue = useMemo(() => (

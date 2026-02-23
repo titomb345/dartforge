@@ -20,6 +20,11 @@ The `[Unreleased]` header controls automatic version bumping on merge:
 - Alias and trigger panels now default to Global scope (tab and editor) since most entries are shared across characters
 - Alias and trigger rows now use full available width for pattern text instead of a fixed narrow column
 - Group filter pills are now capitalized and case-insensitive ("starknight" and "Starknight" merge into one group)
+- Aura readout now uses unique per-level CSS colors instead of ANSI theme colors for better visual distinction
+- Scintillating aura displays rainbow-colored letters that randomize every 10 seconds
+- Status readout danger flash is now severity-based per status type instead of color-based, giving each indicator its own flash threshold
+- Tuned status indicator colors across all types: removed magenta, adjusted red/yellow thresholds to better match in-game severity
+- Brightened low-contrast aura colors (indigo, violet, blue, red ranges) for readability on dark backgrounds
 
 ### Fixed
 - Removed click-outside-to-close behavior on slide-out panels — panels now stay open until explicitly closed via the × button or toolbar toggle
@@ -27,6 +32,7 @@ The `[Unreleased]` header controls automatic version bumping on merge:
 - Skill category lists updated to use actual in-game skill names (underscores, apostrophes, `language#` prefix) so skills are correctly grouped
 - `language#magic` now properly categorized under both Magic and Language via multi-category skill support
 - Variable expansion in aliases and triggers now happens at execution time, so `/var foe $1;/echo $foe` correctly reflects the just-set value
+- Aura matcher now recognizes "You appear to have no aura." (from `aura` command and `score` output) in addition to "You have no aura."
 - Pet skill deletion now works — previously clicking "Del?" on a pet's skill did nothing because the delete function only handled character skills
 - Allocation panel delete button no longer animates with a jarring size transition — now matches the standard "Del?" pattern used elsewhere
 

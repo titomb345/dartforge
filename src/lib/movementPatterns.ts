@@ -23,7 +23,7 @@ export const MOVEMENT_LEVELS: MovementLevel[] = [
   { key: 'awhile', label: 'Travel a While', descriptor: 'You can travel a while longer.', themeColor: 'yellow', severity: 5 },
   { key: 'break', label: 'Need a Break', descriptor: 'You could use a break.', themeColor: 'red', severity: 6 },
   { key: 'there-yet', label: 'Are We There Yet', descriptor: 'Are we there yet?', themeColor: 'red', severity: 7 },
-  { key: 'exhausted', label: 'Exhausted', descriptor: 'You are completely exhausted.', themeColor: 'magenta', severity: 8 },
+  { key: 'exhausted', label: 'Exhausted', descriptor: 'You are completely exhausted.', themeColor: 'red', severity: 8 },
 ];
 
 /** Result from matching a movement line */
