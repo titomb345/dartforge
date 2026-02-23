@@ -49,6 +49,7 @@ import { VariableProvider } from './contexts/VariableContext';
 import { VariablePanel } from './components/VariablePanel';
 import { AliasPanel } from './components/AliasPanel';
 import { TriggerProvider } from './contexts/TriggerContext';
+import { NotesProvider, useNotesContext } from './contexts/NotesContext';
 import { TriggerPanel } from './components/TriggerPanel';
 import { useTriggers } from './hooks/useTriggers';
 import { useSignatureMappings } from './hooks/useSignatureMappings';
@@ -106,7 +107,7 @@ function App() {
     return null;
   }
 
-  return <AppMain />;
+  return <NotesProvider><AppMain /></NotesProvider>;
 }
 
 /** Main client — only mounts after data location is configured and ready. */
@@ -524,6 +525,38 @@ function AppMain() {
     convert: () => {},
     getVariables: () => [],
   });
+
+  // Context menu → trigger panel integration
+  const handleAddToTrigger = useCallback((selectedText: string) => {
+    triggerState.setTriggerPrefill({
+      pattern: selectedText,
+      matchMode: 'substring',
+      gag: false,
+      body: '',
+      group: 'General',
+    });
+    setActivePanel('triggers');
+  }, [triggerState.setTriggerPrefill]);
+
+  const handleGagLine = useCallback((selectedText: string) => {
+    triggerState.createTrigger({
+      pattern: selectedText,
+      matchMode: 'substring',
+      body: '',
+      group: 'Gags',
+      gag: true,
+    }, 'global');
+    if (terminalRef.current) {
+      smartWrite(terminalRef.current, `\x1b[90m[Gag trigger created for: ${selectedText}]\x1b[0m\r\n`);
+    }
+  }, [triggerState.createTrigger]);
+
+  // Context menu → notes panel integration
+  const { appendToNotes } = useNotesContext();
+  const handleOpenInNotes = useCallback((text: string) => {
+    appendToNotes(text);
+    setActivePanel('notes');
+  }, [appendToNotes]);
 
   // Signature mapping system
   const signatureState = useSignatureMappings(dataStore, activeCharacter);
@@ -995,7 +1028,7 @@ function AppMain() {
         {/* Center: Terminal + bottom controls */}
         <div className="flex-1 overflow-hidden flex flex-col gap-1" style={{ minWidth: MIN_TERMINAL_WIDTH }}>
           <div className="flex-1 overflow-hidden rounded-lg flex flex-col">
-            <Terminal terminalRef={terminalRef} inputRef={inputRef} theme={xtermTheme} display={display} onUpdateDisplay={updateDisplay} />
+            <Terminal terminalRef={terminalRef} inputRef={inputRef} theme={xtermTheme} display={display} onUpdateDisplay={updateDisplay} onAddToTrigger={handleAddToTrigger} onGagLine={handleGagLine} onOpenInNotes={handleOpenInNotes} />
           </div>
           {/* Status bar + command input */}
           <div className="rounded-lg bg-bg-primary overflow-hidden shrink-0">

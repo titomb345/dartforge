@@ -29,7 +29,7 @@ export const DEFAULT_THEME: TerminalTheme = {
   black: '#000000',
   red: '#8b0000',
   green: '#008000',
-  yellow: '#ff8c00',
+  yellow: '#cccc00',
   blue: '#1e90ff',
   magenta: '#800080',
   cyan: '#008b8b',

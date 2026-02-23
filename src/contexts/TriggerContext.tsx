@@ -1,5 +1,5 @@
 import { createContext, useContext } from 'react';
-import type { Trigger, TriggerId, TriggerMatchMode, TriggerScope } from '../types/trigger';
+import type { Trigger, TriggerId, TriggerMatchMode, TriggerPrefill, TriggerScope } from '../types/trigger';
 
 export interface TriggerState {
   characterTriggers: Record<TriggerId, Trigger>;
@@ -26,6 +26,8 @@ export interface TriggerState {
   deleteTrigger: (id: TriggerId, scope: TriggerScope) => void;
   toggleTrigger: (id: TriggerId, scope: TriggerScope) => void;
   duplicateTrigger: (id: TriggerId, scope: TriggerScope) => TriggerId | null;
+  triggerPrefill: TriggerPrefill | null;
+  setTriggerPrefill: (prefill: TriggerPrefill | null) => void;
 }
 
 const TriggerContext = createContext<TriggerState | null>(null);

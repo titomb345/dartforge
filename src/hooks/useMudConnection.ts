@@ -28,8 +28,11 @@ function endsWithPrompt(data: string): boolean {
  */
 function stripPrompt(data: string): string {
   const clean = stripAnsi(data);
-  // Bare prompt only — suppress entirely
-  if (clean.trim() === '>' || clean.trim() === '') return '';
+  // Bare prompt only — preserve any ANSI codes (especially color resets)
+  if (clean.trim() === '>' || clean.trim() === '') {
+    const ansiCodes = data.match(/\x1b\[[0-9;]*m/g);
+    return ansiCodes ? ansiCodes.join('') : '';
+  }
   // Strip trailing prompt after newline
   return data.replace(/\r?\n> ?$/, '\n');
 }

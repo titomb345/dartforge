@@ -303,7 +303,7 @@ export class OutputFilter {
       if (this.stripPrompts) {
         const rawStripped = stripAnsi(segment);
         if (/^> \S/.test(rawStripped)) {
-          seg = segment.replace(/^(?:\x1b\[[0-9;]*m)*> /, '');
+          seg = segment.replace(/^((?:\x1b\[[0-9;]*m)*)> /, '$1');
         }
       }
 
@@ -419,7 +419,10 @@ export class OutputFilter {
       const isLoginPrompt = /^(Name|Password)\s*:$/i.test(strippedRemaining);
       if (strippedRemaining === '' || strippedRemaining.endsWith('>') || isLoginPrompt) {
         if ((this.stripPrompts || this.syncActive) && strippedRemaining === '>') {
+          // Preserve ANSI codes (especially color resets) from the stripped prompt
+          const ansiCodes = this.buffer.match(/\x1b\[[0-9;]*m/g);
           this.buffer = '';
+          if (ansiCodes) output += ansiCodes.join('');
         } else {
           output += this.buffer;
           this.buffer = '';

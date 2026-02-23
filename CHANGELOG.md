@@ -15,6 +15,16 @@ The `[Unreleased]` header controls automatic version bumping on merge:
 - `/var <name>` search — typing `/var` with a single argument now regex-searches variable names and displays matches instead of showing a usage error
 - `/var`, `/convert`, and `/spam` directives now work inside alias and trigger bodies (e.g., `/var foe $1` in a trigger to track a target)
 - Syntax help in alias and trigger editors now documents all available directives
+- Alignment tracking — status bar readout with periodic polling and configurable interval
+- Notes panel multi-page support with page navigation, add, and delete
+- Post-sync commands — fire user-configured commands after login sync completes
+- Counter panel configurable hot/cold rate thresholds with color coding
+- Terminal right-click context menu with Copy Selected, Copy Line, Copy Visible, Copy All, Search, Scroll to Bottom, Clear Terminal, and font size controls
+- Context menu "Add Line to Trigger" pre-fills and opens the trigger panel
+- Context menu "Gag Line" instantly creates a gag trigger for the clicked line
+- Context menu "Save Selected to Notes" appends selected text to the current notes page
+- Terminal search (Ctrl+F) with next/prev navigation using xterm search addon
+- Allocation "Save to Profile" dropdown — can now create a new profile or overwrite an existing one from live allocations (combat and magic)
 
 ### Changed
 - Alias and trigger panels now default to Global scope (tab and editor) since most entries are shared across characters
@@ -26,6 +36,8 @@ The `[Unreleased]` header controls automatic version bumping on merge:
 - Tuned status indicator colors across all types: removed magenta, adjusted red/yellow thresholds to better match in-game severity
 - Brightened low-contrast aura colors (indigo, violet, blue, red ranges) for readability on dark backgrounds
 - Settings panel now uses accordion behavior (only one section open at a time), matching the guide panel
+- Default theme yellow changed from dark orange to actual yellow for better readability
+- Trigger bodies now re-expand through the alias engine for nested alias support
 
 ### Fixed
 - Removed click-outside-to-close behavior on slide-out panels — panels now stay open until explicitly closed via the × button or toolbar toggle
@@ -39,6 +51,7 @@ The `[Unreleased]` header controls automatic version bumping on merge:
 - Aura matcher now recognizes "You appear to have no aura." (from `aura` command and `score` output) in addition to "You have no aura."
 - Pet skill deletion now works — previously clicking "Del?" on a pet's skill did nothing because the delete function only handled character skills
 - Allocation panel delete button no longer animates with a jarring size transition — now matches the standard "Del?" pattern used elsewhere
+- Prompt stripping no longer eats ANSI color reset codes — previously, stripping `> ` could discard `\x1b[0m`, causing the prior line's color (e.g., cyan) to bleed into subsequent output
 
 ## [1.0.0] - 2026-02-22
 

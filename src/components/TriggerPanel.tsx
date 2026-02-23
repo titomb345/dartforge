@@ -5,7 +5,7 @@ import { matchTriggers, expandTriggerBody } from '../lib/triggerEngine';
 import { formatCommandPreview } from '../lib/commandUtils';
 import { useFilteredGroups } from '../lib/useFilteredGroups';
 import { charDisplayName } from '../lib/panelUtils';
-import type { Trigger, TriggerId, TriggerMatchMode, TriggerScope } from '../types/trigger';
+import type { Trigger, TriggerId, TriggerMatchMode, TriggerPrefill, TriggerScope } from '../types/trigger';
 import { TrashIcon, PlusIcon, ChevronDownIcon, ChevronUpIcon, TriggerIcon } from './icons';
 import { FilterPill } from './FilterPill';
 import { MudInput, MudTextarea, MudButton } from './shared';
@@ -178,12 +178,14 @@ function BodySyntaxHelp() {
 
 function TriggerEditor({
   trigger,
+  prefill,
   scope: initialScope,
   activeCharacter,
   onSave,
   onCancel,
 }: {
   trigger: Trigger | null; // null = creating new
+  prefill?: TriggerPrefill | null;
   scope: TriggerScope;
   activeCharacter: string | null;
   onSave: (
@@ -202,13 +204,13 @@ function TriggerEditor({
   ) => void;
   onCancel: () => void;
 }) {
-  const [pattern, setPattern] = useState(trigger?.pattern ?? '');
-  const [matchMode, setMatchMode] = useState<TriggerMatchMode>(trigger?.matchMode ?? 'substring');
-  const [body, setBody] = useState(trigger?.body ?? '');
-  const [group, setGroup] = useState(trigger?.group ?? '');
+  const [pattern, setPattern] = useState(trigger?.pattern ?? prefill?.pattern ?? '');
+  const [matchMode, setMatchMode] = useState<TriggerMatchMode>(trigger?.matchMode ?? prefill?.matchMode ?? 'substring');
+  const [body, setBody] = useState(trigger?.body ?? prefill?.body ?? '');
+  const [group, setGroup] = useState(trigger?.group ?? prefill?.group ?? '');
   const [scope, setScope] = useState<TriggerScope>(initialScope);
   const [cooldownMs, setCooldownMs] = useState(trigger?.cooldownMs ?? 0);
-  const [gag, setGag] = useState(trigger?.gag ?? false);
+  const [gag, setGag] = useState(trigger?.gag ?? prefill?.gag ?? false);
   const [highlight, setHighlight] = useState<string | null>(trigger?.highlight ?? null);
   const [soundAlert, setSoundAlert] = useState(trigger?.soundAlert ?? false);
 
@@ -586,6 +588,8 @@ export function TriggerPanel({ onClose }: TriggerPanelProps) {
     createTrigger,
     updateTrigger,
     deleteTrigger,
+    triggerPrefill,
+    setTriggerPrefill,
   } = useTriggerContext();
   const { activeCharacter } = useSkillTrackerContext();
 
@@ -594,6 +598,14 @@ export function TriggerPanel({ onClose }: TriggerPanelProps) {
   const [searchText, setSearchText] = useState('');
   const [editingId, setEditingId] = useState<TriggerId | null>(null);
   const [creating, setCreating] = useState(false);
+
+  // Open editor when prefill arrives from context menu
+  useEffect(() => {
+    if (triggerPrefill) {
+      setCreating(true);
+      setEditingId(null);
+    }
+  }, [triggerPrefill]);
 
   const triggers = scope === 'character' ? characterTriggers : globalTriggers;
   const triggerList = useMemo(() => Object.values(triggers), [triggers]);
@@ -724,13 +736,19 @@ export function TriggerPanel({ onClose }: TriggerPanelProps) {
       {/* Editor (inline) */}
       {(creating || editingTrigger) && (
         <TriggerEditor
+          key={triggerPrefill ? `prefill-${triggerPrefill.pattern}` : editingId ?? 'new'}
           trigger={editingTrigger}
+          prefill={creating ? triggerPrefill : null}
           scope={scope}
           activeCharacter={activeCharacter}
-          onSave={handleSave}
+          onSave={(...args) => {
+            handleSave(...args);
+            setTriggerPrefill(null);
+          }}
           onCancel={() => {
             setCreating(false);
             setEditingId(null);
+            setTriggerPrefill(null);
           }}
         />
       )}

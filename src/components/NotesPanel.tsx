@@ -6,6 +6,7 @@ import { PinnedControls } from './PinnedControls';
 import { NotesIcon, ChevronLeftIcon, ChevronRightSmallIcon, PlusIcon, TrashIcon } from './icons';
 import { useDataStore } from '../contexts/DataStoreContext';
 import { useSkillTrackerContext } from '../contexts/SkillTrackerContext';
+import { useNotesContext } from '../contexts/NotesContext';
 import { cn } from '../lib/cn';
 
 /* ── Constants ──────────────────────────────────────────────── */
@@ -122,6 +123,7 @@ export function NotesPanel({
   const isPinned = mode === 'pinned';
   const dataStore = useDataStore();
   const { activeCharacter } = useSkillTrackerContext();
+  const { pendingAppend, consumeAppend } = useNotesContext();
 
   // Each tab is just a display name. The slug (derived from name) determines the filename.
   const [tabs, setTabs] = useState<string[]>([]);
@@ -241,6 +243,17 @@ export function NotesPanel({
       }
     }, SAVE_DEBOUNCE_MS);
   }, [dataStore]);
+
+  // Consume pending append from context menu "Open in Notes"
+  useEffect(() => {
+    if (!loaded || !pendingAppend) return;
+    const appended = consumeAppend();
+    if (appended) {
+      const newContent = content ? `${content}\n${appended}` : appended;
+      setContent(newContent);
+      saveContent(newContent);
+    }
+  }, [loaded, pendingAppend]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
     const value = e.target.value;

@@ -34,6 +34,15 @@ export interface Trigger {
   updatedAt: string;
 }
 
+/** Pre-fill data for creating a trigger from the terminal context menu */
+export interface TriggerPrefill {
+  pattern: string;
+  matchMode: TriggerMatchMode;
+  gag: boolean;
+  body: string;
+  group: string;
+}
+
 /** Result of a trigger match — used by the trigger engine */
 export interface TriggerMatch {
   trigger: Trigger;
