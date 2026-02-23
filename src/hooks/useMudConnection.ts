@@ -104,6 +104,7 @@ export function useMudConnection(
   const skipHistoryRef = useRef(false);
   const captureNameRef = useRef(false);
   const loginFiredRef = useRef(false);
+  const pendingNameRef = useRef<string | null>(null);
 
   // Store latest callback refs to avoid re-subscribing on every change
   const onOutputChunkRef = useRef(onOutputChunk);
@@ -147,6 +148,11 @@ export function useMudConnection(
               (/Running under version/i.test(data) || /reconnecting to old object/i.test(data))
             ) {
               loginFiredRef.current = true;
+              // Activate the character name only after login succeeds
+              if (pendingNameRef.current) {
+                onCharacterNameRef.current?.(pendingNameRef.current);
+                pendingNameRef.current = null;
+              }
               onLoginRef.current?.();
             }
           };
@@ -237,6 +243,11 @@ export function useMudConnection(
             // Connection dropped — stop any active filtering, show disconnect splash
             filteringBannerRef.current = false;
             bannerBufferRef.current = '';
+            pendingNameRef.current = null;
+            passwordModeRef.current = false;
+            setPasswordMode(false);
+            skipHistoryRef.current = false;
+            setSkipHistory(false);
             outputFilterRef?.current?.reset();
             smartWrite(term, getDisconnectSplash(term.cols));
           }
@@ -260,10 +271,10 @@ export function useMudConnection(
 
   const sendCommand = useCallback(async (command: string) => {
     try {
-      // Capture character name if we just saw a "name:" prompt
+      // Capture character name if we just saw a "name:" prompt (deferred until login succeeds)
       if (captureNameRef.current) {
         captureNameRef.current = false;
-        onCharacterNameRef.current?.(command.trim());
+        pendingNameRef.current = command.trim();
       }
       if (passwordModeRef.current) {
         passwordModeRef.current = false;

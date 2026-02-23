@@ -52,6 +52,9 @@ import { TriggerProvider } from './contexts/TriggerContext';
 import { NotesProvider, useNotesContext } from './contexts/NotesContext';
 import { TriggerPanel } from './components/TriggerPanel';
 import { useTriggers } from './hooks/useTriggers';
+import { useTimers } from './hooks/useTimers';
+import { TimerProvider } from './contexts/TimerContext';
+import { TimerPanel } from './components/TimerPanel';
 import { useSignatureMappings } from './hooks/useSignatureMappings';
 import { matchTriggers, expandTriggerBody, resetTriggerCooldowns } from './lib/triggerEngine';
 import { smartWrite } from './lib/terminalUtils';
@@ -132,7 +135,6 @@ function AppMain() {
   const appSettings = useAppSettings();
   const {
     antiIdleEnabled, antiIdleCommand, antiIdleMinutes,
-    updateAntiIdleEnabled,
     alignmentTrackingEnabled, alignmentTrackingMinutes,
     boardDatesEnabled, stripPromptsEnabled,
     postSyncEnabled, postSyncCommands,
@@ -526,6 +528,11 @@ function AppMain() {
     getVariables: () => [],
   });
 
+  // Timer system
+  const timerState = useTimers(dataStore, activeCharacter);
+  const { mergedTimers } = timerState;
+  const mergedTimersRef = useLatestRef(mergedTimers);
+
   // Context menu → trigger panel integration
   const handleAddToTrigger = useCallback((selectedText: string) => {
     triggerState.setTriggerPrefill({
@@ -901,10 +908,10 @@ function AppMain() {
     const id = setInterval(() => {
       const cmd = antiIdleCommandRef.current;
       if (sendCommandRef.current && antiIdleEnabledRef.current) {
-        sendCommandRef.current(cmd);
         if (terminalRef.current) {
           smartWrite(terminalRef.current, `\x1b[90m[anti-idle: ${cmd}]\x1b[0m\r\n`);
         }
+        sendCommandRef.current(cmd);
       }
       setAntiIdleNextAt(Date.now() + ms);
     }, ms);
@@ -924,15 +931,80 @@ function AppMain() {
     setAlignmentNextAt(Date.now() + ms);
     const id = setInterval(() => {
       if (sendCommandRef.current && alignmentTrackingEnabledRef.current) {
-        sendCommandRef.current('show alignment');
         if (terminalRef.current && !outputFilterRef.current?.filterFlags.alignment) {
           smartWrite(terminalRef.current, `\x1b[90m[alignment sync]\x1b[0m\r\n`);
         }
+        sendCommandRef.current('show alignment');
       }
       setAlignmentNextAt(Date.now() + ms);
     }, ms);
     return () => { clearInterval(id); setAlignmentNextAt(null); };
   }, [connected, loggedIn, alignmentTrackingEnabled, alignmentTrackingMinutes]);
+
+  // Custom timer engine — manages per-timer setIntervals, only fires when connected + logged in
+  const timerIntervalsRef = useRef<Map<string, ReturnType<typeof setInterval>>>(new Map());
+  const [timerNextFires, setTimerNextFires] = useState<Record<string, number>>({});
+
+  useEffect(() => {
+    // Clear all existing intervals
+    for (const id of timerIntervalsRef.current.values()) clearInterval(id);
+    timerIntervalsRef.current.clear();
+
+    if (!connected || !loggedIn) {
+      setTimerNextFires({});
+      return;
+    }
+
+    const enabledTimers = mergedTimersRef.current.filter((t) => t.enabled);
+    const nextFires: Record<string, number> = {};
+
+    for (const timer of enabledTimers) {
+      const ms = timer.intervalSeconds * 1000;
+      nextFires[timer.id] = Date.now() + ms;
+
+      const intervalId = setInterval(() => {
+        if (!sendCommandRef.current) return;
+
+        if (terminalRef.current) {
+          smartWrite(terminalRef.current, `\x1b[90m[timer: ${timer.name}]\x1b[0m\r\n`);
+        }
+
+        // Expand body through alias engine, then execute via the shared runner
+        const result = expandInput(timer.body, mergedAliasesRef.current, {
+          enableSpeedwalk: enableSpeedwalkRef.current,
+          activeCharacter: activeCharacterRef.current,
+        });
+        executeCommands(result.commands, triggerRunnerRef.current);
+
+        setTimerNextFires((prev) => ({ ...prev, [timer.id]: Date.now() + ms }));
+      }, ms);
+
+      timerIntervalsRef.current.set(timer.id, intervalId);
+    }
+
+    setTimerNextFires(nextFires);
+
+    return () => {
+      for (const id of timerIntervalsRef.current.values()) clearInterval(id);
+      timerIntervalsRef.current.clear();
+      setTimerNextFires({});
+    };
+  }, [connected, loggedIn, mergedTimers]);
+
+  // Active timer badges for CommandInput (sorted by soonest-to-fire first)
+  const activeTimerBadges = useMemo(() =>
+    mergedTimers
+      .filter((t) => t.enabled && timerNextFires[t.id])
+      .map((t) => ({ id: t.id, name: t.name, nextAt: timerNextFires[t.id] }))
+      .sort((a, b) => a.nextAt - b.nextAt),
+    [mergedTimers, timerNextFires],
+  );
+
+  // Toggle a timer on/off from the command input badge (double-click or stop button)
+  const handleToggleTimer = useCallback((id: string) => {
+    const scope = id in timerState.characterTimers ? 'character' : 'global';
+    timerState.toggleTimer(id, scope);
+  }, [timerState]);
 
   // First-launch: auto-open Guide panel
   useEffect(() => {
@@ -980,6 +1052,7 @@ function AppMain() {
     <VariableProvider value={variableState}>
     <AliasProvider value={aliasState}>
     <TriggerProvider value={triggerState}>
+    <TimerProvider value={timerState}>
     <SignatureProvider value={signatureState}>
     <SkillTrackerProvider value={skillTrackerValue}>
     <ChatProvider value={chatValue}>
@@ -1072,10 +1145,11 @@ function AppMain() {
               antiIdleCommand={antiIdleCommand}
               antiIdleMinutes={antiIdleMinutes}
               antiIdleNextAt={antiIdleNextAt}
-              onToggleAntiIdle={() => updateAntiIdleEnabled(!antiIdleEnabled)}
               alignmentTrackingEnabled={alignmentTrackingEnabled}
               alignmentTrackingMinutes={alignmentTrackingMinutes}
               alignmentNextAt={alignmentNextAt}
+              activeTimers={activeTimerBadges}
+              onToggleTimer={handleToggleTimer}
               initialHistory={commandHistory}
               onHistoryChange={handleHistoryChange}
             />
@@ -1147,6 +1221,9 @@ function AppMain() {
         <SlideOut panel="triggers">
           <TriggerPanel onClose={() => setActivePanel(null)} />
         </SlideOut>
+        <SlideOut panel="timers">
+          <TimerPanel onClose={() => setActivePanel(null)} />
+        </SlideOut>
         <SlideOut panel="variables">
           <VariablePanel onClose={() => setActivePanel(null)} />
         </SlideOut>
@@ -1180,6 +1257,7 @@ function AppMain() {
     </ChatProvider>
     </SkillTrackerProvider>
     </SignatureProvider>
+    </TimerProvider>
     </TriggerProvider>
     </AliasProvider>
     </VariableProvider>

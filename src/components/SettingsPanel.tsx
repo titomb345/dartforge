@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef, type ReactNode } from 'react';
-import { TimerIcon, FolderIcon, TrashIcon, CheckCircleIcon, ClockIcon, ChevronDownSmallIcon, FilterIcon, GearIcon, NotesIcon, RotateCcwIcon, Volume2Icon, PlayIcon, AlignmentIcon, CounterIcon } from './icons';
+import { TimerIcon, FolderIcon, TrashIcon, CheckCircleIcon, ClockIcon, ChevronDownSmallIcon, FilterIcon, GearIcon, NotesIcon, RotateCcwIcon, Volume2Icon, PlayIcon, CounterIcon } from './icons';
 import { DEFAULT_NUMPAD_MAPPINGS } from '../hooks/useAppSettings';
-import { MudInput, MudTextarea } from './shared';
+import { MudInput, MudTextarea, MudNumberInput } from './shared';
 import { cn } from '../lib/cn';
 import { useDataStore } from '../contexts/DataStoreContext';
 import { useAppSettingsContext } from '../contexts/AppSettingsContext';
@@ -155,6 +155,7 @@ export function SettingsPanel() {
     boardDatesEnabled, updateBoardDatesEnabled: onBoardDatesEnabledChange,
     stripPromptsEnabled, updateStripPromptsEnabled: onStripPromptsEnabledChange,
     commandEchoEnabled, updateCommandEchoEnabled,
+    showTimerBadges, updateShowTimerBadges,
     terminalScrollback, updateTerminalScrollback,
     commandHistorySize, updateCommandHistorySize,
     chatHistorySize, updateChatHistorySize,
@@ -179,14 +180,16 @@ export function SettingsPanel() {
 
       {/* Scrollable sections */}
       <div className="flex-1 overflow-y-auto px-2 py-2 space-y-2">
-        {/* Alignment Tracking */}
+        {/* Timers */}
         <SettingsSection
-          icon={<AlignmentIcon size={13} />}
-          title="Alignment Tracking"
-          accent="#80e080"
-          open={openSection === 'alignment'}
-          onToggle={() => toggle('alignment')}
+          icon={<TimerIcon size={13} />}
+          title="Timers"
+          accent="#f97316"
+          open={openSection === 'timers'}
+          onToggle={() => toggle('timers')}
         >
+          {/* Alignment tracking */}
+          <div className="text-[10px] font-semibold text-text-muted tracking-wide uppercase mb-1">Alignment Tracking</div>
           <FieldRow label="Enabled">
             <ToggleSwitch
               checked={alignmentTrackingEnabled}
@@ -196,35 +199,24 @@ export function SettingsPanel() {
           </FieldRow>
           <FieldRow label="Interval" dimmed={!alignmentTrackingEnabled}>
             <div className="flex items-center gap-1.5">
-              <MudInput
+              <MudNumberInput
                 accent="green"
                 size="sm"
-                type="number"
                 min={1}
                 max={14}
                 value={alignmentTrackingMinutes}
-                onChange={(e) => {
-                  const v = parseInt(e.target.value, 10);
-                  if (!isNaN(v) && v >= 1 && v <= 14) updateAlignmentTrackingMinutes(v);
-                }}
+                onChange={updateAlignmentTrackingMinutes}
                 className="w-[48px] text-center"
               />
               <span className="text-[10px] font-mono text-text-dim">min</span>
             </div>
           </FieldRow>
-          <div className="text-[9px] text-text-dim font-mono leading-relaxed mt-1">
+          <div className="text-[9px] text-text-dim font-mono leading-relaxed mt-1 mb-3">
             Polls alignment at the configured interval. Also prevents idle disconnect.
           </div>
-        </SettingsSection>
 
-        {/* Connection / Anti-Idle */}
-        <SettingsSection
-          icon={<TimerIcon size={13} />}
-          title="Anti-Idle"
-          accent="#bd93f9"
-          open={openSection === 'anti-idle'}
-          onToggle={() => toggle('anti-idle')}
-        >
+          {/* Anti-idle */}
+          <div className="text-[10px] font-semibold text-text-muted tracking-wide uppercase mb-1">Anti-Idle</div>
           {alignmentTrackingEnabled && (
             <div className="text-[9px] text-[#80e080] font-mono leading-relaxed mb-1">
               Disabled — alignment tracking is active.
@@ -250,24 +242,33 @@ export function SettingsPanel() {
           </FieldRow>
           <FieldRow label="Interval" dimmed={!antiIdleEnabled || alignmentTrackingEnabled}>
             <div className="flex items-center gap-1.5">
-              <MudInput
+              <MudNumberInput
                 accent="purple"
                 size="sm"
-                type="number"
                 min={1}
                 max={14}
                 value={antiIdleMinutes}
-                onChange={(e) => {
-                  const v = parseInt(e.target.value, 10);
-                  if (!isNaN(v) && v >= 1 && v <= 14) onAntiIdleMinutesChange(v);
-                }}
+                onChange={onAntiIdleMinutesChange}
                 className="w-[48px] text-center"
               />
               <span className="text-[10px] font-mono text-text-dim">min</span>
             </div>
           </FieldRow>
-          <div className="text-[9px] text-text-dim font-mono leading-relaxed mt-1">
+          <div className="text-[9px] text-text-dim font-mono leading-relaxed mt-1 mb-3">
             Sends the command at the configured interval to prevent idle disconnect.
+          </div>
+
+          {/* Display */}
+          <div className="text-[10px] font-semibold text-text-muted tracking-wide uppercase mb-1">Display</div>
+          <FieldRow label="Timer countdowns">
+            <ToggleSwitch
+              checked={showTimerBadges}
+              onChange={updateShowTimerBadges}
+              accent="#f97316"
+            />
+          </FieldRow>
+          <div className="text-[9px] text-text-dim font-mono leading-relaxed mt-1">
+            Show timer countdowns (anti-idle, alignment, and custom timers) next to the command input.
           </div>
         </SettingsSection>
 
@@ -355,18 +356,15 @@ export function SettingsPanel() {
         >
           <FieldRow label="Hot threshold">
             <div className="flex items-center gap-1.5">
-              <MudInput
+              <MudNumberInput
                 accent="purple"
                 size="sm"
-                type="number"
                 min={0}
                 max={99}
                 step={0.5}
+                parse={parseFloat}
                 value={counterHotThreshold}
-                onChange={(e) => {
-                  const v = parseFloat(e.target.value);
-                  if (!isNaN(v) && v >= 0 && v <= 99) updateCounterHotThreshold(v);
-                }}
+                onChange={updateCounterHotThreshold}
                 className="w-[56px] text-center"
               />
               <span className="text-[10px] font-mono text-text-dim">/pd</span>
@@ -377,18 +375,15 @@ export function SettingsPanel() {
           </div>
           <FieldRow label="Cold threshold">
             <div className="flex items-center gap-1.5">
-              <MudInput
+              <MudNumberInput
                 accent="cyan"
                 size="sm"
-                type="number"
                 min={0}
                 max={99}
                 step={0.5}
+                parse={parseFloat}
                 value={counterColdThreshold}
-                onChange={(e) => {
-                  const v = parseFloat(e.target.value);
-                  if (!isNaN(v) && v >= 0 && v <= 99) updateCounterColdThreshold(v);
-                }}
+                onChange={updateCounterColdThreshold}
                 className="w-[56px] text-center"
               />
               <span className="text-[10px] font-mono text-text-dim">/pd</span>
@@ -409,17 +404,13 @@ export function SettingsPanel() {
         >
           <FieldRow label="Scrollback">
             <div className="flex items-center gap-1.5">
-              <MudInput
+              <MudNumberInput
                 accent="cyan"
                 size="sm"
-                type="number"
                 min={1000}
                 max={100000}
                 value={terminalScrollback}
-                onChange={(e) => {
-                  const v = parseInt(e.target.value, 10);
-                  if (!isNaN(v) && v >= 1000 && v <= 100000) updateTerminalScrollback(v);
-                }}
+                onChange={updateTerminalScrollback}
                 className="w-[72px] text-center"
               />
               <span className="text-[10px] font-mono text-text-dim">lines</span>
@@ -430,17 +421,13 @@ export function SettingsPanel() {
           </div>
           <FieldRow label="Command history">
             <div className="flex items-center gap-1.5">
-              <MudInput
+              <MudNumberInput
                 accent="cyan"
                 size="sm"
-                type="number"
                 min={50}
                 max={5000}
                 value={commandHistorySize}
-                onChange={(e) => {
-                  const v = parseInt(e.target.value, 10);
-                  if (!isNaN(v) && v >= 50 && v <= 5000) updateCommandHistorySize(v);
-                }}
+                onChange={updateCommandHistorySize}
                 className="w-[72px] text-center"
               />
               <span className="text-[10px] font-mono text-text-dim">cmds</span>
@@ -448,17 +435,13 @@ export function SettingsPanel() {
           </FieldRow>
           <FieldRow label="Chat history">
             <div className="flex items-center gap-1.5">
-              <MudInput
+              <MudNumberInput
                 accent="cyan"
                 size="sm"
-                type="number"
                 min={50}
                 max={5000}
                 value={chatHistorySize}
-                onChange={(e) => {
-                  const v = parseInt(e.target.value, 10);
-                  if (!isNaN(v) && v >= 50 && v <= 5000) updateChatHistorySize(v);
-                }}
+                onChange={updateChatHistorySize}
                 className="w-[72px] text-center"
               />
               <span className="text-[10px] font-mono text-text-dim">msgs</span>

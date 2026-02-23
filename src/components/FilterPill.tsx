@@ -6,6 +6,7 @@ const ACCENT_STYLES: Record<string, string> = {
   pink: 'bg-[#ff79c6]/15 border-[#ff79c6]/40 text-[#ff79c6]',
   amber: 'bg-amber/15 border-amber/40 text-amber',
   green: 'bg-[#4ade80]/15 border-[#4ade80]/40 text-[#4ade80]',
+  orange: 'bg-[#f97316]/15 border-[#f97316]/40 text-[#f97316]',
 };
 
 const INACTIVE_STYLE =

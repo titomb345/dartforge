@@ -33,6 +33,9 @@ export interface AppSettingsState {
   // Command echo
   commandEchoEnabled: boolean;
   updateCommandEchoEnabled: (v: boolean) => void;
+  // Timer badges
+  showTimerBadges: boolean;
+  updateShowTimerBadges: (v: boolean) => void;
   // Session logging
   sessionLoggingEnabled: boolean;
   updateSessionLoggingEnabled: (v: boolean) => void;

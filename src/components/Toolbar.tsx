@@ -1,6 +1,6 @@
 import { IconButton } from './IconButton';
 import { DropboxButton } from './DropboxButton';
-import { PowerIcon, PaletteIcon, TrendingUpIcon, ChatIcon, CounterIcon, AliasIcon, TriggerIcon, VariableIcon, NotesIcon, GearIcon, CoinIcon, /* MapIcon, */ AllocIcon, HelpIcon } from './icons';
+import { PowerIcon, PaletteIcon, TrendingUpIcon, ChatIcon, CounterIcon, AliasIcon, TriggerIcon, TimerIcon, VariableIcon, NotesIcon, GearIcon, CoinIcon, /* MapIcon, */ AllocIcon, HelpIcon } from './icons';
 import { getPlatform } from '../lib/platform';
 import { cn } from '../lib/cn';
 import { usePanelContext } from '../contexts/PanelLayoutContext';
@@ -134,6 +134,15 @@ export function Toolbar({
           panelId="triggers"
           toggled={activePanel === 'triggers'}
           onClick={() => togglePanel('triggers')}
+        />
+        <IconButton
+          icon={<TimerIcon />}
+          title="Timers"
+          accent="#f97316"
+          helpId="toolbar-timers"
+          panelId="timers"
+          toggled={activePanel === 'timers'}
+          onClick={() => togglePanel('timers')}
         />
         <IconButton
           icon={<VariableIcon />}

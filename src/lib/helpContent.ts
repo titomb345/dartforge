@@ -1,6 +1,6 @@
 import type { SpotlightStep } from '../contexts/SpotlightContext';
 
-export type InteractionType = 'click' | 'right-click' | 'hover' | 'drag';
+export type InteractionType = 'click' | 'double-click' | 'right-click' | 'hover' | 'drag';
 
 export interface HelpItem {
   title: string;
@@ -157,6 +157,12 @@ export const HELP_CATEGORIES: HelpCategory[] = [
       //   helpId: 'map-canvas',
       //   interaction: 'right-click',
       // },
+      {
+        title: 'Stop a Timer',
+        description: 'Double-click any timer countdown badge next to the command input to disable that timer. In the overflow dropdown, click the stop button.',
+        helpId: 'command-input',
+        interaction: 'double-click',
+      },
       {
         title: 'Cycle Game Clock',
         description: 'Click the game clock in the bottom-right to cycle between different reckoning systems (Ferdarchian, Tirachian, etc.).',

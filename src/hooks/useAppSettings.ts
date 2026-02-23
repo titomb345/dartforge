@@ -50,6 +50,9 @@ export function useAppSettings() {
   // Command echo
   const [commandEchoEnabled, setCommandEchoEnabled] = useState(false);
 
+  // Timer badge display
+  const [showTimerBadges, setShowTimerBadges] = useState(true);
+
   // Session logging
   const [sessionLoggingEnabled, setSessionLoggingEnabled] = useState(false);
 
@@ -108,6 +111,8 @@ export function useAppSettings() {
       if (savedTsFormat === '12h' || savedTsFormat === '24h') setTimestampFormat(savedTsFormat);
       const savedEcho = await dataStore.get<boolean>(SETTINGS_FILE, 'commandEchoEnabled');
       if (savedEcho != null) setCommandEchoEnabled(savedEcho);
+      const savedTimerBadges = await dataStore.get<boolean>(SETTINGS_FILE, 'showTimerBadges');
+      if (savedTimerBadges != null) setShowTimerBadges(savedTimerBadges);
       const savedLogging = await dataStore.get<boolean>(SETTINGS_FILE, 'sessionLoggingEnabled');
       if (savedLogging != null) setSessionLoggingEnabled(savedLogging);
       const savedNumpad = await dataStore.get<Record<string, string>>(SETTINGS_FILE, 'numpadMappings');
@@ -214,6 +219,11 @@ export function useAppSettings() {
     persist('commandEchoEnabled', v);
   }, [persist]);
 
+  const updateShowTimerBadges = useCallback((v: boolean) => {
+    setShowTimerBadges(v);
+    persist('showTimerBadges', v);
+  }, [persist]);
+
   const updateSessionLoggingEnabled = useCallback((v: boolean) => {
     setSessionLoggingEnabled(v);
     persist('sessionLoggingEnabled', v);
@@ -302,6 +312,8 @@ export function useAppSettings() {
     timestampFormat, updateTimestampFormat,
     // Command echo
     commandEchoEnabled, updateCommandEchoEnabled,
+    // Timer badges
+    showTimerBadges, updateShowTimerBadges,
     // Session logging
     sessionLoggingEnabled, updateSessionLoggingEnabled,
     // Numpad

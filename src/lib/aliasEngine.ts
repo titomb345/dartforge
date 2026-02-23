@@ -280,11 +280,20 @@ export function expandInput(
     if (!trimmed) break;
 
     // Try matching the full remaining text against a prefix alias BEFORE
-    // splitting on semicolons. This ensures prefix aliases with $* capture
-    // everything after the trigger (including semicolons in arguments).
+    // splitting on semicolons. Only consume across semicolons when the
+    // alias arguments start with a directive that itself consumes semicolons
+    // (/spam, /var). Otherwise split normally so that e.g.
+    // "ta scrip;wear scrip" becomes two separate commands.
     const fullMatch = matchAlias(trimmed, aliases);
-    if (fullMatch && fullMatch.alias.matchMode === 'prefix' && fullMatch.args.length > 0) {
-      // Prefix alias with arguments — it consumes the rest of the line
+    const argsStartWithDirective =
+      fullMatch && /^\/(?:spam|var)$/i.test(fullMatch.args[0] ?? '');
+    if (
+      fullMatch &&
+      fullMatch.alias.matchMode === 'prefix' &&
+      fullMatch.args.length > 0 &&
+      (findNextSplit(trimmed) === -1 || argsStartWithDirective)
+    ) {
+      // Prefix alias consumes the rest of the line
       commands.push(...expandSegment(trimmed, aliases, enableSpeedwalk, 0, subOptions));
       break;
     }

@@ -8,7 +8,7 @@ import { charDisplayName } from '../lib/panelUtils';
 import type { Trigger, TriggerId, TriggerMatchMode, TriggerPrefill, TriggerScope } from '../types/trigger';
 import { TrashIcon, PlusIcon, ChevronDownIcon, ChevronUpIcon, TriggerIcon } from './icons';
 import { FilterPill } from './FilterPill';
-import { MudInput, MudTextarea, MudButton } from './shared';
+import { MudInput, MudTextarea, MudButton, MudNumberInput } from './shared';
 import { SyntaxHelpTable } from './SyntaxHelpTable';
 import type { HelpRow } from './SyntaxHelpTable';
 
@@ -390,13 +390,12 @@ function TriggerEditor({
           <div className="w-[80px]">
             <label className="text-[10px] text-text-dim mb-0.5 block">Cooldown</label>
             <div className="flex items-center gap-1">
-              <MudInput
+              <MudNumberInput
                 accent="pink"
-                type="number"
                 min={0}
                 step={100}
                 value={cooldownMs}
-                onChange={(e) => setCooldownMs(Math.max(0, parseInt(e.target.value) || 0))}
+                onChange={setCooldownMs}
                 onKeyDown={handleFieldKeyDown}
                 className="w-full"
               />

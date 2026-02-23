@@ -12,6 +12,11 @@ The `[Unreleased]` header controls automatic version bumping on merge:
 ## [Unreleased-minor]
 
 ### Added
+- Custom timers — repeating commands at configurable intervals (seconds or minutes) with full alias/trigger body syntax support
+- Timer panel with create, edit, delete, duplicate, enable/disable, scope (character/global), group filtering, and search
+- Timer countdown badges next to command input — soonest-to-fire shown first, overflow dropdown for additional timers
+- Double-click timer badge to stop a timer; stop buttons in overflow dropdown
+- Timer countdowns toggle in settings to show/hide all timer badges (anti-idle, alignment, and custom timers)
 - `/var <name>` search — typing `/var` with a single argument now regex-searches variable names and displays matches instead of showing a usage error
 - `/var`, `/convert`, and `/spam` directives now work inside alias and trigger bodies (e.g., `/var foe $1` in a trigger to track a target)
 - Syntax help in alias and trigger editors now documents all available directives
@@ -27,6 +32,9 @@ The `[Unreleased]` header controls automatic version bumping on merge:
 - Allocation "Save to Profile" dropdown — can now create a new profile or overwrite an existing one from live allocations (combat and magic)
 
 ### Changed
+- Settings panel: merged Alignment Tracking and Anti-Idle into a single "Timers" section, reducing accordion clutter
+- Timer labels (`[timer: name]`, `[anti-idle]`, `[align]`) now appear before command output in the terminal
+- Anti-idle and alignment badges are now display-only countdowns (enable/disable via settings)
 - Alias and trigger panels now default to Global scope (tab and editor) since most entries are shared across characters
 - Alias and trigger rows now use full available width for pattern text instead of a fixed narrow column
 - Group filter pills are now capitalized and case-insensitive ("starknight" and "Starknight" merge into one group)
@@ -57,6 +65,8 @@ The `[Unreleased]` header controls automatic version bumping on merge:
 - Allocation panel delete button no longer animates with a jarring size transition — now matches the standard "Del?" pattern used elsewhere
 - Prompt stripping no longer eats ANSI color reset codes — previously, stripping `> ` could discard `\x1b[0m`, causing the prior line's color (e.g., cyan) to bleed into subsequent output
 - Login commands no longer fire on connect — previously they ran before the login prompt, sending commands as username/password
+- Password mode now resets on disconnect — previously, disconnecting while at the password prompt left the input masked on reconnect
+- Number inputs across settings and editors no longer force minimum value on every keystroke — fields can be cleared and retyped freely
 
 ## [1.0.0] - 2026-02-22
 

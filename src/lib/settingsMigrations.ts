@@ -7,7 +7,7 @@ import type { DataStore } from '../contexts/DataStoreContext';
  * baseline. Existing beta users (version > 1) are normalized to 1 so
  * future migrations apply correctly to everyone.
  */
-export const CURRENT_VERSION = 3;
+export const CURRENT_VERSION = 4;
 
 /** Raw store contents — all keys are optional since older stores may lack them. */
 export type StoreData = Record<string, unknown>;
@@ -128,6 +128,12 @@ const MIGRATIONS: MigrationFn[] = [
   (data) => {
     if (!('postSyncEnabled' in data)) data.postSyncEnabled = false;
     if (!('postSyncCommands' in data)) data.postSyncCommands = '';
+    return data;
+  },
+  // v3 → v4: Timers
+  (data) => {
+    if (!('timersEnabled' in data)) data.timersEnabled = true;
+    if (!('showTimerBadges' in data)) data.showTimerBadges = true;
     return data;
   },
 ];
