@@ -10,34 +10,12 @@ import {
 import { cn } from '../lib/cn';
 import { TimerIcon, AlignmentIcon } from './icons';
 import { useAppSettingsContext } from '../contexts/AppSettingsContext';
+import { useCommandInputContext } from '../contexts/CommandInputContext';
 import { useSpotlight } from '../contexts/SpotlightContext';
-
-interface ActiveTimerBadge {
-  id: string;
-  name: string;
-  nextAt: number;
-}
 
 interface CommandInputProps {
   onSend: (command: string) => void;
   onReconnect: () => void;
-  onToggleCounter?: () => void;
-  disabled: boolean;
-  connected: boolean;
-  passwordMode: boolean;
-  skipHistory: boolean;
-  recentLinesRef?: React.RefObject<string[]>;
-  antiIdleEnabled?: boolean;
-  antiIdleCommand?: string;
-  antiIdleMinutes?: number;
-  antiIdleNextAt?: number | null;
-  alignmentTrackingEnabled?: boolean;
-  alignmentTrackingMinutes?: number;
-  alignmentNextAt?: number | null;
-  activeTimers?: ActiveTimerBadge[];
-  onToggleTimer?: (id: string) => void;
-  initialHistory?: string[];
-  onHistoryChange?: (history: string[]) => void;
 }
 
 const LINE_HEIGHT = 20;
@@ -98,7 +76,14 @@ function formatCountdown(remainingMs: number): string {
 }
 
 export const CommandInput = forwardRef<HTMLTextAreaElement, CommandInputProps>(
-  ({ onSend, onReconnect, onToggleCounter, disabled, connected, passwordMode, skipHistory, recentLinesRef, antiIdleEnabled, antiIdleCommand, antiIdleMinutes, antiIdleNextAt, alignmentTrackingEnabled, alignmentTrackingMinutes, alignmentNextAt, activeTimers, onToggleTimer, initialHistory, onHistoryChange }, ref) => {
+  ({ onSend, onReconnect }, ref) => {
+    const {
+      connected, disabled, passwordMode, skipHistory, recentLinesRef,
+      onToggleCounter, antiIdleEnabled, antiIdleCommand, antiIdleMinutes,
+      antiIdleNextAt, onToggleAntiIdle, alignmentTrackingEnabled,
+      alignmentTrackingMinutes, alignmentNextAt, onToggleAlignmentTracking,
+      activeTimers, onToggleTimer, initialHistory, onHistoryChange,
+    } = useCommandInputContext();
     const { commandHistorySize, numpadMappings, showTimerBadges } = useAppSettingsContext();
     const { active: spotlightActive } = useSpotlight();
     const numpadRef = useRef(numpadMappings);
@@ -364,8 +349,9 @@ export const CommandInput = forwardRef<HTMLTextAreaElement, CommandInputProps>(
         {/* Alignment tracking badge (only when active) */}
         {showTimerBadges && alignmentTrackingEnabled && (
           <span
-            title={`Alignment tracking: every ${alignmentTrackingMinutes}m`}
-            className="flex items-center gap-1 px-1.5 py-1 rounded border text-[9px] font-mono self-center shrink-0 ml-1 text-[#80e080] border-[#80e080]/30 bg-[#80e080]/8"
+            title={`Alignment tracking: every ${alignmentTrackingMinutes}m (double-click to stop)`}
+            onDoubleClick={onToggleAlignmentTracking}
+            className="flex items-center gap-1 px-1.5 py-1 rounded border text-[9px] font-mono self-center shrink-0 ml-1 text-[#80e080] border-[#80e080]/30 bg-[#80e080]/8 cursor-pointer select-none"
             style={{ filter: 'drop-shadow(0 0 3px rgba(128, 224, 128, 0.25))' }}
           >
             <AlignmentIcon size={9} />
@@ -378,8 +364,9 @@ export const CommandInput = forwardRef<HTMLTextAreaElement, CommandInputProps>(
         {/* Anti-idle badge (only when active, hidden when alignment tracking supersedes) */}
         {showTimerBadges && antiIdleEnabled && !alignmentTrackingEnabled && (
           <span
-            title={`Anti-idle: "${antiIdleCommand}" every ${antiIdleMinutes}m`}
-            className="flex items-center gap-1 px-1.5 py-1 rounded border text-[9px] font-mono self-center shrink-0 ml-1 text-[#bd93f9] border-[#bd93f9]/30 bg-[#bd93f9]/8"
+            title={`Anti-idle: "${antiIdleCommand}" every ${antiIdleMinutes}m (double-click to stop)`}
+            onDoubleClick={onToggleAntiIdle}
+            className="flex items-center gap-1 px-1.5 py-1 rounded border text-[9px] font-mono self-center shrink-0 ml-1 text-[#bd93f9] border-[#bd93f9]/30 bg-[#bd93f9]/8 cursor-pointer select-none"
             style={{ filter: 'drop-shadow(0 0 3px rgba(189, 147, 249, 0.25))' }}
           >
             <TimerIcon size={9} />

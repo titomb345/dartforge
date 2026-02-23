@@ -74,6 +74,9 @@ import { useResize } from './hooks/useResize';
 import { useViewportBudget, MIN_TERMINAL_WIDTH } from './hooks/useViewportBudget';
 import { AllocLineParser, parseAllocCommand, applyAllocUpdates, MagicLineParser, parseMagicAllocCommand, applyMagicAllocUpdates } from './lib/allocPatterns';
 import { useAppSettings } from './hooks/useAppSettings';
+import { useCommandHistory } from './hooks/useCommandHistory';
+import { useTimerEngines } from './hooks/useTimerEngines';
+import { CommandInputProvider } from './contexts/CommandInputContext';
 import { useSessionLogger } from './hooks/useSessionLogger';
 import { useCustomChimes } from './hooks/useCustomChimes';
 import { AppSettingsProvider } from './contexts/AppSettingsContext';
@@ -142,7 +145,7 @@ function AppMain() {
 
   const dataStore = useDataStore();
   const settingsLoadedRef = useRef(false);
-  const [commandHistory, setCommandHistory] = useState<string[]>([]);
+  const { commandHistory, handleHistoryChange } = useCommandHistory(dataStore);
 
   // Load compact mode + filter flags + panel layout from settings (with validation)
   useEffect(() => {
@@ -171,11 +174,6 @@ function AppMain() {
       const savedStatusOrder = await dataStore.get<StatusReadoutKey[]>('settings.json', 'statusBarOrder');
       if (Array.isArray(savedStatusOrder) && savedStatusOrder.length > 0) {
         setStatusBarOrder(savedStatusOrder);
-      }
-
-      const savedHistory = await dataStore.get<string[]>('settings.json', 'commandHistory');
-      if (Array.isArray(savedHistory)) {
-        setCommandHistory(savedHistory);
       }
 
       panelLayoutLoadedRef.current = true;
@@ -531,7 +529,6 @@ function AppMain() {
   // Timer system
   const timerState = useTimers(dataStore, activeCharacter);
   const { mergedTimers } = timerState;
-  const mergedTimersRef = useLatestRef(mergedTimers);
 
   // Context menu → trigger panel integration
   const handleAddToTrigger = useCallback((selectedText: string) => {
@@ -706,11 +703,6 @@ function AppMain() {
   // Command echo ref (used in handleSend callback)
   const commandEchoRef = useLatestRef(appSettings.commandEchoEnabled);
   const passwordModeRef = useLatestRef(passwordMode);
-
-  const handleHistoryChange = useCallback((history: string[]) => {
-    setCommandHistory(history);
-    dataStore.set('settings.json', 'commandHistory', history).then(() => dataStore.save('settings.json')).catch(console.error);
-  }, [dataStore]);
 
   // Alias-expanded send: preprocesses input through the alias engine
   const handleSend = useCallback(async (rawInput: string) => {
@@ -893,118 +885,15 @@ function AppMain() {
   const postSyncEnabledRef = useLatestRef(postSyncEnabled);
   const postSyncCommandsRef = useLatestRef(postSyncCommands);
 
-  // Anti-idle timer — sends command at interval when connected + logged in + enabled
-  const antiIdleEnabledRef = useLatestRef(antiIdleEnabled);
-  const antiIdleCommandRef = useLatestRef(antiIdleCommand);
-  const [antiIdleNextAt, setAntiIdleNextAt] = useState<number | null>(null);
-
-  useEffect(() => {
-    if (!connected || !loggedIn || !antiIdleEnabled) {
-      setAntiIdleNextAt(null);
-      return;
-    }
-    const ms = antiIdleMinutes * 60_000;
-    setAntiIdleNextAt(Date.now() + ms);
-    const id = setInterval(() => {
-      const cmd = antiIdleCommandRef.current;
-      if (sendCommandRef.current && antiIdleEnabledRef.current) {
-        if (terminalRef.current) {
-          smartWrite(terminalRef.current, `\x1b[90m[anti-idle: ${cmd}]\x1b[0m\r\n`);
-        }
-        sendCommandRef.current(cmd);
-      }
-      setAntiIdleNextAt(Date.now() + ms);
-    }, ms);
-    return () => { clearInterval(id); setAntiIdleNextAt(null); };
-  }, [connected, loggedIn, antiIdleEnabled, antiIdleMinutes]);
-
-  // Alignment tracking timer — polls "show alignment" at interval when enabled
-  const alignmentTrackingEnabledRef = useLatestRef(alignmentTrackingEnabled);
-  const [alignmentNextAt, setAlignmentNextAt] = useState<number | null>(null);
-
-  useEffect(() => {
-    if (!connected || !loggedIn || !alignmentTrackingEnabled) {
-      setAlignmentNextAt(null);
-      return;
-    }
-    const ms = alignmentTrackingMinutes * 60_000;
-    setAlignmentNextAt(Date.now() + ms);
-    const id = setInterval(() => {
-      if (sendCommandRef.current && alignmentTrackingEnabledRef.current) {
-        if (terminalRef.current && !outputFilterRef.current?.filterFlags.alignment) {
-          smartWrite(terminalRef.current, `\x1b[90m[alignment sync]\x1b[0m\r\n`);
-        }
-        sendCommandRef.current('show alignment');
-      }
-      setAlignmentNextAt(Date.now() + ms);
-    }, ms);
-    return () => { clearInterval(id); setAlignmentNextAt(null); };
-  }, [connected, loggedIn, alignmentTrackingEnabled, alignmentTrackingMinutes]);
-
-  // Custom timer engine — manages per-timer setIntervals, only fires when connected + logged in
-  const timerIntervalsRef = useRef<Map<string, ReturnType<typeof setInterval>>>(new Map());
-  const [timerNextFires, setTimerNextFires] = useState<Record<string, number>>({});
-
-  useEffect(() => {
-    // Clear all existing intervals
-    for (const id of timerIntervalsRef.current.values()) clearInterval(id);
-    timerIntervalsRef.current.clear();
-
-    if (!connected || !loggedIn) {
-      setTimerNextFires({});
-      return;
-    }
-
-    const enabledTimers = mergedTimersRef.current.filter((t) => t.enabled);
-    const nextFires: Record<string, number> = {};
-
-    for (const timer of enabledTimers) {
-      const ms = timer.intervalSeconds * 1000;
-      nextFires[timer.id] = Date.now() + ms;
-
-      const intervalId = setInterval(() => {
-        if (!sendCommandRef.current) return;
-
-        if (terminalRef.current) {
-          smartWrite(terminalRef.current, `\x1b[90m[timer: ${timer.name}]\x1b[0m\r\n`);
-        }
-
-        // Expand body through alias engine, then execute via the shared runner
-        const result = expandInput(timer.body, mergedAliasesRef.current, {
-          enableSpeedwalk: enableSpeedwalkRef.current,
-          activeCharacter: activeCharacterRef.current,
-        });
-        executeCommands(result.commands, triggerRunnerRef.current);
-
-        setTimerNextFires((prev) => ({ ...prev, [timer.id]: Date.now() + ms }));
-      }, ms);
-
-      timerIntervalsRef.current.set(timer.id, intervalId);
-    }
-
-    setTimerNextFires(nextFires);
-
-    return () => {
-      for (const id of timerIntervalsRef.current.values()) clearInterval(id);
-      timerIntervalsRef.current.clear();
-      setTimerNextFires({});
-    };
-  }, [connected, loggedIn, mergedTimers]);
-
-  // Active timer badges for CommandInput (sorted by soonest-to-fire first)
-  const activeTimerBadges = useMemo(() =>
-    mergedTimers
-      .filter((t) => t.enabled && timerNextFires[t.id])
-      .map((t) => ({ id: t.id, name: t.name, nextAt: timerNextFires[t.id] }))
-      .sort((a, b) => a.nextAt - b.nextAt),
-    [mergedTimers, timerNextFires],
-  );
-
-  // Toggle a timer on/off from the command input badge (double-click or stop button)
-  const handleToggleTimer = useCallback((id: string) => {
-    const scope = id in timerState.characterTimers ? 'character' : 'global';
-    timerState.toggleTimer(id, scope);
-  }, [timerState]);
+  // Timer engines (anti-idle, alignment tracking, custom timers)
+  const { antiIdleNextAt, alignmentNextAt, activeTimerBadges, handleToggleTimer } = useTimerEngines({
+    connected, loggedIn,
+    antiIdleEnabled, antiIdleCommand, antiIdleMinutes,
+    alignmentTrackingEnabled, alignmentTrackingMinutes,
+    mergedTimers, timerState,
+    sendCommandRef, terminalRef, outputFilterRef,
+    mergedAliasesRef, enableSpeedwalkRef, activeCharacterRef, triggerRunnerRef,
+  });
 
   // First-launch: auto-open Guide panel
   useEffect(() => {
@@ -1047,8 +936,38 @@ function AppMain() {
     else startCounter(activeCounterId);
   }, [improveCounters]);
 
+  // CommandInput context value
+  const commandInputValue = useMemo(() => ({
+    connected,
+    disabled: !connected,
+    passwordMode,
+    skipHistory,
+    recentLinesRef,
+    onToggleCounter: toggleActiveCounter,
+    antiIdleEnabled,
+    antiIdleCommand,
+    antiIdleMinutes,
+    antiIdleNextAt,
+    onToggleAntiIdle: () => appSettings.updateAntiIdleEnabled(false),
+    alignmentTrackingEnabled,
+    alignmentTrackingMinutes,
+    alignmentNextAt,
+    onToggleAlignmentTracking: () => appSettings.updateAlignmentTrackingEnabled(false),
+    activeTimers: activeTimerBadges,
+    onToggleTimer: handleToggleTimer,
+    initialHistory: commandHistory,
+    onHistoryChange: handleHistoryChange,
+  }), [
+    connected, passwordMode, skipHistory, recentLinesRef, toggleActiveCounter,
+    antiIdleEnabled, antiIdleCommand, antiIdleMinutes, antiIdleNextAt,
+    alignmentTrackingEnabled, alignmentTrackingMinutes, alignmentNextAt,
+    activeTimerBadges, handleToggleTimer, commandHistory, handleHistoryChange,
+    appSettings.updateAntiIdleEnabled, appSettings.updateAlignmentTrackingEnabled,
+  ]);
+
   return (
     <AppSettingsProvider value={appSettings}>
+    <CommandInputProvider value={commandInputValue}>
     <VariableProvider value={variableState}>
     <AliasProvider value={aliasState}>
     <TriggerProvider value={triggerState}>
@@ -1135,23 +1054,6 @@ function AppMain() {
               ref={inputRef}
               onSend={handleSend}
               onReconnect={reconnect}
-              onToggleCounter={toggleActiveCounter}
-              disabled={!connected}
-              connected={connected}
-              passwordMode={passwordMode}
-              skipHistory={skipHistory}
-              recentLinesRef={recentLinesRef}
-              antiIdleEnabled={antiIdleEnabled}
-              antiIdleCommand={antiIdleCommand}
-              antiIdleMinutes={antiIdleMinutes}
-              antiIdleNextAt={antiIdleNextAt}
-              alignmentTrackingEnabled={alignmentTrackingEnabled}
-              alignmentTrackingMinutes={alignmentTrackingMinutes}
-              alignmentNextAt={alignmentNextAt}
-              activeTimers={activeTimerBadges}
-              onToggleTimer={handleToggleTimer}
-              initialHistory={commandHistory}
-              onHistoryChange={handleHistoryChange}
             />
           </div>
         </div>
@@ -1261,6 +1163,7 @@ function AppMain() {
     </TriggerProvider>
     </AliasProvider>
     </VariableProvider>
+    </CommandInputProvider>
     </AppSettingsProvider>
   );
 }

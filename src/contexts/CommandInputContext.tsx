@@ -1,0 +1,41 @@
+import { createContext, useContext } from 'react';
+import type { ActiveTimerBadge } from '../hooks/useTimerEngines';
+
+export interface CommandInputState {
+  // Connection
+  connected: boolean;
+  disabled: boolean;
+  passwordMode: boolean;
+  skipHistory: boolean;
+  // Refs
+  recentLinesRef: React.RefObject<string[]>;
+  // Counter
+  onToggleCounter?: () => void;
+  // Anti-idle
+  antiIdleEnabled: boolean;
+  antiIdleCommand: string;
+  antiIdleMinutes: number;
+  antiIdleNextAt: number | null;
+  onToggleAntiIdle: () => void;
+  // Alignment
+  alignmentTrackingEnabled: boolean;
+  alignmentTrackingMinutes: number;
+  alignmentNextAt: number | null;
+  onToggleAlignmentTracking: () => void;
+  // Custom timers
+  activeTimers: ActiveTimerBadge[];
+  onToggleTimer: (id: string) => void;
+  // History
+  initialHistory: string[];
+  onHistoryChange: (history: string[]) => void;
+}
+
+const CommandInputContext = createContext<CommandInputState | null>(null);
+
+export const CommandInputProvider = CommandInputContext.Provider;
+
+export function useCommandInputContext(): CommandInputState {
+  const ctx = useContext(CommandInputContext);
+  if (!ctx) throw new Error('useCommandInputContext must be used within a CommandInputProvider');
+  return ctx;
+}
