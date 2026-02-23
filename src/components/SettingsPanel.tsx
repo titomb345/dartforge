@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef, type ReactNode } from 'react';
-import { TimerIcon, FolderIcon, TrashIcon, CheckCircleIcon, ClockIcon, ChevronDownSmallIcon, FilterIcon, GearIcon, NotesIcon, RotateCcwIcon, Volume2Icon, PlayIcon } from './icons';
+import { TimerIcon, FolderIcon, TrashIcon, CheckCircleIcon, ClockIcon, ChevronDownSmallIcon, FilterIcon, GearIcon, NotesIcon, RotateCcwIcon, Volume2Icon, PlayIcon, CounterIcon } from './icons';
 import { DEFAULT_NUMPAD_MAPPINGS } from '../hooks/useAppSettings';
-import { MudInput } from './shared';
+import { MudInput, MudTextarea, MudNumberInput } from './shared';
 import { cn } from '../lib/cn';
 import { useDataStore } from '../contexts/DataStoreContext';
 import { useAppSettingsContext } from '../contexts/AppSettingsContext';
@@ -28,26 +28,29 @@ function SettingsSection({
   icon,
   title,
   accent = '#bd93f9',
-  defaultOpen = false,
+  open,
+  onToggle,
   children,
 }: {
   icon: ReactNode;
   title: string;
   accent?: string;
-  defaultOpen?: boolean;
+  open?: boolean;
+  onToggle?: () => void;
   children: ReactNode;
 }) {
-  const [open, setOpen] = useState(defaultOpen);
-
+  const [internalOpen, setInternalOpen] = useState(false);
+  const isOpen = open ?? internalOpen;
+  const handleToggle = onToggle ?? (() => setInternalOpen((v) => !v));
   return (
     <div className="border border-border-dim rounded overflow-hidden">
       <button
-        onClick={() => setOpen((v) => !v)}
+        onClick={handleToggle}
         className={cn(
           'w-full flex items-center gap-2 px-3 py-2 cursor-pointer transition-colors duration-150',
           'bg-bg-secondary hover:bg-[#252525]',
         )}
-        style={{ borderLeft: `2px solid ${open ? accent : 'transparent'}` }}
+        style={{ borderLeft: `2px solid ${isOpen ? accent : 'transparent'}` }}
       >
         <span style={{ color: accent }} className="shrink-0">{icon}</span>
         <span className="text-[11px] font-mono font-semibold uppercase tracking-[0.06em] text-text-label flex-1 text-left">
@@ -55,14 +58,14 @@ function SettingsSection({
         </span>
         <span
           className="text-text-dim transition-transform duration-200"
-          style={{ transform: open ? 'rotate(180deg)' : 'rotate(0deg)' }}
+          style={{ transform: isOpen ? 'rotate(180deg)' : 'rotate(0deg)' }}
         >
           <ChevronDownSmallIcon size={12} />
         </span>
       </button>
       <div
         className="grid transition-[grid-template-rows] duration-200 ease-in-out"
-        style={{ gridTemplateRows: open ? '1fr' : '0fr' }}
+        style={{ gridTemplateRows: isOpen ? '1fr' : '0fr' }}
       >
         <div className="overflow-hidden">
           <div className="px-3 py-3 space-y-3">
@@ -138,15 +141,21 @@ interface BackupEntry {
 /* ── Main Panel ───────────────────────────────────────────── */
 
 export function SettingsPanel() {
+  const [openSection, setOpenSection] = useState<string | null>(null);
+  const toggle = (key: string) => setOpenSection((prev) => (prev === key ? null : key));
+
   const settings = useAppSettingsContext();
   const {
     antiIdleEnabled, antiIdleCommand, antiIdleMinutes,
     updateAntiIdleEnabled: onAntiIdleEnabledChange,
     updateAntiIdleCommand: onAntiIdleCommandChange,
     updateAntiIdleMinutes: onAntiIdleMinutesChange,
+    alignmentTrackingEnabled, alignmentTrackingMinutes,
+    updateAlignmentTrackingEnabled, updateAlignmentTrackingMinutes,
     boardDatesEnabled, updateBoardDatesEnabled: onBoardDatesEnabledChange,
     stripPromptsEnabled, updateStripPromptsEnabled: onStripPromptsEnabledChange,
     commandEchoEnabled, updateCommandEchoEnabled,
+    showTimerBadges, updateShowTimerBadges,
     terminalScrollback, updateTerminalScrollback,
     commandHistorySize, updateCommandHistorySize,
     chatHistorySize, updateChatHistorySize,
@@ -155,6 +164,10 @@ export function SettingsPanel() {
     numpadMappings, updateNumpadMappings,
     chatNotifications, toggleChatNotification,
     customChime1, customChime2, updateCustomChime1, updateCustomChime2,
+    counterHotThreshold, counterColdThreshold,
+    updateCounterHotThreshold, updateCounterColdThreshold,
+    postSyncEnabled, postSyncCommands,
+    updatePostSyncEnabled, updatePostSyncCommands,
   } = settings;
   const isTauri = getPlatform() === 'tauri';
 
@@ -167,20 +180,57 @@ export function SettingsPanel() {
 
       {/* Scrollable sections */}
       <div className="flex-1 overflow-y-auto px-2 py-2 space-y-2">
-        {/* Connection / Anti-Idle */}
+        {/* Timers */}
         <SettingsSection
           icon={<TimerIcon size={13} />}
-          title="Anti-Idle"
-          accent="#bd93f9"
+          title="Timers"
+          accent="#f97316"
+          open={openSection === 'timers'}
+          onToggle={() => toggle('timers')}
         >
+          {/* Alignment tracking */}
+          <div className="text-[10px] font-semibold text-text-muted tracking-wide uppercase mb-1">Alignment Tracking</div>
           <FieldRow label="Enabled">
+            <ToggleSwitch
+              checked={alignmentTrackingEnabled}
+              onChange={updateAlignmentTrackingEnabled}
+              accent="#80e080"
+            />
+          </FieldRow>
+          <FieldRow label="Interval" dimmed={!alignmentTrackingEnabled}>
+            <div className="flex items-center gap-1.5">
+              <MudNumberInput
+                accent="green"
+                size="sm"
+                min={1}
+                max={14}
+                value={alignmentTrackingMinutes}
+                onChange={updateAlignmentTrackingMinutes}
+                className="w-[48px] text-center"
+              />
+              <span className="text-[10px] font-mono text-text-dim">min</span>
+            </div>
+          </FieldRow>
+          <div className="text-[9px] text-text-dim font-mono leading-relaxed mt-1 mb-3">
+            Polls alignment at the configured interval. Also prevents idle disconnect.
+          </div>
+
+          {/* Anti-idle */}
+          <div className="text-[10px] font-semibold text-text-muted tracking-wide uppercase mb-1">Anti-Idle</div>
+          {alignmentTrackingEnabled && (
+            <div className="text-[9px] text-[#80e080] font-mono leading-relaxed mb-1">
+              Disabled — alignment tracking is active.
+            </div>
+          )}
+          <FieldRow label="Enabled" dimmed={alignmentTrackingEnabled}>
             <ToggleSwitch
               checked={antiIdleEnabled}
               onChange={onAntiIdleEnabledChange}
               accent="#bd93f9"
+              disabled={alignmentTrackingEnabled}
             />
           </FieldRow>
-          <FieldRow label="Command" dimmed={!antiIdleEnabled}>
+          <FieldRow label="Command" dimmed={!antiIdleEnabled || alignmentTrackingEnabled}>
             <MudInput
               accent="purple"
               size="sm"
@@ -190,26 +240,69 @@ export function SettingsPanel() {
               className="w-[120px] text-right"
             />
           </FieldRow>
-          <FieldRow label="Interval" dimmed={!antiIdleEnabled}>
+          <FieldRow label="Interval" dimmed={!antiIdleEnabled || alignmentTrackingEnabled}>
             <div className="flex items-center gap-1.5">
-              <MudInput
+              <MudNumberInput
                 accent="purple"
                 size="sm"
-                type="number"
                 min={1}
                 max={14}
                 value={antiIdleMinutes}
-                onChange={(e) => {
-                  const v = parseInt(e.target.value, 10);
-                  if (!isNaN(v) && v >= 1 && v <= 14) onAntiIdleMinutesChange(v);
-                }}
+                onChange={onAntiIdleMinutesChange}
                 className="w-[48px] text-center"
               />
               <span className="text-[10px] font-mono text-text-dim">min</span>
             </div>
           </FieldRow>
-          <div className="text-[9px] text-text-dim font-mono leading-relaxed mt-1">
+          <div className="text-[9px] text-text-dim font-mono leading-relaxed mt-1 mb-3">
             Sends the command at the configured interval to prevent idle disconnect.
+          </div>
+
+          {/* Display */}
+          <div className="text-[10px] font-semibold text-text-muted tracking-wide uppercase mb-1">Display</div>
+          <FieldRow label="Timer countdowns">
+            <ToggleSwitch
+              checked={showTimerBadges}
+              onChange={updateShowTimerBadges}
+              accent="#f97316"
+            />
+          </FieldRow>
+          <div className="text-[9px] text-text-dim font-mono leading-relaxed mt-1">
+            Show timer countdowns (anti-idle, alignment, and custom timers) next to the command input.
+          </div>
+        </SettingsSection>
+
+        {/* Login Commands */}
+        <SettingsSection
+          icon={<PlayIcon size={13} />}
+          title="Login Commands"
+          accent="#ff79c6"
+          open={openSection === 'post-sync'}
+          onToggle={() => toggle('post-sync')}
+        >
+          <FieldRow label="Enabled">
+            <ToggleSwitch
+              checked={postSyncEnabled}
+              onChange={updatePostSyncEnabled}
+              accent="#ff79c6"
+            />
+          </FieldRow>
+          <FieldRow label="Commands" dimmed={!postSyncEnabled}>
+            <div className="w-full" />
+          </FieldRow>
+          <div className={cn(!postSyncEnabled && 'opacity-40 pointer-events-none')}>
+            <MudTextarea
+              accent="pink"
+              size="sm"
+              value={postSyncCommands}
+              onChange={(e) => updatePostSyncCommands(e.target.value)}
+              placeholder="inventory;who;/echo Ready!"
+              rows={5}
+              className="w-full"
+            />
+          </div>
+          <div className="text-[9px] text-text-dim font-mono leading-relaxed mt-1">
+            Sent automatically after logging in. Supports semicolons, aliases, /delay, /echo, /spam, /var.
           </div>
         </SettingsSection>
 
@@ -218,6 +311,8 @@ export function SettingsPanel() {
           icon={<FilterIcon size={13} />}
           title="Output"
           accent="#50fa7b"
+          open={openSection === 'output'}
+          onToggle={() => toggle('output')}
         >
           <FieldRow label="Convert board dates">
             <ToggleSwitch
@@ -251,25 +346,71 @@ export function SettingsPanel() {
           </div>
         </SettingsSection>
 
+        {/* Counters */}
+        <SettingsSection
+          icon={<CounterIcon size={13} />}
+          title="Counters"
+          accent="#f59e0b"
+          open={openSection === 'counters'}
+          onToggle={() => toggle('counters')}
+        >
+          <FieldRow label="Hot threshold">
+            <div className="flex items-center gap-1.5">
+              <MudNumberInput
+                accent="purple"
+                size="sm"
+                min={0}
+                max={99}
+                step={0.5}
+                parse={parseFloat}
+                value={counterHotThreshold}
+                onChange={updateCounterHotThreshold}
+                className="w-[56px] text-center"
+              />
+              <span className="text-[10px] font-mono text-text-dim">/pd</span>
+            </div>
+          </FieldRow>
+          <div className="text-[9px] text-text-dim font-mono leading-relaxed mt-1">
+            Skills at or above this rate glow warm. Set to 0 to disable.
+          </div>
+          <FieldRow label="Cold threshold">
+            <div className="flex items-center gap-1.5">
+              <MudNumberInput
+                accent="cyan"
+                size="sm"
+                min={0}
+                max={99}
+                step={0.5}
+                parse={parseFloat}
+                value={counterColdThreshold}
+                onChange={updateCounterColdThreshold}
+                className="w-[56px] text-center"
+              />
+              <span className="text-[10px] font-mono text-text-dim">/pd</span>
+            </div>
+          </FieldRow>
+          <div className="text-[9px] text-text-dim font-mono leading-relaxed mt-1">
+            Skills at or below this rate (but &gt; 0) glow cool. Set to 0 to disable.
+          </div>
+        </SettingsSection>
+
         {/* Buffers */}
         <SettingsSection
           icon={<GearIcon size={13} />}
           title="Buffers"
           accent="#8be9fd"
+          open={openSection === 'buffers'}
+          onToggle={() => toggle('buffers')}
         >
           <FieldRow label="Scrollback">
             <div className="flex items-center gap-1.5">
-              <MudInput
+              <MudNumberInput
                 accent="cyan"
                 size="sm"
-                type="number"
                 min={1000}
                 max={100000}
                 value={terminalScrollback}
-                onChange={(e) => {
-                  const v = parseInt(e.target.value, 10);
-                  if (!isNaN(v) && v >= 1000 && v <= 100000) updateTerminalScrollback(v);
-                }}
+                onChange={updateTerminalScrollback}
                 className="w-[72px] text-center"
               />
               <span className="text-[10px] font-mono text-text-dim">lines</span>
@@ -280,17 +421,13 @@ export function SettingsPanel() {
           </div>
           <FieldRow label="Command history">
             <div className="flex items-center gap-1.5">
-              <MudInput
+              <MudNumberInput
                 accent="cyan"
                 size="sm"
-                type="number"
                 min={50}
                 max={5000}
                 value={commandHistorySize}
-                onChange={(e) => {
-                  const v = parseInt(e.target.value, 10);
-                  if (!isNaN(v) && v >= 50 && v <= 5000) updateCommandHistorySize(v);
-                }}
+                onChange={updateCommandHistorySize}
                 className="w-[72px] text-center"
               />
               <span className="text-[10px] font-mono text-text-dim">cmds</span>
@@ -298,17 +435,13 @@ export function SettingsPanel() {
           </FieldRow>
           <FieldRow label="Chat history">
             <div className="flex items-center gap-1.5">
-              <MudInput
+              <MudNumberInput
                 accent="cyan"
                 size="sm"
-                type="number"
                 min={50}
                 max={5000}
                 value={chatHistorySize}
-                onChange={(e) => {
-                  const v = parseInt(e.target.value, 10);
-                  if (!isNaN(v) && v >= 50 && v <= 5000) updateChatHistorySize(v);
-                }}
+                onChange={updateChatHistorySize}
                 className="w-[72px] text-center"
               />
               <span className="text-[10px] font-mono text-text-dim">msgs</span>
@@ -321,6 +454,8 @@ export function SettingsPanel() {
           icon={<ClockIcon size={13} />}
           title="Timestamps"
           accent="#ff79c6"
+          open={openSection === 'timestamps'}
+          onToggle={() => toggle('timestamps')}
         >
           <FieldRow label="Timestamp format">
             <div className="flex gap-1">
@@ -347,6 +482,8 @@ export function SettingsPanel() {
           icon={<NotesIcon size={13} />}
           title="Session Logging"
           accent="#f1fa8c"
+          open={openSection === 'logging'}
+          onToggle={() => toggle('logging')}
         >
           <FieldRow label="Enable logging">
             <ToggleSwitch
@@ -361,7 +498,7 @@ export function SettingsPanel() {
         </SettingsSection>
 
         {/* Numpad Mappings */}
-        <NumpadSection mappings={numpadMappings} onChange={updateNumpadMappings} />
+        <NumpadSection mappings={numpadMappings} onChange={updateNumpadMappings} open={openSection === 'numpad'} onToggle={() => toggle('numpad')} />
 
         {/* Custom Sounds — Tauri only */}
         {isTauri && (
@@ -370,6 +507,8 @@ export function SettingsPanel() {
             customChime2={customChime2}
             updateCustomChime1={updateCustomChime1}
             updateCustomChime2={updateCustomChime2}
+            open={openSection === 'sounds'}
+            onToggle={() => toggle('sounds')}
           />
         )}
 
@@ -378,6 +517,8 @@ export function SettingsPanel() {
           icon={<Volume2Icon size={13} />}
           title="Notifications"
           accent="#ffb86c"
+          open={openSection === 'notifications'}
+          onToggle={() => toggle('notifications')}
         >
           {(['say', 'shout', 'ooc', 'tell', 'sz'] as const).map((type) => (
             <FieldRow key={type} label={type.toUpperCase()}>
@@ -394,10 +535,10 @@ export function SettingsPanel() {
         </SettingsSection>
 
         {/* Data Location — Tauri only */}
-        {isTauri && <DataLocationSection />}
+        {isTauri && <DataLocationSection open={openSection === 'data-location'} onToggle={() => toggle('data-location')} />}
 
         {/* Backups — Tauri only */}
-        {isTauri && <BackupsSection />}
+        {isTauri && <BackupsSection open={openSection === 'backups'} onToggle={() => toggle('backups')} />}
       </div>
     </div>
   );
@@ -415,13 +556,15 @@ const NUMPAD_BOTTOM = [
   { key: 'NumpadAdd', label: '+', span: 1 },
 ];
 
-function NumpadSection({ mappings, onChange }: { mappings: Record<string, string>; onChange: (v: Record<string, string>) => void }) {
+function NumpadSection({ mappings, onChange, open, onToggle }: { mappings: Record<string, string>; onChange: (v: Record<string, string>) => void; open: boolean; onToggle: () => void }) {
   const updateKey = (key: string, value: string) => {
     onChange({ ...mappings, [key]: value });
   };
 
   return (
     <SettingsSection
+      open={open}
+      onToggle={onToggle}
       icon={<GearIcon size={13} />}
       title="Numpad Mappings"
       accent="#6272a4"
@@ -596,14 +739,20 @@ function CustomSoundsSection({
   customChime2,
   updateCustomChime1,
   updateCustomChime2,
+  open,
+  onToggle,
 }: {
   customChime1: string | null;
   customChime2: string | null;
   updateCustomChime1: (v: string | null) => void;
   updateCustomChime2: (v: string | null) => void;
+  open: boolean;
+  onToggle: () => void;
 }) {
   return (
     <SettingsSection
+      open={open}
+      onToggle={onToggle}
       icon={<Volume2Icon size={13} />}
       title="Custom Sounds"
       accent="#50fa7b"
@@ -630,7 +779,7 @@ function CustomSoundsSection({
 
 /* ── Data Location Section (Tauri-only) ───────────────────── */
 
-function DataLocationSection() {
+function DataLocationSection({ open, onToggle }: { open: boolean; onToggle: () => void }) {
   const dataStore = useDataStore();
   const [candidates, setCandidates] = useState<string[]>([]);
   const [status, setStatus] = useState<string | null>(null);
@@ -689,6 +838,8 @@ function DataLocationSection() {
 
   return (
     <SettingsSection
+      open={open}
+      onToggle={onToggle}
       icon={<FolderIcon size={13} />}
       title="Data Location"
       accent="#8be9fd"
@@ -754,7 +905,7 @@ function DataLocationSection() {
 
 /* ── Backups Section (Tauri-only) ─────────────────────────── */
 
-function BackupsSection() {
+function BackupsSection({ open, onToggle }: { open: boolean; onToggle: () => void }) {
   const { autoBackupEnabled, updateAutoBackupEnabled } = useAppSettingsContext();
   const dataStore = useDataStore();
   const [backups, setBackups] = useState<BackupEntry[]>([]);
@@ -827,6 +978,8 @@ function BackupsSection() {
 
   return (
     <SettingsSection
+      open={open}
+      onToggle={onToggle}
       icon={<ClockIcon size={13} />}
       title="Backups"
       accent="#f59e0b"

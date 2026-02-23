@@ -12,11 +12,13 @@ interface StatusReadoutProps {
   autoCompact?: boolean;
   filtered?: boolean;
   danger?: boolean;
+  /** Optional custom label rendering (e.g., rainbow text) — overrides plain label */
+  labelNode?: React.ReactNode;
   onClick?: () => void;
   onToggleCompact?: () => void;
 }
 
-export function StatusReadout({ icon, label, color, tooltip, glow, compact, autoCompact, filtered, danger, onClick, onToggleCompact }: StatusReadoutProps) {
+export function StatusReadout({ icon, label, color, tooltip, glow, compact, autoCompact, filtered, danger, labelNode, onClick, onToggleCompact }: StatusReadoutProps) {
   const [hovered, setHovered] = useState(false);
   const showExpanded = !compact || (hovered && !!autoCompact);
 
@@ -58,13 +60,13 @@ export function StatusReadout({ icon, label, color, tooltip, glow, compact, auto
       <span
         className="text-[11px] leading-none tracking-wide uppercase overflow-hidden whitespace-nowrap transition-all duration-200"
         style={{
-          color,
+          color: labelNode ? undefined : color,
           maxWidth: showExpanded ? 200 : 0,
           opacity: showExpanded ? 1 : 0,
           marginLeft: showExpanded ? 6 : 0,
         }}
       >
-        {label}
+        {labelNode ?? label}
       </span>
     </button>
   );

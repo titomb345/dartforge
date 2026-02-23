@@ -1,6 +1,6 @@
 import { useState, useCallback, useEffect, useRef, useMemo } from 'react';
 import type { DataStore } from '../contexts/DataStoreContext';
-import type { Trigger, TriggerId, TriggerMatchMode, TriggerScope } from '../types/trigger';
+import type { Trigger, TriggerId, TriggerMatchMode, TriggerPrefill, TriggerScope } from '../types/trigger';
 
 const TRIGGERS_FILE = 'triggers.json';
 const GLOBAL_KEY = 'global';
@@ -191,6 +191,9 @@ export function useTriggers(dataStore: DataStore, activeCharacter: string | null
     [characterTriggers, globalTriggers, createTrigger],
   );
 
+  // Trigger prefill state (for context menu → trigger panel)
+  const [triggerPrefill, setTriggerPrefill] = useState<TriggerPrefill | null>(null);
+
   // Merged list for the trigger engine (character first for priority)
   const mergedTriggers = useMemo(() => {
     const charList = Object.values(characterTriggers);
@@ -207,5 +210,7 @@ export function useTriggers(dataStore: DataStore, activeCharacter: string | null
     deleteTrigger,
     toggleTrigger,
     duplicateTrigger,
+    triggerPrefill,
+    setTriggerPrefill,
   };
 }

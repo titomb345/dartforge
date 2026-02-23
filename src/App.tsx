@@ -14,7 +14,7 @@ import { CounterPanel } from './components/CounterPanel';
 import { NotesPanel } from './components/NotesPanel';
 import { GameClock } from './components/GameClock';
 import { SortableStatusBar, DEFAULT_STATUS_BAR_ORDER, type StatusReadoutKey, type ReadoutConfig } from './components/SortableStatusBar';
-import { HeartIcon, FocusIcon, FoodIcon, DropletIcon, AuraIcon, WeightIcon, BootIcon } from './components/icons';
+import { HeartIcon, FocusIcon, FoodIcon, DropletIcon, AuraIcon, WeightIcon, BootIcon, AlignmentIcon } from './components/icons';
 import { useMudConnection } from './hooks/useMudConnection';
 import { useTransport } from './contexts/TransportContext';
 import { useThemeColors } from './hooks/useThemeColors';
@@ -29,6 +29,7 @@ import { useNeeds } from './hooks/useNeeds';
 import { useAura } from './hooks/useAura';
 import { useEncumbrance } from './hooks/useEncumbrance';
 import { useMovement } from './hooks/useMovement';
+import { useAlignment } from './hooks/useAlignment';
 import { useDataStore } from './contexts/DataStoreContext';
 import { buildXtermTheme } from './lib/defaultTheme';
 import { OutputProcessor } from './lib/outputProcessor';
@@ -48,8 +49,12 @@ import { VariableProvider } from './contexts/VariableContext';
 import { VariablePanel } from './components/VariablePanel';
 import { AliasPanel } from './components/AliasPanel';
 import { TriggerProvider } from './contexts/TriggerContext';
+import { NotesProvider, useNotesContext } from './contexts/NotesContext';
 import { TriggerPanel } from './components/TriggerPanel';
 import { useTriggers } from './hooks/useTriggers';
+import { useTimers } from './hooks/useTimers';
+import { TimerProvider } from './contexts/TimerContext';
+import { TimerPanel } from './components/TimerPanel';
 import { useSignatureMappings } from './hooks/useSignatureMappings';
 import { matchTriggers, expandTriggerBody, resetTriggerCooldowns } from './lib/triggerEngine';
 import { smartWrite } from './lib/terminalUtils';
@@ -69,6 +74,9 @@ import { useResize } from './hooks/useResize';
 import { useViewportBudget, MIN_TERMINAL_WIDTH } from './hooks/useViewportBudget';
 import { AllocLineParser, parseAllocCommand, applyAllocUpdates, MagicLineParser, parseMagicAllocCommand, applyMagicAllocUpdates } from './lib/allocPatterns';
 import { useAppSettings } from './hooks/useAppSettings';
+import { useCommandHistory } from './hooks/useCommandHistory';
+import { useTimerEngines } from './hooks/useTimerEngines';
+import { CommandInputProvider } from './contexts/CommandInputContext';
 import { useSessionLogger } from './hooks/useSessionLogger';
 import { useCustomChimes } from './hooks/useCustomChimes';
 import { AppSettingsProvider } from './contexts/AppSettingsContext';
@@ -77,7 +85,7 @@ import { SpotlightOverlay } from './components/SpotlightOverlay';
 import { HelpPanel } from './components/HelpPanel';
 
 /** Commands to send automatically after login */
-const LOGIN_COMMANDS = ['hp', 'score', 'show combat allocation:all', 'show magic allocation'];
+const LOGIN_COMMANDS = ['hp', 'score', 'show combat allocation:all', 'show magic allocation', 'show alignment'];
 
 /** Max recent output lines kept for tab completion */
 const MAX_RECENT_LINES = 500;
@@ -105,7 +113,7 @@ function App() {
     return null;
   }
 
-  return <AppMain />;
+  return <NotesProvider><AppMain /></NotesProvider>;
 }
 
 /** Main client — only mounts after data location is configured and ready. */
@@ -119,6 +127,7 @@ function AppMain() {
   const togglePanel = (panel: Panel) => setActivePanel((v) => v === panel ? null : panel);
   const [panelLayout, setPanelLayout] = useState<PanelLayout>({ left: [], right: [] });
   const [pinnedWidths, setPinnedWidths] = useState<{ left: number; right: number }>({ left: 320, right: 320 });
+  const [panelHeights, setPanelHeights] = useState<{ left: number[]; right: number[] }>({ left: [], right: [] });
   const panelLayoutLoadedRef = useRef(false);
   const [compactReadouts, setCompactReadouts] = useState<Record<string, boolean>>({});
   const [filterFlags, setFilterFlags] = useState<FilterFlags>({ ...DEFAULT_FILTER_FLAGS });
@@ -130,13 +139,14 @@ function AppMain() {
   const appSettings = useAppSettings();
   const {
     antiIdleEnabled, antiIdleCommand, antiIdleMinutes,
-    updateAntiIdleEnabled,
+    alignmentTrackingEnabled, alignmentTrackingMinutes,
     boardDatesEnabled, stripPromptsEnabled,
+    postSyncEnabled, postSyncCommands,
   } = appSettings;
 
   const dataStore = useDataStore();
   const settingsLoadedRef = useRef(false);
-  const [commandHistory, setCommandHistory] = useState<string[]>([]);
+  const { commandHistory, handleHistoryChange } = useCommandHistory(dataStore);
 
   // Load compact mode + filter flags + panel layout from settings (with validation)
   useEffect(() => {
@@ -162,14 +172,13 @@ function AppMain() {
       if (savedWidths != null && typeof savedWidths.left === 'number' && typeof savedWidths.right === 'number') {
         setPinnedWidths(savedWidths);
       }
+      const savedHeights = await dataStore.get<{ left: number[]; right: number[] }>('settings.json', 'panelHeights');
+      if (savedHeights != null && Array.isArray(savedHeights.left) && Array.isArray(savedHeights.right)) {
+        setPanelHeights(savedHeights);
+      }
       const savedStatusOrder = await dataStore.get<StatusReadoutKey[]>('settings.json', 'statusBarOrder');
       if (Array.isArray(savedStatusOrder) && savedStatusOrder.length > 0) {
         setStatusBarOrder(savedStatusOrder);
-      }
-
-      const savedHistory = await dataStore.get<string[]>('settings.json', 'commandHistory');
-      if (Array.isArray(savedHistory)) {
-        setCommandHistory(savedHistory);
       }
 
       panelLayoutLoadedRef.current = true;
@@ -267,6 +276,20 @@ function AppMain() {
     dataStore.set('settings.json', 'pinnedWidths', pinnedWidths).catch(console.error);
   }, [pinnedWidths]);
 
+  // Persist vertical panel height ratios
+  useEffect(() => {
+    if (!panelLayoutLoadedRef.current) return;
+    dataStore.set('settings.json', 'panelHeights', panelHeights).catch(console.error);
+  }, [panelHeights]);
+
+  // Callbacks for vertical resize ratio changes
+  const onLeftHeightRatiosChange = useCallback((ratios: number[]) => {
+    setPanelHeights((p) => ({ ...p, left: ratios }));
+  }, []);
+  const onRightHeightRatiosChange = useCallback((ratios: number[]) => {
+    setPanelHeights((p) => ({ ...p, right: ratios }));
+  }, []);
+
   // Viewport-aware panel width budget
   const budget = useViewportBudget(pinnedWidths, panelLayout);
 
@@ -324,6 +347,9 @@ function AppMain() {
   const { movement, updateMovement } = useMovement();
   const updateMovementRef = useLatestRef(updateMovement);
 
+  const { alignment, updateAlignment } = useAlignment();
+  const updateAlignmentRef = useLatestRef(updateAlignment);
+
   const outputFilterRef = useRef<OutputFilter | null>(null);
   if (!outputFilterRef.current) {
     outputFilterRef.current = new OutputFilter({
@@ -334,6 +360,7 @@ function AppMain() {
       onAura: (match) => { updateAuraRef.current(match); },
       onEncumbrance: (match) => { updateEncumbranceRef.current(match); },
       onMovement: (match) => { updateMovementRef.current(match); },
+      onAlignment: (match) => { updateAlignmentRef.current(match); },
       onChat: (msg) => { handleChatMessageRef.current(msg); },
       onLine: (stripped, raw) => {
         // TODO: Re-enable when automapper is ready
@@ -369,11 +396,16 @@ function AppMain() {
 
           // Expand and execute trigger body asynchronously
           if (match.trigger.body.trim()) {
-            const commands = expandTriggerBody(
+            const raw = expandTriggerBody(
               match.trigger.body,
               match,
               activeCharacterRef.current,
-              mergedVariablesRef.current,
+            );
+            // Re-expand send commands through the alias engine so aliases work in trigger bodies
+            const commands = raw.flatMap((cmd) =>
+              cmd.type === 'send'
+                ? triggerRunnerRef.current.expand(cmd.text)
+                : [cmd],
             );
             triggerFiringRef.current = true;
             (async () => {
@@ -508,7 +540,46 @@ function AppMain() {
     send: async () => {},
     echo: () => {},
     expand: () => [],
+    setVar: () => {},
+    convert: () => {},
+    getVariables: () => [],
   });
+
+  // Timer system
+  const timerState = useTimers(dataStore, activeCharacter);
+  const { mergedTimers } = timerState;
+
+  // Context menu → trigger panel integration
+  const handleAddToTrigger = useCallback((selectedText: string) => {
+    triggerState.setTriggerPrefill({
+      pattern: selectedText,
+      matchMode: 'substring',
+      gag: false,
+      body: '',
+      group: 'General',
+    });
+    setActivePanel('triggers');
+  }, [triggerState.setTriggerPrefill]);
+
+  const handleGagLine = useCallback((selectedText: string) => {
+    triggerState.createTrigger({
+      pattern: selectedText,
+      matchMode: 'substring',
+      body: '',
+      group: 'Gags',
+      gag: true,
+    }, 'global');
+    if (terminalRef.current) {
+      smartWrite(terminalRef.current, `\x1b[90m[Gag trigger created for: ${selectedText}]\x1b[0m\r\n`);
+    }
+  }, [triggerState.createTrigger]);
+
+  // Context menu → notes panel integration
+  const { appendToNotes } = useNotesContext();
+  const handleOpenInNotes = useCallback((text: string) => {
+    appendToNotes(text);
+    setActivePanel('notes');
+  }, [appendToNotes]);
 
   // Signature mapping system
   const signatureState = useSignatureMappings(dataStore, activeCharacter);
@@ -616,18 +687,41 @@ function AppMain() {
     expand: (input) => expandInput(input, mergedAliasesRef.current, {
       enableSpeedwalk: enableSpeedwalkRef.current,
       activeCharacter: activeCharacterRef.current,
-      variables: mergedVariablesRef.current,
     }).commands,
+    setVar: (name, value, scope) => { setVarRef.current(name, value, scope); },
+    convert: (args) => {
+      const parsed = parseConvertCommand(`/convert ${args}`);
+      if (typeof parsed === 'string') {
+        if (terminalRef.current) smartWrite(terminalRef.current, `\x1b[31m${parsed}\x1b[0m\r\n`);
+      } else {
+        if (terminalRef.current) smartWrite(terminalRef.current, `${formatMultiConversion(parsed)}\r\n`);
+      }
+    },
+    getVariables: () => mergedVariablesRef.current,
   };
+
+  // Post-sync commands — fire user-configured commands after login sync completes
+  useEffect(() => {
+    if (!outputFilterRef.current) return;
+    outputFilterRef.current.onSyncEnd = () => {
+      if (!postSyncEnabledRef.current) return;
+      const raw = postSyncCommandsRef.current.trim();
+      if (!raw) return;
+      if (terminalRef.current) {
+        smartWrite(terminalRef.current, '\x1b[90m[login commands]\x1b[0m\r\n');
+      }
+      const result = expandInput(raw, mergedAliasesRef.current, {
+        enableSpeedwalk: enableSpeedwalkRef.current,
+        activeCharacter: activeCharacterRef.current,
+      });
+      executeCommands(result.commands, triggerRunnerRef.current);
+    };
+    return () => { if (outputFilterRef.current) outputFilterRef.current.onSyncEnd = null; };
+  }, []);
 
   // Command echo ref (used in handleSend callback)
   const commandEchoRef = useLatestRef(appSettings.commandEchoEnabled);
   const passwordModeRef = useLatestRef(passwordMode);
-
-  const handleHistoryChange = useCallback((history: string[]) => {
-    setCommandHistory(history);
-    dataStore.set('settings.json', 'commandHistory', history).then(() => dataStore.save('settings.json')).catch(console.error);
-  }, [dataStore]);
 
   // Alias-expanded send: preprocesses input through the alias engine
   const handleSend = useCallback(async (rawInput: string) => {
@@ -706,7 +800,23 @@ function AppMain() {
           }
           const spaceIdx = rest.indexOf(' ');
           if (spaceIdx === -1) {
-            smartWrite(terminalRef.current, `\x1b[31mUsage: /var <name> <value>  |  /var -g <name> <value>  |  /var -d <name>  |  /var\x1b[0m\r\n`);
+            // /var <name> — search variables by name (regex)
+            const query = rest;
+            let re: RegExp;
+            try {
+              re = new RegExp(query, 'i');
+            } catch {
+              re = new RegExp(query.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i');
+            }
+            const matches = mergedVariablesRef.current.filter((v) => v.enabled && re.test(v.name));
+            if (matches.length === 0) {
+              smartWrite(terminalRef.current, `\x1b[36mNo variables matching "${query}".\x1b[0m\r\n`);
+            } else {
+              smartWrite(terminalRef.current, `\x1b[36m--- Variables matching "${query}" ---\x1b[0m\r\n`);
+              for (const v of matches) {
+                smartWrite(terminalRef.current, `\x1b[36m  $${v.name} = ${v.value}\x1b[0m\r\n`);
+              }
+            }
           } else {
             const name = rest.slice(0, spaceIdx);
             const value = rest.slice(spaceIdx + 1);
@@ -721,7 +831,6 @@ function AppMain() {
     const result = expandInput(rawInput, mergedAliasesRef.current, {
       enableSpeedwalk: enableSpeedwalkRef.current,
       activeCharacter: activeCharacterRef.current,
-      variables: mergedVariablesRef.current,
     });
     await executeCommands(result.commands, {
       send: async (text) => {
@@ -754,8 +863,17 @@ function AppMain() {
       expand: (input) => expandInput(input, mergedAliasesRef.current, {
         enableSpeedwalk: enableSpeedwalkRef.current,
         activeCharacter: activeCharacterRef.current,
-        variables: mergedVariablesRef.current,
       }).commands,
+      setVar: (name, value, scope) => { setVarRef.current(name, value, scope); },
+      convert: (args) => {
+        const parsed = parseConvertCommand(`/convert ${args}`);
+        if (typeof parsed === 'string') {
+          if (terminalRef.current) smartWrite(terminalRef.current, `\x1b[31m${parsed}\x1b[0m\r\n`);
+        } else {
+          if (terminalRef.current) smartWrite(terminalRef.current, `${formatMultiConversion(parsed)}\r\n`);
+        }
+      },
+      getVariables: () => mergedVariablesRef.current,
     });
   }, [sendCommand]);
 
@@ -782,30 +900,19 @@ function AppMain() {
     dataStore.set('settings.json', 'statusBarOrder', newOrder).catch(console.error);
   }, [dataStore]);
 
-  // Anti-idle timer — sends command at interval when connected + logged in + enabled
-  const antiIdleEnabledRef = useLatestRef(antiIdleEnabled);
-  const antiIdleCommandRef = useLatestRef(antiIdleCommand);
-  const [antiIdleNextAt, setAntiIdleNextAt] = useState<number | null>(null);
+  // Post-sync commands
+  const postSyncEnabledRef = useLatestRef(postSyncEnabled);
+  const postSyncCommandsRef = useLatestRef(postSyncCommands);
 
-  useEffect(() => {
-    if (!connected || !loggedIn || !antiIdleEnabled) {
-      setAntiIdleNextAt(null);
-      return;
-    }
-    const ms = antiIdleMinutes * 60_000;
-    setAntiIdleNextAt(Date.now() + ms);
-    const id = setInterval(() => {
-      const cmd = antiIdleCommandRef.current;
-      if (sendCommandRef.current && antiIdleEnabledRef.current) {
-        sendCommandRef.current(cmd);
-        if (terminalRef.current) {
-          smartWrite(terminalRef.current, `\x1b[90m[anti-idle: ${cmd}]\x1b[0m\r\n`);
-        }
-      }
-      setAntiIdleNextAt(Date.now() + ms);
-    }, ms);
-    return () => { clearInterval(id); setAntiIdleNextAt(null); };
-  }, [connected, loggedIn, antiIdleEnabled, antiIdleMinutes]);
+  // Timer engines (anti-idle, alignment tracking, custom timers)
+  const { antiIdleNextAt, alignmentNextAt, activeTimerBadges, handleToggleTimer } = useTimerEngines({
+    connected, loggedIn,
+    antiIdleEnabled, antiIdleCommand, antiIdleMinutes,
+    alignmentTrackingEnabled, alignmentTrackingMinutes,
+    mergedTimers, timerState,
+    sendCommandRef, terminalRef, outputFilterRef,
+    mergedAliasesRef, enableSpeedwalkRef, activeCharacterRef, triggerRunnerRef,
+  });
 
   // First-launch: auto-open Guide panel
   useEffect(() => {
@@ -815,14 +922,15 @@ function AppMain() {
   }, [appSettings.hasSeenGuide]);
 
   const readoutConfigs: ReadoutConfig[] = useMemo(() => [
-    { id: 'health', data: health, icon: <HeartIcon size={11} />, tooltip: (d) => d.message ?? '' },
-    { id: 'concentration', data: concentration, icon: <FocusIcon size={11} />, tooltip: (d) => d.message ?? '', filterKey: 'concentration' },
-    { id: 'aura', data: aura, icon: <AuraIcon size={11} />, tooltip: (d) => d.key === 'none' ? 'You have no aura.' : `Your aura appears to be ${d.descriptor}.`, filterKey: 'aura' },
-    { id: 'hunger', data: hunger, icon: <FoodIcon size={11} />, tooltip: (d) => `You are ${d.descriptor}.`, filterKey: 'hunger' },
-    { id: 'thirst', data: thirst, icon: <DropletIcon size={11} />, tooltip: (d) => `You are ${d.descriptor}.`, filterKey: 'thirst' },
-    { id: 'encumbrance', data: encumbrance, icon: <WeightIcon size={11} />, tooltip: (d) => d.descriptor ?? '', filterKey: 'encumbrance' },
-    { id: 'movement', data: movement, icon: <BootIcon size={11} />, tooltip: (d) => d.descriptor ?? '', filterKey: 'movement' },
-  ], [health, concentration, aura, hunger, thirst, encumbrance, movement]);
+    { id: 'health', data: health, icon: <HeartIcon size={11} />, tooltip: (d) => d.message ?? '', dangerThreshold: 5 },
+    { id: 'concentration', data: concentration, icon: <FocusIcon size={11} />, tooltip: (d) => d.message ?? '', filterKey: 'concentration', dangerThreshold: 6 },
+    { id: 'aura', data: aura, icon: <AuraIcon size={11} />, tooltip: (d) => d.key === 'none' ? 'You have no aura.' : `Your aura appears to be ${d.descriptor}.`, filterKey: 'aura', dangerThreshold: 99 },
+    { id: 'hunger', data: hunger, icon: <FoodIcon size={11} />, tooltip: (d) => `You are ${d.descriptor}.`, filterKey: 'hunger', dangerThreshold: 6 },
+    { id: 'thirst', data: thirst, icon: <DropletIcon size={11} />, tooltip: (d) => `You are ${d.descriptor}.`, filterKey: 'thirst', dangerThreshold: 6 },
+    { id: 'encumbrance', data: encumbrance, icon: <WeightIcon size={11} />, tooltip: (d) => d.descriptor ?? '', filterKey: 'encumbrance', dangerThreshold: 5 },
+    { id: 'movement', data: movement, icon: <BootIcon size={11} />, tooltip: (d) => d.descriptor ?? '', filterKey: 'movement', dangerThreshold: 6 },
+    { id: 'alignment', data: alignment, icon: <AlignmentIcon size={11} />, tooltip: (d) => d.key === 'none' ? "You don't feel strongly about anything." : `${d.label}`, filterKey: 'alignment', dangerThreshold: 99 },
+  ], [health, concentration, aura, hunger, thirst, encumbrance, movement, alignment]);
 
   const skillTrackerValue = useMemo(() => (
     { activeCharacter, skillData, showInlineImproves, toggleInlineImproves, addSkill, updateSkillCount, deleteSkill }
@@ -847,11 +955,42 @@ function AppMain() {
     else startCounter(activeCounterId);
   }, [improveCounters]);
 
+  // CommandInput context value
+  const commandInputValue = useMemo(() => ({
+    connected,
+    disabled: !connected,
+    passwordMode,
+    skipHistory,
+    recentLinesRef,
+    onToggleCounter: toggleActiveCounter,
+    antiIdleEnabled,
+    antiIdleCommand,
+    antiIdleMinutes,
+    antiIdleNextAt,
+    onToggleAntiIdle: () => appSettings.updateAntiIdleEnabled(false),
+    alignmentTrackingEnabled,
+    alignmentTrackingMinutes,
+    alignmentNextAt,
+    onToggleAlignmentTracking: () => appSettings.updateAlignmentTrackingEnabled(false),
+    activeTimers: activeTimerBadges,
+    onToggleTimer: handleToggleTimer,
+    initialHistory: commandHistory,
+    onHistoryChange: handleHistoryChange,
+  }), [
+    connected, passwordMode, skipHistory, recentLinesRef, toggleActiveCounter,
+    antiIdleEnabled, antiIdleCommand, antiIdleMinutes, antiIdleNextAt,
+    alignmentTrackingEnabled, alignmentTrackingMinutes, alignmentNextAt,
+    activeTimerBadges, handleToggleTimer, commandHistory, handleHistoryChange,
+    appSettings.updateAntiIdleEnabled, appSettings.updateAlignmentTrackingEnabled,
+  ]);
+
   return (
     <AppSettingsProvider value={appSettings}>
+    <CommandInputProvider value={commandInputValue}>
     <VariableProvider value={variableState}>
     <AliasProvider value={aliasState}>
     <TriggerProvider value={triggerState}>
+    <TimerProvider value={timerState}>
     <SignatureProvider value={signatureState}>
     <SkillTrackerProvider value={skillTrackerValue}>
     <ChatProvider value={chatValue}>
@@ -879,6 +1018,8 @@ function AppMain() {
               onSwapSide={swapPanelSide}
               onSwapWith={swapPanelsWith}
               onMovePanel={movePanel}
+              heightRatios={panelHeights.left}
+              onHeightRatiosChange={onLeftHeightRatiosChange}
             />
             {panelLayout.left.length > 0 && (
               <ResizeHandle side="left" onMouseDown={leftResize.handleMouseDown} isDragging={leftResize.isDragging} constrained={budget.effectiveLeftWidth < pinnedWidths.left} />
@@ -900,7 +1041,7 @@ function AppMain() {
         {/* Center: Terminal + bottom controls */}
         <div className="flex-1 overflow-hidden flex flex-col gap-1" style={{ minWidth: MIN_TERMINAL_WIDTH }}>
           <div className="flex-1 overflow-hidden rounded-lg flex flex-col">
-            <Terminal terminalRef={terminalRef} inputRef={inputRef} theme={xtermTheme} display={display} onUpdateDisplay={updateDisplay} />
+            <Terminal terminalRef={terminalRef} inputRef={inputRef} theme={xtermTheme} display={display} onUpdateDisplay={updateDisplay} onAddToTrigger={handleAddToTrigger} onGagLine={handleGagLine} onOpenInNotes={handleOpenInNotes} />
           </div>
           {/* Status bar + command input */}
           <div className="rounded-lg bg-bg-primary overflow-hidden shrink-0">
@@ -934,19 +1075,6 @@ function AppMain() {
               ref={inputRef}
               onSend={handleSend}
               onReconnect={reconnect}
-              onToggleCounter={toggleActiveCounter}
-              disabled={!connected}
-              connected={connected}
-              passwordMode={passwordMode}
-              skipHistory={skipHistory}
-              recentLinesRef={recentLinesRef}
-              antiIdleEnabled={antiIdleEnabled}
-              antiIdleCommand={antiIdleCommand}
-              antiIdleMinutes={antiIdleMinutes}
-              antiIdleNextAt={antiIdleNextAt}
-              onToggleAntiIdle={() => updateAntiIdleEnabled(!antiIdleEnabled)}
-              initialHistory={commandHistory}
-              onHistoryChange={handleHistoryChange}
             />
           </div>
         </div>
@@ -966,6 +1094,8 @@ function AppMain() {
               onSwapSide={swapPanelSide}
               onSwapWith={swapPanelsWith}
               onMovePanel={movePanel}
+              heightRatios={panelHeights.right}
+              onHeightRatiosChange={onRightHeightRatiosChange}
             />
           </>
         ) : budget.rightCollapsed && panelLayout.right.length > 0 ? (
@@ -1016,6 +1146,9 @@ function AppMain() {
         <SlideOut panel="triggers">
           <TriggerPanel onClose={() => setActivePanel(null)} />
         </SlideOut>
+        <SlideOut panel="timers">
+          <TimerPanel onClose={() => setActivePanel(null)} />
+        </SlideOut>
         <SlideOut panel="variables">
           <VariablePanel onClose={() => setActivePanel(null)} />
         </SlideOut>
@@ -1049,9 +1182,11 @@ function AppMain() {
     </ChatProvider>
     </SkillTrackerProvider>
     </SignatureProvider>
+    </TimerProvider>
     </TriggerProvider>
     </AliasProvider>
     </VariableProvider>
+    </CommandInputProvider>
     </AppSettingsProvider>
   );
 }

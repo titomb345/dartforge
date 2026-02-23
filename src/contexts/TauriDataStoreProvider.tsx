@@ -183,6 +183,14 @@ export function DataStoreProvider({ children }: { children: ReactNode }) {
     }
   }, []);
 
+  const deleteText = useCallback(async (filename: string): Promise<void> => {
+    try {
+      await invoke('delete_text_file', { filename });
+    } catch (e) {
+      console.error(`Failed to delete text file ${filename}:`, e);
+    }
+  }, []);
+
   const flushAll = useCallback(async (): Promise<void> => {
     // Cancel all debounce timers
     for (const timer of dirtyRef.current.values()) {
@@ -236,13 +244,14 @@ export function DataStoreProvider({ children }: { children: ReactNode }) {
     keys,
     readText,
     writeText,
+    deleteText,
     flushAll,
     activeDataDir,
     ready,
     needsSetup,
     completeSetup,
     reloadFromDir,
-  }), [get, set, save, del, keys, readText, writeText, flushAll, activeDataDir, ready, needsSetup, completeSetup, reloadFromDir]);
+  }), [get, set, save, del, keys, readText, writeText, deleteText, flushAll, activeDataDir, ready, needsSetup, completeSetup, reloadFromDir]);
 
   return (
     <DataStoreContext.Provider value={store}>

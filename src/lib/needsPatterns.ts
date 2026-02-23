@@ -16,12 +16,12 @@ export interface NeedLevel {
 export const HUNGER_LEVELS: NeedLevel[] = [
   { key: 'well-fed', label: 'Well Fed', descriptor: 'well fed', themeColor: 'green', severity: 0 },
   { key: 'not-hungry', label: 'Not Hungry', descriptor: 'not hungry', themeColor: 'brightGreen', severity: 1 },
-  { key: 'slightly-hungry', label: 'Slightly Hungry', descriptor: 'slightly hungry', themeColor: 'brightGreen', severity: 2 },
-  { key: 'hungry', label: 'Hungry', descriptor: 'hungry', themeColor: 'yellow', severity: 3 },
-  { key: 'famished', label: 'Famished', descriptor: 'famished', themeColor: 'yellow', severity: 4 },
-  { key: 'faint-hunger', label: 'Faint from Hunger', descriptor: 'faint from hunger', themeColor: 'red', severity: 5 },
+  { key: 'slightly-hungry', label: 'Slightly Hungry', descriptor: 'slightly hungry', themeColor: 'brightYellow', severity: 2 },
+  { key: 'hungry', label: 'Hungry', descriptor: 'hungry', themeColor: 'brightYellow', severity: 3 },
+  { key: 'famished', label: 'Famished', descriptor: 'famished', themeColor: 'brightYellow', severity: 4 },
+  { key: 'faint-hunger', label: 'Faint from Hunger', descriptor: 'faint from hunger', themeColor: 'brightYellow', severity: 5 },
   { key: 'starving', label: 'Starving', descriptor: 'starving', themeColor: 'red', severity: 6 },
-  { key: 'starving-death', label: 'Starving to Death', descriptor: 'starving to death', themeColor: 'magenta', severity: 7 },
+  { key: 'starving-death', label: 'Starving to Death', descriptor: 'starving to death', themeColor: 'red', severity: 7 },
 ];
 
 /**
@@ -31,12 +31,12 @@ export const HUNGER_LEVELS: NeedLevel[] = [
 export const THIRST_LEVELS: NeedLevel[] = [
   { key: 'well-slaked', label: 'Well Slaked', descriptor: 'well slaked', themeColor: 'green', severity: 0 },
   { key: 'not-thirsty', label: 'Not Thirsty', descriptor: 'not thirsty', themeColor: 'brightGreen', severity: 1 },
-  { key: 'slightly-thirsty', label: 'Slightly Thirsty', descriptor: 'slightly thirsty', themeColor: 'brightGreen', severity: 2 },
-  { key: 'thirsty', label: 'Thirsty', descriptor: 'thirsty', themeColor: 'yellow', severity: 3 },
-  { key: 'parched', label: 'Parched', descriptor: 'parched', themeColor: 'yellow', severity: 4 },
-  { key: 'faint-thirst', label: 'Faint from Thirst', descriptor: 'faint from thirst', themeColor: 'red', severity: 5 },
+  { key: 'slightly-thirsty', label: 'Slightly Thirsty', descriptor: 'slightly thirsty', themeColor: 'brightYellow', severity: 2 },
+  { key: 'thirsty', label: 'Thirsty', descriptor: 'thirsty', themeColor: 'brightYellow', severity: 3 },
+  { key: 'parched', label: 'Parched', descriptor: 'parched', themeColor: 'brightYellow', severity: 4 },
+  { key: 'faint-thirst', label: 'Faint from Thirst', descriptor: 'faint from thirst', themeColor: 'brightYellow', severity: 5 },
   { key: 'dehydrated', label: 'Dehydrated', descriptor: 'completely dehydrated', themeColor: 'red', severity: 6 },
-  { key: 'dying-thirst', label: 'Dying of Thirst', descriptor: 'dying of thirst', themeColor: 'magenta', severity: 7 },
+  { key: 'dying-thirst', label: 'Dying of Thirst', descriptor: 'dying of thirst', themeColor: 'red', severity: 7 },
 ];
 
 /** Lookup maps for fast matching */

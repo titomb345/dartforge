@@ -1,4 +1,4 @@
-import { forwardRef } from 'react';
+import { forwardRef, useState, useEffect, useCallback } from 'react';
 
 /* ── Accent color mappings ──────────────────────────────────── */
 
@@ -8,6 +8,7 @@ const FOCUS_COLORS = {
   purple: 'focus:border-[#a78bfa]/40',
   pink: 'focus:border-[#ff79c6]/40',
   green: 'focus:border-[#4ade80]/40',
+  orange: 'focus:border-[#f97316]/40',
 } as const;
 
 const BTN_ACCENT = {
@@ -16,6 +17,7 @@ const BTN_ACCENT = {
   purple: 'bg-[#a78bfa]/10 border-[#a78bfa]/40 text-[#a78bfa] hover:bg-[#a78bfa]/20',
   pink: 'bg-[#ff79c6]/10 border-[#ff79c6]/40 text-[#ff79c6] hover:bg-[#ff79c6]/20',
   green: 'bg-[#4ade80]/10 border-[#4ade80]/40 text-[#4ade80] hover:bg-[#4ade80]/20',
+  orange: 'bg-[#f97316]/10 border-[#f97316]/40 text-[#f97316] hover:bg-[#f97316]/20',
 } as const;
 
 const SIZE_CLASSES = {
@@ -99,3 +101,75 @@ export const MudButton = forwardRef<HTMLButtonElement, MudButtonProps>(
   },
 );
 MudButton.displayName = 'MudButton';
+
+/* ── MudNumberInput ────────────────────────────────────────── */
+
+interface MudNumberInputProps {
+  accent?: Accent;
+  size?: Size;
+  value: number;
+  onChange: (value: number) => void;
+  min?: number;
+  max?: number;
+  step?: number;
+  /** Parse function — defaults to parseInt. Use parseFloat for decimal inputs. */
+  parse?: (v: string) => number;
+  className?: string;
+  disabled?: boolean;
+  onKeyDown?: React.KeyboardEventHandler<HTMLInputElement>;
+}
+
+/**
+ * Number input that stores a local string so the user can freely clear &
+ * retype. The clamped numeric value is committed on blur.
+ */
+export const MudNumberInput = forwardRef<HTMLInputElement, MudNumberInputProps>(
+  ({ accent = 'cyan', size = 'md', value, onChange, min, max, step, parse, className, disabled, onKeyDown }, ref) => {
+    const parseFn = parse ?? parseInt;
+    const [text, setText] = useState(String(value));
+
+    // Sync from parent when the external value changes
+    useEffect(() => {
+      setText((prev) => {
+        const parsed = parseFn(prev);
+        // Only overwrite if the external value actually differs from what we have
+        if (!isNaN(parsed) && parsed === value) return prev;
+        return String(value);
+      });
+    }, [value, parseFn]);
+
+    const commit = useCallback(() => {
+      const parsed = parseFn(text);
+      if (isNaN(parsed)) {
+        // Revert to current value
+        setText(String(value));
+        return;
+      }
+      let clamped = parsed;
+      if (min != null) clamped = Math.max(min, clamped);
+      if (max != null) clamped = Math.min(max, clamped);
+      setText(String(clamped));
+      onChange(clamped);
+    }, [text, value, onChange, min, max, parseFn]);
+
+    return (
+      <input
+        ref={ref}
+        type="number"
+        inputMode="numeric"
+        min={min}
+        max={max}
+        step={step}
+        value={text}
+        onChange={(e) => setText(e.target.value)}
+        onBlur={commit}
+        onKeyDown={onKeyDown}
+        disabled={disabled}
+        spellCheck={false}
+        autoComplete="off"
+        className={`font-mono bg-bg-input border border-border-dim rounded text-text-primary placeholder:text-text-dim focus:outline-none transition-colors duration-150 ${SIZE_CLASSES[size]} ${FOCUS_COLORS[accent]} ${className ?? ''}`}
+      />
+    );
+  },
+);
+MudNumberInput.displayName = 'MudNumberInput';

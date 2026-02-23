@@ -280,8 +280,20 @@ export function useSkillTracker(
     });
   }, []);
 
-  const deleteSkill = useCallback((skill: string) => {
+  const deleteSkill = useCallback((skill: string, petName?: string) => {
     setSkillData((prev) => {
+      if (petName) {
+        const petSkills = prev.pets[petName];
+        if (!petSkills?.[skill]) return prev;
+        const { [skill]: _, ...rest } = petSkills;
+        const newPets = { ...prev.pets };
+        if (Object.keys(rest).length === 0) {
+          delete newPets[petName];
+        } else {
+          newPets[petName] = rest;
+        }
+        return { ...prev, pets: newPets };
+      }
       if (!prev.skills[skill]) return prev;
       const { [skill]: _, ...rest } = prev.skills;
       return { ...prev, skills: rest };

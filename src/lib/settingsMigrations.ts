@@ -7,7 +7,7 @@ import type { DataStore } from '../contexts/DataStoreContext';
  * baseline. Existing beta users (version > 1) are normalized to 1 so
  * future migrations apply correctly to everyone.
  */
-export const CURRENT_VERSION = 1;
+export const CURRENT_VERSION = 4;
 
 /** Raw store contents — all keys are optional since older stores may lack them. */
 export type StoreData = Record<string, unknown>;
@@ -116,6 +116,24 @@ const MIGRATIONS: MigrationFn[] = [
     delete data.compactMode;
     delete data.compactBar;
 
+    return data;
+  },
+  // v1 → v2: Alignment tracking
+  (data) => {
+    if (!('alignmentTrackingEnabled' in data)) data.alignmentTrackingEnabled = false;
+    if (!('alignmentTrackingMinutes' in data)) data.alignmentTrackingMinutes = 5;
+    return data;
+  },
+  // v2 → v3: Post-sync commands
+  (data) => {
+    if (!('postSyncEnabled' in data)) data.postSyncEnabled = false;
+    if (!('postSyncCommands' in data)) data.postSyncCommands = '';
+    return data;
+  },
+  // v3 → v4: Timers
+  (data) => {
+    if (!('timersEnabled' in data)) data.timersEnabled = true;
+    if (!('showTimerBadges' in data)) data.showTimerBadges = true;
     return data;
   },
 ];

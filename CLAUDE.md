@@ -93,6 +93,14 @@ Versioning is automated via CHANGELOG.md bump hints and GitHub Actions.
 - `src-tauri/tauri.conf.json`
 - `src-tauri/Cargo.toml`
 
+## Guide (`src/lib/helpContent.ts`)
+When adding a new feature, panel, keyboard shortcut, or non-obvious interaction, update the in-app guide:
+- **New panel** → add entry to the "Panels & Layout" section (`key: 'panels'`)
+- **New keyboard shortcut** → add entry to "Keyboard Shortcuts" (`key: 'shortcuts'`)
+- **Non-obvious interaction** (right-click, double-click, drag, hover) → add to "Hidden Powers" (`key: 'hidden'`) with the appropriate `interaction` type
+- **New built-in command** (`/echo`, `/delay`, etc.) → add to "Built-in Commands" (`key: 'commands'`)
+- If the feature has a toolbar button, set `helpId` to match its `data-help-id` (e.g., `'toolbar-timers'`) so the "Show me" spotlight works
+
 ## DartMUD Notes
 - Numberless combat interface
 - Class archetypes: Mage, Fighter, Multi-class

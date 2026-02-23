@@ -36,6 +36,7 @@ export interface AllocState {
   setCurrentProfileIndex: (idx: number) => void;
   createProfile: (name?: string) => void;
   createProfileFromLive: (name?: string) => void;
+  updateProfileFromLive: (profileId: string) => void;
   deleteProfile: (id: string) => void;
   duplicateProfile: (id: string) => void;
   renameProfile: (id: string, name: string) => void;
@@ -64,6 +65,7 @@ export interface AllocState {
   navigateMagicProfile: (direction: 'prev' | 'next') => void;
   createMagicProfile: (name?: string) => void;
   createMagicProfileFromLive: (name?: string) => void;
+  updateMagicProfileFromLive: (profileId: string) => void;
   deleteMagicProfile: (id: string) => void;
   duplicateMagicProfile: (id: string) => void;
   renameMagicProfile: (id: string, name: string) => void;
@@ -235,6 +237,23 @@ export function useAllocations(
       return { ...prev, profiles, currentProfileIndex: profiles.length - 1 };
     });
     setView('profiles');
+  }, []);
+
+  /** Overwrite an existing profile's limb data with current live allocations. */
+  const updateProfileFromLive = useCallback((profileId: string) => {
+    setData((prev) => ({
+      ...prev,
+      profiles: prev.profiles.map((p) => {
+        if (p.id !== profileId) return p;
+        const limbs: Record<string, LimbAllocation> = {};
+        for (const limbName of prev.detectedLimbs) {
+          limbs[limbName] = prev.liveAllocations[limbName]
+            ? { ...prev.liveAllocations[limbName] }
+            : { ...EMPTY_LIMB };
+        }
+        return { ...p, limbs };
+      }),
+    }));
   }, []);
 
   const deleteProfile = useCallback((id: string) => {
@@ -510,6 +529,17 @@ export function useAllocations(
     setMagicView('profiles');
   }, []);
 
+  /** Overwrite an existing magic profile with current live allocation. */
+  const updateMagicProfileFromLive = useCallback((profileId: string) => {
+    setMagicData((prev) => ({
+      ...prev,
+      profiles: prev.profiles.map((p) => {
+        if (p.id !== profileId) return p;
+        return { ...p, alloc: { ...prev.liveAllocation } };
+      }),
+    }));
+  }, []);
+
   const deleteMagicProfile = useCallback((id: string) => {
     setMagicData((prev) => {
       const profiles = prev.profiles.filter((p) => p.id !== id);
@@ -626,6 +656,7 @@ export function useAllocations(
     setCurrentProfileIndex,
     createProfile,
     createProfileFromLive,
+    updateProfileFromLive,
     deleteProfile,
     duplicateProfile,
     renameProfile,
@@ -654,6 +685,7 @@ export function useAllocations(
     navigateMagicProfile,
     createMagicProfile,
     createMagicProfileFromLive,
+    updateMagicProfileFromLive,
     deleteMagicProfile,
     duplicateMagicProfile,
     renameMagicProfile,

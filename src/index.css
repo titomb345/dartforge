@@ -183,3 +183,45 @@
   border-color: rgba(217, 175, 80, 0.5) !important;
   filter: drop-shadow(0 0 4px rgba(217, 175, 80, 0.25));
 }
+
+/* ── Counter skill hot/cold effects ─────────────────────── */
+
+@keyframes skill-hot-pulse {
+  0%, 100% {
+    background: rgba(245, 158, 11, 0.04);
+    border-left-color: rgba(245, 158, 11, 0.5);
+  }
+  50% {
+    background: rgba(245, 158, 11, 0.08);
+    border-left-color: rgba(245, 158, 11, 0.8);
+  }
+}
+
+.skill-hot {
+  border-left: 2px solid rgba(245, 158, 11, 0.5);
+  animation: skill-hot-pulse 3s ease-in-out infinite;
+}
+
+.skill-hot .skill-rate {
+  color: #f59e0b;
+}
+
+@keyframes skill-cold-pulse {
+  0%, 100% {
+    background: rgba(139, 233, 253, 0.03);
+    border-left-color: rgba(139, 233, 253, 0.3);
+  }
+  50% {
+    background: rgba(139, 233, 253, 0.06);
+    border-left-color: rgba(139, 233, 253, 0.55);
+  }
+}
+
+.skill-cold {
+  border-left: 2px solid rgba(139, 233, 253, 0.3);
+  animation: skill-cold-pulse 4s ease-in-out infinite;
+}
+
+.skill-cold .skill-rate {
+  color: #8be9fd;
+}

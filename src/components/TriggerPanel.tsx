@@ -1,14 +1,14 @@
 import { useCallback, useRef, useState, useEffect, useMemo } from 'react';
 import { useTriggerContext } from '../contexts/TriggerContext';
-import { useVariableContext } from '../contexts/VariableContext';
 import { useSkillTrackerContext } from '../contexts/SkillTrackerContext';
 import { matchTriggers, expandTriggerBody } from '../lib/triggerEngine';
+import { formatCommandPreview } from '../lib/commandUtils';
 import { useFilteredGroups } from '../lib/useFilteredGroups';
 import { charDisplayName } from '../lib/panelUtils';
-import type { Trigger, TriggerId, TriggerMatchMode, TriggerScope } from '../types/trigger';
+import type { Trigger, TriggerId, TriggerMatchMode, TriggerPrefill, TriggerScope } from '../types/trigger';
 import { TrashIcon, PlusIcon, ChevronDownIcon, ChevronUpIcon, TriggerIcon } from './icons';
 import { FilterPill } from './FilterPill';
-import { MudInput, MudTextarea, MudButton } from './shared';
+import { MudInput, MudTextarea, MudButton, MudNumberInput } from './shared';
 import { SyntaxHelpTable } from './SyntaxHelpTable';
 import type { HelpRow } from './SyntaxHelpTable';
 
@@ -104,7 +104,7 @@ function TriggerRow({
         </button>
       )}
       <span
-        className={`text-[11px] font-mono w-[100px] shrink-0 truncate ${
+        className={`text-[11px] font-mono flex-1 truncate ${
           trigger.matchMode === 'substring'
             ? 'text-[#ff79c6]'
             : trigger.matchMode === 'exact'
@@ -114,9 +114,6 @@ function TriggerRow({
         title={`${trigger.pattern}\n${trigger.matchMode} match`}
       >
         {trigger.pattern}
-      </span>
-      <span className="text-[11px] text-text-dim flex-1 truncate" title={trigger.body}>
-        {trigger.body}
       </span>
       {trigger.gag && (
         <span
@@ -159,6 +156,9 @@ const TRIGGER_HELP_ROWS: HelpRow[] = [
   { token: '\\;', desc: 'Literal semicolon (not a separator)' },
   { token: '/delay <ms>', desc: 'Pause between commands (milliseconds)', example: '/delay 1000;cast heal' },
   { token: '/echo <text>', desc: 'Print text locally (not sent to MUD)', example: '/echo [TRIGGER] Combat started' },
+  { token: '/spam <N> <cmd>', desc: 'Repeat a command N times (max 1000)', example: '/spam 3 say hello' },
+  { token: '/var <name> <val>', desc: 'Set a variable (track state from triggers)', example: '/var foe $1  →  $foe tracks attacker' },
+  { token: '/convert <amt>', desc: 'Convert currency and display locally', example: '/convert $0' },
 ];
 
 const TRIGGER_HELP_FOOTER = (
@@ -178,12 +178,14 @@ function BodySyntaxHelp() {
 
 function TriggerEditor({
   trigger,
+  prefill,
   scope: initialScope,
   activeCharacter,
   onSave,
   onCancel,
 }: {
   trigger: Trigger | null; // null = creating new
+  prefill?: TriggerPrefill | null;
   scope: TriggerScope;
   activeCharacter: string | null;
   onSave: (
@@ -202,14 +204,13 @@ function TriggerEditor({
   ) => void;
   onCancel: () => void;
 }) {
-  const { mergedVariables } = useVariableContext();
-  const [pattern, setPattern] = useState(trigger?.pattern ?? '');
-  const [matchMode, setMatchMode] = useState<TriggerMatchMode>(trigger?.matchMode ?? 'substring');
-  const [body, setBody] = useState(trigger?.body ?? '');
-  const [group, setGroup] = useState(trigger?.group ?? '');
+  const [pattern, setPattern] = useState(trigger?.pattern ?? prefill?.pattern ?? '');
+  const [matchMode, setMatchMode] = useState<TriggerMatchMode>(trigger?.matchMode ?? prefill?.matchMode ?? 'substring');
+  const [body, setBody] = useState(trigger?.body ?? prefill?.body ?? '');
+  const [group, setGroup] = useState(trigger?.group ?? prefill?.group ?? '');
   const [scope, setScope] = useState<TriggerScope>(initialScope);
   const [cooldownMs, setCooldownMs] = useState(trigger?.cooldownMs ?? 0);
-  const [gag, setGag] = useState(trigger?.gag ?? false);
+  const [gag, setGag] = useState(trigger?.gag ?? prefill?.gag ?? false);
   const [highlight, setHighlight] = useState<string | null>(trigger?.highlight ?? null);
   const [soundAlert, setSoundAlert] = useState(trigger?.soundAlert ?? false);
 
@@ -248,20 +249,13 @@ function TriggerEditor({
     try {
       const matches = matchTriggers(testInput, testInput, [tempTrigger]);
       if (matches.length === 0) return { matched: false, text: 'No match' };
-      const commands = expandTriggerBody(body, matches[0], activeCharacter, mergedVariables);
-      const text = commands
-        .map((cmd) => {
-          if (cmd.type === 'send') return cmd.text;
-          if (cmd.type === 'delay') return `[delay ${cmd.ms}ms]`;
-          if (cmd.type === 'echo') return `[echo] ${cmd.text}`;
-          return '';
-        })
-        .join('\n');
+      const commands = expandTriggerBody(body, matches[0], activeCharacter);
+      const text = formatCommandPreview(commands).join('\n');
       return { matched: true, text: text || '(no commands)' };
     } catch {
       return { matched: false, text: '[error]' };
     }
-  }, [testInput, pattern, matchMode, body, activeCharacter, mergedVariables]);
+  }, [testInput, pattern, matchMode, body, activeCharacter]);
 
   const canSave = pattern.trim().length > 0;
 
@@ -346,7 +340,7 @@ function TriggerEditor({
             value={body}
             onChange={(e) => setBody(e.target.value)}
             placeholder="/echo [ALERT] $line"
-            rows={3}
+            rows={5}
             className="w-full"
           />
         </div>
@@ -368,24 +362,24 @@ function TriggerEditor({
             <label className="text-[10px] text-text-dim mb-0.5 block">Scope</label>
             <div className="flex gap-0.5">
               <button
-                onClick={() => setScope('character')}
-                className={`flex-1 text-[10px] py-1 rounded-l border cursor-pointer transition-colors duration-150 ${
-                  scope === 'character'
-                    ? 'border-[#ff79c6]/40 text-[#ff79c6] bg-[#ff79c6]/10'
-                    : 'border-border-dim text-text-dim hover:text-text-label'
-                }`}
-              >
-                Char
-              </button>
-              <button
                 onClick={() => setScope('global')}
-                className={`flex-1 text-[10px] py-1 rounded-r border cursor-pointer transition-colors duration-150 ${
+                className={`flex-1 text-[10px] py-1 rounded-l border cursor-pointer transition-colors duration-150 ${
                   scope === 'global'
                     ? 'border-[#ff79c6]/40 text-[#ff79c6] bg-[#ff79c6]/10'
                     : 'border-border-dim text-text-dim hover:text-text-label'
                 }`}
               >
                 Global
+              </button>
+              <button
+                onClick={() => setScope('character')}
+                className={`flex-1 text-[10px] py-1 rounded-r border cursor-pointer transition-colors duration-150 ${
+                  scope === 'character'
+                    ? 'border-[#ff79c6]/40 text-[#ff79c6] bg-[#ff79c6]/10'
+                    : 'border-border-dim text-text-dim hover:text-text-label'
+                }`}
+              >
+                Char
               </button>
             </div>
           </div>
@@ -396,13 +390,12 @@ function TriggerEditor({
           <div className="w-[80px]">
             <label className="text-[10px] text-text-dim mb-0.5 block">Cooldown</label>
             <div className="flex items-center gap-1">
-              <MudInput
+              <MudNumberInput
                 accent="pink"
-                type="number"
                 min={0}
                 step={100}
                 value={cooldownMs}
-                onChange={(e) => setCooldownMs(Math.max(0, parseInt(e.target.value) || 0))}
+                onChange={setCooldownMs}
                 onKeyDown={handleFieldKeyDown}
                 className="w-full"
               />
@@ -594,14 +587,24 @@ export function TriggerPanel({ onClose }: TriggerPanelProps) {
     createTrigger,
     updateTrigger,
     deleteTrigger,
+    triggerPrefill,
+    setTriggerPrefill,
   } = useTriggerContext();
   const { activeCharacter } = useSkillTrackerContext();
 
-  const [scope, setScope] = useState<TriggerScope>('character');
+  const [scope, setScope] = useState<TriggerScope>('global');
   const [groupFilter, setGroupFilter] = useState<string | null>(null);
   const [searchText, setSearchText] = useState('');
   const [editingId, setEditingId] = useState<TriggerId | null>(null);
   const [creating, setCreating] = useState(false);
+
+  // Open editor when prefill arrives from context menu
+  useEffect(() => {
+    if (triggerPrefill) {
+      setCreating(true);
+      setEditingId(null);
+    }
+  }, [triggerPrefill]);
 
   const triggers = scope === 'character' ? characterTriggers : globalTriggers;
   const triggerList = useMemo(() => Object.values(triggers), [triggers]);
@@ -674,16 +677,16 @@ export function TriggerPanel({ onClose }: TriggerPanelProps) {
       {/* Scope toggle */}
       <div className="flex items-center gap-1.5 px-2 py-2 border-b border-border-subtle shrink-0">
         <FilterPill
-          label="Character"
-          active={scope === 'character'}
-          accent="pink"
-          onClick={() => { setScope('character'); setGroupFilter(null); }}
-        />
-        <FilterPill
           label="Global"
           active={scope === 'global'}
           accent="pink"
           onClick={() => { setScope('global'); setGroupFilter(null); }}
+        />
+        <FilterPill
+          label="Character"
+          active={scope === 'character'}
+          accent="pink"
+          onClick={() => { setScope('character'); setGroupFilter(null); }}
         />
       </div>
 
@@ -732,13 +735,19 @@ export function TriggerPanel({ onClose }: TriggerPanelProps) {
       {/* Editor (inline) */}
       {(creating || editingTrigger) && (
         <TriggerEditor
+          key={triggerPrefill ? `prefill-${triggerPrefill.pattern}` : editingId ?? 'new'}
           trigger={editingTrigger}
+          prefill={creating ? triggerPrefill : null}
           scope={scope}
           activeCharacter={activeCharacter}
-          onSave={handleSave}
+          onSave={(...args) => {
+            handleSave(...args);
+            setTriggerPrefill(null);
+          }}
           onCancel={() => {
             setCreating(false);
             setEditingId(null);
+            setTriggerPrefill(null);
           }}
         />
       )}

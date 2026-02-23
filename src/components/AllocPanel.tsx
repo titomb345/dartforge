@@ -6,8 +6,67 @@ import { ALLOC_SLOTS, POINTS_PER_LIMB, SLOT_SHORT, MAGIC_SLOTS, MAGIC_POINTS, MA
 import { calcNull, calcArcane } from '../lib/allocPatterns';
 import { PinMenuButton } from './PinMenuButton';
 import { PinnedControls } from './PinnedControls';
-import { ChevronLeftIcon, ChevronRightSmallIcon, PlusIcon, TrashIcon, CopyIcon, CheckIcon, AllocIcon } from './icons';
+import { ChevronLeftIcon, ChevronRightSmallIcon, PlusIcon, TrashIcon, CopyIcon, CheckIcon, AllocIcon, ChevronDownSmallIcon } from './icons';
 import { cn } from '../lib/cn';
+
+/** Dropdown menu for "Save to Profile" action. */
+function SaveProfileMenu({
+  profiles,
+  onNew,
+  onUpdate,
+  accent,
+}: {
+  profiles: { id: string; name: string }[];
+  onNew: () => void;
+  onUpdate: (id: string) => void;
+  accent?: string;
+}) {
+  const [open, setOpen] = useState(false);
+  const menuRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    const handler = (e: MouseEvent) => {
+      if (menuRef.current && !menuRef.current.contains(e.target as Node)) setOpen(false);
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, [open]);
+
+  return (
+    <div className="relative" ref={menuRef}>
+      <button
+        onClick={() => setOpen((v) => !v)}
+        className="flex items-center gap-0.5 px-1.5 py-[2px] rounded text-[10px] font-semibold cursor-pointer transition-all duration-200 border border-border-dim text-text-dim hover:text-text-label hover:border-border"
+        title="Save live allocations to a profile"
+      >
+        Save to Profile <ChevronDownSmallIcon size={8} />
+      </button>
+      {open && (
+        <div className="absolute bottom-full left-0 mb-1 min-w-[140px] max-h-[200px] overflow-auto bg-bg-primary border border-border rounded shadow-lg z-50">
+          <button
+            onClick={() => { onNew(); setOpen(false); }}
+            className="flex items-center gap-1 w-full px-2 py-1 text-[10px] text-left text-text-label hover:bg-bg-secondary/60 cursor-pointer transition-colors"
+          >
+            <PlusIcon size={8} /> New Profile
+          </button>
+          {profiles.length > 0 && <div className="h-px bg-border-dim mx-1" />}
+          {profiles.map((p) => (
+            <button
+              key={p.id}
+              onClick={() => { onUpdate(p.id); setOpen(false); }}
+              className="flex items-center gap-1 w-full px-2 py-1 text-[10px] text-left text-text-label hover:bg-bg-secondary/60 cursor-pointer transition-colors truncate"
+              title={`Overwrite "${p.name}" with live values`}
+              style={accent ? { color: undefined } : undefined}
+            >
+              <span className="truncate">{p.name}</span>
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
 
 type AllocPanelProps = PinnablePanelProps;
 
@@ -361,6 +420,7 @@ function LiveView() {
     applyLiveLimb,
     applyLiveAll,
     createProfileFromLive,
+    updateProfileFromLive,
   } = useAllocContext();
 
   const limbNames = data.detectedLimbs;
@@ -422,13 +482,11 @@ function LiveView() {
         >
           Apply All
         </button>
-        <button
-          onClick={() => createProfileFromLive()}
-          className="flex items-center gap-0.5 px-1.5 py-[2px] rounded text-[10px] font-semibold cursor-pointer transition-all duration-200 border border-border-dim text-text-dim hover:text-text-label hover:border-border"
-          title="Save current live allocations as a profile"
-        >
-          <PlusIcon size={9} /> Save as Profile
-        </button>
+        <SaveProfileMenu
+          profiles={data.profiles}
+          onNew={() => createProfileFromLive()}
+          onUpdate={(id) => updateProfileFromLive(id)}
+        />
       </div>
     </div>
   );
@@ -540,10 +598,9 @@ function ProfileView() {
               <button
                 onClick={() => { deleteProfile(currentProfile.id); setConfirmDelete(false); }}
                 onBlur={() => setConfirmDelete(false)}
-                className="flex items-center gap-0.5 px-1 py-[1px] rounded text-[9px] font-semibold cursor-pointer transition-all duration-200 border border-red/40 bg-red/10 text-red"
-                autoFocus
+                className="text-[8px] font-mono text-red border border-red/40 rounded px-1 py-px cursor-pointer hover:bg-red/10 transition-colors duration-150"
               >
-                confirm?
+                Del?
               </button>
             ) : (
               <button
@@ -633,6 +690,7 @@ function MagicLiveView() {
     setMagicLiveSlotDelta,
     applyMagicLive,
     createMagicProfileFromLive,
+    updateMagicProfileFromLive,
   } = useAllocContext();
 
   const alloc = magicData.liveAllocation;
@@ -689,13 +747,12 @@ function MagicLiveView() {
         >
           Apply
         </button>
-        <button
-          onClick={() => createMagicProfileFromLive()}
-          className="flex items-center gap-0.5 px-1.5 py-[2px] rounded text-[10px] font-semibold cursor-pointer transition-all duration-200 border border-border-dim text-text-dim hover:text-text-label hover:border-border"
-          title="Save current magic allocation as a profile"
-        >
-          <PlusIcon size={9} /> Save as Profile
-        </button>
+        <SaveProfileMenu
+          profiles={magicData.profiles}
+          onNew={() => createMagicProfileFromLive()}
+          onUpdate={(id) => updateMagicProfileFromLive(id)}
+          accent={MAGIC_ACCENT}
+        />
       </div>
     </div>
   );

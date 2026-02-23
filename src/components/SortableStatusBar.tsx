@@ -1,4 +1,4 @@
-import { useState, useCallback, useMemo } from 'react';
+import { useState, useCallback, useMemo, useEffect, useRef } from 'react';
 import {
   DndContext,
   closestCenter,
@@ -20,10 +20,10 @@ import { StatusReadout } from './StatusReadout';
 import type { ThemeColorKey } from '../lib/defaultTheme';
 import type { FilterFlags } from '../lib/outputFilter';
 
-export type StatusReadoutKey = 'health' | 'concentration' | 'aura' | 'hunger' | 'thirst' | 'encumbrance' | 'movement';
+export type StatusReadoutKey = 'health' | 'concentration' | 'aura' | 'hunger' | 'thirst' | 'encumbrance' | 'movement' | 'alignment';
 
 export const DEFAULT_STATUS_BAR_ORDER: StatusReadoutKey[] = [
-  'health', 'concentration', 'aura', 'hunger', 'thirst', 'encumbrance', 'movement',
+  'health', 'concentration', 'aura', 'hunger', 'thirst', 'encumbrance', 'movement', 'alignment',
 ];
 
 export interface ReadoutData {
@@ -33,6 +33,8 @@ export interface ReadoutData {
   descriptor?: string;
   message?: string;
   key?: string;
+  /** Optional direct CSS color — bypasses theme lookup when set */
+  color?: string;
 }
 
 export interface ReadoutConfig {
@@ -41,6 +43,8 @@ export interface ReadoutConfig {
   icon: React.ReactNode;
   tooltip: (data: ReadoutData) => string;
   filterKey?: keyof FilterFlags;
+  /** Severity at or above which the readout flashes red */
+  dangerThreshold: number;
 }
 
 interface SortableStatusBarProps {
@@ -55,8 +59,42 @@ interface SortableStatusBarProps {
   toggleCompactReadout: (key: string) => void;
 }
 
-function isDanger(tc: string) {
-  return tc === 'red' || tc === 'brightRed' || tc === 'magenta';
+const RAINBOW_COLORS = [
+  '#ff2020', '#ff6020', '#ffa020', '#ffe020',
+  '#a0ff20', '#20ff40', '#20ffa0', '#20e0ff',
+  '#2080ff', '#6040ff', '#a020ff', '#ff20e0',
+];
+
+function randomizeColors(length: number): string[] {
+  const result: string[] = [];
+  for (let i = 0; i < length; i++) {
+    let color: string;
+    do {
+      color = RAINBOW_COLORS[Math.floor(Math.random() * RAINBOW_COLORS.length)];
+    } while (i > 0 && color === result[i - 1]);
+    result.push(color);
+  }
+  return result;
+}
+
+function RainbowText({ text }: { text: string }) {
+  const [colors, setColors] = useState(() => randomizeColors(text.length));
+  const intervalRef = useRef<ReturnType<typeof setInterval>>(undefined);
+
+  useEffect(() => {
+    intervalRef.current = setInterval(() => {
+      setColors(randomizeColors(text.length));
+    }, 10000);
+    return () => clearInterval(intervalRef.current);
+  }, [text.length]);
+
+  return (
+    <>
+      {text.split('').map((ch, i) => (
+        <span key={i} style={{ color: colors[i], transition: 'color 0.5s ease' }}>{ch}</span>
+      ))}
+    </>
+  );
 }
 
 function SortableReadout({
@@ -103,10 +141,11 @@ function SortableReadout({
       <StatusReadout
         icon={config.icon}
         label={data.label}
-        color={theme[data.themeColor]}
+        color={data.color ?? theme[data.themeColor]}
         tooltip={config.tooltip(data)}
         glow={data.severity <= 1}
-        danger={isDanger(data.themeColor)}
+        danger={data.severity >= config.dangerThreshold}
+        labelNode={data.key === 'scintillating' ? <RainbowText text={data.label} /> : undefined}
         compact={autoCompact || !!compactReadouts[config.id]}
         autoCompact={autoCompact}
         filtered={config.filterKey ? filterFlags[config.filterKey] : undefined}

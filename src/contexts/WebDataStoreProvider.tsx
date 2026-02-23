@@ -81,6 +81,10 @@ export function WebDataStoreProvider({ children }: { children: ReactNode }) {
     localStorage.setItem(PREFIX + filename, content);
   }, []);
 
+  const deleteText = useCallback(async (filename: string): Promise<void> => {
+    localStorage.removeItem(PREFIX + filename);
+  }, []);
+
   const flushAll = useCallback(async (): Promise<void> => {
     for (const timer of dirtyRef.current.values()) clearTimeout(timer);
     dirtyRef.current.clear();
@@ -91,7 +95,7 @@ export function WebDataStoreProvider({ children }: { children: ReactNode }) {
   const reloadFromDir = useCallback(async (): Promise<string> => 'localStorage', []);
 
   const store: DataStore = {
-    get, set, save, delete: del, keys, readText, writeText, flushAll,
+    get, set, save, delete: del, keys, readText, writeText, deleteText, flushAll,
     activeDataDir, ready, needsSetup,
     completeSetup, reloadFromDir,
   };

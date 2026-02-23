@@ -31,7 +31,9 @@ export type ExpandedCommand =
   | { type: 'send'; text: string }
   | { type: 'delay'; ms: number }
   | { type: 'echo'; text: string }
-  | { type: 'spam'; count: number; command: string };
+  | { type: 'spam'; count: number; command: string }
+  | { type: 'var'; name: string; value: string; scope: 'character' | 'global' }
+  | { type: 'convert'; args: string };
 
 /** Result of expanding a single user command through the alias engine */
 export interface ExpansionResult {

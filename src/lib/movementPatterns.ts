@@ -19,11 +19,11 @@ export const MOVEMENT_LEVELS: MovementLevel[] = [
   { key: 'epic', label: 'Epic Adventure', descriptor: 'Ready for an epic adventure.', themeColor: 'green', severity: 1 },
   { key: 'trek', label: 'Long Trek', descriptor: 'Ready for a long trek.', themeColor: 'brightGreen', severity: 2 },
   { key: 'well-rested', label: 'Well Rested', descriptor: 'Well rested.', themeColor: 'brightGreen', severity: 3 },
-  { key: 'spring', label: 'Spring in Step', descriptor: 'You have spring in your step.', themeColor: 'yellow', severity: 4 },
-  { key: 'awhile', label: 'Travel a While', descriptor: 'You can travel a while longer.', themeColor: 'yellow', severity: 5 },
+  { key: 'spring', label: 'Spring in Step', descriptor: 'You have spring in your step.', themeColor: 'brightYellow', severity: 4 },
+  { key: 'awhile', label: 'Travel a While', descriptor: 'You can travel a while longer.', themeColor: 'brightYellow', severity: 5 },
   { key: 'break', label: 'Need a Break', descriptor: 'You could use a break.', themeColor: 'red', severity: 6 },
   { key: 'there-yet', label: 'Are We There Yet', descriptor: 'Are we there yet?', themeColor: 'red', severity: 7 },
-  { key: 'exhausted', label: 'Exhausted', descriptor: 'You are completely exhausted.', themeColor: 'magenta', severity: 8 },
+  { key: 'exhausted', label: 'Exhausted', descriptor: 'You are completely exhausted.', themeColor: 'red', severity: 8 },
 ];
 
 /** Result from matching a movement line */

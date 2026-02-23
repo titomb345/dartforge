@@ -9,6 +9,67 @@ The `[Unreleased]` header controls automatic version bumping on merge:
 - `[Unreleased-minor]` → 0.1.0 → 0.2.0
 - `[Unreleased-major]` → 0.1.0 → 1.0.0
 
+## [Unreleased-minor]
+
+### Added
+- Custom timers — repeating commands at configurable intervals (seconds or minutes) with full alias/trigger body syntax support
+- Timer panel with create, edit, delete, duplicate, enable/disable, scope (character/global), group filtering, and search
+- Timer countdown badges next to command input — soonest-to-fire shown first, overflow dropdown for additional timers
+- Double-click timer badge to stop a timer; stop buttons in overflow dropdown
+- Timer countdowns toggle in settings to show/hide all timer badges (anti-idle, alignment, and custom timers)
+- `/var <name>` search — typing `/var` with a single argument now regex-searches variable names and displays matches instead of showing a usage error
+- `/var`, `/convert`, and `/spam` directives now work inside alias and trigger bodies (e.g., `/var foe $1` in a trigger to track a target)
+- Syntax help in alias and trigger editors now documents all available directives
+- Alignment tracking — status bar readout with periodic polling and configurable interval
+- Notes panel multi-page support with page navigation, add, and delete
+- Login commands — fire user-configured commands automatically after logging in
+- Counter panel configurable hot/cold rate thresholds with color coding
+- Terminal right-click context menu with Copy Selected, Copy Line, Copy Visible, Copy All, Search, Scroll to Bottom, Clear Terminal, and font size controls
+- Context menu "Add Line to Trigger" pre-fills and opens the trigger panel
+- Context menu "Gag Line" instantly creates a gag trigger for the clicked line
+- Context menu "Save Selected to Notes" appends selected text to the current notes page
+- Terminal search (Ctrl+F) with next/prev navigation using xterm search addon
+- Allocation "Save to Profile" dropdown — can now create a new profile or overwrite an existing one from live allocations (combat and magic)
+
+### Changed
+- Settings panel: merged Alignment Tracking and Anti-Idle into a single "Timers" section, reducing accordion clutter
+- Timer labels (`[timer: name]`, `[anti-idle]`, `[align]`) now appear before command output in the terminal
+- Anti-idle and alignment badges are now display-only countdowns (enable/disable via settings)
+- Alias and trigger panels now default to Global scope (tab and editor) since most entries are shared across characters
+- Alias and trigger rows now use full available width for pattern text instead of a fixed narrow column
+- Group filter pills are now capitalized and case-insensitive ("starknight" and "Starknight" merge into one group)
+- Aura readout now uses unique per-level CSS colors instead of ANSI theme colors for better visual distinction
+- Scintillating aura displays rainbow-colored letters that randomize every 10 seconds
+- Status readout danger flash is now severity-based per status type instead of color-based, giving each indicator its own flash threshold
+- Tuned status indicator colors across all types: removed magenta, adjusted red/yellow thresholds to better match in-game severity
+- Brightened low-contrast aura colors (indigo, violet, blue, red ranges) for readability on dark backgrounds
+- Settings panel now uses accordion behavior (only one section open at a time), matching the guide panel
+- Default theme yellow changed from dark orange to actual yellow for better readability
+- Trigger bodies now re-expand through the alias engine for nested alias support
+- Alias and trigger body textareas default to 5 rows instead of 3
+- Alias and trigger search now filters by pattern only, no longer matches body or group text
+- Status indicator yellow levels now use bright yellow for better visibility
+- Renamed "Post-Sync Commands" to "Login Commands" in settings
+- Extracted `CommandInputContext`, `useTimerEngines`, and `useCommandHistory` from App.tsx — CommandInput now reads state from context instead of 20+ props
+- Double-click anti-idle and alignment tracking badges to disable them, matching custom timer badge behavior
+
+### Fixed
+- Removed click-outside-to-close behavior on slide-out panels — panels now stay open until explicitly closed via the × button or toolbar toggle
+- Prefix aliases with `$*` now capture the full argument string including semicolons (e.g., `rea /spam 1 k demon;sf` no longer splits on `;` before alias consumption)
+- `/var` values now preserve semicolons (treated as rest-of-line, like `/spam`)
+- Variables that expand to directives (e.g., `$reattackAction` → `/spam 1 k demon;sf`) are now re-processed through the command pipeline instead of being sent raw to the MUD
+- Alias and trigger preview now properly expands `/spam` commands, showing all repeated commands instead of blank lines
+- Skill category lists updated to use actual in-game skill names (underscores, apostrophes, `language#` prefix) so skills are correctly grouped
+- `language#magic` now properly categorized under both Magic and Language via multi-category skill support
+- Variable expansion in aliases and triggers now happens at execution time, so `/var foe $1;/echo $foe` correctly reflects the just-set value
+- Aura matcher now recognizes "You appear to have no aura." (from `aura` command and `score` output) in addition to "You have no aura."
+- Pet skill deletion now works — previously clicking "Del?" on a pet's skill did nothing because the delete function only handled character skills
+- Allocation panel delete button no longer animates with a jarring size transition — now matches the standard "Del?" pattern used elsewhere
+- Prompt stripping no longer eats ANSI color reset codes — previously, stripping `> ` could discard `\x1b[0m`, causing the prior line's color (e.g., cyan) to bleed into subsequent output
+- Login commands no longer fire on connect — previously they ran before the login prompt, sending commands as username/password
+- Password mode now resets on disconnect — previously, disconnecting while at the password prompt left the input masked on reconnect, and the masked password was revealed when the mask was removed
+- Number inputs across settings and editors no longer force minimum value on every keystroke — fields can be cleared and retyped freely
+
 ## [1.0.0] - 2026-02-22
 
 ### Added

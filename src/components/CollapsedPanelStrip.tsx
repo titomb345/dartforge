@@ -26,8 +26,20 @@ export function CollapsedPanelStrip({
   onMovePanel,
 }: CollapsedPanelStripProps) {
   const [openPanel, setOpenPanel] = useState<PinnablePanel | null>(null);
+  // Keep the last panel rendered during close animation so content doesn't vanish mid-slide
+  const [renderedPanel, setRenderedPanel] = useState<PinnablePanel | null>(null);
   const overlayRef = useRef<HTMLDivElement>(null);
   const stripRef = useRef<HTMLDivElement>(null);
+
+  // When opening, update rendered panel immediately. When closing, let transition finish first.
+  useEffect(() => {
+    if (openPanel) {
+      setRenderedPanel(openPanel);
+    } else {
+      const timer = setTimeout(() => setRenderedPanel(null), 300); // matches transition duration
+      return () => clearTimeout(timer);
+    }
+  }, [openPanel]);
 
   // Clear overlay if the open panel was removed from this side (e.g. swapped or unpinned)
   useEffect(() => {
@@ -93,37 +105,48 @@ export function CollapsedPanelStrip({
         })}
       </div>
 
-      {/* Overlay panel */}
-      {openPanel && (() => {
-        const meta = PANEL_META[openPanel];
-        const i = panels.indexOf(openPanel);
-        return (
-          <div
-            ref={overlayRef}
-            className={cn(
-              'absolute top-0 bottom-0 z-[90] transition-transform duration-200 ease-out',
-              side === 'left' ? 'left-[40px]' : 'right-[40px]',
-            )}
-            style={{ width: panelWidth }}
-          >
-            <div className="h-full flex flex-col rounded-lg bg-bg-primary overflow-hidden shadow-xl shadow-black/30 border border-border-subtle">
-              <PinnedControlsProvider value={{
-                side,
-                onUnpin: () => { setOpenPanel(null); onUnpin(openPanel); },
-                onSwapSide: canSwapSide ? () => { setOpenPanel(null); onSwapSide(openPanel); } : undefined,
-                onMoveUp: i > 0 ? () => onMovePanel(openPanel, 'up') : undefined,
-                onMoveDown: i < panels.length - 1 ? () => onMovePanel(openPanel, 'down') : undefined,
-                canMoveUp: i > 0,
-                canMoveDown: i < panels.length - 1,
-                otherSidePanels: !canSwapSide ? otherSidePanels : undefined,
-                onSwapWith: !canSwapSide ? (target: PinnablePanel) => { setOpenPanel(null); onSwapWith(openPanel, target); } : undefined,
-              }}>
-                {meta.render()}
-              </PinnedControlsProvider>
-            </div>
-          </div>
-        );
-      })()}
+      {/* Clip container — hides the overlay behind the icon strip edge */}
+      <div
+        className={cn(
+          'absolute top-0 bottom-0 z-[90] overflow-hidden',
+          side === 'left' ? 'left-[40px]' : 'right-[40px]',
+          !openPanel && 'pointer-events-none',
+        )}
+        style={{ width: panelWidth }}
+      >
+        {/* Overlay panel — slides in/out from the icon strip edge */}
+        <div
+          ref={overlayRef}
+          className={cn(
+            'h-full transition-transform duration-300 ease-in-out',
+            openPanel
+              ? 'translate-x-0'
+              : side === 'left' ? '-translate-x-full pointer-events-none' : 'translate-x-full pointer-events-none',
+          )}
+        >
+          {renderedPanel && (() => {
+            const meta = PANEL_META[renderedPanel];
+            const i = panels.indexOf(renderedPanel);
+            return (
+              <div className="h-full flex flex-col rounded-lg bg-bg-primary overflow-hidden shadow-xl shadow-black/30 border border-border-subtle">
+                <PinnedControlsProvider value={{
+                  side,
+                  onUnpin: () => { setOpenPanel(null); onUnpin(renderedPanel); },
+                  onSwapSide: canSwapSide ? () => { setOpenPanel(null); onSwapSide(renderedPanel); } : undefined,
+                  onMoveUp: i > 0 ? () => onMovePanel(renderedPanel, 'up') : undefined,
+                  onMoveDown: i < panels.length - 1 ? () => onMovePanel(renderedPanel, 'down') : undefined,
+                  canMoveUp: i > 0,
+                  canMoveDown: i < panels.length - 1,
+                  otherSidePanels: !canSwapSide ? otherSidePanels : undefined,
+                  onSwapWith: !canSwapSide ? (target: PinnablePanel) => { setOpenPanel(null); onSwapWith(renderedPanel, target); } : undefined,
+                }}>
+                  {meta.render()}
+                </PinnedControlsProvider>
+              </div>
+            );
+          })()}
+        </div>
+      </div>
     </div>
   );
 }

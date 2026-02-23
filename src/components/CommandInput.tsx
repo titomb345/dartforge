@@ -8,25 +8,14 @@ import {
   forwardRef,
 } from 'react';
 import { cn } from '../lib/cn';
-import { TimerIcon } from './icons';
+import { TimerIcon, AlignmentIcon } from './icons';
 import { useAppSettingsContext } from '../contexts/AppSettingsContext';
+import { useCommandInputContext } from '../contexts/CommandInputContext';
+import { useSpotlight } from '../contexts/SpotlightContext';
 
 interface CommandInputProps {
   onSend: (command: string) => void;
   onReconnect: () => void;
-  onToggleCounter?: () => void;
-  disabled: boolean;
-  connected: boolean;
-  passwordMode: boolean;
-  skipHistory: boolean;
-  recentLinesRef?: React.RefObject<string[]>;
-  antiIdleEnabled?: boolean;
-  antiIdleCommand?: string;
-  antiIdleMinutes?: number;
-  antiIdleNextAt?: number | null;
-  onToggleAntiIdle?: () => void;
-  initialHistory?: string[];
-  onHistoryChange?: (history: string[]) => void;
 }
 
 const LINE_HEIGHT = 20;
@@ -87,8 +76,16 @@ function formatCountdown(remainingMs: number): string {
 }
 
 export const CommandInput = forwardRef<HTMLTextAreaElement, CommandInputProps>(
-  ({ onSend, onReconnect, onToggleCounter, disabled, connected, passwordMode, skipHistory, recentLinesRef, antiIdleEnabled, antiIdleCommand, antiIdleMinutes, antiIdleNextAt, onToggleAntiIdle, initialHistory, onHistoryChange }, ref) => {
-    const { commandHistorySize, numpadMappings } = useAppSettingsContext();
+  ({ onSend, onReconnect }, ref) => {
+    const {
+      connected, disabled, passwordMode, skipHistory, recentLinesRef,
+      onToggleCounter, antiIdleEnabled, antiIdleCommand, antiIdleMinutes,
+      antiIdleNextAt, onToggleAntiIdle, alignmentTrackingEnabled,
+      alignmentTrackingMinutes, alignmentNextAt, onToggleAlignmentTracking,
+      activeTimers, onToggleTimer, initialHistory, onHistoryChange,
+    } = useCommandInputContext();
+    const { commandHistorySize, numpadMappings, showTimerBadges } = useAppSettingsContext();
+    const { active: spotlightActive } = useSpotlight();
     const numpadRef = useRef(numpadMappings);
     numpadRef.current = numpadMappings;
     const toggleCounterRef = useRef(onToggleCounter);
@@ -122,13 +119,24 @@ export const CommandInput = forwardRef<HTMLTextAreaElement, CommandInputProps>(
       }
     }, [initialHistory]);
 
-    // Anti-idle countdown tick
+    // Clear input when password mode is turned off (e.g. disconnect) to avoid revealing the password
+    const prevPasswordMode = useRef(passwordMode);
+    useEffect(() => {
+      if (prevPasswordMode.current && !passwordMode) setValue('');
+      prevPasswordMode.current = passwordMode;
+    }, [passwordMode]);
+
+    // Anti-idle / alignment / custom timer countdown tick
+    const hasActiveTimers = activeTimers && activeTimers.length > 0;
     const [, setCountdownTick] = useState(0);
     useEffect(() => {
-      if (!antiIdleNextAt) return;
+      if (!antiIdleNextAt && !alignmentNextAt && !hasActiveTimers) return;
       const id = setInterval(() => setCountdownTick((t) => t + 1), 1000);
       return () => clearInterval(id);
-    }, [antiIdleNextAt]);
+    }, [antiIdleNextAt, alignmentNextAt, hasActiveTimers]);
+
+    // Timer overflow dropdown state
+    const [timerOverflowOpen, setTimerOverflowOpen] = useState(false);
 
     // Re-focus when window regains focus
     useEffect(() => {
@@ -338,26 +346,104 @@ export const CommandInput = forwardRef<HTMLTextAreaElement, CommandInputProps>(
           )}
         />
 
-        {/* Anti-idle quick toggle */}
-        {onToggleAntiIdle && (
-          <button
-            onClick={onToggleAntiIdle}
-            title={antiIdleEnabled ? `Anti-idle: "${antiIdleCommand}" every ${antiIdleMinutes}m (click to disable)` : 'Anti-idle off (click to enable)'}
-            className={cn(
-              'flex items-center gap-1 px-1.5 py-1 rounded border text-[9px] font-mono transition-all duration-200 cursor-pointer self-center shrink-0 ml-1',
-              antiIdleEnabled
-                ? 'text-[#bd93f9] border-[#bd93f9]/30 bg-[#bd93f9]/8'
-                : 'text-text-dim border-border-dim bg-transparent hover:text-text-muted'
-            )}
-            style={antiIdleEnabled ? { filter: 'drop-shadow(0 0 3px rgba(189, 147, 249, 0.25))' } : undefined}
+        {/* Alignment tracking badge (only when active) */}
+        {showTimerBadges && alignmentTrackingEnabled && (
+          <span
+            title={`Alignment tracking: every ${alignmentTrackingMinutes}m (double-click to stop)`}
+            onDoubleClick={onToggleAlignmentTracking}
+            className="flex items-center gap-1 px-1.5 py-1 rounded border text-[9px] font-mono self-center shrink-0 ml-1 text-[#80e080] border-[#80e080]/30 bg-[#80e080]/8 cursor-pointer select-none"
+            style={{ filter: 'drop-shadow(0 0 3px rgba(128, 224, 128, 0.25))' }}
+          >
+            <AlignmentIcon size={9} />
+            <span>{alignmentNextAt
+              ? formatCountdown(alignmentNextAt - Date.now())
+              : `${alignmentTrackingMinutes}m`}</span>
+          </span>
+        )}
+
+        {/* Anti-idle badge (only when active, hidden when alignment tracking supersedes) */}
+        {showTimerBadges && antiIdleEnabled && !alignmentTrackingEnabled && (
+          <span
+            title={`Anti-idle: "${antiIdleCommand}" every ${antiIdleMinutes}m (double-click to stop)`}
+            onDoubleClick={onToggleAntiIdle}
+            className="flex items-center gap-1 px-1.5 py-1 rounded border text-[9px] font-mono self-center shrink-0 ml-1 text-[#bd93f9] border-[#bd93f9]/30 bg-[#bd93f9]/8 cursor-pointer select-none"
+            style={{ filter: 'drop-shadow(0 0 3px rgba(189, 147, 249, 0.25))' }}
           >
             <TimerIcon size={9} />
-            <span>{antiIdleEnabled
-              ? antiIdleNextAt
-                ? formatCountdown(antiIdleNextAt - Date.now())
-                : `${antiIdleMinutes}m`
-              : 'idle'}</span>
-          </button>
+            <span>{antiIdleNextAt
+              ? formatCountdown(antiIdleNextAt - Date.now())
+              : `${antiIdleMinutes}m`}</span>
+          </span>
+        )}
+
+        {/* Custom timer countdown badges (sorted soonest-first) */}
+        {showTimerBadges && activeTimers && activeTimers.length > 0 && (() => {
+          const MAX_VISIBLE = 2;
+          const visible = activeTimers.slice(0, MAX_VISIBLE);
+          const overflow = activeTimers.slice(MAX_VISIBLE);
+
+          return (
+            <>
+              {visible.map((t) => (
+                <span
+                  key={t.id}
+                  title={`Timer: ${t.name} (double-click to stop)`}
+                  onDoubleClick={() => onToggleTimer?.(t.id)}
+                  className="flex items-center gap-1 px-1.5 py-1 rounded border text-[9px] font-mono self-center shrink-0 ml-1 text-[#f97316] border-[#f97316]/30 bg-[#f97316]/8 cursor-pointer select-none"
+                  style={{ filter: 'drop-shadow(0 0 3px rgba(249, 115, 22, 0.25))' }}
+                >
+                  <TimerIcon size={8} />
+                  <span className="max-w-[50px] truncate">{t.name}</span>
+                  <span>{formatCountdown(t.nextAt - Date.now())}</span>
+                </span>
+              ))}
+              {overflow.length > 0 && (
+                <div className="relative self-center shrink-0 ml-1">
+                  <button
+                    onClick={() => setTimerOverflowOpen((v) => !v)}
+                    onBlur={() => setTimeout(() => setTimerOverflowOpen(false), 150)}
+                    className="flex items-center gap-0.5 px-1.5 py-1 rounded border text-[9px] font-mono cursor-pointer text-[#f97316] border-[#f97316]/30 bg-[#f97316]/8 hover:bg-[#f97316]/15 transition-colors duration-150"
+                    style={{ filter: 'drop-shadow(0 0 3px rgba(249, 115, 22, 0.25))' }}
+                  >
+                    +{overflow.length}
+                  </button>
+                  {timerOverflowOpen && (
+                    <div className="absolute bottom-full right-0 mb-1 bg-bg-primary border border-[#f97316]/30 rounded-lg shadow-lg py-1 min-w-[160px] z-50">
+                      {overflow.map((t) => (
+                        <div
+                          key={t.id}
+                          className="flex items-center gap-1.5 px-2.5 py-1 text-[9px] font-mono text-[#f97316]"
+                        >
+                          <TimerIcon size={8} />
+                          <span className="flex-1 truncate">{t.name}</span>
+                          <span className="shrink-0">{formatCountdown(t.nextAt - Date.now())}</span>
+                          <button
+                            onClick={() => onToggleTimer?.(t.id)}
+                            title="Stop timer"
+                            className="shrink-0 ml-1 px-1 py-0.5 rounded text-[8px] border border-[#f97316]/30 bg-[#f97316]/10 hover:bg-[#f97316]/25 transition-colors cursor-pointer"
+                          >
+                            stop
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
+            </>
+          );
+        })()}
+
+        {/* Demo timer badge when spotlight is active but no real badges are visible */}
+        {spotlightActive?.helpId === 'command-input' && (!showTimerBadges || (!hasActiveTimers && !antiIdleEnabled && !alignmentTrackingEnabled)) && (
+          <span
+            className="flex items-center gap-1 px-1.5 py-1 rounded border text-[9px] font-mono self-center shrink-0 ml-1 text-[#f97316] border-[#f97316]/30 bg-[#f97316]/8 opacity-75"
+            style={{ filter: 'drop-shadow(0 0 3px rgba(249, 115, 22, 0.25))' }}
+          >
+            <TimerIcon size={8} />
+            <span>heal</span>
+            <span>0:25</span>
+          </span>
         )}
       </div>
     );

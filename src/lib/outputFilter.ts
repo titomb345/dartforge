@@ -4,6 +4,7 @@ import { matchNeedsLine, type NeedLevel } from './needsPatterns';
 import { matchAuraLine, type AuraMatch } from './auraPatterns';
 import { matchEncumbranceLine, type EncumbranceMatch } from './encumbrancePatterns';
 import { matchMovementLine, type MovementMatch } from './movementPatterns';
+import { matchAlignmentLine, type AlignmentMatch } from './alignmentPatterns';
 import { matchChatLine } from './chatPatterns';
 import { transformBoardDateLine } from './boardDatePatterns';
 import type { ChatMessage } from '../types/chat';
@@ -46,6 +47,7 @@ export interface OutputFilterCallbacks {
   onAura?: (match: AuraMatch) => void;
   onEncumbrance?: (match: EncumbranceMatch) => void;
   onMovement?: (match: MovementMatch) => void;
+  onAlignment?: (match: AlignmentMatch) => void;
   onChat?: (msg: ChatMessage) => void;
   /** Fired for every complete line with stripped + raw text. Return gag/highlight directives. */
   onLine?: (stripped: string, raw: string) => LineCallbackResult | void;
@@ -59,6 +61,7 @@ export interface FilterFlags {
   aura: boolean;
   encumbrance: boolean;
   movement: boolean;
+  alignment: boolean;
 }
 
 export const DEFAULT_FILTER_FLAGS: FilterFlags = {
@@ -68,6 +71,7 @@ export const DEFAULT_FILTER_FLAGS: FilterFlags = {
   aura: false,
   encumbrance: false,
   movement: false,
+  alignment: false,
 };
 
 /**
@@ -88,10 +92,12 @@ export class OutputFilter {
   boardDatesEnabled = true;
   /** When true, strip server prompt prefix ("> ") from terminal output. */
   stripPrompts = true;
+  /** Callback invoked when sync gagging completes (all login responses consumed). */
+  onSyncEnd: (() => void) | null = null;
 
   /* ---- Sync gag state (pattern-based, NOT blanket suppression) ---- */
   private syncActive = false;
-  private syncGags = { hp: false, score: false, combatAlloc: false, magicAlloc: false };
+  private syncGags = { hp: false, score: false, combatAlloc: false, magicAlloc: false, alignment: false };
   /** True while inside the multi-line score block during sync. */
   private syncInScoreBlock = false;
   /** True while a limb header was seen, waiting for its values line. */
@@ -114,7 +120,7 @@ export class OutputFilter {
    */
   startSync(): void {
     this.syncActive = true;
-    this.syncGags = { hp: true, score: true, combatAlloc: true, magicAlloc: true };
+    this.syncGags = { hp: true, score: true, combatAlloc: true, magicAlloc: true, alignment: true };
     this.syncInScoreBlock = false;
     this.syncAllocPending = false;
     this.syncAllocHasData = false;
@@ -128,8 +134,9 @@ export class OutputFilter {
 
   /** End sync gagging. */
   endSync(): void {
+    const wasActive = this.syncActive;
     this.syncActive = false;
-    this.syncGags = { hp: false, score: false, combatAlloc: false, magicAlloc: false };
+    this.syncGags = { hp: false, score: false, combatAlloc: false, magicAlloc: false, alignment: false };
     this.syncInScoreBlock = false;
     this.syncAllocPending = false;
     this.syncAllocHasData = false;
@@ -138,6 +145,7 @@ export class OutputFilter {
       clearTimeout(this.syncTimer);
       this.syncTimer = null;
     }
+    if (wasActive) this.onSyncEnd?.();
   }
 
   /** True while sync is active (some gags still pending). */
@@ -147,7 +155,7 @@ export class OutputFilter {
 
   /** Check if all sync gags are consumed and end sync after a short grace period for the trailing prompt. */
   private checkSyncDone(): void {
-    if (!this.syncGags.hp && !this.syncGags.score && !this.syncGags.combatAlloc && !this.syncGags.magicAlloc) {
+    if (!this.syncGags.hp && !this.syncGags.score && !this.syncGags.combatAlloc && !this.syncGags.magicAlloc && !this.syncGags.alignment) {
       // Brief delay so the trailing ">" prompt from the last command gets gagged too
       if (this.syncTimer) clearTimeout(this.syncTimer);
       this.syncTimer = setTimeout(() => {
@@ -256,6 +264,13 @@ export class OutputFilter {
       }
     }
 
+    // Alignment response — single line
+    if (this.syncGags.alignment && matchAlignmentLine(stripped)) {
+      this.syncGags.alignment = false;
+      this.checkSyncDone();
+      return true;
+    }
+
     return false;
   }
 
@@ -289,7 +304,7 @@ export class OutputFilter {
       if (this.stripPrompts) {
         const rawStripped = stripAnsi(segment);
         if (/^> \S/.test(rawStripped)) {
-          seg = segment.replace(/^(?:\x1b\[[0-9;]*m)*> /, '');
+          seg = segment.replace(/^((?:\x1b\[[0-9;]*m)*)> /, '$1');
         }
       }
 
@@ -336,6 +351,11 @@ export class OutputFilter {
         this.callbacks.onHealth?.(healthMatch);
       }
 
+      const alignmentMatch = matchAlignmentLine(stripped);
+      if (alignmentMatch) {
+        this.callbacks.onAlignment?.(alignmentMatch);
+      }
+
       // --- Chat detection (observational — never strips) ---
       const chatMatch = matchChatLine(stripped, this.activeCharacter);
       if (chatMatch) {
@@ -367,7 +387,8 @@ export class OutputFilter {
           (this.filterFlags.thirst && needsMatch?.thirst) ||
           (this.filterFlags.aura && auraMatch) ||
           (this.filterFlags.encumbrance && encumbranceMatch) ||
-          (this.filterFlags.movement && movementMatch)
+          (this.filterFlags.movement && movementMatch) ||
+          (this.filterFlags.alignment && alignmentMatch)
         )
       ) {
         continue;
@@ -399,7 +420,10 @@ export class OutputFilter {
       const isLoginPrompt = /^(Name|Password)\s*:$/i.test(strippedRemaining);
       if (strippedRemaining === '' || strippedRemaining.endsWith('>') || isLoginPrompt) {
         if ((this.stripPrompts || this.syncActive) && strippedRemaining === '>') {
+          // Preserve ANSI codes (especially color resets) from the stripped prompt
+          const ansiCodes = this.buffer.match(/\x1b\[[0-9;]*m/g);
           this.buffer = '';
+          if (ansiCodes) output += ansiCodes.join('');
         } else {
           output += this.buffer;
           this.buffer = '';

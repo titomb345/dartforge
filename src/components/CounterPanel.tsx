@@ -12,6 +12,7 @@ import {
   RotateCcwIcon,
   CounterIcon,
 } from './icons';
+import { useAppSettingsContext } from '../contexts/AppSettingsContext';
 import { PinMenuButton } from './PinMenuButton';
 import { PinnedControls } from './PinnedControls';
 
@@ -392,10 +393,6 @@ function CounterStats({
           {formatCompactDuration(elapsed)}
         </span>
       </div>
-      <div className="flex items-baseline justify-between">
-        <span className="text-[10px] text-text-dim">Current period</span>
-        <span className="text-[10px] font-mono text-text-label">{counter.impsInCurrentPeriod}</span>
-      </div>
       <div className="h-px bg-border-subtle my-1" />
       <div className="grid grid-cols-3 gap-1 text-center">
         <RateStat label="/min" value={perMinute} />
@@ -426,6 +423,8 @@ function SkillsTable({
   skills: { skill: string; count: number }[];
   getRate: (skill: string) => number;
 }) {
+  const { counterHotThreshold, counterColdThreshold } = useAppSettingsContext();
+
   if (skills.length === 0) {
     return (
       <div className="px-3 py-4 text-[10px] text-text-dim">
@@ -438,20 +437,30 @@ function SkillsTable({
 
   return (
     <div className="px-1 py-1">
-      {skills.map(({ skill, count }) => (
-        <div
-          key={skill}
-          className="flex items-center justify-between px-2 py-0.5 hover:bg-bg-secondary/50 transition-colors duration-100 rounded-sm"
-        >
-          <span className="text-[11px] text-text-primary truncate mr-2">{skill}</span>
-          <div className="flex items-center gap-2 shrink-0">
-            <span className="text-[11px] font-mono text-text-label">{count.toLocaleString()}</span>
-            <span className="text-[10px] font-mono text-text-dim w-10 text-right">
-              ({getRate(skill).toFixed(2)})
-            </span>
+      {skills.map(({ skill, count }) => {
+        const rate = getRate(skill);
+        const effectClass =
+          counterHotThreshold > 0 && rate >= counterHotThreshold
+            ? 'skill-hot'
+            : counterColdThreshold > 0 && rate > 0 && rate <= counterColdThreshold
+              ? 'skill-cold'
+              : '';
+
+        return (
+          <div
+            key={skill}
+            className={`flex items-center justify-between px-2 py-0.5 hover:bg-bg-secondary/50 transition-colors duration-100 rounded-sm ${effectClass}`}
+          >
+            <span className="text-[11px] text-text-primary truncate mr-2">{skill}</span>
+            <div className="flex items-center gap-2 shrink-0">
+              <span className="text-[11px] font-mono text-text-label">{count.toLocaleString()}</span>
+              <span className="skill-rate text-[10px] font-mono text-text-label w-10 text-right">
+                ({rate.toFixed(2)})
+              </span>
+            </div>
           </div>
-        </div>
-      ))}
+        );
+      })}
     </div>
   );
 }

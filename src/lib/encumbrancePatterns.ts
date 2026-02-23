@@ -17,11 +17,11 @@ export const ENCUMBRANCE_LEVELS: EncumbranceLevel[] = [
   { key: 'unburdened', label: 'Unburdened', descriptor: 'You are completely unburdened.', themeColor: 'green', severity: 0 },
   { key: 'considerably', label: 'Very Light', descriptor: 'You can carry considerably more.', themeColor: 'brightGreen', severity: 1 },
   { key: 'a-lot', label: 'Light', descriptor: 'You can carry a lot more.', themeColor: 'brightGreen', severity: 2 },
-  { key: 'easy', label: 'Easy to Move', descriptor: 'You find it easy to move.', themeColor: 'yellow', severity: 3 },
-  { key: 'more', label: 'Can Carry More', descriptor: 'You can carry more.', themeColor: 'yellow', severity: 4 },
+  { key: 'easy', label: 'Easy to Move', descriptor: 'You find it easy to move.', themeColor: 'brightGreen', severity: 3 },
+  { key: 'more', label: 'Can Carry More', descriptor: 'You can carry more.', themeColor: 'brightYellow', severity: 4 },
   { key: 'hardly', label: 'Near Capacity', descriptor: 'You can hardly carry anything more.', themeColor: 'red', severity: 5 },
   { key: 'struggling', label: 'Struggling', descriptor: 'You are struggling to move.', themeColor: 'red', severity: 6 },
-  { key: 'unable', label: 'Immobile', descriptor: 'You are unable to move.', themeColor: 'magenta', severity: 7 },
+  { key: 'unable', label: 'Immobile', descriptor: 'You are unable to move.', themeColor: 'red', severity: 7 },
 ];
 
 /** Result from matching an encumbrance line */

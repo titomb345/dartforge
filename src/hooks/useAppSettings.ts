@@ -29,6 +29,10 @@ export function useAppSettings() {
   const [antiIdleCommand, setAntiIdleCommand] = useState('hp');
   const [antiIdleMinutes, setAntiIdleMinutes] = useState(10);
 
+  // Alignment tracking
+  const [alignmentTrackingEnabled, setAlignmentTrackingEnabled] = useState(false);
+  const [alignmentTrackingMinutes, setAlignmentTrackingMinutes] = useState(5);
+
   // Output transforms
   const [boardDatesEnabled, setBoardDatesEnabled] = useState(false);
   const [stripPromptsEnabled, setStripPromptsEnabled] = useState(false);
@@ -46,6 +50,9 @@ export function useAppSettings() {
   // Command echo
   const [commandEchoEnabled, setCommandEchoEnabled] = useState(false);
 
+  // Timer badge display
+  const [showTimerBadges, setShowTimerBadges] = useState(true);
+
   // Session logging
   const [sessionLoggingEnabled, setSessionLoggingEnabled] = useState(false);
 
@@ -62,8 +69,16 @@ export function useAppSettings() {
   const [customChime1, setCustomChime1] = useState<string | null>(null);
   const [customChime2, setCustomChime2] = useState<string | null>(null);
 
+  // Counter thresholds
+  const [counterHotThreshold, setCounterHotThreshold] = useState(5.0);
+  const [counterColdThreshold, setCounterColdThreshold] = useState(1.0);
+
   // Help guide
   const [hasSeenGuide, setHasSeenGuide] = useState(false);
+
+  // Post-sync commands
+  const [postSyncEnabled, setPostSyncEnabled] = useState(false);
+  const [postSyncCommands, setPostSyncCommands] = useState('');
 
   // Load from settings
   useEffect(() => {
@@ -76,6 +91,10 @@ export function useAppSettings() {
       if (savedAntiIdleCommand != null) setAntiIdleCommand(savedAntiIdleCommand);
       const savedAntiIdleMinutes = await dataStore.get<number>(SETTINGS_FILE, 'antiIdleMinutes');
       if (savedAntiIdleMinutes != null) setAntiIdleMinutes(savedAntiIdleMinutes);
+      const savedAlignmentEnabled = await dataStore.get<boolean>(SETTINGS_FILE, 'alignmentTrackingEnabled');
+      if (savedAlignmentEnabled != null) setAlignmentTrackingEnabled(savedAlignmentEnabled);
+      const savedAlignmentMinutes = await dataStore.get<number>(SETTINGS_FILE, 'alignmentTrackingMinutes');
+      if (savedAlignmentMinutes != null) setAlignmentTrackingMinutes(savedAlignmentMinutes);
       const savedBoardDates = await dataStore.get<boolean>(SETTINGS_FILE, 'boardDatesEnabled');
       if (savedBoardDates != null) setBoardDatesEnabled(savedBoardDates);
       const savedStripPrompts = await dataStore.get<boolean>(SETTINGS_FILE, 'stripPromptsEnabled');
@@ -92,6 +111,8 @@ export function useAppSettings() {
       if (savedTsFormat === '12h' || savedTsFormat === '24h') setTimestampFormat(savedTsFormat);
       const savedEcho = await dataStore.get<boolean>(SETTINGS_FILE, 'commandEchoEnabled');
       if (savedEcho != null) setCommandEchoEnabled(savedEcho);
+      const savedTimerBadges = await dataStore.get<boolean>(SETTINGS_FILE, 'showTimerBadges');
+      if (savedTimerBadges != null) setShowTimerBadges(savedTimerBadges);
       const savedLogging = await dataStore.get<boolean>(SETTINGS_FILE, 'sessionLoggingEnabled');
       if (savedLogging != null) setSessionLoggingEnabled(savedLogging);
       const savedNumpad = await dataStore.get<Record<string, string>>(SETTINGS_FILE, 'numpadMappings');
@@ -108,8 +129,16 @@ export function useAppSettings() {
       if (savedCustomChime1 !== undefined) setCustomChime1(savedCustomChime1);
       const savedCustomChime2 = await dataStore.get<string | null>(SETTINGS_FILE, 'customChime2');
       if (savedCustomChime2 !== undefined) setCustomChime2(savedCustomChime2);
+      const savedHotThreshold = await dataStore.get<number>(SETTINGS_FILE, 'counterHotThreshold');
+      if (savedHotThreshold != null && savedHotThreshold >= 0) setCounterHotThreshold(savedHotThreshold);
+      const savedColdThreshold = await dataStore.get<number>(SETTINGS_FILE, 'counterColdThreshold');
+      if (savedColdThreshold != null && savedColdThreshold >= 0) setCounterColdThreshold(savedColdThreshold);
       const savedHasSeenGuide = await dataStore.get<boolean>(SETTINGS_FILE, 'hasSeenGuide');
       if (savedHasSeenGuide != null) setHasSeenGuide(savedHasSeenGuide);
+      const savedPostSyncEnabled = await dataStore.get<boolean>(SETTINGS_FILE, 'postSyncEnabled');
+      if (savedPostSyncEnabled != null) setPostSyncEnabled(savedPostSyncEnabled);
+      const savedPostSyncCommands = await dataStore.get<string>(SETTINGS_FILE, 'postSyncCommands');
+      if (savedPostSyncCommands != null) setPostSyncCommands(savedPostSyncCommands);
 
       loaded.current = true;
     })().catch(console.error);
@@ -136,6 +165,21 @@ export function useAppSettings() {
   const updateAntiIdleMinutes = useCallback((v: number) => {
     setAntiIdleMinutes(v);
     persist('antiIdleMinutes', v);
+  }, [persist]);
+
+  const updateAlignmentTrackingEnabled = useCallback((v: boolean) => {
+    setAlignmentTrackingEnabled(v);
+    persist('alignmentTrackingEnabled', v);
+    // Alignment polling replaces anti-idle — force it off when enabling
+    if (v) {
+      setAntiIdleEnabled(false);
+      persist('antiIdleEnabled', false);
+    }
+  }, [persist]);
+
+  const updateAlignmentTrackingMinutes = useCallback((v: number) => {
+    setAlignmentTrackingMinutes(v);
+    persist('alignmentTrackingMinutes', v);
   }, [persist]);
 
   const updateBoardDatesEnabled = useCallback((v: boolean) => {
@@ -175,6 +219,11 @@ export function useAppSettings() {
     persist('commandEchoEnabled', v);
   }, [persist]);
 
+  const updateShowTimerBadges = useCallback((v: boolean) => {
+    setShowTimerBadges(v);
+    persist('showTimerBadges', v);
+  }, [persist]);
+
   const updateSessionLoggingEnabled = useCallback((v: boolean) => {
     setSessionLoggingEnabled(v);
     persist('sessionLoggingEnabled', v);
@@ -205,9 +254,29 @@ export function useAppSettings() {
     persist('customChime2', v);
   }, [persist]);
 
+  const updateCounterHotThreshold = useCallback((v: number) => {
+    setCounterHotThreshold(v);
+    persist('counterHotThreshold', v);
+  }, [persist]);
+
+  const updateCounterColdThreshold = useCallback((v: number) => {
+    setCounterColdThreshold(v);
+    persist('counterColdThreshold', v);
+  }, [persist]);
+
   const updateHasSeenGuide = useCallback((v: boolean) => {
     setHasSeenGuide(v);
     persist('hasSeenGuide', v);
+  }, [persist]);
+
+  const updatePostSyncEnabled = useCallback((v: boolean) => {
+    setPostSyncEnabled(v);
+    persist('postSyncEnabled', v);
+  }, [persist]);
+
+  const updatePostSyncCommands = useCallback((v: string) => {
+    setPostSyncCommands(v);
+    persist('postSyncCommands', v);
   }, [persist]);
 
   const toggleChatNotification = useCallback(async (type: keyof ChatFilters) => {
@@ -230,6 +299,9 @@ export function useAppSettings() {
     // Anti-idle
     antiIdleEnabled, antiIdleCommand, antiIdleMinutes,
     updateAntiIdleEnabled, updateAntiIdleCommand, updateAntiIdleMinutes,
+    // Alignment tracking
+    alignmentTrackingEnabled, alignmentTrackingMinutes,
+    updateAlignmentTrackingEnabled, updateAlignmentTrackingMinutes,
     // Output transforms
     boardDatesEnabled, stripPromptsEnabled,
     updateBoardDatesEnabled, updateStripPromptsEnabled,
@@ -240,6 +312,8 @@ export function useAppSettings() {
     timestampFormat, updateTimestampFormat,
     // Command echo
     commandEchoEnabled, updateCommandEchoEnabled,
+    // Timer badges
+    showTimerBadges, updateShowTimerBadges,
     // Session logging
     sessionLoggingEnabled, updateSessionLoggingEnabled,
     // Numpad
@@ -250,7 +324,13 @@ export function useAppSettings() {
     chatNotifications, updateChatNotifications, toggleChatNotification,
     // Custom chimes
     customChime1, customChime2, updateCustomChime1, updateCustomChime2,
+    // Counter thresholds
+    counterHotThreshold, counterColdThreshold,
+    updateCounterHotThreshold, updateCounterColdThreshold,
     // Help guide
     hasSeenGuide, updateHasSeenGuide,
+    // Post-sync commands
+    postSyncEnabled, postSyncCommands,
+    updatePostSyncEnabled, updatePostSyncCommands,
   };
 }

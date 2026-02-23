@@ -1,8 +1,6 @@
 import type { Trigger, TriggerMatchMode, TriggerMatch } from '../types/trigger';
-import type { Variable } from '../types/variable';
 import type { ExpandedCommand } from '../types/alias';
 import { splitCommands, parseDirective } from './commandUtils';
-import { expandVariables } from './variableEngine';
 
 /** Specificity order: exact > substring > regex */
 const MATCH_MODE_PRIORITY: Record<TriggerMatchMode, number> = {
@@ -124,7 +122,6 @@ export function expandTriggerBody(
   body: string,
   match: TriggerMatch,
   activeCharacter?: string | null,
-  variables?: Variable[],
 ): ExpandedCommand[] {
   let result = body;
 
@@ -142,12 +139,7 @@ export function expandTriggerBody(
     result = result.split(`$${i}`).join(match.captures[i] ?? '');
   }
 
-  // Expand user-defined variables
-  if (variables) {
-    result = expandVariables(result, variables);
-  }
-
-  // Split on semicolons and parse directives
+  // Split on semicolons and parse directives (variables expanded at execution time)
   const segments = splitCommands(result);
   const commands: ExpandedCommand[] = [];
   for (const segment of segments) {
