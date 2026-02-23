@@ -134,6 +134,7 @@ export class OutputFilter {
 
   /** End sync gagging. */
   endSync(): void {
+    const wasActive = this.syncActive;
     this.syncActive = false;
     this.syncGags = { hp: false, score: false, combatAlloc: false, magicAlloc: false, alignment: false };
     this.syncInScoreBlock = false;
@@ -144,7 +145,7 @@ export class OutputFilter {
       clearTimeout(this.syncTimer);
       this.syncTimer = null;
     }
-    this.onSyncEnd?.();
+    if (wasActive) this.onSyncEnd?.();
   }
 
   /** True while sync is active (some gags still pending). */

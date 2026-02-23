@@ -76,7 +76,7 @@ interface AlignmentTypeDef {
 
 const ALIGNMENT_TYPES: Record<string, AlignmentTypeDef> = {
   war:         { baseColor: [230, 50, 50],   themeColor: 'brightRed' },
-  passion:     { baseColor: [240, 160, 40],  themeColor: 'yellow' },
+  passion:     { baseColor: [240, 160, 40],  themeColor: 'brightYellow' },
   renewal:     { baseColor: [50, 200, 80],   themeColor: 'brightGreen' },
   peace:       { baseColor: [60, 140, 240],  themeColor: 'brightBlue' },
   fatalism:    { baseColor: [160, 90, 220],  themeColor: 'magenta' },

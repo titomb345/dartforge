@@ -269,7 +269,7 @@ function AliasEditor({
             value={body}
             onChange={(e) => setBody(e.target.value)}
             placeholder="attack $1;kill $1"
-            rows={3}
+            rows={5}
             className="w-full"
           />
         </div>

@@ -271,10 +271,10 @@ export function SettingsPanel() {
           </div>
         </SettingsSection>
 
-        {/* Post-Sync Commands */}
+        {/* Login Commands */}
         <SettingsSection
           icon={<PlayIcon size={13} />}
-          title="Post-Sync Commands"
+          title="Login Commands"
           accent="#ff79c6"
           open={openSection === 'post-sync'}
           onToggle={() => toggle('post-sync')}
@@ -296,12 +296,12 @@ export function SettingsPanel() {
               value={postSyncCommands}
               onChange={(e) => updatePostSyncCommands(e.target.value)}
               placeholder="inventory;who;/echo Ready!"
-              rows={3}
+              rows={5}
               className="w-full"
             />
           </div>
           <div className="text-[9px] text-text-dim font-mono leading-relaxed mt-1">
-            Sent after login sync. Supports semicolons, aliases, /delay, /echo, /spam, /var.
+            Sent automatically after logging in. Supports semicolons, aliases, /delay, /echo, /spam, /var.
           </div>
         </SettingsSection>
 

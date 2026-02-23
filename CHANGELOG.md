@@ -17,7 +17,7 @@ The `[Unreleased]` header controls automatic version bumping on merge:
 - Syntax help in alias and trigger editors now documents all available directives
 - Alignment tracking — status bar readout with periodic polling and configurable interval
 - Notes panel multi-page support with page navigation, add, and delete
-- Post-sync commands — fire user-configured commands after login sync completes
+- Login commands — fire user-configured commands automatically after logging in
 - Counter panel configurable hot/cold rate thresholds with color coding
 - Terminal right-click context menu with Copy Selected, Copy Line, Copy Visible, Copy All, Search, Scroll to Bottom, Clear Terminal, and font size controls
 - Context menu "Add Line to Trigger" pre-fills and opens the trigger panel
@@ -38,6 +38,10 @@ The `[Unreleased]` header controls automatic version bumping on merge:
 - Settings panel now uses accordion behavior (only one section open at a time), matching the guide panel
 - Default theme yellow changed from dark orange to actual yellow for better readability
 - Trigger bodies now re-expand through the alias engine for nested alias support
+- Alias and trigger body textareas default to 5 rows instead of 3
+- Alias and trigger search now filters by pattern only, no longer matches body or group text
+- Status indicator yellow levels now use bright yellow for better visibility
+- Renamed "Post-Sync Commands" to "Login Commands" in settings
 
 ### Fixed
 - Removed click-outside-to-close behavior on slide-out panels — panels now stay open until explicitly closed via the × button or toolbar toggle
@@ -52,6 +56,7 @@ The `[Unreleased]` header controls automatic version bumping on merge:
 - Pet skill deletion now works — previously clicking "Del?" on a pet's skill did nothing because the delete function only handled character skills
 - Allocation panel delete button no longer animates with a jarring size transition — now matches the standard "Del?" pattern used elsewhere
 - Prompt stripping no longer eats ANSI color reset codes — previously, stripping `> ` could discard `\x1b[0m`, causing the prior line's color (e.g., cyan) to bleed into subsequent output
+- Login commands no longer fire on connect — previously they ran before the login prompt, sending commands as username/password
 
 ## [1.0.0] - 2026-02-22
 

@@ -685,7 +685,7 @@ function AppMain() {
       const raw = postSyncCommandsRef.current.trim();
       if (!raw) return;
       if (terminalRef.current) {
-        smartWrite(terminalRef.current, '\x1b[90m[post-sync commands]\x1b[0m\r\n');
+        smartWrite(terminalRef.current, '\x1b[90m[login commands]\x1b[0m\r\n');
       }
       const result = expandInput(raw, mergedAliasesRef.current, {
         enableSpeedwalk: enableSpeedwalkRef.current,
