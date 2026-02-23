@@ -373,7 +373,6 @@ function AppMain() {
               match.trigger.body,
               match,
               activeCharacterRef.current,
-              mergedVariablesRef.current,
             );
             triggerFiringRef.current = true;
             (async () => {
@@ -508,6 +507,9 @@ function AppMain() {
     send: async () => {},
     echo: () => {},
     expand: () => [],
+    setVar: () => {},
+    convert: () => {},
+    getVariables: () => [],
   });
 
   // Signature mapping system
@@ -616,8 +618,17 @@ function AppMain() {
     expand: (input) => expandInput(input, mergedAliasesRef.current, {
       enableSpeedwalk: enableSpeedwalkRef.current,
       activeCharacter: activeCharacterRef.current,
-      variables: mergedVariablesRef.current,
     }).commands,
+    setVar: (name, value, scope) => { setVarRef.current(name, value, scope); },
+    convert: (args) => {
+      const parsed = parseConvertCommand(`/convert ${args}`);
+      if (typeof parsed === 'string') {
+        if (terminalRef.current) smartWrite(terminalRef.current, `\x1b[31m${parsed}\x1b[0m\r\n`);
+      } else {
+        if (terminalRef.current) smartWrite(terminalRef.current, `${formatMultiConversion(parsed)}\r\n`);
+      }
+    },
+    getVariables: () => mergedVariablesRef.current,
   };
 
   // Command echo ref (used in handleSend callback)
@@ -706,7 +717,23 @@ function AppMain() {
           }
           const spaceIdx = rest.indexOf(' ');
           if (spaceIdx === -1) {
-            smartWrite(terminalRef.current, `\x1b[31mUsage: /var <name> <value>  |  /var -g <name> <value>  |  /var -d <name>  |  /var\x1b[0m\r\n`);
+            // /var <name> — search variables by name (regex)
+            const query = rest;
+            let re: RegExp;
+            try {
+              re = new RegExp(query, 'i');
+            } catch {
+              re = new RegExp(query.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i');
+            }
+            const matches = mergedVariablesRef.current.filter((v) => v.enabled && re.test(v.name));
+            if (matches.length === 0) {
+              smartWrite(terminalRef.current, `\x1b[36mNo variables matching "${query}".\x1b[0m\r\n`);
+            } else {
+              smartWrite(terminalRef.current, `\x1b[36m--- Variables matching "${query}" ---\x1b[0m\r\n`);
+              for (const v of matches) {
+                smartWrite(terminalRef.current, `\x1b[36m  $${v.name} = ${v.value}\x1b[0m\r\n`);
+              }
+            }
           } else {
             const name = rest.slice(0, spaceIdx);
             const value = rest.slice(spaceIdx + 1);
@@ -721,7 +748,6 @@ function AppMain() {
     const result = expandInput(rawInput, mergedAliasesRef.current, {
       enableSpeedwalk: enableSpeedwalkRef.current,
       activeCharacter: activeCharacterRef.current,
-      variables: mergedVariablesRef.current,
     });
     await executeCommands(result.commands, {
       send: async (text) => {
@@ -754,8 +780,17 @@ function AppMain() {
       expand: (input) => expandInput(input, mergedAliasesRef.current, {
         enableSpeedwalk: enableSpeedwalkRef.current,
         activeCharacter: activeCharacterRef.current,
-        variables: mergedVariablesRef.current,
       }).commands,
+      setVar: (name, value, scope) => { setVarRef.current(name, value, scope); },
+      convert: (args) => {
+        const parsed = parseConvertCommand(`/convert ${args}`);
+        if (typeof parsed === 'string') {
+          if (terminalRef.current) smartWrite(terminalRef.current, `\x1b[31m${parsed}\x1b[0m\r\n`);
+        } else {
+          if (terminalRef.current) smartWrite(terminalRef.current, `${formatMultiConversion(parsed)}\r\n`);
+        }
+      },
+      getVariables: () => mergedVariablesRef.current,
     });
   }, [sendCommand]);
 

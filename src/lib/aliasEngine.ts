@@ -1,9 +1,7 @@
 import type { Alias, AliasMatchMode, ExpandedCommand, ExpansionResult } from '../types/alias';
-import type { Variable } from '../types/variable';
 import { DIRECTIONS, OPPOSITE_DIRECTIONS } from './constants';
 import type { Direction } from './constants';
 import { splitCommands, parseDirective } from './commandUtils';
-import { expandVariables } from './variableEngine';
 
 /** Maximum nesting depth to prevent infinite alias recursion */
 const MAX_EXPANSION_DEPTH = 10;
@@ -41,7 +39,6 @@ function expandSpeedwalk(input: string): string[] {
 /** Options threaded through expansion for special substitutions. */
 interface SubstitutionOptions {
   activeCharacter?: string | null;
-  variables?: Variable[];
 }
 
 /**
@@ -204,16 +201,11 @@ function expandSegment(
   // Try alias match
   const match = matchAlias(trimmed, aliases);
   if (!match) {
-    // No alias match — expand variables in the raw command before parsing as directive
-    const withVars = subOptions?.variables ? expandVariables(trimmed, subOptions.variables) : trimmed;
-    return [parseDirective(withVars)];
+    return [parseDirective(trimmed)];
   }
 
-  // Substitute arguments into alias body, then expand user variables
-  let expanded = substituteArgs(match.alias.body, match.args, subOptions);
-  if (subOptions?.variables) {
-    expanded = expandVariables(expanded, subOptions.variables);
-  }
+  // Substitute arguments into alias body (variables expanded at execution time)
+  const expanded = substituteArgs(match.alias.body, match.args, subOptions);
 
   // Split the expanded body on semicolons and recursively expand each part
   const subSegments = splitCommands(expanded);
@@ -223,7 +215,7 @@ function expandSegment(
     if (!subTrimmed) continue;
 
     // Check if this is a directive (no alias expansion needed)
-    if (/^\/(delay|echo|spam)\s/i.test(subTrimmed)) {
+    if (/^\/(delay|echo|spam|var|convert)\s/i.test(subTrimmed)) {
       commands.push(parseDirective(subTrimmed));
     } else {
       // Recursively expand (may hit another alias)
@@ -244,12 +236,11 @@ function expandSegment(
 export function expandInput(
   input: string,
   aliases: Alias[],
-  options?: { enableSpeedwalk?: boolean; activeCharacter?: string | null; variables?: Variable[] },
+  options?: { enableSpeedwalk?: boolean; activeCharacter?: string | null },
 ): ExpansionResult {
   const enableSpeedwalk = options?.enableSpeedwalk ?? true;
   const subOptions: SubstitutionOptions = {
     activeCharacter: options?.activeCharacter,
-    variables: options?.variables,
   };
 
   // Split on semicolons first

@@ -1,8 +1,8 @@
 import { useCallback, useRef, useState, useEffect, useMemo } from 'react';
 import { useAliasContext } from '../contexts/AliasContext';
-import { useVariableContext } from '../contexts/VariableContext';
 import { useSkillTrackerContext } from '../contexts/SkillTrackerContext';
 import { expandInput } from '../lib/aliasEngine';
+import { formatCommandPreview } from '../lib/commandUtils';
 import { useFilteredGroups } from '../lib/useFilteredGroups';
 import { charDisplayName } from '../lib/panelUtils';
 import type { Alias, AliasId, AliasMatchMode, AliasScope } from '../types/alias';
@@ -66,7 +66,7 @@ function AliasRow({
         </button>
       )}
       <span
-        className={`text-[11px] font-mono w-[80px] shrink-0 truncate ${
+        className={`text-[11px] font-mono flex-1 truncate ${
           alias.matchMode === 'exact'
             ? 'text-[#a78bfa]'
             : alias.matchMode === 'prefix'
@@ -76,9 +76,6 @@ function AliasRow({
         title={`${alias.pattern}\n${alias.matchMode} match`}
       >
         {alias.pattern}
-      </span>
-      <span className="text-[11px] text-text-dim flex-1 truncate" title={alias.body}>
-        {alias.body}
       </span>
       <button
         onClick={(e) => {
@@ -115,6 +112,9 @@ const ALIAS_HELP_ROWS: HelpRow[] = [
   { token: '\\;', desc: 'Literal semicolon (not a separator)' },
   { token: '/delay <ms>', desc: 'Pause between commands (milliseconds)', example: 'cast shield;/delay 1500;cast armor' },
   { token: '/echo <text>', desc: 'Print text locally (not sent to MUD)', example: '/echo --- Starting combo ---' },
+  { token: '/spam <N> <cmd>', desc: 'Repeat a command N times (max 1000)', example: '/spam 5 cast heal' },
+  { token: '/var <name> <val>', desc: 'Set a variable', example: '/var foe $1  →  $foe = goblin' },
+  { token: '/convert <amt>', desc: 'Convert currency and display locally', example: '/convert 3ri 5dn' },
 ];
 
 const ALIAS_HELP_FOOTER = (
@@ -149,7 +149,6 @@ function AliasEditor({
   ) => void;
   onCancel: () => void;
 }) {
-  const { mergedVariables } = useVariableContext();
   const [pattern, setPattern] = useState(alias?.pattern ?? '');
   const [matchMode, setMatchMode] = useState<AliasMatchMode>(alias?.matchMode ?? 'prefix');
   const [body, setBody] = useState(alias?.body ?? '');
@@ -178,19 +177,14 @@ function AliasEditor({
       updatedAt: '',
     };
     try {
-      const result = expandInput(testInput, [tempAlias], { activeCharacter, variables: mergedVariables });
-      return result.commands
-        .map((cmd) => {
-          if (cmd.type === 'send') return cmd.text;
-          if (cmd.type === 'delay') return `[delay ${cmd.ms}ms]`;
-          if (cmd.type === 'echo') return `[echo] ${cmd.text}`;
-          return '';
-        })
-        .join('\n');
+      const opts = { activeCharacter };
+      const result = expandInput(testInput, [tempAlias], opts);
+      const expand = (input: string) => expandInput(input, [tempAlias], opts).commands;
+      return formatCommandPreview(result.commands, expand).join('\n');
     } catch {
       return '[expansion error]';
     }
-  }, [testInput, pattern, matchMode, body, activeCharacter, mergedVariables]);
+  }, [testInput, pattern, matchMode, body, activeCharacter]);
 
   const canSave = pattern.trim().length > 0 && body.trim().length > 0;
 
@@ -297,24 +291,24 @@ function AliasEditor({
             <label className="text-[10px] text-text-dim mb-0.5 block">Scope</label>
             <div className="flex gap-0.5">
               <button
-                onClick={() => setScope('character')}
-                className={`flex-1 text-[10px] py-1 rounded-l border cursor-pointer transition-colors duration-150 ${
-                  scope === 'character'
-                    ? 'border-[#a78bfa]/40 text-[#a78bfa] bg-[#a78bfa]/10'
-                    : 'border-border-dim text-text-dim hover:text-text-label'
-                }`}
-              >
-                Char
-              </button>
-              <button
                 onClick={() => setScope('global')}
-                className={`flex-1 text-[10px] py-1 rounded-r border cursor-pointer transition-colors duration-150 ${
+                className={`flex-1 text-[10px] py-1 rounded-l border cursor-pointer transition-colors duration-150 ${
                   scope === 'global'
                     ? 'border-[#a78bfa]/40 text-[#a78bfa] bg-[#a78bfa]/10'
                     : 'border-border-dim text-text-dim hover:text-text-label'
                 }`}
               >
                 Global
+              </button>
+              <button
+                onClick={() => setScope('character')}
+                className={`flex-1 text-[10px] py-1 rounded-r border cursor-pointer transition-colors duration-150 ${
+                  scope === 'character'
+                    ? 'border-[#a78bfa]/40 text-[#a78bfa] bg-[#a78bfa]/10'
+                    : 'border-border-dim text-text-dim hover:text-text-label'
+                }`}
+              >
+                Char
               </button>
             </div>
           </div>
@@ -356,7 +350,7 @@ export function AliasPanel({ onClose }: AliasPanelProps) {
   } = useAliasContext();
   const { activeCharacter } = useSkillTrackerContext();
 
-  const [scope, setScope] = useState<AliasScope>('character');
+  const [scope, setScope] = useState<AliasScope>('global');
   const [groupFilter, setGroupFilter] = useState<string | null>(null);
   const [searchText, setSearchText] = useState('');
   const [editingId, setEditingId] = useState<AliasId | null>(null);
@@ -424,16 +418,16 @@ export function AliasPanel({ onClose }: AliasPanelProps) {
       {/* Scope toggle + speedwalk */}
       <div className="flex items-center gap-1.5 px-2 py-2 border-b border-border-subtle shrink-0">
         <FilterPill
-          label="Character"
-          active={scope === 'character'}
-          accent="purple"
-          onClick={() => { setScope('character'); setGroupFilter(null); }}
-        />
-        <FilterPill
           label="Global"
           active={scope === 'global'}
           accent="purple"
           onClick={() => { setScope('global'); setGroupFilter(null); }}
+        />
+        <FilterPill
+          label="Character"
+          active={scope === 'character'}
+          accent="purple"
+          onClick={() => { setScope('character'); setGroupFilter(null); }}
         />
         <div className="flex-1" />
         <button

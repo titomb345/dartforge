@@ -9,6 +9,27 @@ The `[Unreleased]` header controls automatic version bumping on merge:
 - `[Unreleased-minor]` → 0.1.0 → 0.2.0
 - `[Unreleased-major]` → 0.1.0 → 1.0.0
 
+## [Unreleased-minor]
+
+### Added
+- `/var <name>` search — typing `/var` with a single argument now regex-searches variable names and displays matches instead of showing a usage error
+- `/var`, `/convert`, and `/spam` directives now work inside alias and trigger bodies (e.g., `/var foe $1` in a trigger to track a target)
+- Syntax help in alias and trigger editors now documents all available directives
+
+### Changed
+- Alias and trigger panels now default to Global scope (tab and editor) since most entries are shared across characters
+- Alias and trigger rows now use full available width for pattern text instead of a fixed narrow column
+- Group filter pills are now capitalized and case-insensitive ("starknight" and "Starknight" merge into one group)
+
+### Fixed
+- Removed click-outside-to-close behavior on slide-out panels — panels now stay open until explicitly closed via the × button or toolbar toggle
+- Alias and trigger preview now properly expands `/spam` commands, showing all repeated commands instead of blank lines
+- Skill category lists updated to use actual in-game skill names (underscores, apostrophes, `language#` prefix) so skills are correctly grouped
+- `language#magic` now properly categorized under both Magic and Language via multi-category skill support
+- Variable expansion in aliases and triggers now happens at execution time, so `/var foe $1;/echo $foe` correctly reflects the just-set value
+- Pet skill deletion now works — previously clicking "Del?" on a pet's skill did nothing because the delete function only handled character skills
+- Allocation panel delete button no longer animates with a jarring size transition — now matches the standard "Del?" pattern used elsewhere
+
 ## [1.0.0] - 2026-02-22
 
 ### Added

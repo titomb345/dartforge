@@ -4,33 +4,33 @@ const COMBAT_SKILLS = new Set([
   'aim blows', 'archery', 'attack speed', 'bashing', 'brawling',
   'control', 'daring', 'dodge', 'fighting', 'hafted',
   'multiple attacks', 'offensive', 'parry', 'shield use', 'split defense',
-  'sword', 'thrown', 'two handed hafted', 'two handed sword',
+  'sword', 'thrown', 'two-handed hafted', 'two-handed sword',
 ]);
 
 const MAGIC_SKILLS = new Set([
-  'channelling', 'inscription', 'magic theory', 'spell casting',
+  'channelling', 'inscription', 'language#magic', 'magic theory', 'spell casting',
 ]);
 
 const SPELL_SKILLS = new Set([
-  'blur', 'buzz animal invisibility', 'chill',
-  'dannikas calm', 'deliors pocket dimension', 'detect soul', 'dog fart',
-  'flameblade', 'flynns flimflam', 'frostaxe',
-  'grand summon animal', 'green armor', 'green focus',
-  'heal other', 'heal self', 'influenza cure',
-  'jonathans ears', 'jonathans fareyes', 'jonathans neareyes',
-  'jonathans nighteyes', 'jonathans nose',
-  'lesser heal other', 'lesser heal self',
-  'lirrins candle', 'lirrins glow', 'lungs of the fish',
-  'major summon animal', 'mark',
-  'minor heal other', 'minor heal self', 'mystic arrow',
-  'orange fire bolt', 'orange focus',
-  'pols gloom', 'preserve corpse', 'quests vigor',
-  'recall', 'red armor', 'red fire bolt', 'red focus',
-  'refresh other', 'reincarnation', 'reveal aura',
-  'sense aura',
-  'shillelagh', 'skyrdins zephyr',
-  'thunderhammer', 'troys helping hand', 'warm',
-  'yellow armor', 'yellow fire bolt',
+  'blur', 'buzz_animal_invisibility', 'chill',
+  "dannika's_calm", "delior's_pocket_dimension", 'detect_soul', 'dog_fart',
+  'flameblade', "flynn's_flimflam", 'frostaxe',
+  'green_armor', 'green_focus',
+  'heal_other', 'heal_self', 'influenza_cure',
+  "jonathan's_ears", "jonathan's_fareyes", "jonathan's_neareyes",
+  "jonathan's_nighteyes", "jonathan's_nose",
+  'lesser_heal_other', 'lesser_heal_self',
+  "lirrin's_candle", "lirrin's_glow",
+  'mark',
+  'minor_heal_other', 'minor_heal_self', 'mystic_arrow',
+  'orange_fire_bolt', 'orange_focus',
+  "pol's_gloom", 'preserve_corpse', "quest's_vigor",
+  'recall', 'red_armor', 'red_fire_bolt', 'red_focus',
+  'refresh_other', 'reincarnation', 'reveal_aura',
+  'sense_aura',
+  'shillelagh', "skyrdin's_zephyr",
+  'thunderhammer', "troy's_helping_hand", 'warm',
+  'yellow_armor', 'yellow_fire_bolt',
 ]);
 
 const CRAFTING_SKILLS = new Set([
@@ -50,27 +50,28 @@ const THIEF_SKILLS = new Set([
   'ambush', 'hiding', 'lock picking', 'lockpicking', 'pilfer', 'sneaking',
 ]);
 
-/** Returns the category for a skill name. Unknown skills default to 'other'. */
-export function getSkillCategory(skillName: string): SkillCategory {
+/** Returns all categories for a skill name. Most skills belong to one; language#magic belongs to both magic and language. */
+export function getSkillCategory(skillName: string): SkillCategory[] {
   const lower = skillName.toLowerCase();
+  const cats: SkillCategory[] = [];
 
-  if (COMBAT_SKILLS.has(lower)) return 'combat';
-  if (MAGIC_SKILLS.has(lower)) return 'magic';
-  if (SPELL_SKILLS.has(lower)) return 'spells';
-  if (CRAFTING_SKILLS.has(lower)) return 'crafting';
-  if (MOVEMENT_SKILLS.has(lower)) return 'movement';
-  if (THIEF_SKILLS.has(lower)) return 'thief';
+  if (COMBAT_SKILLS.has(lower)) cats.push('combat');
+  if (MAGIC_SKILLS.has(lower)) cats.push('magic');
+  if (SPELL_SKILLS.has(lower)) cats.push('spells');
+  if (CRAFTING_SKILLS.has(lower)) cats.push('crafting');
+  if (MOVEMENT_SKILLS.has(lower)) cats.push('movement');
+  if (THIEF_SKILLS.has(lower)) cats.push('thief');
 
-  // Auto-detect language skills (except "language magic" which is magic)
-  if (lower.startsWith('language ')) return 'language';
+  // Auto-detect language skills (language#common, language#elvish, etc.)
+  if (lower.startsWith('language#')) cats.push('language');
 
-  return 'other';
+  return cats.length > 0 ? cats : ['other'];
 }
 
 // --- Sub-categories ---
 
 const COMBAT_WEAPONS = new Set([
-  'sword', 'hafted', 'brawling', 'two handed sword', 'two handed hafted', 'shield use',
+  'sword', 'hafted', 'brawling', 'two-handed sword', 'two-handed hafted', 'shield use',
 ]);
 
 const COMBAT_SODA = new Set([

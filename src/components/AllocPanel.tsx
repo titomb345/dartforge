@@ -540,10 +540,9 @@ function ProfileView() {
               <button
                 onClick={() => { deleteProfile(currentProfile.id); setConfirmDelete(false); }}
                 onBlur={() => setConfirmDelete(false)}
-                className="flex items-center gap-0.5 px-1 py-[1px] rounded text-[9px] font-semibold cursor-pointer transition-all duration-200 border border-red/40 bg-red/10 text-red"
-                autoFocus
+                className="text-[8px] font-mono text-red border border-red/40 rounded px-1 py-px cursor-pointer hover:bg-red/10 transition-colors duration-150"
               >
-                confirm?
+                Del?
               </button>
             ) : (
               <button

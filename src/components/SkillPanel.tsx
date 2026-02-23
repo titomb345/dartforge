@@ -28,6 +28,7 @@ type SortMode = 'name' | 'count';
 
 interface SubGroup {
   name: string;
+  key?: string;
   skills: SkillRecord[];
 }
 
@@ -39,7 +40,7 @@ function sortSkills(skills: SkillRecord[], mode: SortMode): SkillRecord[] {
   );
 }
 
-function SkillRow({ record, displayName }: { record: SkillRecord; displayName?: string }) {
+function SkillRow({ record, displayName, petName }: { record: SkillRecord; displayName?: string; petName?: string }) {
   const { updateSkillCount, deleteSkill } = useSkillTrackerContext();
   const tier = getTierForCount(record.count);
   const toNext = getImprovesToNextTier(record.count);
@@ -73,7 +74,7 @@ function SkillRow({ record, displayName }: { record: SkillRecord; displayName?: 
     <div className="group flex items-center gap-1 px-2 py-1 hover:bg-bg-secondary rounded transition-[background] duration-150">
       {confirmingDelete ? (
         <button
-          onClick={() => { deleteSkill(record.skill); setConfirmingDelete(false); }}
+          onClick={() => { deleteSkill(record.skill, petName); setConfirmingDelete(false); }}
           onBlur={() => setConfirmingDelete(false)}
           className="text-[8px] font-mono text-red border border-red/40 rounded px-1 py-px cursor-pointer hover:bg-red/10 shrink-0 transition-colors duration-150"
         >
@@ -145,21 +146,21 @@ const SUB_GROUP_COLORS: Record<string, string> = {
 const PET_DIVIDER_COLOR = '#50fa7b';
 
 function getSkillDisplayName(skill: string, context: 'all' | SkillCategory): string | undefined {
-  const category = getSkillCategory(skill);
+  const categories = getSkillCategory(skill);
 
   // Spells: replace spaces with underscores (any tab)
-  if (category === 'spells') {
+  if (categories.includes('spells')) {
     return skill.replace(/ /g, '_');
   }
 
-  // Languages in "all" tab: "language common" → "language#common"
-  if (category === 'language' && context === 'all') {
-    return skill.replace(' ', '#').replace(/ /g, '_');
+  // Languages in "all" tab: show as-is (already language#common)
+  if (categories.includes('language') && context === 'all') {
+    return skill;
   }
 
-  // Languages in language tab: strip "language " prefix, underscores for remaining spaces
-  if (category === 'language' && context === 'language') {
-    return skill.startsWith('language ') ? skill.slice(9).replace(/ /g, '_') : undefined;
+  // Languages in language tab: strip "language#" prefix
+  if (categories.includes('language') && context === 'language') {
+    return skill.startsWith('language#') ? skill.slice(9) : undefined;
   }
 
   return undefined;
@@ -205,7 +206,8 @@ function SkillSection({
               </div>
               {group.skills.map((record) => (
                 <SkillRow key={record.skill} record={record}
-                  displayName={displayContext ? getSkillDisplayName(record.skill, displayContext) : undefined} />
+                  displayName={displayContext ? getSkillDisplayName(record.skill, displayContext) : undefined}
+                  petName={group.key} />
               ))}
             </div>
           ) : null;
@@ -300,12 +302,8 @@ export function SkillPanel({
       combat: [], magic: [], spells: [], crafting: [], movement: [], language: [], thief: [], pets: [], other: [],
     };
     for (const record of Object.values(skillData.skills)) {
-      const cat = getSkillCategory(record.skill);
-      groups[cat].push(record);
-      // "language magic" belongs in both language and magic
-      if (record.skill.toLowerCase() === 'language magic') {
-        groups.magic.push(record);
-      }
+      const cats = getSkillCategory(record.skill);
+      for (const cat of cats) groups[cat].push(record);
     }
     // Fold pet skills into the 'pets' category
     for (const petSkills of Object.values(skillData.pets)) {
@@ -323,6 +321,7 @@ export function SkillPanel({
     return Object.entries(skillData.pets)
       .map(([petName, skills]) => ({
         name: charDisplayName(petName),
+        key: petName,
         skills: sortSkills(Object.values(skills), sort),
       }))
       .filter((g) => g.skills.length > 0)
