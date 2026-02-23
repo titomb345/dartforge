@@ -50,6 +50,8 @@ The `[Unreleased]` header controls automatic version bumping on merge:
 - Alias and trigger search now filters by pattern only, no longer matches body or group text
 - Status indicator yellow levels now use bright yellow for better visibility
 - Renamed "Post-Sync Commands" to "Login Commands" in settings
+- Extracted `CommandInputContext`, `useTimerEngines`, and `useCommandHistory` from App.tsx — CommandInput now reads state from context instead of 20+ props
+- Double-click anti-idle and alignment tracking badges to disable them, matching custom timer badge behavior
 
 ### Fixed
 - Removed click-outside-to-close behavior on slide-out panels — panels now stay open until explicitly closed via the × button or toolbar toggle
