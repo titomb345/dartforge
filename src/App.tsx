@@ -127,6 +127,7 @@ function AppMain() {
   const togglePanel = (panel: Panel) => setActivePanel((v) => v === panel ? null : panel);
   const [panelLayout, setPanelLayout] = useState<PanelLayout>({ left: [], right: [] });
   const [pinnedWidths, setPinnedWidths] = useState<{ left: number; right: number }>({ left: 320, right: 320 });
+  const [panelHeights, setPanelHeights] = useState<{ left: number[]; right: number[] }>({ left: [], right: [] });
   const panelLayoutLoadedRef = useRef(false);
   const [compactReadouts, setCompactReadouts] = useState<Record<string, boolean>>({});
   const [filterFlags, setFilterFlags] = useState<FilterFlags>({ ...DEFAULT_FILTER_FLAGS });
@@ -170,6 +171,10 @@ function AppMain() {
       const savedWidths = await dataStore.get<{ left: number; right: number }>('settings.json', 'pinnedWidths');
       if (savedWidths != null && typeof savedWidths.left === 'number' && typeof savedWidths.right === 'number') {
         setPinnedWidths(savedWidths);
+      }
+      const savedHeights = await dataStore.get<{ left: number[]; right: number[] }>('settings.json', 'panelHeights');
+      if (savedHeights != null && Array.isArray(savedHeights.left) && Array.isArray(savedHeights.right)) {
+        setPanelHeights(savedHeights);
       }
       const savedStatusOrder = await dataStore.get<StatusReadoutKey[]>('settings.json', 'statusBarOrder');
       if (Array.isArray(savedStatusOrder) && savedStatusOrder.length > 0) {
@@ -270,6 +275,20 @@ function AppMain() {
     if (!panelLayoutLoadedRef.current) return;
     dataStore.set('settings.json', 'pinnedWidths', pinnedWidths).catch(console.error);
   }, [pinnedWidths]);
+
+  // Persist vertical panel height ratios
+  useEffect(() => {
+    if (!panelLayoutLoadedRef.current) return;
+    dataStore.set('settings.json', 'panelHeights', panelHeights).catch(console.error);
+  }, [panelHeights]);
+
+  // Callbacks for vertical resize ratio changes
+  const onLeftHeightRatiosChange = useCallback((ratios: number[]) => {
+    setPanelHeights((p) => ({ ...p, left: ratios }));
+  }, []);
+  const onRightHeightRatiosChange = useCallback((ratios: number[]) => {
+    setPanelHeights((p) => ({ ...p, right: ratios }));
+  }, []);
 
   // Viewport-aware panel width budget
   const budget = useViewportBudget(pinnedWidths, panelLayout);
@@ -999,6 +1018,8 @@ function AppMain() {
               onSwapSide={swapPanelSide}
               onSwapWith={swapPanelsWith}
               onMovePanel={movePanel}
+              heightRatios={panelHeights.left}
+              onHeightRatiosChange={onLeftHeightRatiosChange}
             />
             {panelLayout.left.length > 0 && (
               <ResizeHandle side="left" onMouseDown={leftResize.handleMouseDown} isDragging={leftResize.isDragging} constrained={budget.effectiveLeftWidth < pinnedWidths.left} />
@@ -1073,6 +1094,8 @@ function AppMain() {
               onSwapSide={swapPanelSide}
               onSwapWith={swapPanelsWith}
               onMovePanel={movePanel}
+              heightRatios={panelHeights.right}
+              onHeightRatiosChange={onRightHeightRatiosChange}
             />
           </>
         ) : budget.rightCollapsed && panelLayout.right.length > 0 ? (
