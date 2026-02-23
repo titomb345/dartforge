@@ -65,7 +65,7 @@ The `[Unreleased]` header controls automatic version bumping on merge:
 - Allocation panel delete button no longer animates with a jarring size transition — now matches the standard "Del?" pattern used elsewhere
 - Prompt stripping no longer eats ANSI color reset codes — previously, stripping `> ` could discard `\x1b[0m`, causing the prior line's color (e.g., cyan) to bleed into subsequent output
 - Login commands no longer fire on connect — previously they ran before the login prompt, sending commands as username/password
-- Password mode now resets on disconnect — previously, disconnecting while at the password prompt left the input masked on reconnect
+- Password mode now resets on disconnect — previously, disconnecting while at the password prompt left the input masked on reconnect, and the masked password was revealed when the mask was removed
 - Number inputs across settings and editors no longer force minimum value on every keystroke — fields can be cleared and retyped freely
 
 ## [1.0.0] - 2026-02-22

@@ -134,6 +134,13 @@ export const CommandInput = forwardRef<HTMLTextAreaElement, CommandInputProps>(
       }
     }, [initialHistory]);
 
+    // Clear input when password mode is turned off (e.g. disconnect) to avoid revealing the password
+    const prevPasswordMode = useRef(passwordMode);
+    useEffect(() => {
+      if (prevPasswordMode.current && !passwordMode) setValue('');
+      prevPasswordMode.current = passwordMode;
+    }, [passwordMode]);
+
     // Anti-idle / alignment / custom timer countdown tick
     const hasActiveTimers = activeTimers && activeTimers.length > 0;
     const [, setCountdownTick] = useState(0);
@@ -441,7 +448,7 @@ export const CommandInput = forwardRef<HTMLTextAreaElement, CommandInputProps>(
         })()}
 
         {/* Demo timer badge when spotlight is active but no real badges are visible */}
-        {spotlightActive?.helpId === 'command-input' && !hasActiveTimers && !antiIdleEnabled && !alignmentTrackingEnabled && (
+        {spotlightActive?.helpId === 'command-input' && (!showTimerBadges || (!hasActiveTimers && !antiIdleEnabled && !alignmentTrackingEnabled)) && (
           <span
             className="flex items-center gap-1 px-1.5 py-1 rounded border text-[9px] font-mono self-center shrink-0 ml-1 text-[#f97316] border-[#f97316]/30 bg-[#f97316]/8 opacity-75"
             style={{ filter: 'drop-shadow(0 0 3px rgba(249, 115, 22, 0.25))' }}
