@@ -12,8 +12,12 @@ The `[Unreleased]` header controls automatic version bumping on merge:
 ## [Unreleased-minor]
 
 ### Added
-- Who List panel — shows online players with guild tags and idle status, auto-refreshes in the background (configurable interval), pinnable to left/right side; manual `who` command also updates the panel without suppressing terminal output
+- Who List panel — shows online players with guild tags, ANSI name colors, and idle status; auto-refreshes in the background (configurable interval), pinnable to left/right side; manual `who` command also updates the panel without suppressing terminal output
+- Who title tracking — players using custom who titles (names that don't match "Name the race") can be mapped to suspected or confirmed player names; hover a title row and click "?" to add, click an annotation to edit, right-click to toggle confirmed/suspected; mappings are character-scoped and persisted
+- Who panel now supports all 5 player states: Online, Away, Busy, Walkup, and Idle — each with theme-aware colored indicators
 - Who auto-refresh countdown badge next to command input (matches alignment/anti-idle pattern); double-click to disable
+- Complete spell database (`spellData.ts`) with abbreviations, cast times, and aura costs for all 93+ spells
+- Non-spell skill database (`skillData.ts`) with optional abbreviations and category assignments; category sets in `skillCategories.ts` are now derived from these databases automatically
 - Action blocking — automatically queues commands during channeled actions (cast, study, hunt, gather, search, invoke, inscribe, write, revise, learn book, summon armor) to prevent accidental interruption; queued commands flush on completion with chain-aware re-queuing
 - `/block` and `/unblock` built-in commands for manual blocking control
 - Auto-login: store up to 2 character profiles in Settings > Characters — name and password are sent automatically on connect

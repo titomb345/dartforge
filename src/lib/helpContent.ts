@@ -429,7 +429,7 @@ export const HELP_CATEGORIES: HelpCategory[] = [
       {
         title: 'Who List',
         description:
-          'Shows online players with guild tags and idle status. Auto-refreshes in the background (configurable interval in Settings > Timers). Click the refresh button for a manual update. Pin the panel to keep it visible.',
+          'Shows online players with guild tags, idle status, and ANSI name colors. Auto-refreshes in the background (configurable interval in Settings > Timers). Click the refresh button for a manual update. Players using who titles (names that don\'t match the standard "Name the race" format) can be mapped to suspected or confirmed player names — hover over a title and click "?" to add a mapping. Pin the panel to keep it visible.',
         helpId: 'toolbar-who',
       },
       {

@@ -86,6 +86,8 @@ import { AllocPanel } from './components/AllocPanel';
 import { CurrencyPanel } from './components/CurrencyPanel';
 import { WhoPanel } from './components/WhoPanel';
 import { WhoProvider } from './contexts/WhoContext';
+import { WhoTitleProvider } from './contexts/WhoTitleContext';
+import { useWhoTitleMappings } from './hooks/useWhoTitleMappings';
 import type { WhoSnapshot } from './lib/whoPatterns';
 import { ResizeHandle } from './components/ResizeHandle';
 import { useResize } from './hooks/useResize';
@@ -103,6 +105,7 @@ import type { AutoLoginConfig } from './hooks/useMudConnection';
 import { useCommandHistory } from './hooks/useCommandHistory';
 import { useTimerEngines } from './hooks/useTimerEngines';
 import { CommandInputProvider } from './contexts/CommandInputContext';
+import { TerminalThemeProvider } from './contexts/TerminalThemeContext';
 import { useSessionLogger } from './hooks/useSessionLogger';
 import { useCustomChimes } from './hooks/useCustomChimes';
 import { AppSettingsProvider } from './contexts/AppSettingsContext';
@@ -776,6 +779,9 @@ function AppMain() {
 
   // Signature mapping system
   const signatureState = useSignatureMappings(dataStore, activeCharacter);
+
+  // Who title mapping system
+  const whoTitleState = useWhoTitleMappings(dataStore, activeCharacter);
   const { resolveSignature } = signatureState;
   const resolveSignatureRef = useLatestRef(resolveSignature);
 
@@ -1468,256 +1474,261 @@ function AppMain() {
   );
 
   return (
-    <AppSettingsProvider value={appSettingsWithExtras}>
-      <CommandInputProvider value={commandInputValue}>
-        <VariableProvider value={variableState}>
-          <AliasProvider value={aliasState}>
-            <TriggerProvider value={triggerState}>
-              <TimerProvider value={timerState}>
-                <SignatureProvider value={signatureState}>
-                  <SkillTrackerProvider value={skillTrackerValue}>
-                    <ChatProvider value={chatValue}>
-                      <ImproveCounterProvider value={counterValue}>
-                        <MapProvider value={mapTracker}>
-                          <AllocProvider value={allocState}>
-                            <WhoProvider value={whoValue}>
-                              <PanelProvider
-                                layout={panelLayout}
-                                activePanel={activePanel}
-                                togglePanel={togglePanel}
-                                pinPanel={pinPanel}
-                              >
-                                <SpotlightProvider>
-                                  <div className="flex flex-col h-screen bg-bg-canvas text-text-primary relative p-1 gap-1">
-                                    <Toolbar
-                                      connected={connected}
-                                      onReconnect={() => {
-                                        reconnect();
-                                        requestAnimationFrame(() => inputRef.current?.focus());
-                                      }}
-                                      onDisconnect={() => {
-                                        disconnect();
-                                        requestAnimationFrame(() => inputRef.current?.focus());
-                                      }}
-                                    />
-                                    <div className="flex-1 overflow-hidden flex flex-row gap-1 relative">
-                                      {/* Left pinned region — full, collapsed strip, or hidden */}
-                                      {budget.effectiveLeftWidth > 0 ? (
-                                        <>
-                                          <PinnedRegion
+    <TerminalThemeProvider value={theme}>
+      <AppSettingsProvider value={appSettingsWithExtras}>
+        <CommandInputProvider value={commandInputValue}>
+          <VariableProvider value={variableState}>
+            <AliasProvider value={aliasState}>
+              <TriggerProvider value={triggerState}>
+                <TimerProvider value={timerState}>
+                  <SignatureProvider value={signatureState}>
+                    <SkillTrackerProvider value={skillTrackerValue}>
+                      <ChatProvider value={chatValue}>
+                        <ImproveCounterProvider value={counterValue}>
+                          <MapProvider value={mapTracker}>
+                            <AllocProvider value={allocState}>
+                              <WhoProvider value={whoValue}>
+                                <WhoTitleProvider value={whoTitleState}>
+                                <PanelProvider
+                                  layout={panelLayout}
+                                  activePanel={activePanel}
+                                  togglePanel={togglePanel}
+                                  pinPanel={pinPanel}
+                                >
+                                  <SpotlightProvider>
+                                    <div className="flex flex-col h-screen bg-bg-canvas text-text-primary relative p-1 gap-1">
+                                      <Toolbar
+                                        connected={connected}
+                                        onReconnect={() => {
+                                          reconnect();
+                                          requestAnimationFrame(() => inputRef.current?.focus());
+                                        }}
+                                        onDisconnect={() => {
+                                          disconnect();
+                                          requestAnimationFrame(() => inputRef.current?.focus());
+                                        }}
+                                      />
+                                      <div className="flex-1 overflow-hidden flex flex-row gap-1 relative">
+                                        {/* Left pinned region — full, collapsed strip, or hidden */}
+                                        {budget.effectiveLeftWidth > 0 ? (
+                                          <>
+                                            <PinnedRegion
+                                              side="left"
+                                              panels={panelLayout.left}
+                                              width={budget.effectiveLeftWidth}
+                                              otherSidePanels={panelLayout.right}
+                                              onUnpin={unpinPanel}
+                                              onSwapSide={swapPanelSide}
+                                              onSwapWith={swapPanelsWith}
+                                              onMovePanel={movePanel}
+                                              heightRatios={panelHeights.left}
+                                              onHeightRatiosChange={onLeftHeightRatiosChange}
+                                            />
+                                            {panelLayout.left.length > 0 && (
+                                              <ResizeHandle
+                                                side="left"
+                                                onMouseDown={leftResize.handleMouseDown}
+                                                isDragging={leftResize.isDragging}
+                                                constrained={
+                                                  budget.effectiveLeftWidth < pinnedWidths.left
+                                                }
+                                              />
+                                            )}
+                                          </>
+                                        ) : budget.leftCollapsed && panelLayout.left.length > 0 ? (
+                                          <CollapsedPanelStrip
                                             side="left"
                                             panels={panelLayout.left}
-                                            width={budget.effectiveLeftWidth}
+                                            panelWidth={pinnedWidths.left}
                                             otherSidePanels={panelLayout.right}
                                             onUnpin={unpinPanel}
                                             onSwapSide={swapPanelSide}
                                             onSwapWith={swapPanelsWith}
                                             onMovePanel={movePanel}
-                                            heightRatios={panelHeights.left}
-                                            onHeightRatiosChange={onLeftHeightRatiosChange}
                                           />
-                                          {panelLayout.left.length > 0 && (
-                                            <ResizeHandle
-                                              side="left"
-                                              onMouseDown={leftResize.handleMouseDown}
-                                              isDragging={leftResize.isDragging}
-                                              constrained={
-                                                budget.effectiveLeftWidth < pinnedWidths.left
-                                              }
-                                            />
-                                          )}
-                                        </>
-                                      ) : budget.leftCollapsed && panelLayout.left.length > 0 ? (
-                                        <CollapsedPanelStrip
-                                          side="left"
-                                          panels={panelLayout.left}
-                                          panelWidth={pinnedWidths.left}
-                                          otherSidePanels={panelLayout.right}
-                                          onUnpin={unpinPanel}
-                                          onSwapSide={swapPanelSide}
-                                          onSwapWith={swapPanelsWith}
-                                          onMovePanel={movePanel}
-                                        />
-                                      ) : null}
+                                        ) : null}
 
-                                      {/* Center: Terminal + bottom controls */}
-                                      <div
-                                        className="flex-1 overflow-hidden flex flex-col gap-1"
-                                        style={{ minWidth: MIN_TERMINAL_WIDTH }}
-                                      >
-                                        <div className="flex-1 overflow-hidden rounded-lg flex flex-col">
-                                          <Terminal
-                                            terminalRef={terminalRef}
-                                            inputRef={inputRef}
-                                            theme={xtermTheme}
-                                            display={display}
-                                            onUpdateDisplay={updateDisplay}
-                                            onAddToTrigger={handleAddToTrigger}
-                                            onGagLine={handleGagLine}
-                                            onOpenInNotes={handleOpenInNotes}
-                                          />
+                                        {/* Center: Terminal + bottom controls */}
+                                        <div
+                                          className="flex-1 overflow-hidden flex flex-col gap-1"
+                                          style={{ minWidth: MIN_TERMINAL_WIDTH }}
+                                        >
+                                          <div className="flex-1 overflow-hidden rounded-lg flex flex-col">
+                                            <Terminal
+                                              terminalRef={terminalRef}
+                                              inputRef={inputRef}
+                                              theme={xtermTheme}
+                                              display={display}
+                                              onUpdateDisplay={updateDisplay}
+                                              onAddToTrigger={handleAddToTrigger}
+                                              onGagLine={handleGagLine}
+                                              onOpenInNotes={handleOpenInNotes}
+                                            />
+                                          </div>
+                                          {/* Status bar + command input */}
+                                          <div className="rounded-lg bg-bg-primary overflow-hidden shrink-0">
+                                            <div
+                                              ref={statusBarRef}
+                                              data-help-id="status-bar"
+                                              className="flex items-center gap-1 px-1.5 py-0.5"
+                                              style={{
+                                                background:
+                                                  'linear-gradient(to bottom, #1e1e1e, #1a1a1a)',
+                                              }}
+                                            >
+                                              {loggedIn && (
+                                                <SortableStatusBar
+                                                  items={readoutConfigs}
+                                                  order={statusBarOrder}
+                                                  onReorder={reorderStatusBar}
+                                                  theme={theme}
+                                                  autoCompact={autoCompact}
+                                                  compactReadouts={compactReadouts}
+                                                  filterFlags={filterFlags}
+                                                  toggleFilter={toggleFilter}
+                                                  toggleCompactReadout={toggleCompactReadout}
+                                                />
+                                              )}
+                                              <div className="ml-auto">
+                                                <GameClock
+                                                  compact={autoCompact || !!compactReadouts.clock}
+                                                  onToggleCompact={() =>
+                                                    toggleCompactReadout('clock')
+                                                  }
+                                                />
+                                              </div>
+                                            </div>
+                                            <CommandInput
+                                              ref={inputRef}
+                                              onSend={handleSend}
+                                              onReconnect={reconnect}
+                                            />
+                                          </div>
                                         </div>
-                                        {/* Status bar + command input */}
-                                        <div className="rounded-lg bg-bg-primary overflow-hidden shrink-0">
-                                          <div
-                                            ref={statusBarRef}
-                                            data-help-id="status-bar"
-                                            className="flex items-center gap-1 px-1.5 py-0.5"
-                                            style={{
-                                              background:
-                                                'linear-gradient(to bottom, #1e1e1e, #1a1a1a)',
-                                            }}
-                                          >
-                                            {loggedIn && (
-                                              <SortableStatusBar
-                                                items={readoutConfigs}
-                                                order={statusBarOrder}
-                                                onReorder={reorderStatusBar}
-                                                theme={theme}
-                                                autoCompact={autoCompact}
-                                                compactReadouts={compactReadouts}
-                                                filterFlags={filterFlags}
-                                                toggleFilter={toggleFilter}
-                                                toggleCompactReadout={toggleCompactReadout}
-                                              />
-                                            )}
-                                            <div className="ml-auto">
-                                              <GameClock
-                                                compact={autoCompact || !!compactReadouts.clock}
-                                                onToggleCompact={() =>
-                                                  toggleCompactReadout('clock')
+
+                                        {/* Right pinned region — full, collapsed strip, or hidden */}
+                                        {budget.effectiveRightWidth > 0 ? (
+                                          <>
+                                            {panelLayout.right.length > 0 && (
+                                              <ResizeHandle
+                                                side="right"
+                                                onMouseDown={rightResize.handleMouseDown}
+                                                isDragging={rightResize.isDragging}
+                                                constrained={
+                                                  budget.effectiveRightWidth < pinnedWidths.right
                                                 }
                                               />
-                                            </div>
-                                          </div>
-                                          <CommandInput
-                                            ref={inputRef}
-                                            onSend={handleSend}
-                                            onReconnect={reconnect}
-                                          />
-                                        </div>
-                                      </div>
-
-                                      {/* Right pinned region — full, collapsed strip, or hidden */}
-                                      {budget.effectiveRightWidth > 0 ? (
-                                        <>
-                                          {panelLayout.right.length > 0 && (
-                                            <ResizeHandle
+                                            )}
+                                            <PinnedRegion
                                               side="right"
-                                              onMouseDown={rightResize.handleMouseDown}
-                                              isDragging={rightResize.isDragging}
-                                              constrained={
-                                                budget.effectiveRightWidth < pinnedWidths.right
-                                              }
+                                              panels={panelLayout.right}
+                                              width={budget.effectiveRightWidth}
+                                              otherSidePanels={panelLayout.left}
+                                              onUnpin={unpinPanel}
+                                              onSwapSide={swapPanelSide}
+                                              onSwapWith={swapPanelsWith}
+                                              onMovePanel={movePanel}
+                                              heightRatios={panelHeights.right}
+                                              onHeightRatiosChange={onRightHeightRatiosChange}
                                             />
-                                          )}
-                                          <PinnedRegion
+                                          </>
+                                        ) : budget.rightCollapsed &&
+                                          panelLayout.right.length > 0 ? (
+                                          <CollapsedPanelStrip
                                             side="right"
                                             panels={panelLayout.right}
-                                            width={budget.effectiveRightWidth}
+                                            panelWidth={pinnedWidths.right}
                                             otherSidePanels={panelLayout.left}
                                             onUnpin={unpinPanel}
                                             onSwapSide={swapPanelSide}
                                             onSwapWith={swapPanelsWith}
                                             onMovePanel={movePanel}
-                                            heightRatios={panelHeights.right}
-                                            onHeightRatiosChange={onRightHeightRatiosChange}
                                           />
-                                        </>
-                                      ) : budget.rightCollapsed && panelLayout.right.length > 0 ? (
-                                        <CollapsedPanelStrip
-                                          side="right"
-                                          panels={panelLayout.right}
-                                          panelWidth={pinnedWidths.right}
-                                          otherSidePanels={panelLayout.left}
-                                          onUnpin={unpinPanel}
-                                          onSwapSide={swapPanelSide}
-                                          onSwapWith={swapPanelsWith}
-                                          onMovePanel={movePanel}
-                                        />
-                                      ) : null}
+                                        ) : null}
 
-                                      {/* Slide-out overlays */}
-                                      <SlideOut panel="appearance">
-                                        <ColorSettings
-                                          theme={theme}
-                                          onUpdateColor={updateColor}
-                                          onResetColor={resetColor}
-                                          onReset={resetAll}
-                                          display={display}
-                                          onUpdateDisplay={updateDisplay}
-                                          onResetDisplay={resetDisplay}
-                                          debugMode={debugMode}
-                                          onToggleDebug={toggleDebug}
-                                        />
-                                      </SlideOut>
-                                      <SlideOut panel="settings">
-                                        <SettingsPanel />
-                                      </SlideOut>
-                                      <SlideOut panel="skills" pinnable="skills">
-                                        <SkillPanel mode="slideout" />
-                                      </SlideOut>
-                                      <SlideOut panel="chat" pinnable="chat">
-                                        <ChatPanel mode="slideout" />
-                                      </SlideOut>
-                                      <SlideOut panel="counter" pinnable="counter">
-                                        <CounterPanel mode="slideout" />
-                                      </SlideOut>
-                                      <SlideOut panel="notes" pinnable="notes">
-                                        <NotesPanel mode="slideout" />
-                                      </SlideOut>
-                                      <SlideOut panel="aliases">
-                                        <AliasPanel onClose={() => setActivePanel(null)} />
-                                      </SlideOut>
-                                      <SlideOut panel="triggers">
-                                        <TriggerPanel onClose={() => setActivePanel(null)} />
-                                      </SlideOut>
-                                      <SlideOut panel="timers">
-                                        <TimerPanel onClose={() => setActivePanel(null)} />
-                                      </SlideOut>
-                                      <SlideOut panel="variables">
-                                        <VariablePanel onClose={() => setActivePanel(null)} />
-                                      </SlideOut>
-                                      <SlideOut panel="map" pinnable="map">
-                                        <MapPanel
-                                          mode="slideout"
-                                          onWalkTo={async (directions) => {
-                                            for (const dir of directions) {
-                                              await sendCommand(dir);
-                                            }
-                                          }}
-                                        />
-                                      </SlideOut>
-                                      <SlideOut panel="alloc" pinnable="alloc">
-                                        <AllocPanel mode="slideout" />
-                                      </SlideOut>
-                                      <SlideOut panel="currency" pinnable="currency">
-                                        <CurrencyPanel mode="slideout" />
-                                      </SlideOut>
-                                      <SlideOut panel="who" pinnable="who">
-                                        <WhoPanel mode="slideout" />
-                                      </SlideOut>
-                                      <SlideOut panel="help">
-                                        <HelpPanel />
-                                      </SlideOut>
+                                        {/* Slide-out overlays */}
+                                        <SlideOut panel="appearance">
+                                          <ColorSettings
+                                            theme={theme}
+                                            onUpdateColor={updateColor}
+                                            onResetColor={resetColor}
+                                            onReset={resetAll}
+                                            display={display}
+                                            onUpdateDisplay={updateDisplay}
+                                            onResetDisplay={resetDisplay}
+                                            debugMode={debugMode}
+                                            onToggleDebug={toggleDebug}
+                                          />
+                                        </SlideOut>
+                                        <SlideOut panel="settings">
+                                          <SettingsPanel />
+                                        </SlideOut>
+                                        <SlideOut panel="skills" pinnable="skills">
+                                          <SkillPanel mode="slideout" />
+                                        </SlideOut>
+                                        <SlideOut panel="chat" pinnable="chat">
+                                          <ChatPanel mode="slideout" />
+                                        </SlideOut>
+                                        <SlideOut panel="counter" pinnable="counter">
+                                          <CounterPanel mode="slideout" />
+                                        </SlideOut>
+                                        <SlideOut panel="notes" pinnable="notes">
+                                          <NotesPanel mode="slideout" />
+                                        </SlideOut>
+                                        <SlideOut panel="aliases">
+                                          <AliasPanel onClose={() => setActivePanel(null)} />
+                                        </SlideOut>
+                                        <SlideOut panel="triggers">
+                                          <TriggerPanel onClose={() => setActivePanel(null)} />
+                                        </SlideOut>
+                                        <SlideOut panel="timers">
+                                          <TimerPanel onClose={() => setActivePanel(null)} />
+                                        </SlideOut>
+                                        <SlideOut panel="variables">
+                                          <VariablePanel onClose={() => setActivePanel(null)} />
+                                        </SlideOut>
+                                        <SlideOut panel="map" pinnable="map">
+                                          <MapPanel
+                                            mode="slideout"
+                                            onWalkTo={async (directions) => {
+                                              for (const dir of directions) {
+                                                await sendCommand(dir);
+                                              }
+                                            }}
+                                          />
+                                        </SlideOut>
+                                        <SlideOut panel="alloc" pinnable="alloc">
+                                          <AllocPanel mode="slideout" />
+                                        </SlideOut>
+                                        <SlideOut panel="currency" pinnable="currency">
+                                          <CurrencyPanel mode="slideout" />
+                                        </SlideOut>
+                                        <SlideOut panel="who" pinnable="who">
+                                          <WhoPanel mode="slideout" />
+                                        </SlideOut>
+                                        <SlideOut panel="help">
+                                          <HelpPanel />
+                                        </SlideOut>
+                                      </div>
                                     </div>
-                                  </div>
-                                  <SpotlightOverlay />
-                                </SpotlightProvider>
-                              </PanelProvider>
-                            </WhoProvider>
-                          </AllocProvider>
-                        </MapProvider>
-                      </ImproveCounterProvider>
-                    </ChatProvider>
-                  </SkillTrackerProvider>
-                </SignatureProvider>
-              </TimerProvider>
-            </TriggerProvider>
-          </AliasProvider>
-        </VariableProvider>
-      </CommandInputProvider>
-    </AppSettingsProvider>
+                                    <SpotlightOverlay />
+                                  </SpotlightProvider>
+                                </PanelProvider>
+                                </WhoTitleProvider>
+                              </WhoProvider>
+                            </AllocProvider>
+                          </MapProvider>
+                        </ImproveCounterProvider>
+                      </ChatProvider>
+                    </SkillTrackerProvider>
+                  </SignatureProvider>
+                </TimerProvider>
+              </TriggerProvider>
+            </AliasProvider>
+          </VariableProvider>
+        </CommandInputProvider>
+      </AppSettingsProvider>
+    </TerminalThemeProvider>
   );
 }
 

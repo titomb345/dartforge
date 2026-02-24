@@ -119,14 +119,17 @@ export class OutputFilter {
   private syncMagicPending = false;
   /** True while inside the who list block during sync. */
   private syncInWhoBlock = false;
-  /** Accumulated who list lines during sync. */
+  /** Accumulated who list lines during sync (stripped). */
   private syncWhoLines: string[] = [];
+  /** Accumulated who list raw lines during sync (with ANSI). */
+  private syncWhoRawLines: string[] = [];
   /** Safety timer to auto-end sync. */
   private syncTimer: ReturnType<typeof setTimeout> | null = null;
 
   /* ---- Passive who tracking (captures manual `who` output without gagging) ---- */
   private passiveWhoActive = false;
   private passiveWhoLines: string[] = [];
+  private passiveWhoRawLines: string[] = [];
 
   constructor(callbacks: OutputFilterCallbacks = {}) {
     this.callbacks = callbacks;
@@ -153,9 +156,11 @@ export class OutputFilter {
     this.syncMagicPending = false;
     this.syncInWhoBlock = false;
     this.syncWhoLines = [];
+    this.syncWhoRawLines = [];
     // Abort any in-progress passive who tracking (sync takes over)
     this.passiveWhoActive = false;
     this.passiveWhoLines = [];
+    this.passiveWhoRawLines = [];
     if (this.syncTimer) clearTimeout(this.syncTimer);
     this.syncTimer = setTimeout(() => {
       this.syncTimer = null;
@@ -172,9 +177,11 @@ export class OutputFilter {
     this.syncGags.who = true;
     this.syncInWhoBlock = false;
     this.syncWhoLines = [];
+    this.syncWhoRawLines = [];
     // Abort any in-progress passive who tracking (sync takes over)
     this.passiveWhoActive = false;
     this.passiveWhoLines = [];
+    this.passiveWhoRawLines = [];
     if (this.syncTimer) clearTimeout(this.syncTimer);
     this.syncTimer = setTimeout(() => {
       this.syncTimer = null;
@@ -200,6 +207,7 @@ export class OutputFilter {
     this.syncMagicPending = false;
     this.syncInWhoBlock = false;
     this.syncWhoLines = [];
+    this.syncWhoRawLines = [];
     if (this.syncTimer) {
       clearTimeout(this.syncTimer);
       this.syncTimer = null;
@@ -235,21 +243,24 @@ export class OutputFilter {
    * Track who list output passively (no gagging).
    * Used for manual `who` typed by the player — updates the panel without suppressing output.
    */
-  private trackPassiveWho(stripped: string): void {
+  private trackPassiveWho(stripped: string, raw: string): void {
     if (!this.passiveWhoActive) {
       if (isWhoHeaderLine(stripped)) {
         this.passiveWhoActive = true;
         this.passiveWhoLines = [];
+        this.passiveWhoRawLines = [];
       }
       return;
     }
 
     this.passiveWhoLines.push(stripped);
+    this.passiveWhoRawLines.push(raw);
     if (isWhoFinalLine(stripped)) {
-      const snapshot = buildWhoSnapshot(this.passiveWhoLines);
+      const snapshot = buildWhoSnapshot(this.passiveWhoLines, this.passiveWhoRawLines);
       this.callbacks.onWho?.(snapshot);
       this.passiveWhoActive = false;
       this.passiveWhoLines = [];
+      this.passiveWhoRawLines = [];
     }
   }
 
@@ -257,7 +268,7 @@ export class OutputFilter {
    * Check if a line should be gagged as part of a sync command response.
    * Returns true if the line should be suppressed.
    */
-  private shouldSyncGag(stripped: string, healthMatch: HealthMatch | null): boolean {
+  private shouldSyncGag(stripped: string, raw: string, healthMatch: HealthMatch | null): boolean {
     if (!this.syncActive) return false;
 
     // Bare prompt lines ("> " → empty after stripping) between sync command responses
@@ -364,13 +375,15 @@ export class OutputFilter {
       if (!this.syncInWhoBlock && isWhoHeaderLine(stripped)) {
         this.syncInWhoBlock = true;
         this.syncWhoLines = [];
+        this.syncWhoRawLines = [];
         return true;
       }
       if (this.syncInWhoBlock) {
         this.syncWhoLines.push(stripped);
+        this.syncWhoRawLines.push(raw);
         if (isWhoFinalLine(stripped)) {
           // End of who block — build snapshot and fire callback
-          const snapshot = buildWhoSnapshot(this.syncWhoLines);
+          const snapshot = buildWhoSnapshot(this.syncWhoLines, this.syncWhoRawLines);
           this.callbacks.onWho?.(snapshot);
           this.syncInWhoBlock = false;
           this.syncWhoLines = [];
@@ -482,14 +495,14 @@ export class OutputFilter {
       // --- Sync gagging (pattern-based, only login command responses) ---
       // Check if this line is a sync response that should be suppressed.
       // Callbacks (onLine, etc.) still fire so parsers always run.
-      if (this.syncActive && this.shouldSyncGag(stripped, healthMatch)) {
+      if (this.syncActive && this.shouldSyncGag(stripped, seg, healthMatch)) {
         // Fire onLine so alloc/magic parsers and triggers still process
         this.callbacks.onLine?.(stripped, seg);
         continue; // suppress only this specific sync response line
       }
 
       // --- Passive who tracking (manual `who` → updates panel without gagging) ---
-      this.trackPassiveWho(stripped);
+      this.trackPassiveWho(stripped, seg);
 
       // --- Compact mode: strip status lines from terminal ---
 
@@ -551,6 +564,7 @@ export class OutputFilter {
     this.buffer = '';
     this.passiveWhoActive = false;
     this.passiveWhoLines = [];
+    this.passiveWhoRawLines = [];
     this.endSync();
   }
 }
