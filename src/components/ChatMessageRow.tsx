@@ -91,9 +91,15 @@ export function ChatMessageRow({
               {msg.isOwn ? 'You' : msg.sender}
             </span>
           )}
-          {(msg.type === 'say' || msg.type === 'shout') && <LanguageBadge language={msg.language ?? ''} />}
+          {(msg.type === 'say' || msg.type === 'shout') && (
+            <LanguageBadge language={msg.language ?? ''} />
+          )}
           {badge && (
-            <span className={`text-[9px] font-mono ${badge.color} ${knownSender ? 'ml-1' : ''} shrink-0`}>{badge.label}</span>
+            <span
+              className={`text-[9px] font-mono ${badge.color} ${knownSender ? 'ml-1' : ''} shrink-0`}
+            >
+              {badge.label}
+            </span>
           )}
           {msg.directed && (
             <span className="text-[9px] font-mono text-purple ml-1 shrink-0">to you</span>

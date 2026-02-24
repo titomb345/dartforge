@@ -21,7 +21,7 @@ if (window.opener) {
         code: params.get('code'),
         state: params.get('state'),
       },
-      window.location.origin,
+      window.location.origin
     );
   } else {
     // Error, cancellation, or bare redirect — notify opener
@@ -30,7 +30,7 @@ if (window.opener) {
         type: 'dropbox-oauth-callback',
         error: params.get('error') || 'cancelled',
       },
-      window.location.origin,
+      window.location.origin
     );
   }
 
@@ -48,6 +48,6 @@ if (window.opener) {
           </DropboxDataStoreProvider>
         </DropboxProvider>
       </TransportProvider>
-    </React.StrictMode>,
+    </React.StrictMode>
   );
 }

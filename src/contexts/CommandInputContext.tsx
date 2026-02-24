@@ -22,6 +22,15 @@ export interface CommandInputState {
   alignmentTrackingMinutes: number;
   alignmentNextAt: number | null;
   onToggleAlignmentTracking: () => void;
+  // Who auto-refresh
+  whoAutoRefreshEnabled: boolean;
+  whoRefreshMinutes: number;
+  whoNextAt: number | null;
+  onToggleWhoAutoRefresh: () => void;
+  // Action blocking
+  actionBlocked: boolean;
+  actionBlockLabel: string | null;
+  actionQueueLength: number;
   // Custom timers
   activeTimers: ActiveTimerBadge[];
   onToggleTimer: (id: string) => void;

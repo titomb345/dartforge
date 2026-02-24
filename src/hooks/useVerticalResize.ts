@@ -58,7 +58,7 @@ export function useVerticalResize({
       setDragIndex(index);
       setIsDragging(true);
     },
-    [ratios],
+    [ratios]
   );
 
   useEffect(() => {

@@ -1,7 +1,23 @@
 import { useState, useCallback, useEffect, useRef } from 'react';
-import type { AllocData, AllocProfile, AllocSlot, AllocView, AllocTab, LimbAllocation, MagicAllocation, MagicData, MagicProfile, MagicSlot } from '../types/alloc';
+import type {
+  AllocData,
+  AllocProfile,
+  AllocSlot,
+  AllocView,
+  AllocTab,
+  LimbAllocation,
+  MagicAllocation,
+  MagicData,
+  MagicProfile,
+  MagicSlot,
+} from '../types/alloc';
 import { EMPTY_LIMB, EMPTY_MAGIC } from '../types/alloc';
-import { updateSlot, buildAllocCommand, updateMagicSlot, buildMagicAllocCommand } from '../lib/allocPatterns';
+import {
+  updateSlot,
+  buildAllocCommand,
+  updateMagicSlot,
+  buildMagicAllocCommand,
+} from '../lib/allocPatterns';
 import type { AllocParseResult, MagicParseResult } from '../lib/allocPatterns';
 import type { DataStore } from '../contexts/DataStoreContext';
 
@@ -83,7 +99,7 @@ export interface AllocState {
 export function useAllocations(
   sendCommandRef: React.RefObject<((cmd: string) => Promise<void>) | null>,
   dataStore: DataStore,
-  activeCharacter: string | null,
+  activeCharacter: string | null
 ): AllocState {
   const [data, setData] = useState<AllocData>({ ...EMPTY_DATA });
   const [view, setView] = useState<AllocView>('live');
@@ -114,7 +130,10 @@ export function useAllocations(
         const profiles = await dataStore.get<AllocProfile[]>(filename, 'profiles');
         const currentProfileIndex = await dataStore.get<number>(filename, 'currentProfileIndex');
         const detectedLimbs = await dataStore.get<string[]>(filename, 'detectedLimbs');
-        const liveAllocations = await dataStore.get<Record<string, LimbAllocation>>(filename, 'liveAllocations');
+        const liveAllocations = await dataStore.get<Record<string, LimbAllocation>>(
+          filename,
+          'liveAllocations'
+        );
         setData({
           profiles: profiles ?? [],
           currentProfileIndex: currentProfileIndex ?? 0,
@@ -199,7 +218,8 @@ export function useAllocations(
 
   const createProfile = useCallback((name?: string) => {
     setData((prev) => {
-      const limbNames = prev.detectedLimbs.length > 0 ? prev.detectedLimbs : ['right hand', 'left hand'];
+      const limbNames =
+        prev.detectedLimbs.length > 0 ? prev.detectedLimbs : ['right hand', 'left hand'];
       const limbs: Record<string, LimbAllocation> = {};
       for (const limb of limbNames) {
         limbs[limb] = { ...EMPTY_LIMB };
@@ -273,9 +293,7 @@ export function useAllocations(
         id: genId(),
         name: `${source.name} (copy)`,
         isActive: false,
-        limbs: Object.fromEntries(
-          Object.entries(source.limbs).map(([k, v]) => [k, { ...v }]),
-        ),
+        limbs: Object.fromEntries(Object.entries(source.limbs).map(([k, v]) => [k, { ...v }])),
       };
       const profiles = [...prev.profiles, copy];
       return { ...prev, profiles, currentProfileIndex: profiles.length - 1 };
@@ -289,33 +307,39 @@ export function useAllocations(
     }));
   }, []);
 
-  const updateLimbSlot = useCallback((profileId: string, limb: string, slot: AllocSlot, value: number) => {
-    setData((prev) => ({
-      ...prev,
-      profiles: prev.profiles.map((p) => {
-        if (p.id !== profileId) return p;
-        const limbAlloc = p.limbs[limb] ?? { ...EMPTY_LIMB };
-        return {
-          ...p,
-          limbs: { ...p.limbs, [limb]: updateSlot(limbAlloc, slot, value) },
-        };
-      }),
-    }));
-  }, []);
+  const updateLimbSlot = useCallback(
+    (profileId: string, limb: string, slot: AllocSlot, value: number) => {
+      setData((prev) => ({
+        ...prev,
+        profiles: prev.profiles.map((p) => {
+          if (p.id !== profileId) return p;
+          const limbAlloc = p.limbs[limb] ?? { ...EMPTY_LIMB };
+          return {
+            ...p,
+            limbs: { ...p.limbs, [limb]: updateSlot(limbAlloc, slot, value) },
+          };
+        }),
+      }));
+    },
+    []
+  );
 
-  const setLimbSlotDelta = useCallback((profileId: string, limb: string, slot: AllocSlot, delta: number) => {
-    setData((prev) => ({
-      ...prev,
-      profiles: prev.profiles.map((p) => {
-        if (p.id !== profileId) return p;
-        const limbAlloc = p.limbs[limb] ?? { ...EMPTY_LIMB };
-        return {
-          ...p,
-          limbs: { ...p.limbs, [limb]: updateSlot(limbAlloc, slot, limbAlloc[slot] + delta) },
-        };
-      }),
-    }));
-  }, []);
+  const setLimbSlotDelta = useCallback(
+    (profileId: string, limb: string, slot: AllocSlot, delta: number) => {
+      setData((prev) => ({
+        ...prev,
+        profiles: prev.profiles.map((p) => {
+          if (p.id !== profileId) return p;
+          const limbAlloc = p.limbs[limb] ?? { ...EMPTY_LIMB };
+          return {
+            ...p,
+            limbs: { ...p.limbs, [limb]: updateSlot(limbAlloc, slot, limbAlloc[slot] + delta) },
+          };
+        }),
+      }));
+    },
+    []
+  );
 
   // Live allocation editing
   const updateLiveLimbSlot = useCallback((limb: string, slot: AllocSlot, value: number) => {
@@ -344,15 +368,20 @@ export function useAllocations(
   const setProfileActive = useCallback((id: string, active: boolean) => {
     setData((prev) => ({
       ...prev,
-      profiles: prev.profiles.map((p) => (p.id === id ? { ...p, isActive: active } : { ...p, isActive: false })),
+      profiles: prev.profiles.map((p) =>
+        p.id === id ? { ...p, isActive: active } : { ...p, isActive: false }
+      ),
     }));
   }, []);
 
   const handleAllocParse = useCallback((result: AllocParseResult) => {
-    console.log('[alloc] parsed limbs:', result.limbs.map((l) => {
-      const sum = Object.values(l.alloc).reduce((a, b) => a + b, 0);
-      return `${l.limb} (sum=${sum}, null=${l.null})`;
-    }));
+    console.log(
+      '[alloc] parsed limbs:',
+      result.limbs.map((l) => {
+        const sum = Object.values(l.alloc).reduce((a, b) => a + b, 0);
+        return `${l.limb} (sum=${sum}, null=${l.null})`;
+      })
+    );
     const newLimbNames = result.limbs.map((l) => l.limb);
 
     // Build a map of the parsed allocations
@@ -402,65 +431,74 @@ export function useAllocations(
     });
   }, []);
 
-  const applyLimb = useCallback((profileId: string, limb: string) => {
-    const profile = dataRef.current.profiles.find((p) => p.id === profileId);
-    if (!profile || !sendCommandRef.current) return;
-    const alloc = profile.limbs[limb];
-    if (!alloc) return;
-    const cmd = buildAllocCommand(limb, alloc);
-    console.log('[alloc] apply limb:', cmd);
-    sendCommandRef.current(cmd).catch(console.error);
-    // Update live state directly — we already know the values
-    setData((prev) => ({
-      ...prev,
-      liveAllocations: { ...prev.liveAllocations, [limb]: { ...alloc } },
-    }));
-  }, [sendCommandRef]);
+  const applyLimb = useCallback(
+    (profileId: string, limb: string) => {
+      const profile = dataRef.current.profiles.find((p) => p.id === profileId);
+      if (!profile || !sendCommandRef.current) return;
+      const alloc = profile.limbs[limb];
+      if (!alloc) return;
+      const cmd = buildAllocCommand(limb, alloc);
+      console.log('[alloc] apply limb:', cmd);
+      sendCommandRef.current(cmd).catch(console.error);
+      // Update live state directly — we already know the values
+      setData((prev) => ({
+        ...prev,
+        liveAllocations: { ...prev.liveAllocations, [limb]: { ...alloc } },
+      }));
+    },
+    [sendCommandRef]
+  );
 
-  const applyAll = useCallback((profileId: string) => {
-    const profile = dataRef.current.profiles.find((p) => p.id === profileId);
-    if (!profile || !sendCommandRef.current) return;
-    const send = sendCommandRef.current;
-    const limbOrder = dataRef.current.detectedLimbs.length > 0
-      ? dataRef.current.detectedLimbs
-      : Object.keys(profile.limbs);
-    (async () => {
-      for (const limb of limbOrder) {
-        const alloc = profile.limbs[limb];
-        if (!alloc) continue;
-        const cmd = buildAllocCommand(limb, alloc);
-        console.log('[alloc] apply all:', cmd);
-        await send(cmd);
-      }
-      setProfileActive(profileId, true);
-    })().catch(console.error);
-    // Update live state directly from the profile
-    setData((prev) => {
-      const liveAllocations = { ...prev.liveAllocations };
-      for (const limb of limbOrder) {
-        const alloc = profile.limbs[limb];
-        if (alloc) liveAllocations[limb] = { ...alloc };
-      }
-      return { ...prev, liveAllocations };
-    });
-  }, [sendCommandRef, setProfileActive]);
+  const applyAll = useCallback(
+    (profileId: string) => {
+      const profile = dataRef.current.profiles.find((p) => p.id === profileId);
+      if (!profile || !sendCommandRef.current) return;
+      const send = sendCommandRef.current;
+      const limbOrder =
+        dataRef.current.detectedLimbs.length > 0
+          ? dataRef.current.detectedLimbs
+          : Object.keys(profile.limbs);
+      (async () => {
+        for (const limb of limbOrder) {
+          const alloc = profile.limbs[limb];
+          if (!alloc) continue;
+          const cmd = buildAllocCommand(limb, alloc);
+          console.log('[alloc] apply all:', cmd);
+          await send(cmd);
+        }
+        setProfileActive(profileId, true);
+      })().catch(console.error);
+      // Update live state directly from the profile
+      setData((prev) => {
+        const liveAllocations = { ...prev.liveAllocations };
+        for (const limb of limbOrder) {
+          const alloc = profile.limbs[limb];
+          if (alloc) liveAllocations[limb] = { ...alloc };
+        }
+        return { ...prev, liveAllocations };
+      });
+    },
+    [sendCommandRef, setProfileActive]
+  );
 
-  const applyLiveLimb = useCallback((limb: string) => {
-    if (!sendCommandRef.current) return;
-    const alloc = dataRef.current.liveAllocations[limb];
-    if (!alloc) return;
-    const cmd = buildAllocCommand(limb, alloc);
-    console.log('[alloc] apply live limb:', cmd);
-    sendCommandRef.current(cmd).catch(console.error);
-  }, [sendCommandRef]);
+  const applyLiveLimb = useCallback(
+    (limb: string) => {
+      if (!sendCommandRef.current) return;
+      const alloc = dataRef.current.liveAllocations[limb];
+      if (!alloc) return;
+      const cmd = buildAllocCommand(limb, alloc);
+      console.log('[alloc] apply live limb:', cmd);
+      sendCommandRef.current(cmd).catch(console.error);
+    },
+    [sendCommandRef]
+  );
 
   const applyLiveAll = useCallback(() => {
     if (!sendCommandRef.current) return;
     const send = sendCommandRef.current;
     const live = dataRef.current.liveAllocations;
-    const limbOrder = dataRef.current.detectedLimbs.length > 0
-      ? dataRef.current.detectedLimbs
-      : Object.keys(live);
+    const limbOrder =
+      dataRef.current.detectedLimbs.length > 0 ? dataRef.current.detectedLimbs : Object.keys(live);
     (async () => {
       for (const limb of limbOrder) {
         const alloc = live[limb];
@@ -571,25 +609,31 @@ export function useAllocations(
     }));
   }, []);
 
-  const updateMagicProfileSlot = useCallback((profileId: string, slot: MagicSlot, value: number) => {
-    setMagicData((prev) => ({
-      ...prev,
-      profiles: prev.profiles.map((p) => {
-        if (p.id !== profileId) return p;
-        return { ...p, alloc: updateMagicSlot(p.alloc, slot, value) };
-      }),
-    }));
-  }, []);
+  const updateMagicProfileSlot = useCallback(
+    (profileId: string, slot: MagicSlot, value: number) => {
+      setMagicData((prev) => ({
+        ...prev,
+        profiles: prev.profiles.map((p) => {
+          if (p.id !== profileId) return p;
+          return { ...p, alloc: updateMagicSlot(p.alloc, slot, value) };
+        }),
+      }));
+    },
+    []
+  );
 
-  const setMagicProfileSlotDelta = useCallback((profileId: string, slot: MagicSlot, delta: number) => {
-    setMagicData((prev) => ({
-      ...prev,
-      profiles: prev.profiles.map((p) => {
-        if (p.id !== profileId) return p;
-        return { ...p, alloc: updateMagicSlot(p.alloc, slot, p.alloc[slot] + delta) };
-      }),
-    }));
-  }, []);
+  const setMagicProfileSlotDelta = useCallback(
+    (profileId: string, slot: MagicSlot, delta: number) => {
+      setMagicData((prev) => ({
+        ...prev,
+        profiles: prev.profiles.map((p) => {
+          if (p.id !== profileId) return p;
+          return { ...p, alloc: updateMagicSlot(p.alloc, slot, p.alloc[slot] + delta) };
+        }),
+      }));
+    },
+    []
+  );
 
   const updateMagicLiveSlot = useCallback((slot: MagicSlot, value: number) => {
     setMagicData((prev) => ({
@@ -608,7 +652,9 @@ export function useAllocations(
   const setMagicProfileActive = useCallback((id: string, active: boolean) => {
     setMagicData((prev) => ({
       ...prev,
-      profiles: prev.profiles.map((p) => (p.id === id ? { ...p, isActive: active } : { ...p, isActive: false })),
+      profiles: prev.profiles.map((p) =>
+        p.id === id ? { ...p, isActive: active } : { ...p, isActive: false }
+      ),
     }));
   }, []);
 
@@ -620,15 +666,18 @@ export function useAllocations(
     }));
   }, []);
 
-  const applyMagic = useCallback((profileId: string) => {
-    const profile = magicDataRef.current.profiles.find((p) => p.id === profileId);
-    if (!profile || !sendCommandRef.current) return;
-    const cmd = buildMagicAllocCommand(profile.alloc);
-    console.log('[alloc] apply magic:', cmd);
-    sendCommandRef.current(cmd).catch(console.error);
-    setMagicData((prev) => ({ ...prev, liveAllocation: { ...profile.alloc } }));
-    setMagicProfileActive(profileId, true);
-  }, [sendCommandRef, setMagicProfileActive]);
+  const applyMagic = useCallback(
+    (profileId: string) => {
+      const profile = magicDataRef.current.profiles.find((p) => p.id === profileId);
+      if (!profile || !sendCommandRef.current) return;
+      const cmd = buildMagicAllocCommand(profile.alloc);
+      console.log('[alloc] apply magic:', cmd);
+      sendCommandRef.current(cmd).catch(console.error);
+      setMagicData((prev) => ({ ...prev, liveAllocation: { ...profile.alloc } }));
+      setMagicProfileActive(profileId, true);
+    },
+    [sendCommandRef, setMagicProfileActive]
+  );
 
   const applyMagicLive = useCallback(() => {
     if (!sendCommandRef.current) return;

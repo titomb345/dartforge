@@ -14,7 +14,11 @@ export function ResizeHandle({ side, onMouseDown, isDragging, constrained }: Res
       onMouseDown={onMouseDown}
       className={cn(
         'w-1 flex-shrink-0 cursor-col-resize transition-colors duration-150 rounded-full self-stretch',
-        isDragging ? 'bg-cyan/40' : constrained ? 'bg-amber/30 hover:bg-amber/50' : 'bg-transparent hover:bg-border',
+        isDragging
+          ? 'bg-cyan/40'
+          : constrained
+            ? 'bg-amber/30 hover:bg-amber/50'
+            : 'bg-transparent hover:bg-border'
       )}
       title={constrained ? 'Panel width limited by window size' : undefined}
       style={{

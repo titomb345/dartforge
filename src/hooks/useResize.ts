@@ -26,16 +26,14 @@ export function useResize({
       startWidthRef.current = initialWidth;
       setIsDragging(true);
     },
-    [initialWidth],
+    [initialWidth]
   );
 
   useEffect(() => {
     if (!isDragging) return;
 
     const handleMouseMove = (e: MouseEvent) => {
-      const delta = side === 'left'
-        ? e.clientX - startXRef.current
-        : startXRef.current - e.clientX;
+      const delta = side === 'left' ? e.clientX - startXRef.current : startXRef.current - e.clientX;
       const newWidth = Math.round(Math.min(max, Math.max(min, startWidthRef.current + delta)));
       onWidthChange(newWidth);
     };

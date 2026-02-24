@@ -40,9 +40,9 @@ interface ConvictionDef {
 const CONVICTION_DEFS: ConvictionDef[] = [
   { key: 'fanatic', convictionLabel: 'Fanatic', severity: 0, intensity: 1.0 },
   { key: 'zealot', convictionLabel: 'Zealot', severity: 1, intensity: 0.85 },
-  { key: 'verb-belief', convictionLabel: 'Strong Belief', severity: 2, intensity: 0.70 },
+  { key: 'verb-belief', convictionLabel: 'Strong Belief', severity: 2, intensity: 0.7 },
   { key: 'belief', convictionLabel: 'Belief', severity: 3, intensity: 0.55 },
-  { key: 'moderate', convictionLabel: 'Moderate', severity: 4, intensity: 0.40 },
+  { key: 'moderate', convictionLabel: 'Moderate', severity: 4, intensity: 0.4 },
   { key: 'some', convictionLabel: 'Some Belief', severity: 5, intensity: 0.25 },
   { key: 'none', convictionLabel: 'None', severity: 6, intensity: 0.0 },
 ];
@@ -75,12 +75,12 @@ interface AlignmentTypeDef {
 }
 
 const ALIGNMENT_TYPES: Record<string, AlignmentTypeDef> = {
-  war:         { baseColor: [230, 50, 50],   themeColor: 'brightRed' },
-  passion:     { baseColor: [240, 160, 40],  themeColor: 'brightYellow' },
-  renewal:     { baseColor: [50, 200, 80],   themeColor: 'brightGreen' },
-  peace:       { baseColor: [60, 140, 240],  themeColor: 'brightBlue' },
-  fatalism:    { baseColor: [160, 90, 220],  themeColor: 'magenta' },
-  destruction: { baseColor: [180, 50, 90],   themeColor: 'red' },
+  war: { baseColor: [230, 50, 50], themeColor: 'brightRed' },
+  passion: { baseColor: [240, 160, 40], themeColor: 'brightYellow' },
+  renewal: { baseColor: [50, 200, 80], themeColor: 'brightGreen' },
+  peace: { baseColor: [60, 140, 240], themeColor: 'brightBlue' },
+  fatalism: { baseColor: [160, 90, 220], themeColor: 'magenta' },
+  destruction: { baseColor: [180, 50, 90], themeColor: 'red' },
 };
 
 /** Neutral gray when alignment is unknown or "none" */
@@ -120,7 +120,7 @@ function computeColor(alignment: string, intensity: number): string {
   return rgbToHex(
     lerp(GRAY[0], br, intensity),
     lerp(GRAY[1], bg, intensity),
-    lerp(GRAY[2], bb, intensity),
+    lerp(GRAY[2], bb, intensity)
   );
 }
 

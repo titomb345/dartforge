@@ -43,7 +43,9 @@ export function DataStoreProvider({ children }: { children: ReactNode }) {
         if (!cancelled) setNeedsSetup(true);
       }
     })();
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   async function initializeWithCandidates(candidates: string[]) {
@@ -51,7 +53,9 @@ export function DataStoreProvider({ children }: { children: ReactNode }) {
     setActiveDataDir(resolved);
 
     // Check if auto-backups are enabled (read directly — settings context isn't mounted yet)
-    const settings: Record<string, unknown> | null = await invoke('read_data_file', { filename: 'settings.json' });
+    const settings: Record<string, unknown> | null = await invoke('read_data_file', {
+      filename: 'settings.json',
+    });
     const backupsEnabled = settings?.autoBackupEnabled !== false; // default true
 
     if (backupsEnabled) {
@@ -127,18 +131,24 @@ export function DataStoreProvider({ children }: { children: ReactNode }) {
     dirtyRef.current.set(filename, timer);
   }, []);
 
-  const get = useCallback(async <T,>(filename: string, key: string): Promise<T | null> => {
-    const cache = await ensureLoaded(filename);
-    const value = cache[key];
-    return value !== undefined ? (value as T) : null;
-  }, [ensureLoaded]);
+  const get = useCallback(
+    async <T,>(filename: string, key: string): Promise<T | null> => {
+      const cache = await ensureLoaded(filename);
+      const value = cache[key];
+      return value !== undefined ? (value as T) : null;
+    },
+    [ensureLoaded]
+  );
 
-  const set = useCallback(async (filename: string, key: string, value: unknown): Promise<void> => {
-    const cache = await ensureLoaded(filename);
-    cache[key] = value;
-    cacheRef.current.set(filename, cache);
-    scheduleDebouncedWrite(filename);
-  }, [ensureLoaded, scheduleDebouncedWrite]);
+  const set = useCallback(
+    async (filename: string, key: string, value: unknown): Promise<void> => {
+      const cache = await ensureLoaded(filename);
+      cache[key] = value;
+      cacheRef.current.set(filename, cache);
+      scheduleDebouncedWrite(filename);
+    },
+    [ensureLoaded, scheduleDebouncedWrite]
+  );
 
   const save = useCallback(async (filename: string): Promise<void> => {
     // Cancel any pending debounced write
@@ -158,17 +168,23 @@ export function DataStoreProvider({ children }: { children: ReactNode }) {
     }
   }, []);
 
-  const del = useCallback(async (filename: string, key: string): Promise<void> => {
-    const cache = await ensureLoaded(filename);
-    delete cache[key];
-    cacheRef.current.set(filename, cache);
-    scheduleDebouncedWrite(filename);
-  }, [ensureLoaded, scheduleDebouncedWrite]);
+  const del = useCallback(
+    async (filename: string, key: string): Promise<void> => {
+      const cache = await ensureLoaded(filename);
+      delete cache[key];
+      cacheRef.current.set(filename, cache);
+      scheduleDebouncedWrite(filename);
+    },
+    [ensureLoaded, scheduleDebouncedWrite]
+  );
 
-  const keys = useCallback(async (filename: string): Promise<string[]> => {
-    const cache = await ensureLoaded(filename);
-    return Object.keys(cache);
-  }, [ensureLoaded]);
+  const keys = useCallback(
+    async (filename: string): Promise<string[]> => {
+      const cache = await ensureLoaded(filename);
+      return Object.keys(cache);
+    },
+    [ensureLoaded]
+  );
 
   const readText = useCallback(async (filename: string): Promise<string | null> => {
     const result: string | null = await invoke('read_text_file', { filename });
@@ -216,46 +232,63 @@ export function DataStoreProvider({ children }: { children: ReactNode }) {
     await Promise.all(promises);
   }, []);
 
-  const reloadFromDir = useCallback(async (candidates: string[]): Promise<string> => {
-    // Flush current state first
-    await flushAll();
+  const reloadFromDir = useCallback(
+    async (candidates: string[]): Promise<string> => {
+      // Flush current state first
+      await flushAll();
 
-    // Clear caches
-    cacheRef.current.clear();
-    loadedRef.current.clear();
+      // Clear caches
+      cacheRef.current.clear();
+      loadedRef.current.clear();
 
-    // Save candidates to local config
-    const localStore = await load(LOCAL_CONFIG_FILE);
-    await localStore.set(DATA_DIRS_KEY, candidates);
-    await localStore.save();
+      // Save candidates to local config
+      const localStore = await load(LOCAL_CONFIG_FILE);
+      await localStore.set(DATA_DIRS_KEY, candidates);
+      await localStore.save();
 
-    // Re-resolve
-    const resolved: string = await invoke('resolve_data_dir', { candidates });
-    setActiveDataDir(resolved);
+      // Re-resolve
+      const resolved: string = await invoke('resolve_data_dir', { candidates });
+      setActiveDataDir(resolved);
 
-    return resolved;
-  }, [flushAll]);
-
-  const store: DataStore = useMemo(() => ({
-    get,
-    set,
-    save,
-    delete: del,
-    keys,
-    readText,
-    writeText,
-    deleteText,
-    flushAll,
-    activeDataDir,
-    ready,
-    needsSetup,
-    completeSetup,
-    reloadFromDir,
-  }), [get, set, save, del, keys, readText, writeText, deleteText, flushAll, activeDataDir, ready, needsSetup, completeSetup, reloadFromDir]);
-
-  return (
-    <DataStoreContext.Provider value={store}>
-      {children}
-    </DataStoreContext.Provider>
+      return resolved;
+    },
+    [flushAll]
   );
+
+  const store: DataStore = useMemo(
+    () => ({
+      get,
+      set,
+      save,
+      delete: del,
+      keys,
+      readText,
+      writeText,
+      deleteText,
+      flushAll,
+      activeDataDir,
+      ready,
+      needsSetup,
+      completeSetup,
+      reloadFromDir,
+    }),
+    [
+      get,
+      set,
+      save,
+      del,
+      keys,
+      readText,
+      writeText,
+      deleteText,
+      flushAll,
+      activeDataDir,
+      ready,
+      needsSetup,
+      completeSetup,
+      reloadFromDir,
+    ]
+  );
+
+  return <DataStoreContext.Provider value={store}>{children}</DataStoreContext.Provider>;
 }

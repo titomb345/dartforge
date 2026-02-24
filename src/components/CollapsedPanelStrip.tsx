@@ -55,8 +55,10 @@ export function CollapsedPanelStrip({
       const target = e.target as Element;
       if (target?.closest?.('[data-panel-dropdown]')) return;
       if (
-        overlayRef.current && !overlayRef.current.contains(target) &&
-        stripRef.current && !stripRef.current.contains(target)
+        overlayRef.current &&
+        !overlayRef.current.contains(target) &&
+        stripRef.current &&
+        !stripRef.current.contains(target)
       ) {
         setOpenPanel(null);
       }
@@ -87,16 +89,16 @@ export function CollapsedPanelStrip({
               className={cn(
                 'w-[28px] h-[28px] flex items-center justify-center rounded-[5px] transition-all duration-150 cursor-pointer',
                 'border border-transparent',
-                isActive
-                  ? 'border-current'
-                  : 'hover:bg-white/5',
+                isActive ? 'border-current' : 'hover:bg-white/5'
               )}
               style={{
                 color: meta.accent,
-                ...(isActive ? {
-                  background: `color-mix(in srgb, ${meta.accent} 12%, transparent)`,
-                  filter: `drop-shadow(0 0 4px color-mix(in srgb, ${meta.accent} 40%, transparent))`,
-                } : {}),
+                ...(isActive
+                  ? {
+                      background: `color-mix(in srgb, ${meta.accent} 12%, transparent)`,
+                      filter: `drop-shadow(0 0 4px color-mix(in srgb, ${meta.accent} 40%, transparent))`,
+                    }
+                  : {}),
               }}
             >
               {meta.icon(13)}
@@ -110,7 +112,7 @@ export function CollapsedPanelStrip({
         className={cn(
           'absolute top-0 bottom-0 z-[90] overflow-hidden',
           side === 'left' ? 'left-[40px]' : 'right-[40px]',
-          !openPanel && 'pointer-events-none',
+          !openPanel && 'pointer-events-none'
         )}
         style={{ width: panelWidth }}
       >
@@ -121,30 +123,51 @@ export function CollapsedPanelStrip({
             'h-full transition-transform duration-300 ease-in-out',
             openPanel
               ? 'translate-x-0'
-              : side === 'left' ? '-translate-x-full pointer-events-none' : 'translate-x-full pointer-events-none',
+              : side === 'left'
+                ? '-translate-x-full pointer-events-none'
+                : 'translate-x-full pointer-events-none'
           )}
         >
-          {renderedPanel && (() => {
-            const meta = PANEL_META[renderedPanel];
-            const i = panels.indexOf(renderedPanel);
-            return (
-              <div className="h-full flex flex-col rounded-lg bg-bg-primary overflow-hidden shadow-xl shadow-black/30 border border-border-subtle">
-                <PinnedControlsProvider value={{
-                  side,
-                  onUnpin: () => { setOpenPanel(null); onUnpin(renderedPanel); },
-                  onSwapSide: canSwapSide ? () => { setOpenPanel(null); onSwapSide(renderedPanel); } : undefined,
-                  onMoveUp: i > 0 ? () => onMovePanel(renderedPanel, 'up') : undefined,
-                  onMoveDown: i < panels.length - 1 ? () => onMovePanel(renderedPanel, 'down') : undefined,
-                  canMoveUp: i > 0,
-                  canMoveDown: i < panels.length - 1,
-                  otherSidePanels: !canSwapSide ? otherSidePanels : undefined,
-                  onSwapWith: !canSwapSide ? (target: PinnablePanel) => { setOpenPanel(null); onSwapWith(renderedPanel, target); } : undefined,
-                }}>
-                  {meta.render()}
-                </PinnedControlsProvider>
-              </div>
-            );
-          })()}
+          {renderedPanel &&
+            (() => {
+              const meta = PANEL_META[renderedPanel];
+              const i = panels.indexOf(renderedPanel);
+              return (
+                <div className="h-full flex flex-col rounded-lg bg-bg-primary overflow-hidden shadow-xl shadow-black/30 border border-border-subtle">
+                  <PinnedControlsProvider
+                    value={{
+                      side,
+                      onUnpin: () => {
+                        setOpenPanel(null);
+                        onUnpin(renderedPanel);
+                      },
+                      onSwapSide: canSwapSide
+                        ? () => {
+                            setOpenPanel(null);
+                            onSwapSide(renderedPanel);
+                          }
+                        : undefined,
+                      onMoveUp: i > 0 ? () => onMovePanel(renderedPanel, 'up') : undefined,
+                      onMoveDown:
+                        i < panels.length - 1
+                          ? () => onMovePanel(renderedPanel, 'down')
+                          : undefined,
+                      canMoveUp: i > 0,
+                      canMoveDown: i < panels.length - 1,
+                      otherSidePanels: !canSwapSide ? otherSidePanels : undefined,
+                      onSwapWith: !canSwapSide
+                        ? (target: PinnablePanel) => {
+                            setOpenPanel(null);
+                            onSwapWith(renderedPanel, target);
+                          }
+                        : undefined,
+                    }}
+                  >
+                    {meta.render()}
+                  </PinnedControlsProvider>
+                </div>
+              );
+            })()}
         </div>
       </div>
     </div>

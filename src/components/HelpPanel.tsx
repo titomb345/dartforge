@@ -3,7 +3,12 @@ import { HelpSection } from './HelpSection';
 import { useSpotlight } from '../contexts/SpotlightContext';
 import { useAppSettingsContext } from '../contexts/AppSettingsContext';
 import { usePanelContext } from '../contexts/PanelLayoutContext';
-import { HELP_CATEGORIES, QUICK_TOUR_STEPS, type HelpItem as HelpItemData, type InteractionType } from '../lib/helpContent';
+import {
+  HELP_CATEGORIES,
+  QUICK_TOUR_STEPS,
+  type HelpItem as HelpItemData,
+  type InteractionType,
+} from '../lib/helpContent';
 import { PowerIcon, ChatIcon, TrendingUpIcon, AliasIcon, HelpIcon } from './icons';
 
 const GOLD = '#d9af50';
@@ -15,19 +20,46 @@ const GOLD_BG = 'rgba(217, 175, 80, 0.08)';
 const SECTION_ICONS: Record<string, ReactNode> = {
   power: <PowerIcon size={13} />,
   layout: (
-    <svg width={13} height={13} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <svg
+      width={13}
+      height={13}
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
       <rect x="3" y="3" width="18" height="18" rx="2" />
       <line x1="9" y1="3" x2="9" y2="21" />
       <line x1="9" y1="12" x2="21" y2="12" />
     </svg>
   ),
   sparkle: (
-    <svg width={13} height={13} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <svg
+      width={13}
+      height={13}
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
       <path d="M12 2l2.4 7.2L22 12l-7.6 2.8L12 22l-2.4-7.2L2 12l7.6-2.8z" />
     </svg>
   ),
   keyboard: (
-    <svg width={13} height={13} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <svg
+      width={13}
+      height={13}
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
       <rect x="2" y="4" width="20" height="16" rx="2" />
       <line x1="6" y1="8" x2="6" y2="8" />
       <line x1="10" y1="8" x2="10" y2="8" />
@@ -39,7 +71,16 @@ const SECTION_ICONS: Record<string, ReactNode> = {
     </svg>
   ),
   terminal: (
-    <svg width={13} height={13} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <svg
+      width={13}
+      height={13}
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
       <polyline points="4 17 10 11 4 5" />
       <line x1="12" y1="19" x2="20" y2="19" />
     </svg>
@@ -78,7 +119,9 @@ function KbdDisplay({ keys }: { keys: string[] }) {
   return (
     <span className="inline-flex items-center gap-0.5 shrink-0">
       {keys.map((k, i) => (
-        <kbd key={i} className="help-kbd">{k}</kbd>
+        <kbd key={i} className="help-kbd">
+          {k}
+        </kbd>
       ))}
     </span>
   );
@@ -116,10 +159,7 @@ function ShowMeButton({ helpId, description }: { helpId: string; description: st
 
 function HelpItemRow({ item }: { item: HelpItemData }) {
   return (
-    <div
-      className="py-1.5 border-border-dim"
-      style={{ borderBottom: '1px solid #1a1a1a' }}
-    >
+    <div className="py-1.5 border-border-dim" style={{ borderBottom: '1px solid #1a1a1a' }}>
       <div className="flex items-center gap-1.5 mb-0.5">
         {item.interaction && <InteractionBadge type={item.interaction} />}
         <span className="text-[11px] text-text-primary font-medium flex-1">{item.title}</span>
@@ -154,18 +194,17 @@ function WelcomeBanner() {
     <div
       className="rounded-lg p-3 mb-3"
       style={{
-        background: 'linear-gradient(135deg, rgba(217, 175, 80, 0.06) 0%, rgba(217, 175, 80, 0.02) 100%)',
+        background:
+          'linear-gradient(135deg, rgba(217, 175, 80, 0.06) 0%, rgba(217, 175, 80, 0.02) 100%)',
         border: `1px solid ${GOLD_DIM}`,
       }}
     >
-      <h3
-        className="text-[13px] font-semibold mb-1"
-        style={{ color: GOLD }}
-      >
+      <h3 className="text-[13px] font-semibold mb-1" style={{ color: GOLD }}>
         Welcome to DartForge
       </h3>
       <p className="text-[10px] text-text-muted leading-[1.5] mb-3">
-        This client is built for DartMUD and packed with features to help you play. Take a quick tour to see the highlights, or browse the sections below at your own pace.
+        This client is built for DartMUD and packed with features to help you play. Take a quick
+        tour to see the highlights, or browse the sections below at your own pace.
       </p>
       <div className="flex items-center gap-2">
         <button
@@ -221,7 +260,9 @@ export function HelpPanel() {
           background: 'linear-gradient(to right, rgba(217, 175, 80, 0.04), transparent)',
         }}
       >
-        <span style={{ color: GOLD }}><HelpIcon size={14} /></span>
+        <span style={{ color: GOLD }}>
+          <HelpIcon size={14} />
+        </span>
         <span
           className="text-[12px] font-semibold uppercase tracking-[0.1em]"
           style={{ color: GOLD }}
@@ -229,9 +270,7 @@ export function HelpPanel() {
           Guide
         </span>
         <div className="flex-1" />
-        <span className="text-[9px] text-text-dim">
-          ? for help anytime
-        </span>
+        <span className="text-[9px] text-text-dim">? for help anytime</span>
       </div>
 
       {/* Scrollable body */}
@@ -244,7 +283,7 @@ export function HelpPanel() {
             icon={SECTION_ICONS[cat.iconName] ?? <HelpIcon size={13} />}
             title={cat.title}
             open={openSection === cat.key}
-            onToggle={() => setOpenSection((prev) => prev === cat.key ? null : cat.key)}
+            onToggle={() => setOpenSection((prev) => (prev === cat.key ? null : cat.key))}
           >
             {cat.items.map((item, i) => (
               <HelpItemRow key={i} item={item} />

@@ -11,104 +11,26 @@ const GRADIENT = [
   color(196), // A - red
   color(208), // R - orange
   color(214), // T - gold
-  color(40),  // M - green
-  color(39),  // U - cyan
-  color(63),  // D - purple
+  color(40), // M - green
+  color(39), // U - cyan
+  color(63), // D - purple
 ];
 
 // Each letter is 5 rows x 6 cols (using ██ per pixel)
 const LETTERS: Record<string, string[]> = {
-  D: [
-    '████  ',
-    '██  ██',
-    '██  ██',
-    '██  ██',
-    '████  ',
-  ],
-  A: [
-    ' ████ ',
-    '██  ██',
-    '██████',
-    '██  ██',
-    '██  ██',
-  ],
-  R: [
-    '████  ',
-    '██  ██',
-    '████  ',
-    '██ ██ ',
-    '██  ██',
-  ],
-  T: [
-    '██████',
-    '  ██  ',
-    '  ██  ',
-    '  ██  ',
-    '  ██  ',
-  ],
-  M: [
-    '██  ██',
-    '██████',
-    '██████',
-    '██  ██',
-    '██  ██',
-  ],
-  U: [
-    '██  ██',
-    '██  ██',
-    '██  ██',
-    '██  ██',
-    ' ████ ',
-  ],
-  E: [
-    '██████',
-    '██    ',
-    '████  ',
-    '██    ',
-    '██████',
-  ],
-  I: [
-    '██████',
-    '  ██  ',
-    '  ██  ',
-    '  ██  ',
-    '██████',
-  ],
-  S: [
-    ' █████',
-    '██    ',
-    ' ████ ',
-    '    ██',
-    '█████ ',
-  ],
-  C: [
-    ' █████',
-    '██    ',
-    '██    ',
-    '██    ',
-    ' █████',
-  ],
-  N: [
-    '██  ██',
-    '███ ██',
-    '██████',
-    '██ ███',
-    '██  ██',
-  ],
-  O: [
-    ' ████ ',
-    '██  ██',
-    '██  ██',
-    '██  ██',
-    ' ████ ',
-  ],
-  P: [
-    '████  ',
-    '██  ██',
-    '████  ',
-    '██    ',
-    '██    ',
-  ],
+  D: ['████  ', '██  ██', '██  ██', '██  ██', '████  '],
+  A: [' ████ ', '██  ██', '██████', '██  ██', '██  ██'],
+  R: ['████  ', '██  ██', '████  ', '██ ██ ', '██  ██'],
+  T: ['██████', '  ██  ', '  ██  ', '  ██  ', '  ██  '],
+  M: ['██  ██', '██████', '██████', '██  ██', '██  ██'],
+  U: ['██  ██', '██  ██', '██  ██', '██  ██', ' ████ '],
+  E: ['██████', '██    ', '████  ', '██    ', '██████'],
+  I: ['██████', '  ██  ', '  ██  ', '  ██  ', '██████'],
+  S: [' █████', '██    ', ' ████ ', '    ██', '█████ '],
+  C: [' █████', '██    ', '██    ', '██    ', ' █████'],
+  N: ['██  ██', '███ ██', '██████', '██ ███', '██  ██'],
+  O: [' ████ ', '██  ██', '██  ██', '██  ██', ' ████ '],
+  P: ['████  ', '██  ██', '████  ', '██    ', '██    '],
 };
 
 function buildGradientWord(word: string, colors: string[]): string[] {
@@ -188,13 +110,16 @@ export function getConnectingSplash(cols: number): string {
 }
 
 export function getConnectedSplash(cols: number): string {
-  const time = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+  const time = new Date().toLocaleTimeString([], {
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+  });
   return mainSplash(cols, `${BRIGHT_GREEN}Connected at ${time}${RESET}`);
 }
 
 // Dark-to-bright red gradient for "DROPPED" (7 letters)
-const RED_GRADIENT = [52, 88, 160, 196, 160, 88, 52]
-  .map((n) => `\x1b[1;38;5;${n}m`);
+const RED_GRADIENT = [52, 88, 160, 196, 160, 88, 52].map((n) => `\x1b[1;38;5;${n}m`);
 
 function redBar(cols: number): string {
   const len = Math.min(cols - 4, 60);
@@ -211,7 +136,11 @@ export function getDisconnectSplash(cols: number): string {
   const barWidth = Math.min(cols - 4, 60);
   const logo = buildGradientWord('DROPPED', RED_GRADIENT);
   const bar = redBar(cols);
-  const time = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+  const time = new Date().toLocaleTimeString([], {
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+  });
   const lines = [
     '',
     '',

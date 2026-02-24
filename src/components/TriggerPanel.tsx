@@ -5,7 +5,13 @@ import { matchTriggers, expandTriggerBody } from '../lib/triggerEngine';
 import { formatCommandPreview } from '../lib/commandUtils';
 import { useFilteredGroups } from '../lib/useFilteredGroups';
 import { charDisplayName } from '../lib/panelUtils';
-import type { Trigger, TriggerId, TriggerMatchMode, TriggerPrefill, TriggerScope } from '../types/trigger';
+import type {
+  Trigger,
+  TriggerId,
+  TriggerMatchMode,
+  TriggerPrefill,
+  TriggerScope,
+} from '../types/trigger';
 import { TrashIcon, PlusIcon, ChevronDownIcon, ChevronUpIcon, TriggerIcon } from './icons';
 import { FilterPill } from './FilterPill';
 import { MudInput, MudTextarea, MudButton, MudNumberInput } from './shared';
@@ -37,11 +43,15 @@ const PRESET_CODES = new Set(HIGHLIGHT_PRESETS.map((p) => p.code));
 function hexToAnsi(fg: string | null, bg: string | null): string | null {
   const parts: string[] = [];
   if (fg) {
-    const r = parseInt(fg.slice(1, 3), 16), g = parseInt(fg.slice(3, 5), 16), b = parseInt(fg.slice(5, 7), 16);
+    const r = parseInt(fg.slice(1, 3), 16),
+      g = parseInt(fg.slice(3, 5), 16),
+      b = parseInt(fg.slice(5, 7), 16);
     parts.push(`38;2;${r};${g};${b}`);
   }
   if (bg) {
-    const r = parseInt(bg.slice(1, 3), 16), g = parseInt(bg.slice(3, 5), 16), b = parseInt(bg.slice(5, 7), 16);
+    const r = parseInt(bg.slice(1, 3), 16),
+      g = parseInt(bg.slice(3, 5), 16),
+      b = parseInt(bg.slice(5, 7), 16);
     parts.push(`48;2;${r};${g};${b}`);
   }
   return parts.length > 0 ? parts.join(';') : null;
@@ -147,31 +157,74 @@ const TRIGGER_ACCENT = '#ff79c6';
 
 const TRIGGER_HELP_ROWS: HelpRow[] = [
   { token: '$0', desc: 'The matched text (full match for regex, matched portion for substring)' },
-  { token: '$1 $2 .. $9', desc: 'Regex capture groups', example: "Pattern: (\\w+) tells you '(.+)'  →  $1 = name, $2 = message" },
+  {
+    token: '$1 $2 .. $9',
+    desc: 'Regex capture groups',
+    example: "Pattern: (\\w+) tells you '(.+)'  →  $1 = name, $2 = message",
+  },
   { token: '$line', desc: 'The full matched line (ANSI-stripped)' },
   { token: '$me', desc: 'Your active character name (lowercase)' },
   { token: '$Me', desc: 'Your active character name (Capitalized)' },
-  { token: '$varName', desc: 'User-defined variable (set via /var)', example: '/var target goblin  \u2192  $target = goblin' },
-  { token: ';', desc: 'Command separator — sends multiple commands', example: '/echo Alert!;say hello' },
+  {
+    token: '$varName',
+    desc: 'User-defined variable (set via /var)',
+    example: '/var target goblin  \u2192  $target = goblin',
+  },
+  {
+    token: ';',
+    desc: 'Command separator — sends multiple commands',
+    example: '/echo Alert!;say hello',
+  },
   { token: '\\;', desc: 'Literal semicolon (not a separator)' },
-  { token: '/delay <ms>', desc: 'Pause between commands (milliseconds)', example: '/delay 1000;cast heal' },
-  { token: '/echo <text>', desc: 'Print text locally (not sent to MUD)', example: '/echo [TRIGGER] Combat started' },
-  { token: '/spam <N> <cmd>', desc: 'Repeat a command N times (max 1000)', example: '/spam 3 say hello' },
-  { token: '/var <name> <val>', desc: 'Set a variable (track state from triggers)', example: '/var foe $1  →  $foe tracks attacker' },
+  {
+    token: '/delay <ms>',
+    desc: 'Pause between commands (milliseconds)',
+    example: '/delay 1000;cast heal',
+  },
+  {
+    token: '/echo <text>',
+    desc: 'Print text locally (not sent to MUD)',
+    example: '/echo [TRIGGER] Combat started',
+  },
+  {
+    token: '/spam <N> <cmd>',
+    desc: 'Repeat a command N times (max 1000)',
+    example: '/spam 3 say hello',
+  },
+  {
+    token: '/var <name> <val>',
+    desc: 'Set a variable (track state from triggers)',
+    example: '/var foe $1  →  $foe tracks attacker',
+  },
   { token: '/convert <amt>', desc: 'Convert currency and display locally', example: '/convert $0' },
 ];
 
 const TRIGGER_HELP_FOOTER = (
   <>
     <span className="text-text-label">Match modes:</span>{' '}
-    <span className="font-mono" style={{ color: TRIGGER_ACCENT }}>Substring</span> = pattern appears anywhere in line (case-insensitive).{' '}
-    <span className="font-mono" style={{ color: TRIGGER_ACCENT }}>Exact</span> = entire line must match exactly.{' '}
-    <span className="font-mono" style={{ color: TRIGGER_ACCENT }}>Regex</span> = regular expression, capture groups become $1, $2.
+    <span className="font-mono" style={{ color: TRIGGER_ACCENT }}>
+      Substring
+    </span>{' '}
+    = pattern appears anywhere in line (case-insensitive).{' '}
+    <span className="font-mono" style={{ color: TRIGGER_ACCENT }}>
+      Exact
+    </span>{' '}
+    = entire line must match exactly.{' '}
+    <span className="font-mono" style={{ color: TRIGGER_ACCENT }}>
+      Regex
+    </span>{' '}
+    = regular expression, capture groups become $1, $2.
   </>
 );
 
 function BodySyntaxHelp() {
-  return <SyntaxHelpTable rows={TRIGGER_HELP_ROWS} accentColor={TRIGGER_ACCENT} footer={TRIGGER_HELP_FOOTER} />;
+  return (
+    <SyntaxHelpTable
+      rows={TRIGGER_HELP_ROWS}
+      accentColor={TRIGGER_ACCENT}
+      footer={TRIGGER_HELP_FOOTER}
+    />
+  );
 }
 
 // --- Trigger Editor ---
@@ -200,12 +253,14 @@ function TriggerEditor({
       soundAlert: boolean;
     },
     scope: TriggerScope,
-    existingId?: TriggerId,
+    existingId?: TriggerId
   ) => void;
   onCancel: () => void;
 }) {
   const [pattern, setPattern] = useState(trigger?.pattern ?? prefill?.pattern ?? '');
-  const [matchMode, setMatchMode] = useState<TriggerMatchMode>(trigger?.matchMode ?? prefill?.matchMode ?? 'substring');
+  const [matchMode, setMatchMode] = useState<TriggerMatchMode>(
+    trigger?.matchMode ?? prefill?.matchMode ?? 'substring'
+  );
   const [body, setBody] = useState(trigger?.body ?? prefill?.body ?? '');
   const [group, setGroup] = useState(trigger?.group ?? prefill?.group ?? '');
   const [scope, setScope] = useState<TriggerScope>(initialScope);
@@ -215,12 +270,19 @@ function TriggerEditor({
   const [soundAlert, setSoundAlert] = useState(trigger?.soundAlert ?? false);
 
   // Custom highlight color state
-  const initCustom = trigger?.highlight && !PRESET_CODES.has(trigger.highlight) ? ansiToHex(trigger.highlight) : null;
+  const initCustom =
+    trigger?.highlight && !PRESET_CODES.has(trigger.highlight)
+      ? ansiToHex(trigger.highlight)
+      : null;
   const [customMode, setCustomMode] = useState(initCustom !== null);
   const [customFg, setCustomFg] = useState<string>(initCustom?.fg ?? '#ffffff');
   const [customBg, setCustomBg] = useState<string>(initCustom?.bg ?? '#000000');
-  const [customFgEnabled, setCustomFgEnabled] = useState(initCustom?.fg !== null && initCustom !== null);
-  const [customBgEnabled, setCustomBgEnabled] = useState(initCustom?.bg !== null && initCustom !== null);
+  const [customFgEnabled, setCustomFgEnabled] = useState(
+    initCustom?.fg !== null && initCustom !== null
+  );
+  const [customBgEnabled, setCustomBgEnabled] = useState(
+    initCustom?.bg !== null && initCustom !== null
+  );
   const [testInput, setTestInput] = useState('');
   const [showHelp, setShowHelp] = useState(false);
   const patternRef = useRef<HTMLInputElement>(null);
@@ -262,7 +324,20 @@ function TriggerEditor({
   const handleFieldKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter' && canSave) {
       e.preventDefault();
-      onSave({ pattern: pattern.trim(), matchMode, body, group: group.trim() || 'General', cooldownMs, gag, highlight, soundAlert }, scope, trigger?.id);
+      onSave(
+        {
+          pattern: pattern.trim(),
+          matchMode,
+          body,
+          group: group.trim() || 'General',
+          cooldownMs,
+          gag,
+          highlight,
+          soundAlert,
+        },
+        scope,
+        trigger?.id
+      );
     }
   };
 
@@ -281,7 +356,21 @@ function TriggerEditor({
             accent="pink"
             size="sm"
             onClick={() => {
-              if (canSave) onSave({ pattern: pattern.trim(), matchMode, body, group: group.trim() || 'General', cooldownMs, gag, highlight, soundAlert }, scope, trigger?.id);
+              if (canSave)
+                onSave(
+                  {
+                    pattern: pattern.trim(),
+                    matchMode,
+                    body,
+                    group: group.trim() || 'General',
+                    cooldownMs,
+                    gag,
+                    highlight,
+                    soundAlert,
+                  },
+                  scope,
+                  trigger?.id
+                );
             }}
             disabled={!canSave}
           >
@@ -433,7 +522,10 @@ function TriggerEditor({
           <label className="text-[10px] text-text-dim mb-0.5 block">Highlight</label>
           <div className="flex items-center gap-1 flex-wrap">
             <button
-              onClick={() => { setHighlight(null); setCustomMode(false); }}
+              onClick={() => {
+                setHighlight(null);
+                setCustomMode(false);
+              }}
               className={`text-[9px] font-mono px-2 py-0.5 rounded border cursor-pointer transition-colors duration-150 ${
                 highlight === null
                   ? 'text-text-label border-[#ff79c6]/40 bg-[#ff79c6]/10'
@@ -445,7 +537,10 @@ function TriggerEditor({
             {HIGHLIGHT_PRESETS.map((preset) => (
               <button
                 key={preset.code}
-                onClick={() => { setHighlight(preset.code); setCustomMode(false); }}
+                onClick={() => {
+                  setHighlight(preset.code);
+                  setCustomMode(false);
+                }}
                 className={`text-[9px] font-mono px-2 py-0.5 rounded border cursor-pointer transition-colors duration-150 ${
                   !customMode && highlight === preset.code
                     ? 'border-[#ff79c6]/40 bg-[#ff79c6]/10'
@@ -462,10 +557,16 @@ function TriggerEditor({
                 // Pre-fill from current preset if active
                 if (highlight && PRESET_CODES.has(highlight)) {
                   const preset = HIGHLIGHT_PRESETS.find((p) => p.code === highlight);
-                  if (preset) { setCustomFg(preset.hex); setCustomFgEnabled(true); }
+                  if (preset) {
+                    setCustomFg(preset.hex);
+                    setCustomFgEnabled(true);
+                  }
                 }
                 // Apply current custom state
-                const code = hexToAnsi(customFgEnabled ? customFg : null, customBgEnabled ? customBg : null);
+                const code = hexToAnsi(
+                  customFgEnabled ? customFg : null,
+                  customBgEnabled ? customBg : null
+                );
                 setHighlight(code);
               }}
               className={`text-[9px] font-mono px-2 py-0.5 rounded border cursor-pointer transition-colors duration-150 ${
@@ -488,7 +589,9 @@ function TriggerEditor({
                     onClick={() => {
                       const next = !customFgEnabled;
                       setCustomFgEnabled(next);
-                      setHighlight(hexToAnsi(next ? customFg : null, customBgEnabled ? customBg : null));
+                      setHighlight(
+                        hexToAnsi(next ? customFg : null, customBgEnabled ? customBg : null)
+                      );
                     }}
                     className={`text-[8px] font-mono px-1.5 py-px rounded border cursor-pointer transition-colors duration-150 ${
                       customFgEnabled
@@ -503,12 +606,18 @@ function TriggerEditor({
                     value={customFg}
                     onChange={(e) => {
                       setCustomFg(e.target.value);
-                      if (customFgEnabled) setHighlight(hexToAnsi(e.target.value, customBgEnabled ? customBg : null));
+                      if (customFgEnabled)
+                        setHighlight(hexToAnsi(e.target.value, customBgEnabled ? customBg : null));
                     }}
                     className="w-5 h-5 rounded border border-border-dim cursor-pointer bg-transparent p-0"
                     style={{ opacity: customFgEnabled ? 1 : 0.3 }}
                   />
-                  <span className="text-[9px] font-mono text-text-dim" style={{ opacity: customFgEnabled ? 1 : 0.4 }}>{customFg}</span>
+                  <span
+                    className="text-[9px] font-mono text-text-dim"
+                    style={{ opacity: customFgEnabled ? 1 : 0.4 }}
+                  >
+                    {customFg}
+                  </span>
                 </div>
                 {/* Background */}
                 <div className="flex items-center gap-1.5">
@@ -516,7 +625,9 @@ function TriggerEditor({
                     onClick={() => {
                       const next = !customBgEnabled;
                       setCustomBgEnabled(next);
-                      setHighlight(hexToAnsi(customFgEnabled ? customFg : null, next ? customBg : null));
+                      setHighlight(
+                        hexToAnsi(customFgEnabled ? customFg : null, next ? customBg : null)
+                      );
                     }}
                     className={`text-[8px] font-mono px-1.5 py-px rounded border cursor-pointer transition-colors duration-150 ${
                       customBgEnabled
@@ -531,12 +642,18 @@ function TriggerEditor({
                     value={customBg}
                     onChange={(e) => {
                       setCustomBg(e.target.value);
-                      if (customBgEnabled) setHighlight(hexToAnsi(customFgEnabled ? customFg : null, e.target.value));
+                      if (customBgEnabled)
+                        setHighlight(hexToAnsi(customFgEnabled ? customFg : null, e.target.value));
                     }}
                     className="w-5 h-5 rounded border border-border-dim cursor-pointer bg-transparent p-0"
                     style={{ opacity: customBgEnabled ? 1 : 0.3 }}
                   />
-                  <span className="text-[9px] font-mono text-text-dim" style={{ opacity: customBgEnabled ? 1 : 0.4 }}>{customBg}</span>
+                  <span
+                    className="text-[9px] font-mono text-text-dim"
+                    style={{ opacity: customBgEnabled ? 1 : 0.4 }}
+                  >
+                    {customBg}
+                  </span>
                 </div>
               </div>
               {/* Preview */}
@@ -562,12 +679,18 @@ function TriggerEditor({
             accent="pink"
             value={testInput}
             onChange={(e) => setTestInput(e.target.value)}
-            placeholder={pattern ? `e.g., ${pattern.includes('(') ? 'A sample MUD output line' : pattern}` : 'paste a MUD output line...'}
+            placeholder={
+              pattern
+                ? `e.g., ${pattern.includes('(') ? 'A sample MUD output line' : pattern}`
+                : 'paste a MUD output line...'
+            }
             className="w-full"
           />
           {preview && (
             <div className="mt-1 px-2 py-1 rounded bg-bg-primary border border-border-dim">
-              <pre className={`text-[10px] font-mono whitespace-pre-wrap ${preview.matched ? 'text-green' : 'text-text-dim'}`}>
+              <pre
+                className={`text-[10px] font-mono whitespace-pre-wrap ${preview.matched ? 'text-green' : 'text-text-dim'}`}
+              >
                 {preview.text}
               </pre>
             </div>
@@ -609,10 +732,13 @@ export function TriggerPanel({ onClose }: TriggerPanelProps) {
   const triggers = scope === 'character' ? characterTriggers : globalTriggers;
   const triggerList = useMemo(() => Object.values(triggers), [triggers]);
 
-  const { groups, grouped: groupedTriggers } =
-    useFilteredGroups(triggerList, groupFilter, searchText);
+  const { groups, grouped: groupedTriggers } = useFilteredGroups(
+    triggerList,
+    groupFilter,
+    searchText
+  );
 
-  const editingTrigger = editingId ? triggers[editingId] ?? null : null;
+  const editingTrigger = editingId ? (triggers[editingId] ?? null) : null;
 
   const handleSave = useCallback(
     (
@@ -627,7 +753,7 @@ export function TriggerPanel({ onClose }: TriggerPanelProps) {
         soundAlert: boolean;
       },
       saveScope: TriggerScope,
-      existingId?: TriggerId,
+      existingId?: TriggerId
     ) => {
       if (existingId) {
         // If scope changed, delete from old scope and create in new scope
@@ -643,7 +769,7 @@ export function TriggerPanel({ onClose }: TriggerPanelProps) {
       setEditingId(null);
       setCreating(false);
     },
-    [scope, createTrigger, updateTrigger, deleteTrigger],
+    [scope, createTrigger, updateTrigger, deleteTrigger]
   );
 
   const titleText = `Triggers${activeCharacter && scope === 'character' ? ` (${charDisplayName(activeCharacter)})` : scope === 'global' ? ' (Global)' : ''}`;
@@ -652,7 +778,9 @@ export function TriggerPanel({ onClose }: TriggerPanelProps) {
     <div className="w-[420px] h-full bg-bg-primary border-l border-border-subtle flex flex-col overflow-hidden">
       {/* Header */}
       <div className="flex items-center justify-between px-3 py-2.5 border-b border-border-subtle shrink-0">
-        <span className="text-[13px] font-semibold text-text-heading flex items-center gap-1.5"><TriggerIcon size={12} /> {titleText}</span>
+        <span className="text-[13px] font-semibold text-text-heading flex items-center gap-1.5">
+          <TriggerIcon size={12} /> {titleText}
+        </span>
         <div className="flex items-center gap-1.5">
           <button
             onClick={() => {
@@ -680,13 +808,19 @@ export function TriggerPanel({ onClose }: TriggerPanelProps) {
           label="Global"
           active={scope === 'global'}
           accent="pink"
-          onClick={() => { setScope('global'); setGroupFilter(null); }}
+          onClick={() => {
+            setScope('global');
+            setGroupFilter(null);
+          }}
         />
         <FilterPill
           label="Character"
           active={scope === 'character'}
           accent="pink"
-          onClick={() => { setScope('character'); setGroupFilter(null); }}
+          onClick={() => {
+            setScope('character');
+            setGroupFilter(null);
+          }}
         />
       </div>
 
@@ -735,7 +869,7 @@ export function TriggerPanel({ onClose }: TriggerPanelProps) {
       {/* Editor (inline) */}
       {(creating || editingTrigger) && (
         <TriggerEditor
-          key={triggerPrefill ? `prefill-${triggerPrefill.pattern}` : editingId ?? 'new'}
+          key={triggerPrefill ? `prefill-${triggerPrefill.pattern}` : (editingId ?? 'new')}
           trigger={editingTrigger}
           prefill={creating ? triggerPrefill : null}
           scope={scope}
@@ -764,7 +898,7 @@ export function TriggerPanel({ onClose }: TriggerPanelProps) {
 
         {groupedTriggers.map(([groupName, groupTriggers]) => (
           <div key={groupName} className="mb-3">
-            {(groupFilter === null && groups.length > 1) && (
+            {groupFilter === null && groups.length > 1 && (
               <div className="text-[10px] font-semibold uppercase tracking-[0.08em] text-[#555] mb-1 px-2">
                 {groupName}
               </div>

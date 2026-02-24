@@ -109,10 +109,7 @@ export function MutedSection({
         )}
         {filtered.map((name) =>
           editingName === name ? (
-            <div
-              key={name}
-              className="flex items-center gap-1.5 px-3 py-1 bg-red/5"
-            >
+            <div key={name} className="flex items-center gap-1.5 px-3 py-1 bg-red/5">
               <MudInput
                 ref={editRef}
                 accent="red"
@@ -146,7 +143,10 @@ export function MutedSection({
             >
               <span className="text-[12px] font-mono text-text-label truncate">{name}</span>
               <button
-                onClick={(e) => { e.stopPropagation(); onUnmute(name); }}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onUnmute(name);
+                }}
                 className="text-[12px] font-mono text-text-dim hover:text-red cursor-pointer shrink-0 opacity-0 group-hover/row:opacity-100 transition-all duration-150"
                 title={`Unmute ${name}`}
               >

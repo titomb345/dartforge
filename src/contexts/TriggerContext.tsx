@@ -1,5 +1,11 @@
 import { createContext, useContext } from 'react';
-import type { Trigger, TriggerId, TriggerMatchMode, TriggerPrefill, TriggerScope } from '../types/trigger';
+import type {
+  Trigger,
+  TriggerId,
+  TriggerMatchMode,
+  TriggerPrefill,
+  TriggerScope,
+} from '../types/trigger';
 
 export interface TriggerState {
   characterTriggers: Record<TriggerId, Trigger>;
@@ -16,12 +22,12 @@ export interface TriggerState {
       highlight?: string | null;
       soundAlert?: boolean;
     },
-    scope: TriggerScope,
+    scope: TriggerScope
   ) => TriggerId;
   updateTrigger: (
     id: TriggerId,
     updates: Partial<Omit<Trigger, 'id' | 'createdAt'>>,
-    scope: TriggerScope,
+    scope: TriggerScope
   ) => void;
   deleteTrigger: (id: TriggerId, scope: TriggerScope) => void;
   toggleTrigger: (id: TriggerId, scope: TriggerScope) => void;

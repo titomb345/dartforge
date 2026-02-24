@@ -106,13 +106,17 @@ function TerminalContextMenu({
       style={{ left: pos.x, top: pos.y }}
     >
       <button
-        onClick={() => { if (hasSel) onCopy(); }}
+        onClick={() => {
+          if (hasSel) onCopy();
+        }}
         className={hasSel ? activeClass : dimClass}
       >
         Copy Selected
       </button>
       <button
-        onClick={() => { if (clickedLine) onCopyLine(); }}
+        onClick={() => {
+          if (clickedLine) onCopyLine();
+        }}
         className={clickedLine ? activeClass : dimClass}
       >
         Copy Line
@@ -127,24 +131,20 @@ function TerminalContextMenu({
         <div className="h-px bg-border-dim mx-1.5 my-0.5" />
       )}
       {clickedLine && onAddToTrigger && (
-        <button
-          onClick={() => onAddToTrigger(clickedLine)}
-          className={activeClass}
-        >
+        <button onClick={() => onAddToTrigger(clickedLine)} className={activeClass}>
           Add Line to Trigger
         </button>
       )}
       {clickedLine && onGagLine && (
-        <button
-          onClick={() => onGagLine(clickedLine)}
-          className={activeClass}
-        >
+        <button onClick={() => onGagLine(clickedLine)} className={activeClass}>
           Gag Line
         </button>
       )}
       {onOpenInNotes && (
         <button
-          onClick={() => { if (hasSel) onOpenInNotes(selectedText); }}
+          onClick={() => {
+            if (hasSel) onOpenInNotes(selectedText);
+          }}
           className={hasSel ? activeClass : dimClass}
         >
           Save Selected to Notes
@@ -172,7 +172,9 @@ function TerminalContextMenu({
           >
             -
           </button>
-          <span className="text-[11px] font-mono text-text-label w-[20px] text-center tabular-nums">{fontSize}</span>
+          <span className="text-[11px] font-mono text-text-label w-[20px] text-center tabular-nums">
+            {fontSize}
+          </span>
           <button
             onClick={() => onFontSize(1)}
             disabled={fontSize >= 28}
@@ -187,7 +189,16 @@ function TerminalContextMenu({
   );
 }
 
-export function Terminal({ terminalRef, inputRef, theme, display, onUpdateDisplay, onAddToTrigger, onGagLine, onOpenInNotes }: TerminalProps) {
+export function Terminal({
+  terminalRef,
+  inputRef,
+  theme,
+  display,
+  onUpdateDisplay,
+  onAddToTrigger,
+  onGagLine,
+  onOpenInNotes,
+}: TerminalProps) {
   const outerRef = useRef<HTMLDivElement>(null);
   const innerRef = useRef<HTMLDivElement>(null);
   const fitAddonRef = useRef<FitAddon | null>(null);
@@ -310,11 +321,16 @@ export function Terminal({ terminalRef, inputRef, theme, display, onUpdateDispla
       const sel = term.getSelection();
       // Determine which terminal row was clicked
       let clickedLine = '';
-      const screenEl = (term.element ?? innerRef.current)?.querySelector('.xterm-screen') as HTMLElement | null;
+      const screenEl = (term.element ?? innerRef.current)?.querySelector(
+        '.xterm-screen'
+      ) as HTMLElement | null;
       if (screenEl) {
         const rect = screenEl.getBoundingClientRect();
         const cellHeight = rect.height / term.rows;
-        const row = Math.max(0, Math.min(term.rows - 1, Math.floor((e.clientY - rect.top) / cellHeight)));
+        const row = Math.max(
+          0,
+          Math.min(term.rows - 1, Math.floor((e.clientY - rect.top) / cellHeight))
+        );
         const buf = term.buffer.active;
         const line = buf.getLine(buf.viewportY + row);
         if (line) clickedLine = line.translateToString(true).trimEnd();
@@ -408,7 +424,8 @@ export function Terminal({ terminalRef, inputRef, theme, display, onUpdateDispla
             }}
             onKeyDown={(e) => {
               if (e.key === 'Enter') {
-                e.shiftKey ? searchPrev() : searchNext();
+                if (e.shiftKey) searchPrev();
+                else searchNext();
               }
               if (e.key === 'Escape') closeSearch();
             }}
@@ -420,14 +437,36 @@ export function Terminal({ terminalRef, inputRef, theme, display, onUpdateDispla
             className="w-[20px] h-[20px] flex items-center justify-center rounded text-text-dim hover:text-text-label hover:bg-bg-secondary/60 cursor-pointer transition-colors text-[10px]"
             title="Previous (Shift+Enter)"
           >
-            <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="18 15 12 9 6 15" /></svg>
+            <svg
+              width="10"
+              height="10"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2.5"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            >
+              <polyline points="18 15 12 9 6 15" />
+            </svg>
           </button>
           <button
             onClick={searchNext}
             className="w-[20px] h-[20px] flex items-center justify-center rounded text-text-dim hover:text-text-label hover:bg-bg-secondary/60 cursor-pointer transition-colors text-[10px]"
             title="Next (Enter)"
           >
-            <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="6 9 12 15 18 9" /></svg>
+            <svg
+              width="10"
+              height="10"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2.5"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            >
+              <polyline points="6 9 12 15 18 9" />
+            </svg>
           </button>
           <button
             onClick={closeSearch}
@@ -487,18 +526,30 @@ export function Terminal({ terminalRef, inputRef, theme, display, onUpdateDispla
             }
             setCtxMenu(null);
           }}
-          onAddToTrigger={onAddToTrigger ? (text) => {
-            onAddToTrigger(text);
-            setCtxMenu(null);
-          } : undefined}
-          onGagLine={onGagLine ? (text) => {
-            onGagLine(text);
-            setCtxMenu(null);
-          } : undefined}
-          onOpenInNotes={onOpenInNotes ? (text) => {
-            onOpenInNotes(text);
-            setCtxMenu(null);
-          } : undefined}
+          onAddToTrigger={
+            onAddToTrigger
+              ? (text) => {
+                  onAddToTrigger(text);
+                  setCtxMenu(null);
+                }
+              : undefined
+          }
+          onGagLine={
+            onGagLine
+              ? (text) => {
+                  onGagLine(text);
+                  setCtxMenu(null);
+                }
+              : undefined
+          }
+          onOpenInNotes={
+            onOpenInNotes
+              ? (text) => {
+                  onOpenInNotes(text);
+                  setCtxMenu(null);
+                }
+              : undefined
+          }
           onScrollToBottom={() => {
             terminalRef.current?.scrollToBottom();
             setCtxMenu(null);

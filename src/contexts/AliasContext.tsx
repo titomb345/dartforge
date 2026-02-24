@@ -9,12 +9,12 @@ export interface AliasState {
   setEnableSpeedwalk: (value: boolean) => void;
   createAlias: (
     partial: { pattern: string; matchMode: AliasMatchMode; body: string; group: string },
-    scope: AliasScope,
+    scope: AliasScope
   ) => AliasId;
   updateAlias: (
     id: AliasId,
     updates: Partial<Omit<Alias, 'id' | 'createdAt'>>,
-    scope: AliasScope,
+    scope: AliasScope
   ) => void;
   deleteAlias: (id: AliasId, scope: AliasScope) => void;
   toggleAlias: (id: AliasId, scope: AliasScope) => void;

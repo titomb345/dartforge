@@ -16,10 +16,16 @@ export function useCommandHistory(dataStore: DataStore) {
     })().catch(console.error);
   }, [dataStore.ready]);
 
-  const handleHistoryChange = useCallback((history: string[]) => {
-    setCommandHistory(history);
-    dataStore.set(SETTINGS_FILE, 'commandHistory', history).then(() => dataStore.save(SETTINGS_FILE)).catch(console.error);
-  }, [dataStore]);
+  const handleHistoryChange = useCallback(
+    (history: string[]) => {
+      setCommandHistory(history);
+      dataStore
+        .set(SETTINGS_FILE, 'commandHistory', history)
+        .then(() => dataStore.save(SETTINGS_FILE))
+        .catch(console.error);
+    },
+    [dataStore]
+  );
 
   return { commandHistory, handleHistoryChange };
 }

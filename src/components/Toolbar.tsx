@@ -1,6 +1,22 @@
 import { IconButton } from './IconButton';
 import { DropboxButton } from './DropboxButton';
-import { PowerIcon, PaletteIcon, TrendingUpIcon, ChatIcon, CounterIcon, AliasIcon, TriggerIcon, TimerIcon, VariableIcon, NotesIcon, GearIcon, CoinIcon, /* MapIcon, */ AllocIcon, HelpIcon } from './icons';
+import {
+  PowerIcon,
+  PaletteIcon,
+  TrendingUpIcon,
+  ChatIcon,
+  CounterIcon,
+  AliasIcon,
+  TriggerIcon,
+  TimerIcon,
+  VariableIcon,
+  NotesIcon,
+  GearIcon,
+  CoinIcon,
+  WhoIcon,
+  /* MapIcon, */ AllocIcon,
+  HelpIcon,
+} from './icons';
 import { getPlatform } from '../lib/platform';
 import { cn } from '../lib/cn';
 import { usePanelContext } from '../contexts/PanelLayoutContext';
@@ -11,11 +27,7 @@ interface ToolbarProps {
   onDisconnect: () => void;
 }
 
-export function Toolbar({
-  connected,
-  onReconnect,
-  onDisconnect,
-}: ToolbarProps) {
+export function Toolbar({ connected, onReconnect, onDisconnect }: ToolbarProps) {
   const { activePanel, togglePanel, isPinned } = usePanelContext();
 
   return (
@@ -44,6 +56,16 @@ export function Toolbar({
 
       <div className="flex items-center gap-1">
         {getPlatform() === 'web' && <DropboxButton />}
+        <IconButton
+          icon={<WhoIcon />}
+          title="Who"
+          accent="#61afef"
+          helpId="toolbar-who"
+          panelId="who"
+          toggled={activePanel === 'who'}
+          pinned={isPinned('who')}
+          onClick={() => togglePanel('who')}
+        />
         <IconButton
           icon={<ChatIcon />}
           title="Chat"

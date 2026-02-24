@@ -104,20 +104,40 @@ function TimerRow({
 const TIMER_HELP_ROWS: HelpRow[] = [
   { token: '$me', desc: 'Your active character name (lowercase)' },
   { token: '$Me', desc: 'Your active character name (Capitalized)' },
-  { token: '$varName', desc: 'User-defined variable (set via /var)', example: '/var target goblin  \u2192  $target = goblin' },
+  {
+    token: '$varName',
+    desc: 'User-defined variable (set via /var)',
+    example: '/var target goblin  \u2192  $target = goblin',
+  },
   { token: ';', desc: 'Command separator \u2014 sends multiple commands', example: 'hp;score' },
   { token: '\\;', desc: 'Literal semicolon (not a separator)' },
-  { token: '/delay <ms>', desc: 'Pause between commands (milliseconds)', example: '/delay 1000;cast heal' },
-  { token: '/echo <text>', desc: 'Print text locally (not sent to MUD)', example: '/echo [TIMER] Healing...' },
-  { token: '/spam <N> <cmd>', desc: 'Repeat a command N times (max 1000)', example: '/spam 3 get coin' },
+  {
+    token: '/delay <ms>',
+    desc: 'Pause between commands (milliseconds)',
+    example: '/delay 1000;cast heal',
+  },
+  {
+    token: '/echo <text>',
+    desc: 'Print text locally (not sent to MUD)',
+    example: '/echo [TIMER] Healing...',
+  },
+  {
+    token: '/spam <N> <cmd>',
+    desc: 'Repeat a command N times (max 1000)',
+    example: '/spam 3 get coin',
+  },
   { token: '/var <name> <val>', desc: 'Set a variable (track state)', example: '/var count 5' },
-  { token: '/convert <amt>', desc: 'Convert currency and display locally', example: '/convert 500' },
+  {
+    token: '/convert <amt>',
+    desc: 'Convert currency and display locally',
+    example: '/convert 500',
+  },
 ];
 
 const TIMER_HELP_FOOTER = (
   <>
-    <span className="text-text-label">Timers</span> fire their body at a fixed interval while connected and logged in.
-    The body supports the same command syntax as aliases and triggers.
+    <span className="text-text-label">Timers</span> fire their body at a fixed interval while
+    connected and logged in. The body supports the same command syntax as aliases and triggers.
   </>
 );
 
@@ -145,7 +165,7 @@ function TimerEditor({
       group: string;
     },
     scope: TimerScope,
-    existingId?: TimerId,
+    existingId?: TimerId
   ) => void;
   onCancel: () => void;
 }) {
@@ -190,7 +210,11 @@ function TimerEditor({
   const handleFieldKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter' && canSave) {
       e.preventDefault();
-      onSave({ name: name.trim(), body, intervalSeconds, group: group.trim() || 'General' }, scope, timer?.id);
+      onSave(
+        { name: name.trim(), body, intervalSeconds, group: group.trim() || 'General' },
+        scope,
+        timer?.id
+      );
     }
   };
 
@@ -209,7 +233,12 @@ function TimerEditor({
             accent="orange"
             size="sm"
             onClick={() => {
-              if (canSave) onSave({ name: name.trim(), body, intervalSeconds, group: group.trim() || 'General' }, scope, timer?.id);
+              if (canSave)
+                onSave(
+                  { name: name.trim(), body, intervalSeconds, group: group.trim() || 'General' },
+                  scope,
+                  timer?.id
+                );
             }}
             disabled={!canSave}
           >
@@ -325,9 +354,7 @@ function TimerEditor({
           <div className="border-t border-[#444] pt-2">
             <label className="text-[10px] text-text-dim mb-0.5 block">Command preview</label>
             <div className="px-2 py-1 rounded bg-bg-primary border border-border-dim">
-              <pre className="text-[10px] font-mono whitespace-pre-wrap text-green">
-                {preview}
-              </pre>
+              <pre className="text-[10px] font-mono whitespace-pre-wrap text-green">{preview}</pre>
             </div>
           </div>
         )}
@@ -339,13 +366,8 @@ function TimerEditor({
 // --- Main Panel ---
 
 export function TimerPanel({ onClose }: TimerPanelProps) {
-  const {
-    characterTimers,
-    globalTimers,
-    createTimer,
-    updateTimer,
-    deleteTimer,
-  } = useTimerContext();
+  const { characterTimers, globalTimers, createTimer, updateTimer, deleteTimer } =
+    useTimerContext();
   const { activeCharacter } = useSkillTrackerContext();
 
   const [scope, setScope] = useState<TimerScope>('global');
@@ -358,14 +380,10 @@ export function TimerPanel({ onClose }: TimerPanelProps) {
   const timerList = useMemo(() => Object.values(timers), [timers]);
 
   // Adapt for useFilteredGroups which expects { pattern, body, group }
-  const adapted = useMemo(
-    () => timerList.map((t) => ({ ...t, pattern: t.name })),
-    [timerList],
-  );
-  const { groups, grouped: groupedTimers } =
-    useFilteredGroups(adapted, groupFilter, searchText);
+  const adapted = useMemo(() => timerList.map((t) => ({ ...t, pattern: t.name })), [timerList]);
+  const { groups, grouped: groupedTimers } = useFilteredGroups(adapted, groupFilter, searchText);
 
-  const editingTimer = editingId ? timers[editingId] ?? null : null;
+  const editingTimer = editingId ? (timers[editingId] ?? null) : null;
 
   const handleSave = useCallback(
     (
@@ -376,7 +394,7 @@ export function TimerPanel({ onClose }: TimerPanelProps) {
         group: string;
       },
       saveScope: TimerScope,
-      existingId?: TimerId,
+      existingId?: TimerId
     ) => {
       if (existingId) {
         if (saveScope !== scope) {
@@ -391,7 +409,7 @@ export function TimerPanel({ onClose }: TimerPanelProps) {
       setEditingId(null);
       setCreating(false);
     },
-    [scope, createTimer, updateTimer, deleteTimer],
+    [scope, createTimer, updateTimer, deleteTimer]
   );
 
   const titleText = `Timers${activeCharacter && scope === 'character' ? ` (${charDisplayName(activeCharacter)})` : scope === 'global' ? ' (Global)' : ''}`;
@@ -400,7 +418,9 @@ export function TimerPanel({ onClose }: TimerPanelProps) {
     <div className="w-[420px] h-full bg-bg-primary border-l border-border-subtle flex flex-col overflow-hidden">
       {/* Header */}
       <div className="flex items-center justify-between px-3 py-2.5 border-b border-border-subtle shrink-0">
-        <span className="text-[13px] font-semibold text-text-heading flex items-center gap-1.5"><TimerIcon size={12} /> {titleText}</span>
+        <span className="text-[13px] font-semibold text-text-heading flex items-center gap-1.5">
+          <TimerIcon size={12} /> {titleText}
+        </span>
         <div className="flex items-center gap-1.5">
           <button
             onClick={() => {
@@ -428,13 +448,19 @@ export function TimerPanel({ onClose }: TimerPanelProps) {
           label="Global"
           active={scope === 'global'}
           accent="orange"
-          onClick={() => { setScope('global'); setGroupFilter(null); }}
+          onClick={() => {
+            setScope('global');
+            setGroupFilter(null);
+          }}
         />
         <FilterPill
           label="Character"
           active={scope === 'character'}
           accent="orange"
-          onClick={() => { setScope('character'); setGroupFilter(null); }}
+          onClick={() => {
+            setScope('character');
+            setGroupFilter(null);
+          }}
         />
       </div>
 
@@ -507,7 +533,7 @@ export function TimerPanel({ onClose }: TimerPanelProps) {
 
         {groupedTimers.map(([groupName, groupTimers]) => (
           <div key={groupName} className="mb-3">
-            {(groupFilter === null && groups.length > 1) && (
+            {groupFilter === null && groups.length > 1 && (
               <div className="text-[10px] font-semibold uppercase tracking-[0.08em] text-[#555] mb-1 px-2">
                 {groupName}
               </div>

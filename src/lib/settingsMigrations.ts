@@ -7,7 +7,7 @@ import type { DataStore } from '../contexts/DataStoreContext';
  * baseline. Existing beta users (version > 1) are normalized to 1 so
  * future migrations apply correctly to everyone.
  */
-export const CURRENT_VERSION = 5;
+export const CURRENT_VERSION = 7;
 
 /** Raw store contents — all keys are optional since older stores may lack them. */
 export type StoreData = Record<string, unknown>;
@@ -28,19 +28,36 @@ const MIGRATIONS: MigrationFn[] = [
     // Status bar filtering & compact readouts
     if (!('filteredStatuses' in data)) {
       data.filteredStatuses = {
-        concentration: false, hunger: false, thirst: false,
-        aura: false, encumbrance: false, movement: false,
+        concentration: false,
+        hunger: false,
+        thirst: false,
+        aura: false,
+        encumbrance: false,
+        movement: false,
       };
     }
     if (!('compactReadouts' in data)) {
       data.compactReadouts = {
-        health: false, concentration: false, aura: false,
-        hunger: false, thirst: false, encumbrance: false,
-        movement: false, clock: false,
+        health: false,
+        concentration: false,
+        aura: false,
+        hunger: false,
+        thirst: false,
+        encumbrance: false,
+        movement: false,
+        clock: false,
       };
     }
     if (!('statusBarOrder' in data)) {
-      data.statusBarOrder = ['health', 'concentration', 'aura', 'hunger', 'thirst', 'encumbrance', 'movement'];
+      data.statusBarOrder = [
+        'health',
+        'concentration',
+        'aura',
+        'hunger',
+        'thirst',
+        'encumbrance',
+        'movement',
+      ];
     }
 
     // Panel docking
@@ -95,10 +112,17 @@ const MIGRATIONS: MigrationFn[] = [
     // Numpad
     if (!('numpadMappings' in data)) {
       data.numpadMappings = {
-        Numpad7: 'nw', Numpad8: 'n', Numpad9: 'ne',
-        Numpad4: 'w', Numpad5: 'd', Numpad6: 'e',
-        Numpad1: 'sw', Numpad2: 's', Numpad3: 'se',
-        Numpad0: 'u', NumpadAdd: 'back',
+        Numpad7: 'nw',
+        Numpad8: 'n',
+        Numpad9: 'ne',
+        Numpad4: 'w',
+        Numpad5: 'd',
+        Numpad6: 'e',
+        Numpad1: 'sw',
+        Numpad2: 's',
+        Numpad3: 'se',
+        Numpad0: 'u',
+        NumpadAdd: 'back',
       };
     }
 
@@ -147,6 +171,17 @@ const MIGRATIONS: MigrationFn[] = [
     delete data.autoLoginCharacters;
     return data;
   },
+  // v5 → v6: Action blocking / command queueing
+  (data) => {
+    if (!('actionBlockingEnabled' in data)) data.actionBlockingEnabled = true;
+    return data;
+  },
+  // v6 → v7: Who list auto-refresh
+  (data) => {
+    if (!('whoAutoRefreshEnabled' in data)) data.whoAutoRefreshEnabled = true;
+    if (!('whoRefreshMinutes' in data)) data.whoRefreshMinutes = 5;
+    return data;
+  },
 ];
 
 const SETTINGS_FILE = 'settings.json';
@@ -156,7 +191,7 @@ const SETTINGS_FILE = 'settings.json';
  * then write the updated `_version` back.
  */
 export async function migrateSettings(dataStore: DataStore): Promise<void> {
-  let version = (await dataStore.get<number>(SETTINGS_FILE, '_version')) ?? 0;
+  const version = (await dataStore.get<number>(SETTINGS_FILE, '_version')) ?? 0;
 
   // v1.0 reset: beta users had version 2–20 from pre-release migrations.
   // Normalize them to CURRENT_VERSION so future migrations apply correctly.
@@ -178,7 +213,9 @@ export async function migrateSettings(dataStore: DataStore): Promise<void> {
   for (let v = version; v < CURRENT_VERSION; v++) {
     const result = MIGRATIONS[v](data);
     if (result == null || typeof result !== 'object') {
-      console.error(`Settings migration v${v}→v${v + 1} returned invalid data, aborting migrations`);
+      console.error(
+        `Settings migration v${v}→v${v + 1} returned invalid data, aborting migrations`
+      );
       break;
     }
     data = result;

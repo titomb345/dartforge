@@ -62,11 +62,19 @@ export interface AppSettingsState {
   // Help guide
   hasSeenGuide: boolean;
   updateHasSeenGuide: (v: boolean) => void;
+  // Action blocking
+  actionBlockingEnabled: boolean;
+  updateActionBlockingEnabled: (v: boolean) => void;
   // Post-sync commands
   postSyncEnabled: boolean;
   postSyncCommands: string;
   updatePostSyncEnabled: (v: boolean) => void;
   updatePostSyncCommands: (v: string) => void;
+  // Who list
+  whoAutoRefreshEnabled: boolean;
+  whoRefreshMinutes: number;
+  updateWhoAutoRefreshEnabled: (v: boolean) => void;
+  updateWhoRefreshMinutes: (v: number) => void;
   // Auto-login
   autoLoginEnabled: boolean;
   autoLoginActiveSlot: 0 | 1;

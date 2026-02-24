@@ -6,8 +6,8 @@ import type { Variable } from '../types/variable';
  */
 const RESERVED_PREFIXES = [
   'opposite', // $opposite1..$opposite9
-  'line',     // $line (trigger)
-  'me',       // $me
+  'line', // $line (trigger)
+  'me', // $me
 ];
 
 /**
@@ -37,9 +37,13 @@ export function expandVariables(text: string, variables: Variable[]): string {
 
   // Filter out any names that collide with reserved prefixes
   const safeNames = names.filter((n) => {
-    return !RESERVED_PREFIXES.some((prefix) => n === prefix) &&
+    return (
+      !RESERVED_PREFIXES.some((prefix) => n === prefix) &&
       !/^\d+$/.test(n) && // skip purely numeric names
-      n !== '*' && n !== '-' && n !== '!'; // skip special chars
+      n !== '*' &&
+      n !== '-' &&
+      n !== '!'
+    ); // skip special chars
   });
 
   if (safeNames.length === 0) return text;

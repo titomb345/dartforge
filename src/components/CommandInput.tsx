@@ -8,7 +8,7 @@ import {
   forwardRef,
 } from 'react';
 import { cn } from '../lib/cn';
-import { TimerIcon, AlignmentIcon } from './icons';
+import { TimerIcon, AlignmentIcon, WhoIcon } from './icons';
 import { useAppSettingsContext } from '../contexts/AppSettingsContext';
 import { useCommandInputContext } from '../contexts/CommandInputContext';
 import { useSpotlight } from '../contexts/SpotlightContext';
@@ -78,11 +78,32 @@ function formatCountdown(remainingMs: number): string {
 export const CommandInput = forwardRef<HTMLTextAreaElement, CommandInputProps>(
   ({ onSend, onReconnect }, ref) => {
     const {
-      connected, disabled, passwordMode, skipHistory, recentLinesRef,
-      onToggleCounter, antiIdleEnabled, antiIdleCommand, antiIdleMinutes,
-      antiIdleNextAt, onToggleAntiIdle, alignmentTrackingEnabled,
-      alignmentTrackingMinutes, alignmentNextAt, onToggleAlignmentTracking,
-      activeTimers, onToggleTimer, initialHistory, onHistoryChange,
+      connected,
+      disabled,
+      passwordMode,
+      skipHistory,
+      recentLinesRef,
+      onToggleCounter,
+      antiIdleEnabled,
+      antiIdleCommand,
+      antiIdleMinutes,
+      antiIdleNextAt,
+      onToggleAntiIdle,
+      alignmentTrackingEnabled,
+      alignmentTrackingMinutes,
+      alignmentNextAt,
+      onToggleAlignmentTracking,
+      whoAutoRefreshEnabled,
+      whoRefreshMinutes,
+      whoNextAt,
+      onToggleWhoAutoRefresh,
+      activeTimers,
+      onToggleTimer,
+      initialHistory,
+      onHistoryChange,
+      actionBlocked,
+      actionBlockLabel,
+      actionQueueLength,
     } = useCommandInputContext();
     const { commandHistorySize, numpadMappings, showTimerBadges } = useAppSettingsContext();
     const { active: spotlightActive } = useSpotlight();
@@ -130,10 +151,10 @@ export const CommandInput = forwardRef<HTMLTextAreaElement, CommandInputProps>(
     const hasActiveTimers = activeTimers && activeTimers.length > 0;
     const [, setCountdownTick] = useState(0);
     useEffect(() => {
-      if (!antiIdleNextAt && !alignmentNextAt && !hasActiveTimers) return;
+      if (!antiIdleNextAt && !alignmentNextAt && !whoNextAt && !hasActiveTimers) return;
       const id = setInterval(() => setCountdownTick((t) => t + 1), 1000);
       return () => clearInterval(id);
-    }, [antiIdleNextAt, alignmentNextAt, hasActiveTimers]);
+    }, [antiIdleNextAt, alignmentNextAt, whoNextAt, hasActiveTimers]);
 
     // Timer overflow dropdown state
     const [timerOverflowOpen, setTimerOverflowOpen] = useState(false);
@@ -156,7 +177,8 @@ export const CommandInput = forwardRef<HTMLTextAreaElement, CommandInputProps>(
     // Set cursor position after value changes (for tab completion)
     useLayoutEffect(() => {
       if (pendingCursorRef.current !== null && internalRef.current) {
-        internalRef.current.selectionStart = internalRef.current.selectionEnd = pendingCursorRef.current;
+        internalRef.current.selectionStart = internalRef.current.selectionEnd =
+          pendingCursorRef.current;
         pendingCursorRef.current = null;
       }
     }, [value]);
@@ -173,7 +195,10 @@ export const CommandInput = forwardRef<HTMLTextAreaElement, CommandInputProps>(
         const trimmed = value.trim();
         if (trimmed) {
           setHistory((prev) => {
-            const next = [trimmed, ...prev.filter((h) => h !== trimmed)].slice(0, commandHistorySize);
+            const next = [trimmed, ...prev.filter((h) => h !== trimmed)].slice(
+              0,
+              commandHistorySize
+            );
             onHistoryChangeRef.current?.(next);
             return next;
           });
@@ -272,7 +297,7 @@ export const CommandInput = forwardRef<HTMLTextAreaElement, CommandInputProps>(
           setValue('');
           historyIndexRef.current = -1;
           searchPrefixRef.current = '';
-        } else if (e.key === 'ArrowUp' && !e.shiftKey || e.key === 'ArrowDown' && !e.shiftKey) {
+        } else if ((e.key === 'ArrowUp' && !e.shiftKey) || (e.key === 'ArrowDown' && !e.shiftKey)) {
           const el = internalRef.current;
           if (!el) return;
           // ArrowUp: only when cursor is on the first line
@@ -292,13 +317,12 @@ export const CommandInput = forwardRef<HTMLTextAreaElement, CommandInputProps>(
 
           // Filter history by the saved prefix
           const prefix = searchPrefixRef.current;
-          const filtered = prefix
-            ? history.filter((h) => h.startsWith(prefix))
-            : history;
+          const filtered = prefix ? history.filter((h) => h.startsWith(prefix)) : history;
 
-          const idx = historyIndexRef.current === -1
-            ? -1
-            : filtered.indexOf(history[historyIndexRef.current]);
+          const idx =
+            historyIndexRef.current === -1
+              ? -1
+              : filtered.indexOf(history[historyIndexRef.current]);
           const next = isUp ? idx + 1 : idx - 1;
 
           if (next >= 0 && next < filtered.length) {
@@ -315,7 +339,10 @@ export const CommandInput = forwardRef<HTMLTextAreaElement, CommandInputProps>(
     );
 
     return (
-      <div data-help-id="command-input" className="flex items-start px-2.5 py-1.5 border-t border-border-subtle transition-[border-color] duration-300 ease-in-out">
+      <div
+        data-help-id="command-input"
+        className="flex items-start px-2.5 py-1.5 border-t border-border-subtle transition-[border-color] duration-300 ease-in-out"
+      >
         {/* Prompt / line count */}
         <span
           className={cn(
@@ -346,6 +373,18 @@ export const CommandInput = forwardRef<HTMLTextAreaElement, CommandInputProps>(
           )}
         />
 
+        {/* Action blocking badge */}
+        {actionBlocked && (
+          <span
+            title={`Blocked: ${actionBlockLabel ?? 'action'} — ${actionQueueLength} command(s) queued. /unblock to release`}
+            className="flex items-center gap-1 px-1.5 py-1 rounded border text-[9px] font-mono self-center shrink-0 ml-1 text-[#f59e0b] border-[#f59e0b]/30 bg-[#f59e0b]/8 select-none animate-pulse"
+            style={{ filter: 'drop-shadow(0 0 3px rgba(245, 158, 11, 0.25))' }}
+          >
+            <span>{actionBlockLabel ?? 'BLOCKED'}</span>
+            {actionQueueLength > 0 && <span>({actionQueueLength})</span>}
+          </span>
+        )}
+
         {/* Alignment tracking badge (only when active) */}
         {showTimerBadges && alignmentTrackingEnabled && (
           <span
@@ -355,9 +394,26 @@ export const CommandInput = forwardRef<HTMLTextAreaElement, CommandInputProps>(
             style={{ filter: 'drop-shadow(0 0 3px rgba(128, 224, 128, 0.25))' }}
           >
             <AlignmentIcon size={9} />
-            <span>{alignmentNextAt
-              ? formatCountdown(alignmentNextAt - Date.now())
-              : `${alignmentTrackingMinutes}m`}</span>
+            <span>
+              {alignmentNextAt
+                ? formatCountdown(alignmentNextAt - Date.now())
+                : `${alignmentTrackingMinutes}m`}
+            </span>
+          </span>
+        )}
+
+        {/* Who auto-refresh badge (only when active) */}
+        {showTimerBadges && whoAutoRefreshEnabled && (
+          <span
+            title={`Who auto-refresh: every ${whoRefreshMinutes}m (double-click to stop)`}
+            onDoubleClick={onToggleWhoAutoRefresh}
+            className="flex items-center gap-1 px-1.5 py-1 rounded border text-[9px] font-mono self-center shrink-0 ml-1 text-[#61afef] border-[#61afef]/30 bg-[#61afef]/8 cursor-pointer select-none"
+            style={{ filter: 'drop-shadow(0 0 3px rgba(97, 175, 239, 0.25))' }}
+          >
+            <WhoIcon size={9} />
+            <span>
+              {whoNextAt ? formatCountdown(whoNextAt - Date.now()) : `${whoRefreshMinutes}m`}
+            </span>
           </span>
         )}
 
@@ -370,81 +426,93 @@ export const CommandInput = forwardRef<HTMLTextAreaElement, CommandInputProps>(
             style={{ filter: 'drop-shadow(0 0 3px rgba(189, 147, 249, 0.25))' }}
           >
             <TimerIcon size={9} />
-            <span>{antiIdleNextAt
-              ? formatCountdown(antiIdleNextAt - Date.now())
-              : `${antiIdleMinutes}m`}</span>
+            <span>
+              {antiIdleNextAt
+                ? formatCountdown(antiIdleNextAt - Date.now())
+                : `${antiIdleMinutes}m`}
+            </span>
           </span>
         )}
 
         {/* Custom timer countdown badges (sorted soonest-first) */}
-        {showTimerBadges && activeTimers && activeTimers.length > 0 && (() => {
-          const MAX_VISIBLE = 2;
-          const visible = activeTimers.slice(0, MAX_VISIBLE);
-          const overflow = activeTimers.slice(MAX_VISIBLE);
+        {showTimerBadges &&
+          activeTimers &&
+          activeTimers.length > 0 &&
+          (() => {
+            const MAX_VISIBLE = 2;
+            const visible = activeTimers.slice(0, MAX_VISIBLE);
+            const overflow = activeTimers.slice(MAX_VISIBLE);
 
-          return (
-            <>
-              {visible.map((t) => (
-                <span
-                  key={t.id}
-                  title={`Timer: ${t.name} (double-click to stop)`}
-                  onDoubleClick={() => onToggleTimer?.(t.id)}
-                  className="flex items-center gap-1 px-1.5 py-1 rounded border text-[9px] font-mono self-center shrink-0 ml-1 text-[#f97316] border-[#f97316]/30 bg-[#f97316]/8 cursor-pointer select-none"
-                  style={{ filter: 'drop-shadow(0 0 3px rgba(249, 115, 22, 0.25))' }}
-                >
-                  <TimerIcon size={8} />
-                  <span className="max-w-[50px] truncate">{t.name}</span>
-                  <span>{formatCountdown(t.nextAt - Date.now())}</span>
-                </span>
-              ))}
-              {overflow.length > 0 && (
-                <div className="relative self-center shrink-0 ml-1">
-                  <button
-                    onClick={() => setTimerOverflowOpen((v) => !v)}
-                    onBlur={() => setTimeout(() => setTimerOverflowOpen(false), 150)}
-                    className="flex items-center gap-0.5 px-1.5 py-1 rounded border text-[9px] font-mono cursor-pointer text-[#f97316] border-[#f97316]/30 bg-[#f97316]/8 hover:bg-[#f97316]/15 transition-colors duration-150"
+            return (
+              <>
+                {visible.map((t) => (
+                  <span
+                    key={t.id}
+                    title={`Timer: ${t.name} (double-click to stop)`}
+                    onDoubleClick={() => onToggleTimer?.(t.id)}
+                    className="flex items-center gap-1 px-1.5 py-1 rounded border text-[9px] font-mono self-center shrink-0 ml-1 text-[#f97316] border-[#f97316]/30 bg-[#f97316]/8 cursor-pointer select-none"
                     style={{ filter: 'drop-shadow(0 0 3px rgba(249, 115, 22, 0.25))' }}
                   >
-                    +{overflow.length}
-                  </button>
-                  {timerOverflowOpen && (
-                    <div className="absolute bottom-full right-0 mb-1 bg-bg-primary border border-[#f97316]/30 rounded-lg shadow-lg py-1 min-w-[160px] z-50">
-                      {overflow.map((t) => (
-                        <div
-                          key={t.id}
-                          className="flex items-center gap-1.5 px-2.5 py-1 text-[9px] font-mono text-[#f97316]"
-                        >
-                          <TimerIcon size={8} />
-                          <span className="flex-1 truncate">{t.name}</span>
-                          <span className="shrink-0">{formatCountdown(t.nextAt - Date.now())}</span>
-                          <button
-                            onClick={() => onToggleTimer?.(t.id)}
-                            title="Stop timer"
-                            className="shrink-0 ml-1 px-1 py-0.5 rounded text-[8px] border border-[#f97316]/30 bg-[#f97316]/10 hover:bg-[#f97316]/25 transition-colors cursor-pointer"
+                    <TimerIcon size={8} />
+                    <span className="max-w-[50px] truncate">{t.name}</span>
+                    <span>{formatCountdown(t.nextAt - Date.now())}</span>
+                  </span>
+                ))}
+                {overflow.length > 0 && (
+                  <div className="relative self-center shrink-0 ml-1">
+                    <button
+                      onClick={() => setTimerOverflowOpen((v) => !v)}
+                      onBlur={() => setTimeout(() => setTimerOverflowOpen(false), 150)}
+                      className="flex items-center gap-0.5 px-1.5 py-1 rounded border text-[9px] font-mono cursor-pointer text-[#f97316] border-[#f97316]/30 bg-[#f97316]/8 hover:bg-[#f97316]/15 transition-colors duration-150"
+                      style={{ filter: 'drop-shadow(0 0 3px rgba(249, 115, 22, 0.25))' }}
+                    >
+                      +{overflow.length}
+                    </button>
+                    {timerOverflowOpen && (
+                      <div className="absolute bottom-full right-0 mb-1 bg-bg-primary border border-[#f97316]/30 rounded-lg shadow-lg py-1 min-w-[160px] z-50">
+                        {overflow.map((t) => (
+                          <div
+                            key={t.id}
+                            className="flex items-center gap-1.5 px-2.5 py-1 text-[9px] font-mono text-[#f97316]"
                           >
-                            stop
-                          </button>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              )}
-            </>
-          );
-        })()}
+                            <TimerIcon size={8} />
+                            <span className="flex-1 truncate">{t.name}</span>
+                            <span className="shrink-0">
+                              {formatCountdown(t.nextAt - Date.now())}
+                            </span>
+                            <button
+                              onClick={() => onToggleTimer?.(t.id)}
+                              title="Stop timer"
+                              className="shrink-0 ml-1 px-1 py-0.5 rounded text-[8px] border border-[#f97316]/30 bg-[#f97316]/10 hover:bg-[#f97316]/25 transition-colors cursor-pointer"
+                            >
+                              stop
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                )}
+              </>
+            );
+          })()}
 
         {/* Demo timer badge when spotlight is active but no real badges are visible */}
-        {spotlightActive?.helpId === 'command-input' && (!showTimerBadges || (!hasActiveTimers && !antiIdleEnabled && !alignmentTrackingEnabled)) && (
-          <span
-            className="flex items-center gap-1 px-1.5 py-1 rounded border text-[9px] font-mono self-center shrink-0 ml-1 text-[#f97316] border-[#f97316]/30 bg-[#f97316]/8 opacity-75"
-            style={{ filter: 'drop-shadow(0 0 3px rgba(249, 115, 22, 0.25))' }}
-          >
-            <TimerIcon size={8} />
-            <span>heal</span>
-            <span>0:25</span>
-          </span>
-        )}
+        {spotlightActive?.helpId === 'command-input' &&
+          (!showTimerBadges ||
+            (!hasActiveTimers &&
+              !antiIdleEnabled &&
+              !alignmentTrackingEnabled &&
+              !whoAutoRefreshEnabled)) && (
+            <span
+              className="flex items-center gap-1 px-1.5 py-1 rounded border text-[9px] font-mono self-center shrink-0 ml-1 text-[#f97316] border-[#f97316]/30 bg-[#f97316]/8 opacity-75"
+              style={{ filter: 'drop-shadow(0 0 3px rgba(249, 115, 22, 0.25))' }}
+            >
+              <TimerIcon size={8} />
+              <span>heal</span>
+              <span>0:25</span>
+            </span>
+          )}
       </div>
     );
   }

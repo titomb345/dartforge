@@ -66,15 +66,22 @@ function annotateAnsi(data: string): string {
 
     for (const code of codes) {
       if (code === 0) continue;
-      if (code === 1) { bold = true; continue; }
+      if (code === 1) {
+        bold = true;
+        continue;
+      }
       const name = sgrName(code);
       if (name) names.push(name);
     }
 
     // Bold + normal foreground color → promote to bright variant
     const finalNames = names.map((n) => {
-      if (bold && !n.startsWith('bright') && !n.startsWith('bg:') &&
-          !['dim', 'italic', 'underline', 'reverse'].includes(n)) {
+      if (
+        bold &&
+        !n.startsWith('bright') &&
+        !n.startsWith('bg:') &&
+        !['dim', 'italic', 'underline', 'reverse'].includes(n)
+      ) {
         return 'bright ' + n;
       }
       return n;
@@ -99,7 +106,7 @@ export function useMudConnection(
   onCharacterName?: (name: string) => void,
   outputFilterRef?: React.RefObject<OutputFilter | null>,
   onLogin?: () => void,
-  autoLoginRef?: React.RefObject<AutoLoginConfig | null>,
+  autoLoginRef?: React.RefObject<AutoLoginConfig | null>
 ) {
   const [connected, setConnected] = useState(false);
   const [statusMessage, setStatusMessage] = useState('Connecting...');
@@ -207,7 +214,9 @@ export function useMudConnection(
                   ? outputFilterRef.current.filter(afterBanner)
                   : afterBanner;
                 if (filteredAfter) {
-                  let afterOutput = debugModeRef.current ? annotateAnsi(filteredAfter) : filteredAfter;
+                  let afterOutput = debugModeRef.current
+                    ? annotateAnsi(filteredAfter)
+                    : filteredAfter;
                   const shouldStrip = outputFilterRef?.current?.stripPrompts ?? true;
                   if (payload.ga && shouldStrip) {
                     afterOutput = stripPrompt(afterOutput);
@@ -228,7 +237,9 @@ export function useMudConnection(
                 ? outputFilterRef.current.filter(rawBuffer)
                 : rawBuffer;
               if (filteredBuffer) {
-                let flushOutput = debugModeRef.current ? annotateAnsi(filteredBuffer) : filteredBuffer;
+                let flushOutput = debugModeRef.current
+                  ? annotateAnsi(filteredBuffer)
+                  : filteredBuffer;
                 const shouldStrip2 = outputFilterRef?.current?.stripPrompts ?? true;
                 if (payload.ga && shouldStrip2) {
                   flushOutput = stripPrompt(flushOutput);
@@ -343,5 +354,13 @@ export function useMudConnection(
     }
   }, []);
 
-  return { connected, passwordMode, skipHistory, statusMessage, sendCommand, reconnect, disconnect };
+  return {
+    connected,
+    passwordMode,
+    skipHistory,
+    statusMessage,
+    sendCommand,
+    reconnect,
+    disconnect,
+  };
 }

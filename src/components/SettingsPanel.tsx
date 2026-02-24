@@ -1,5 +1,20 @@
 import { useState, useEffect, useRef, type ReactNode } from 'react';
-import { TimerIcon, FolderIcon, TrashIcon, CheckCircleIcon, ClockIcon, ChevronDownSmallIcon, FilterIcon, GearIcon, NotesIcon, RotateCcwIcon, Volume2Icon, PlayIcon, CounterIcon, UserIcon } from './icons';
+import {
+  TimerIcon,
+  FolderIcon,
+  TrashIcon,
+  CheckCircleIcon,
+  ClockIcon,
+  ChevronDownSmallIcon,
+  FilterIcon,
+  GearIcon,
+  NotesIcon,
+  RotateCcwIcon,
+  Volume2Icon,
+  PlayIcon,
+  CounterIcon,
+  UserIcon,
+} from './icons';
 import { DEFAULT_NUMPAD_MAPPINGS } from '../hooks/useAppSettings';
 import { MudInput, MudTextarea, MudNumberInput } from './shared';
 import { cn } from '../lib/cn';
@@ -11,12 +26,24 @@ import { getPlatform } from '../lib/platform';
 
 let invoke: ((cmd: string, args?: Record<string, unknown>) => Promise<unknown>) | null = null;
 let openDialog: ((opts: Record<string, unknown>) => Promise<unknown>) | null = null;
-let loadStore: ((path: string) => Promise<{ get: <T>(k: string) => Promise<T | null | undefined>; set: (k: string, v: unknown) => Promise<void>; save: () => Promise<void> }>) | null = null;
+let loadStore:
+  | ((path: string) => Promise<{
+      get: <T>(k: string) => Promise<T | null | undefined>;
+      set: (k: string, v: unknown) => Promise<void>;
+      save: () => Promise<void>;
+    }>)
+  | null = null;
 
 if (getPlatform() === 'tauri') {
-  import('@tauri-apps/api/core').then((m) => { invoke = m.invoke; });
-  import('@tauri-apps/plugin-dialog').then((m) => { openDialog = m.open as typeof openDialog; });
-  import('@tauri-apps/plugin-store').then((m) => { loadStore = m.load; });
+  import('@tauri-apps/api/core').then((m) => {
+    invoke = m.invoke;
+  });
+  import('@tauri-apps/plugin-dialog').then((m) => {
+    openDialog = m.open as typeof openDialog;
+  });
+  import('@tauri-apps/plugin-store').then((m) => {
+    loadStore = m.load;
+  });
 }
 
 const LOCAL_CONFIG_FILE = 'local-config.json';
@@ -48,11 +75,13 @@ function SettingsSection({
         onClick={handleToggle}
         className={cn(
           'w-full flex items-center gap-2 px-3 py-2 cursor-pointer transition-colors duration-150',
-          'bg-bg-secondary hover:bg-[#252525]',
+          'bg-bg-secondary hover:bg-[#252525]'
         )}
         style={{ borderLeft: `2px solid ${isOpen ? accent : 'transparent'}` }}
       >
-        <span style={{ color: accent }} className="shrink-0">{icon}</span>
+        <span style={{ color: accent }} className="shrink-0">
+          {icon}
+        </span>
         <span className="text-[11px] font-mono font-semibold uppercase tracking-[0.06em] text-text-label flex-1 text-left">
           {title}
         </span>
@@ -68,9 +97,7 @@ function SettingsSection({
         style={{ gridTemplateRows: isOpen ? '1fr' : '0fr' }}
       >
         <div className="overflow-hidden">
-          <div className="px-3 py-3 space-y-3">
-            {children}
-          </div>
+          <div className="px-3 py-3 space-y-3">{children}</div>
         </div>
       </div>
     </div>
@@ -97,7 +124,7 @@ function ToggleSwitch({
       onClick={() => !disabled && onChange(!checked)}
       className={cn(
         'relative w-[32px] h-[16px] rounded-full border transition-colors duration-200 cursor-pointer shrink-0',
-        disabled && 'opacity-30 cursor-default',
+        disabled && 'opacity-30 cursor-default'
       )}
       style={{
         background: checked ? `${accent}25` : '#1a1a1a',
@@ -118,10 +145,20 @@ function ToggleSwitch({
 
 /* ── Field Row ────────────────────────────────────────────── */
 
-function FieldRow({ label, children, dimmed }: { label: string; children: ReactNode; dimmed?: boolean }) {
+function FieldRow({
+  label,
+  children,
+  dimmed,
+}: {
+  label: string;
+  children: ReactNode;
+  dimmed?: boolean;
+}) {
   return (
     <div className={cn('flex items-center gap-2', dimmed && 'opacity-40 pointer-events-none')}>
-      <span className="text-[10px] font-mono text-text-dim uppercase tracking-wide flex-1">{label}</span>
+      <span className="text-[10px] font-mono text-text-dim uppercase tracking-wide flex-1">
+        {label}
+      </span>
       {children}
     </div>
   );
@@ -146,32 +183,65 @@ export function SettingsPanel() {
 
   const settings = useAppSettingsContext();
   const {
-    antiIdleEnabled, antiIdleCommand, antiIdleMinutes,
+    antiIdleEnabled,
+    antiIdleCommand,
+    antiIdleMinutes,
     updateAntiIdleEnabled: onAntiIdleEnabledChange,
     updateAntiIdleCommand: onAntiIdleCommandChange,
     updateAntiIdleMinutes: onAntiIdleMinutesChange,
-    alignmentTrackingEnabled, alignmentTrackingMinutes,
-    updateAlignmentTrackingEnabled, updateAlignmentTrackingMinutes,
-    boardDatesEnabled, updateBoardDatesEnabled: onBoardDatesEnabledChange,
-    stripPromptsEnabled, updateStripPromptsEnabled: onStripPromptsEnabledChange,
-    commandEchoEnabled, updateCommandEchoEnabled,
-    showTimerBadges, updateShowTimerBadges,
-    terminalScrollback, updateTerminalScrollback,
-    commandHistorySize, updateCommandHistorySize,
-    chatHistorySize, updateChatHistorySize,
-    timestampFormat, updateTimestampFormat,
-    sessionLoggingEnabled, updateSessionLoggingEnabled,
-    numpadMappings, updateNumpadMappings,
-    chatNotifications, toggleChatNotification,
-    customChime1, customChime2, updateCustomChime1, updateCustomChime2,
-    counterHotThreshold, counterColdThreshold,
-    updateCounterHotThreshold, updateCounterColdThreshold,
-    postSyncEnabled, postSyncCommands,
-    updatePostSyncEnabled, updatePostSyncCommands,
-    autoLoginEnabled, autoLoginActiveSlot, autoLoginCharacters,
-    lastLoginTimestamp, lastLoginSlot,
-    updateAutoLoginEnabled, updateAutoLoginActiveSlot, updateAutoLoginCharacters,
-    onSwitchCharacter, connected,
+    alignmentTrackingEnabled,
+    alignmentTrackingMinutes,
+    updateAlignmentTrackingEnabled,
+    updateAlignmentTrackingMinutes,
+    whoAutoRefreshEnabled,
+    whoRefreshMinutes,
+    updateWhoAutoRefreshEnabled,
+    updateWhoRefreshMinutes,
+    boardDatesEnabled,
+    updateBoardDatesEnabled: onBoardDatesEnabledChange,
+    stripPromptsEnabled,
+    updateStripPromptsEnabled: onStripPromptsEnabledChange,
+    commandEchoEnabled,
+    updateCommandEchoEnabled,
+    showTimerBadges,
+    updateShowTimerBadges,
+    terminalScrollback,
+    updateTerminalScrollback,
+    commandHistorySize,
+    updateCommandHistorySize,
+    chatHistorySize,
+    updateChatHistorySize,
+    timestampFormat,
+    updateTimestampFormat,
+    sessionLoggingEnabled,
+    updateSessionLoggingEnabled,
+    actionBlockingEnabled,
+    updateActionBlockingEnabled,
+    numpadMappings,
+    updateNumpadMappings,
+    chatNotifications,
+    toggleChatNotification,
+    customChime1,
+    customChime2,
+    updateCustomChime1,
+    updateCustomChime2,
+    counterHotThreshold,
+    counterColdThreshold,
+    updateCounterHotThreshold,
+    updateCounterColdThreshold,
+    postSyncEnabled,
+    postSyncCommands,
+    updatePostSyncEnabled,
+    updatePostSyncCommands,
+    autoLoginEnabled,
+    autoLoginActiveSlot,
+    autoLoginCharacters,
+    lastLoginTimestamp,
+    lastLoginSlot,
+    updateAutoLoginEnabled,
+    updateAutoLoginCharacters,
+    onSwitchCharacter,
+    connected,
   } = settings;
   const isTauri = getPlatform() === 'tauri';
 
@@ -186,7 +256,8 @@ export function SettingsPanel() {
   // - That same slot can always re-login (no cooldown)
   // - The other slot must wait 20 minutes from lastLoginTimestamp
   // - So cooldown applies when switching TO a slot that is NOT lastLoginSlot
-  const otherSlotNeedsCooldown = lastLoginTimestamp != null && lastLoginSlot != null && lastLoginSlot !== otherSlot;
+  const otherSlotNeedsCooldown =
+    lastLoginTimestamp != null && lastLoginSlot != null && lastLoginSlot !== otherSlot;
 
   useEffect(() => {
     const tick = () => {
@@ -212,7 +283,10 @@ export function SettingsPanel() {
   };
 
   const updateCharacterField = (slot: 0 | 1, field: 'name' | 'password', value: string) => {
-    const updated = [...autoLoginCharacters] as [typeof autoLoginCharacters[0], typeof autoLoginCharacters[1]];
+    const updated = [...autoLoginCharacters] as [
+      (typeof autoLoginCharacters)[0],
+      (typeof autoLoginCharacters)[1],
+    ];
     const current = updated[slot] ?? { name: '', password: '' };
     updated[slot] = { ...current, [field]: value };
     updateAutoLoginCharacters(updated);
@@ -222,7 +296,9 @@ export function SettingsPanel() {
     <div className="w-[360px] h-full bg-bg-primary border-l border-border-subtle flex flex-col overflow-hidden">
       {/* Header */}
       <div className="flex items-center px-3 py-2.5 border-b border-border-subtle">
-        <span className="text-[13px] font-semibold text-text-heading flex items-center gap-1.5"><GearIcon size={12} /> Settings</span>
+        <span className="text-[13px] font-semibold text-text-heading flex items-center gap-1.5">
+          <GearIcon size={12} /> Settings
+        </span>
       </div>
 
       {/* Scrollable sections */}
@@ -243,72 +319,67 @@ export function SettingsPanel() {
             />
           </FieldRow>
 
-          {([0, 1] as const).map((slot) => (
-            <div key={slot} className={slot === 0 ? 'mt-2' : 'mt-3'}>
-              <div className="flex items-center gap-2 mb-1.5">
-                <span className="text-[10px] font-semibold text-text-muted tracking-wide uppercase">Character {slot + 1}</span>
-                <span className={cn(
-                  'text-[8px] font-mono px-1.5 py-0.5 rounded border transition-opacity duration-150',
-                  autoLoginActiveSlot === slot
-                    ? 'bg-[#56b6c2]/10 text-[#56b6c2] border-[#56b6c2]/20 opacity-100'
-                    : 'opacity-0 border-transparent',
-                )}>active</span>
+          {([0, 1] as const).map((slot) => {
+            const char1Set = !!(autoLoginCharacters[0]?.name && autoLoginCharacters[0]?.password);
+            const isDisabled = slot === 1 && !char1Set;
+            return (
+              <div key={slot} className={slot === 0 ? 'mt-2' : 'mt-3'}>
+                <div className="flex items-center gap-2 mb-1.5">
+                  <span className="text-[10px] font-semibold text-text-muted tracking-wide uppercase">
+                    Character {slot + 1}
+                  </span>
+                  {autoLoginActiveSlot === slot ? (
+                    <span className="text-[8px] font-mono px-1.5 py-0.5 rounded border bg-[#56b6c2]/10 text-[#56b6c2] border-[#56b6c2]/20">
+                      active
+                    </span>
+                  ) : isDisabled ? (
+                    <span className="text-[8px] font-mono text-text-dim">
+                      Set Character 1 first
+                    </span>
+                  ) : null}
+                </div>
+                {/* Use <form> with autocomplete hints so password managers can detect and fill */}
+                <form
+                  className="space-y-1.5"
+                  onSubmit={(e) => e.preventDefault()}
+                  autoComplete="on"
+                >
+                  <input
+                    type="hidden"
+                    name={`dartmud-slot-${slot}`}
+                    value={`dartmud-slot-${slot}`}
+                  />
+                  <FieldRow label="Name">
+                    <MudInput
+                      accent="cyan"
+                      size="sm"
+                      name="username"
+                      autoComplete="username"
+                      value={autoLoginCharacters[slot]?.name ?? ''}
+                      onChange={(e) => updateCharacterField(slot, 'name', e.target.value)}
+                      placeholder="Character name"
+                      className="w-[140px] text-right"
+                      disabled={isDisabled}
+                    />
+                  </FieldRow>
+                  <FieldRow label="Password">
+                    <MudInput
+                      type="password"
+                      accent="cyan"
+                      size="sm"
+                      name="password"
+                      autoComplete="current-password"
+                      value={autoLoginCharacters[slot]?.password ?? ''}
+                      onChange={(e) => updateCharacterField(slot, 'password', e.target.value)}
+                      placeholder="Password"
+                      className="w-[140px] text-right"
+                      disabled={isDisabled}
+                    />
+                  </FieldRow>
+                </form>
               </div>
-              {/* Use <form> with autocomplete hints so password managers can detect and fill */}
-              <form className="space-y-1.5" onSubmit={(e) => e.preventDefault()} autoComplete="on">
-                <input type="hidden" name={`dartmud-slot-${slot}`} value={`dartmud-slot-${slot}`} />
-                <FieldRow label="Name">
-                  <MudInput
-                    accent="cyan"
-                    size="sm"
-                    name="username"
-                    autoComplete="username"
-                    value={autoLoginCharacters[slot]?.name ?? ''}
-                    onChange={(e) => updateCharacterField(slot, 'name', e.target.value)}
-                    placeholder="Character name"
-                    className="w-[140px] text-right"
-                  />
-                </FieldRow>
-                <FieldRow label="Password">
-                  <MudInput
-                    type="password"
-                    accent="cyan"
-                    size="sm"
-                    name="password"
-                    autoComplete="current-password"
-                    value={autoLoginCharacters[slot]?.password ?? ''}
-                    onChange={(e) => updateCharacterField(slot, 'password', e.target.value)}
-                    placeholder="Password"
-                    className="w-[140px] text-right"
-                  />
-                </FieldRow>
-              </form>
-            </div>
-          ))}
-
-          {/* Active slot selector */}
-          <FieldRow label="Active">
-            <div className="flex gap-1">
-              {([0, 1] as const).map((slot) => {
-                const char = autoLoginCharacters[slot];
-                const label = char?.name || `Slot ${slot + 1}`;
-                return (
-                  <button
-                    key={slot}
-                    onClick={() => updateAutoLoginActiveSlot(slot)}
-                    className={cn(
-                      'text-[10px] font-mono px-2 py-0.5 rounded border cursor-pointer transition-colors duration-150',
-                      autoLoginActiveSlot === slot
-                        ? 'text-[#56b6c2] border-[#56b6c2]/40 bg-[#56b6c2]/10'
-                        : 'text-text-dim border-border-dim hover:border-[#56b6c2]/30 hover:text-text-muted',
-                    )}
-                  >
-                    {label}
-                  </button>
-                );
-              })}
-            </div>
-          </FieldRow>
+            );
+          })}
 
           {/* Switch & reconnect */}
           {otherCharacter?.name && (
@@ -320,7 +391,7 @@ export function SettingsPanel() {
                   'w-full text-[10px] font-mono py-1.5 px-3 rounded border transition-all duration-200',
                   connected || switchCooldownActive || !autoLoginEnabled
                     ? 'text-text-dim border-border-dim opacity-40 cursor-default'
-                    : 'text-[#56b6c2] border-[#56b6c2]/30 bg-[#56b6c2]/5 hover:bg-[#56b6c2]/10 hover:border-[#56b6c2]/50 cursor-pointer',
+                    : 'text-[#56b6c2] border-[#56b6c2]/30 bg-[#56b6c2]/5 hover:bg-[#56b6c2]/10 hover:border-[#56b6c2]/50 cursor-pointer'
                 )}
               >
                 {connected
@@ -334,8 +405,8 @@ export function SettingsPanel() {
 
           <div className="text-[9px] text-text-dim font-mono leading-relaxed mt-2">
             {isTauri
-              ? 'Passwords are stored securely in your operating system\'s credential manager. When enabled, name and password are sent automatically on connect.'
-              : 'Your browser\'s password manager can save these credentials. Passwords are not stored by DartForge on web — they are held in memory for this session only.'}
+              ? "Passwords are stored securely in your operating system's credential manager. When enabled, name and password are sent automatically on connect."
+              : "Your browser's password manager can save these credentials. Passwords are not stored by DartForge on web — they are held in memory for this session only."}
           </div>
         </SettingsSection>
 
@@ -348,7 +419,9 @@ export function SettingsPanel() {
           onToggle={() => toggle('timers')}
         >
           {/* Alignment tracking */}
-          <div className="text-[10px] font-semibold text-text-muted tracking-wide uppercase mb-1">Alignment Tracking</div>
+          <div className="text-[10px] font-semibold text-text-muted tracking-wide uppercase mb-1">
+            Alignment Tracking
+          </div>
           <FieldRow label="Enabled">
             <ToggleSwitch
               checked={alignmentTrackingEnabled}
@@ -374,8 +447,39 @@ export function SettingsPanel() {
             Polls alignment at the configured interval. Also prevents idle disconnect.
           </div>
 
+          {/* Who list refresh */}
+          <div className="text-[10px] font-semibold text-text-muted tracking-wide uppercase mb-1">
+            Who List
+          </div>
+          <FieldRow label="Auto-refresh">
+            <ToggleSwitch
+              checked={whoAutoRefreshEnabled}
+              onChange={updateWhoAutoRefreshEnabled}
+              accent="#61afef"
+            />
+          </FieldRow>
+          <FieldRow label="Interval" dimmed={!whoAutoRefreshEnabled}>
+            <div className="flex items-center gap-1.5">
+              <MudNumberInput
+                accent="cyan"
+                size="sm"
+                min={1}
+                max={30}
+                value={whoRefreshMinutes}
+                onChange={updateWhoRefreshMinutes}
+                className="w-[48px] text-center"
+              />
+              <span className="text-[10px] font-mono text-text-dim">min</span>
+            </div>
+          </FieldRow>
+          <div className="text-[9px] text-text-dim font-mono leading-relaxed mt-1 mb-3">
+            Silently refreshes the who list in the background.
+          </div>
+
           {/* Anti-idle */}
-          <div className="text-[10px] font-semibold text-text-muted tracking-wide uppercase mb-1">Anti-Idle</div>
+          <div className="text-[10px] font-semibold text-text-muted tracking-wide uppercase mb-1">
+            Anti-Idle
+          </div>
           {alignmentTrackingEnabled && (
             <div className="text-[9px] text-[#80e080] font-mono leading-relaxed mb-1">
               Disabled — alignment tracking is active.
@@ -417,8 +521,26 @@ export function SettingsPanel() {
             Sends the command at the configured interval to prevent idle disconnect.
           </div>
 
+          {/* Action Blocking */}
+          <div className="text-[10px] font-semibold text-text-muted tracking-wide uppercase mb-1">
+            Action Blocking
+          </div>
+          <FieldRow label="Enabled">
+            <ToggleSwitch
+              checked={actionBlockingEnabled}
+              onChange={updateActionBlockingEnabled}
+              accent="#f59e0b"
+            />
+          </FieldRow>
+          <div className="text-[9px] text-text-dim font-mono leading-relaxed mt-1 mb-3">
+            Queues commands during channeled actions (cast, study, hunt, etc.) to prevent
+            interruption. Use /block and /unblock for manual control.
+          </div>
+
           {/* Display */}
-          <div className="text-[10px] font-semibold text-text-muted tracking-wide uppercase mb-1">Display</div>
+          <div className="text-[10px] font-semibold text-text-muted tracking-wide uppercase mb-1">
+            Display
+          </div>
           <FieldRow label="Timer countdowns">
             <ToggleSwitch
               checked={showTimerBadges}
@@ -427,7 +549,8 @@ export function SettingsPanel() {
             />
           </FieldRow>
           <div className="text-[9px] text-text-dim font-mono leading-relaxed mt-1">
-            Show timer countdowns (anti-idle, alignment, and custom timers) next to the command input.
+            Show timer countdowns (anti-idle, alignment, and custom timers) next to the command
+            input.
           </div>
         </SettingsSection>
 
@@ -461,7 +584,8 @@ export function SettingsPanel() {
             />
           </div>
           <div className="text-[9px] text-text-dim font-mono leading-relaxed mt-1">
-            Sent automatically after logging in. Supports semicolons, aliases, /delay, /echo, /spam, /var.
+            Sent automatically after logging in. Supports semicolons, aliases, /delay, /echo, /spam,
+            /var.
           </div>
         </SettingsSection>
 
@@ -626,7 +750,7 @@ export function SettingsPanel() {
                     'text-[10px] font-mono px-2 py-0.5 rounded border cursor-pointer transition-colors',
                     timestampFormat === fmt
                       ? 'text-pink border-pink/40 bg-pink/10'
-                      : 'text-text-dim border-border-dim hover:border-pink/30',
+                      : 'text-text-dim border-border-dim hover:border-pink/30'
                   )}
                 >
                   {fmt}
@@ -652,12 +776,18 @@ export function SettingsPanel() {
             />
           </FieldRow>
           <div className="text-[9px] text-text-dim font-mono leading-relaxed mt-1">
-            Logs session output (ANSI stripped) and your commands to the sessions/ folder in your data directory.
+            Logs session output (ANSI stripped) and your commands to the sessions/ folder in your
+            data directory.
           </div>
         </SettingsSection>
 
         {/* Numpad Mappings */}
-        <NumpadSection mappings={numpadMappings} onChange={updateNumpadMappings} open={openSection === 'numpad'} onToggle={() => toggle('numpad')} />
+        <NumpadSection
+          mappings={numpadMappings}
+          onChange={updateNumpadMappings}
+          open={openSection === 'numpad'}
+          onToggle={() => toggle('numpad')}
+        />
 
         {/* Custom Sounds — Tauri only */}
         {isTauri && (
@@ -694,10 +824,17 @@ export function SettingsPanel() {
         </SettingsSection>
 
         {/* Data Location — Tauri only */}
-        {isTauri && <DataLocationSection open={openSection === 'data-location'} onToggle={() => toggle('data-location')} />}
+        {isTauri && (
+          <DataLocationSection
+            open={openSection === 'data-location'}
+            onToggle={() => toggle('data-location')}
+          />
+        )}
 
         {/* Backups — Tauri only */}
-        {isTauri && <BackupsSection open={openSection === 'backups'} onToggle={() => toggle('backups')} />}
+        {isTauri && (
+          <BackupsSection open={openSection === 'backups'} onToggle={() => toggle('backups')} />
+        )}
       </div>
     </div>
   );
@@ -706,16 +843,38 @@ export function SettingsPanel() {
 /* ── Numpad Mappings Section ──────────────────────────────── */
 
 const NUMPAD_GRID = [
-  [{ key: 'Numpad7', label: '7' }, { key: 'Numpad8', label: '8' }, { key: 'Numpad9', label: '9' }],
-  [{ key: 'Numpad4', label: '4' }, { key: 'Numpad5', label: '5' }, { key: 'Numpad6', label: '6' }],
-  [{ key: 'Numpad1', label: '1' }, { key: 'Numpad2', label: '2' }, { key: 'Numpad3', label: '3' }],
+  [
+    { key: 'Numpad7', label: '7' },
+    { key: 'Numpad8', label: '8' },
+    { key: 'Numpad9', label: '9' },
+  ],
+  [
+    { key: 'Numpad4', label: '4' },
+    { key: 'Numpad5', label: '5' },
+    { key: 'Numpad6', label: '6' },
+  ],
+  [
+    { key: 'Numpad1', label: '1' },
+    { key: 'Numpad2', label: '2' },
+    { key: 'Numpad3', label: '3' },
+  ],
 ];
 const NUMPAD_BOTTOM = [
   { key: 'Numpad0', label: '0', span: 2 },
   { key: 'NumpadAdd', label: '+', span: 1 },
 ];
 
-function NumpadSection({ mappings, onChange, open, onToggle }: { mappings: Record<string, string>; onChange: (v: Record<string, string>) => void; open: boolean; onToggle: () => void }) {
+function NumpadSection({
+  mappings,
+  onChange,
+  open,
+  onToggle,
+}: {
+  mappings: Record<string, string>;
+  onChange: (v: Record<string, string>) => void;
+  open: boolean;
+  onToggle: () => void;
+}) {
   const updateKey = (key: string, value: string) => {
     onChange({ ...mappings, [key]: value });
   };
@@ -744,7 +903,11 @@ function NumpadSection({ mappings, onChange, open, onToggle }: { mappings: Recor
       </div>
       <div className="grid grid-cols-3 gap-1 mt-1">
         {NUMPAD_BOTTOM.map(({ key, label, span }) => (
-          <div key={key} className="flex flex-col items-center gap-0.5" style={{ gridColumn: `span ${span}` }}>
+          <div
+            key={key}
+            className="flex flex-col items-center gap-0.5"
+            style={{ gridColumn: `span ${span}` }}
+          >
             <span className="text-[9px] font-mono text-text-dim">{label}</span>
             <MudInput
               accent="purple"
@@ -776,7 +939,7 @@ function NumpadSection({ mappings, onChange, open, onToggle }: { mappings: Recor
 const CHIME_BTN = cn(
   'flex items-center gap-1 px-2 py-0.5 rounded',
   'text-[9px] font-mono text-text-dim border border-border-dim',
-  'hover:text-text-label hover:border-border-subtle transition-colors cursor-pointer',
+  'hover:text-text-label hover:border-border-subtle transition-colors cursor-pointer'
 );
 
 function ChimePicker({
@@ -805,10 +968,10 @@ function ChimePicker({
       });
       if (!selected || typeof selected !== 'string') return;
 
-      const destName = await invoke('import_sound_file', {
+      const destName = (await invoke('import_sound_file', {
         sourcePath: selected,
         chimeId,
-      }) as string;
+      })) as string;
 
       // Store the original filename for display
       const parts = selected.replace(/\\/g, '/').split('/');
@@ -829,14 +992,17 @@ function ChimePicker({
     try {
       let url: string;
       if (customFileName && invoke) {
-        const dataUrl = await invoke('get_sound_base64', { chimeId }) as string | null;
+        const dataUrl = (await invoke('get_sound_base64', { chimeId })) as string | null;
         url = dataUrl || `/${chimeId}.wav`;
       } else {
         url = `/${chimeId}.wav`;
       }
       const audio = new Audio(url);
       previewRef.current = audio;
-      const done = () => { previewRef.current = null; setPreviewing(false); };
+      const done = () => {
+        previewRef.current = null;
+        setPreviewing(false);
+      };
       audio.onended = done;
       audio.onerror = done;
       audio.play().catch(done);
@@ -862,7 +1028,10 @@ function ChimePicker({
         <span className="text-[10px] font-mono text-text-dim uppercase tracking-wide flex-1">
           {label}
         </span>
-        <span className="text-[9px] font-mono text-text-dim truncate max-w-[120px]" title={customFileName || 'Default'}>
+        <span
+          className="text-[9px] font-mono text-text-dim truncate max-w-[120px]"
+          title={customFileName || 'Default'}
+        >
           {customFileName || 'Default'}
         </span>
       </div>
@@ -886,9 +1055,7 @@ function ChimePicker({
           </button>
         )}
       </div>
-      {error && (
-        <div className="text-[9px] font-mono text-red-400 leading-relaxed">{error}</div>
-      )}
+      {error && <div className="text-[9px] font-mono text-red-400 leading-relaxed">{error}</div>}
     </div>
   );
 }
@@ -930,7 +1097,8 @@ function CustomSoundsSection({
         onUpdate={updateCustomChime2}
       />
       <div className="text-[9px] text-text-dim font-mono leading-relaxed mt-1">
-        Choose custom audio files for chat alert sounds. Supports WAV, MP3, OGG, and WebM (max 5 MB).
+        Choose custom audio files for chat alert sounds. Supports WAV, MP3, OGG, and WebM (max 5
+        MB).
       </div>
     </SettingsSection>
   );
@@ -959,12 +1127,22 @@ function DataLocationSection({ open, onToggle }: { open: boolean; onToggle: () =
   async function addDirectory() {
     if (!openDialog || !invoke || !loadStore) return;
     try {
-      const selected = await openDialog({ directory: true, multiple: false, title: 'Select Data Directory' });
+      const selected = await openDialog({
+        directory: true,
+        multiple: false,
+        title: 'Select Data Directory',
+      });
       if (!selected) return;
       const path = selected as string;
-      if (candidates.includes(path)) { showStatus('Already added'); return; }
-      const valid: boolean = await invoke('check_dir_valid', { path }) as boolean;
-      if (!valid) { showStatus('Not writable'); return; }
+      if (candidates.includes(path)) {
+        showStatus('Already added');
+        return;
+      }
+      const valid: boolean = (await invoke('check_dir_valid', { path })) as boolean;
+      if (!valid) {
+        showStatus('Not writable');
+        return;
+      }
       const updated = [...candidates, path];
       await saveCandidates(updated);
       await dataStore.reloadFromDir(updated);
@@ -1003,14 +1181,15 @@ function DataLocationSection({ open, onToggle }: { open: boolean; onToggle: () =
       title="Data Location"
       accent="#8be9fd"
     >
-      {status && (
-        <div className="text-[10px] text-cyan font-mono mb-1">{status}</div>
-      )}
+      {status && <div className="text-[10px] text-cyan font-mono mb-1">{status}</div>}
 
       {/* Active directory */}
       <div className="flex items-center gap-2 px-2 py-1.5 bg-bg-secondary rounded border border-border-dim">
         <CheckCircleIcon size={11} />
-        <span className="text-[10px] text-text-label font-mono truncate flex-1" title={dataStore.activeDataDir ?? ''}>
+        <span
+          className="text-[10px] text-text-label font-mono truncate flex-1"
+          title={dataStore.activeDataDir ?? ''}
+        >
           {dataStore.activeDataDir ?? 'Default'}
         </span>
       </div>
@@ -1088,9 +1267,11 @@ function BackupsSection({ open, onToggle }: { open: boolean; onToggle: () => voi
 
   function refreshBackups() {
     if (!invoke) return;
-    invoke('list_backups').then((list) => {
-      setBackups(list as BackupEntry[]);
-    }).catch(console.error);
+    invoke('list_backups')
+      .then((list) => {
+        setBackups(list as BackupEntry[]);
+      })
+      .catch(console.error);
   }
 
   // Load backups on first expand (via useEffect since section mounts lazily)
@@ -1154,9 +1335,7 @@ function BackupsSection({ open, onToggle }: { open: boolean; onToggle: () => voi
         Automatically creates backups at session start and every hour.
       </div>
 
-      {status && (
-        <div className="text-[10px] text-cyan font-mono mb-1">{status}</div>
-      )}
+      {status && <div className="text-[10px] text-cyan font-mono mb-1">{status}</div>}
 
       <div className="text-[9px] text-text-dim font-mono">
         Restoring creates a safety backup first.
@@ -1169,7 +1348,10 @@ function BackupsSection({ open, onToggle }: { open: boolean; onToggle: () => voi
       ) : (
         <div className="space-y-1.5">
           {backups.map((entry) => (
-            <div key={entry.path} className="border border-border-dim rounded overflow-hidden group">
+            <div
+              key={entry.path}
+              className="border border-border-dim rounded overflow-hidden group"
+            >
               <div className="flex items-center gap-1 px-2 py-1 bg-bg-secondary">
                 <ClockIcon size={9} />
                 <span className="text-[9px] font-mono text-text-muted">

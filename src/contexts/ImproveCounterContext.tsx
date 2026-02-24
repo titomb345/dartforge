@@ -32,6 +32,7 @@ export const ImproveCounterProvider = ImproveCounterContext.Provider;
 
 export function useImproveCounterContext(): ImproveCounterState {
   const ctx = useContext(ImproveCounterContext);
-  if (!ctx) throw new Error('useImproveCounterContext must be used within an ImproveCounterProvider');
+  if (!ctx)
+    throw new Error('useImproveCounterContext must be used within an ImproveCounterProvider');
   return ctx;
 }

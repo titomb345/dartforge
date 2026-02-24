@@ -26,7 +26,7 @@ const DEFAULT_SOUND_ALERTS: ChatFilters = {
 export function useChatMessages(
   maxMessages = MAX_MESSAGES,
   notificationsRef?: React.RefObject<ChatFilters | null>,
-  chimesRef?: React.RefObject<Chimes>,
+  chimesRef?: React.RefObject<Chimes>
 ) {
   const dataStore = useDataStore();
   const [messages, setMessages] = useState<ChatMessage[]>([]);
@@ -90,9 +90,10 @@ export function useChatMessages(
     // Sound alert
     const s = soundAlertsRef.current;
     if (!msg.isOwn && s[msg.type] && !isMuted && chimesRef?.current) {
-      const audio = msg.type === 'tell' || msg.type === 'sz'
-        ? chimesRef.current.chime2
-        : chimesRef.current.chime1;
+      const audio =
+        msg.type === 'tell' || msg.type === 'sz'
+          ? chimesRef.current.chime2
+          : chimesRef.current.chime1;
       audio.currentTime = 0;
       audio.play().catch(() => {});
     }
@@ -100,11 +101,7 @@ export function useChatMessages(
     // Desktop notification when window is unfocused
     const n = notificationsRef?.current;
     if (n && !msg.isOwn && n[msg.type] && !isMuted && !document.hasFocus()) {
-      alertUser(
-        `${msg.sender} (${msg.type})`,
-        msg.message,
-        `dartforge-chat-${msg.type}`,
-      );
+      alertUser(`${msg.sender} (${msg.type})`, msg.message, `dartforge-chat-${msg.type}`);
     }
 
     setMessages((prev) => {

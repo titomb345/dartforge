@@ -56,34 +56,76 @@ const YEAR_OFFSET: Record<Reckoning, number> = {
 // ── Month names ─────────────────────────────────────────────────
 
 const COMMON_MONTHS = [
-  'Frostflower', 'Icemoon', 'Wolfmoon', 'Wintersebb',
-  'Saprise', 'Petalspread', 'Greentide', 'Midsummer',
-  'Berrymoon', 'Cornripe', 'Harvestmoon', 'Winnowing',
+  'Frostflower',
+  'Icemoon',
+  'Wolfmoon',
+  'Wintersebb',
+  'Saprise',
+  'Petalspread',
+  'Greentide',
+  'Midsummer',
+  'Berrymoon',
+  'Cornripe',
+  'Harvestmoon',
+  'Winnowing',
 ];
 
 const COMMON_MONTHS_ABBREV = [
-  'Ffl', 'Ice', 'Wlf', 'Web', 'Sap', 'Ptl',
-  'Grt', 'Mid', 'Bry', 'Crn', 'Hvt', 'Win',
+  'Ffl',
+  'Ice',
+  'Wlf',
+  'Web',
+  'Sap',
+  'Ptl',
+  'Grt',
+  'Mid',
+  'Bry',
+  'Crn',
+  'Hvt',
+  'Win',
 ];
 
 const THORPIAN_MONTHS = [
-  'Red', 'Orange', 'Yellow', 'Green',
-  'Blue', 'Indigo', 'Violet', 'Octarine',
+  'Red',
+  'Orange',
+  'Yellow',
+  'Green',
+  'Blue',
+  'Indigo',
+  'Violet',
+  'Octarine',
 ];
 
-const THORPIAN_MONTHS_ABBREV = [
-  'Red', 'Org', 'Ylw', 'Grn', 'Blu', 'Ind', 'Vio', 'Oct',
-];
+const THORPIAN_MONTHS_ABBREV = ['Red', 'Org', 'Ylw', 'Grn', 'Blu', 'Ind', 'Vio', 'Oct'];
 
 const ADACHIAN_MONTHS = [
-  'Yayoi', 'Uzuki', 'Satsuki', 'Minazuki',
-  'Fumizuki', 'Hazuki', 'Nagatsuki', 'Kannazuki',
-  'Shimotsuki', 'Shiwasu', 'Mutsuki', 'Kisaragi',
+  'Yayoi',
+  'Uzuki',
+  'Satsuki',
+  'Minazuki',
+  'Fumizuki',
+  'Hazuki',
+  'Nagatsuki',
+  'Kannazuki',
+  'Shimotsuki',
+  'Shiwasu',
+  'Mutsuki',
+  'Kisaragi',
 ];
 
 const ADACHIAN_MONTHS_ABBREV = [
-  'Yay', 'Uzu', 'Saz', 'Min', 'Fum', 'Haz',
-  'Nag', 'Kan', 'Shm', 'Shw', 'Muz', 'Kis',
+  'Yay',
+  'Uzu',
+  'Saz',
+  'Min',
+  'Fum',
+  'Haz',
+  'Nag',
+  'Kan',
+  'Shm',
+  'Shw',
+  'Muz',
+  'Kis',
 ];
 
 const MONTH_NAMES: Record<Reckoning, string[]> = {
@@ -100,17 +142,11 @@ const MONTH_NAMES_ABBREV: Record<Reckoning, string[]> = {
 
 // ── Weekday names ───────────────────────────────────────────────
 
-const COMMON_WEEKDAYS = [
-  'Martin', 'Mahasa', "Tannorat'h", 'Anastasia', 'Sulamar', 'Dannika',
-];
+const COMMON_WEEKDAYS = ['Martin', 'Mahasa', "Tannorat'h", 'Anastasia', 'Sulamar', 'Dannika'];
 
-const THORPIAN_WEEKDAYS = [
-  'Flic', 'Ic', 'Mla', 'Orl', 'Dri', 'Sic', 'Lor', 'Cim',
-];
+const THORPIAN_WEEKDAYS = ['Flic', 'Ic', 'Mla', 'Orl', 'Dri', 'Sic', 'Lor', 'Cim'];
 
-const ADACHIAN_WEEKDAYS = [
-  'Homura', 'Mizu', 'Moku', 'Kane', 'Seki', 'Kuu',
-];
+const ADACHIAN_WEEKDAYS = ['Homura', 'Mizu', 'Moku', 'Kane', 'Seki', 'Kuu'];
 
 const WEEKDAYS: Record<Reckoning, string[]> = {
   [Reckoning.Common]: COMMON_WEEKDAYS,
@@ -304,8 +340,18 @@ export function getReckoningAccent(reckoning: Reckoning, secs?: number | null): 
 
 /** Real-world month abbreviations for date formatting. */
 const REAL_MONTHS = [
-  'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
-  'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
+  'Jan',
+  'Feb',
+  'Mar',
+  'Apr',
+  'May',
+  'Jun',
+  'Jul',
+  'Aug',
+  'Sep',
+  'Oct',
+  'Nov',
+  'Dec',
 ];
 
 /** Pre-built lookup: lowercase month abbreviation → { reckoning, monthIdx } */

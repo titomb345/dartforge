@@ -30,21 +30,11 @@ function formatCompactDuration(ms: number): string {
 
 function StatusDot({ status }: { status: ImproveCounter['status'] }) {
   const color =
-    status === 'running'
-      ? 'bg-green'
-      : status === 'paused'
-        ? 'bg-amber'
-        : 'bg-text-dim';
+    status === 'running' ? 'bg-green' : status === 'paused' ? 'bg-amber' : 'bg-text-dim';
   return <span className={`inline-block w-1.5 h-1.5 rounded-full ${color} shrink-0`} />;
 }
 
-function InlineEdit({
-  value,
-  onSave,
-}: {
-  value: string;
-  onSave: (v: string) => void;
-}) {
+function InlineEdit({ value, onSave }: { value: string; onSave: (v: string) => void }) {
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(value);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -92,9 +82,7 @@ function InlineEdit({
   );
 }
 
-export function CounterPanel({
-  mode = 'slideout',
-}: CounterPanelProps) {
+export function CounterPanel({ mode = 'slideout' }: CounterPanelProps) {
   const {
     counters,
     activeCounterId,
@@ -150,22 +138,16 @@ export function CounterPanel({
   };
 
   // Pin controls (shared between header layouts)
-  const pinControls = isPinned ? (
-    <PinnedControls />
-  ) : (
-    <PinMenuButton panel="counter" />
-  );
+  const pinControls = isPinned ? <PinnedControls /> : <PinMenuButton panel="counter" />;
 
   return (
-    <div
-      className={panelRootClass(isPinned)}
-    >
+    <div className={panelRootClass(isPinned)}>
       {/* Header */}
       <div className="flex items-center justify-between px-3 py-2.5 border-b border-border-subtle shrink-0">
-        <span className="text-[13px] font-semibold text-text-heading flex items-center gap-1.5"><CounterIcon size={12} /> Counters</span>
-        <div className="flex items-center gap-1.5">
-          {pinControls}
-        </div>
+        <span className="text-[13px] font-semibold text-text-heading flex items-center gap-1.5">
+          <CounterIcon size={12} /> Counters
+        </span>
+        <div className="flex items-center gap-1.5">{pinControls}</div>
       </div>
       {/* Counter tabs */}
       <div className="flex items-center gap-1 px-2 py-1.5 border-b border-border-subtle shrink-0">
@@ -233,35 +215,47 @@ export function CounterPanel({
             </div>
 
             {/* Clear */}
-            {(activeCounter.totalImps > 0 || activeCounter.accumulatedMs > 0) && (
-              confirmClear === activeCounter.id ? (
+            {(activeCounter.totalImps > 0 || activeCounter.accumulatedMs > 0) &&
+              (confirmClear === activeCounter.id ? (
                 <button
-                  onClick={() => { clearCounter(activeCounter.id); setConfirmClear(null); }}
+                  onClick={() => {
+                    clearCounter(activeCounter.id);
+                    setConfirmClear(null);
+                  }}
                   className="text-[8px] font-mono text-red border border-red/40 rounded px-1 py-px cursor-pointer hover:bg-red/10 transition-colors duration-150"
                 >
                   Clear?
                 </button>
               ) : (
-                <TinyBtn onClick={() => setConfirmClear(activeCounter.id)} title="Clear counter" accent="dim">
+                <TinyBtn
+                  onClick={() => setConfirmClear(activeCounter.id)}
+                  title="Clear counter"
+                  accent="dim"
+                >
                   <RotateCcwIcon size={8} />
                 </TinyBtn>
-              )
-            )}
+              ))}
             {/* Delete */}
-            {counters.length > 1 && (
-              confirmDelete === activeCounter.id ? (
+            {counters.length > 1 &&
+              (confirmDelete === activeCounter.id ? (
                 <button
-                  onClick={() => { deleteCounter(activeCounter.id); setConfirmDelete(null); }}
+                  onClick={() => {
+                    deleteCounter(activeCounter.id);
+                    setConfirmDelete(null);
+                  }}
                   className="text-[8px] font-mono text-red border border-red/40 rounded px-1 py-px cursor-pointer hover:bg-red/10 transition-colors duration-150"
                 >
                   Del?
                 </button>
               ) : (
-                <TinyBtn onClick={() => setConfirmDelete(activeCounter.id)} title="Delete counter" accent="dim">
+                <TinyBtn
+                  onClick={() => setConfirmDelete(activeCounter.id)}
+                  title="Delete counter"
+                  accent="dim"
+                >
                   <TrashIcon size={8} />
                 </TinyBtn>
-              )
-            )}
+              ))}
             {/* Period config */}
             {editingPeriod ? (
               <input
@@ -282,13 +276,19 @@ export function CounterPanel({
                 }}
                 onKeyDown={(e) => {
                   if (e.key === 'Enter') (e.target as HTMLInputElement).blur();
-                  if (e.key === 'Escape') { setPeriodDraft(String(periodLengthMinutes)); setEditingPeriod(false); }
+                  if (e.key === 'Escape') {
+                    setPeriodDraft(String(periodLengthMinutes));
+                    setEditingPeriod(false);
+                  }
                 }}
                 className="w-7 text-[9px] font-mono text-text-label bg-bg-secondary border border-border-dim rounded px-0.5 py-px outline-none text-center"
               />
             ) : (
               <button
-                onClick={() => { setPeriodDraft(String(periodLengthMinutes)); setEditingPeriod(true); }}
+                onClick={() => {
+                  setPeriodDraft(String(periodLengthMinutes));
+                  setEditingPeriod(true);
+                }}
                 className="text-[9px] font-mono text-text-dim hover:text-text-label cursor-pointer transition-colors duration-150"
                 title="Click to change period length (minutes)"
               >
@@ -453,7 +453,9 @@ function SkillsTable({
           >
             <span className="text-[11px] text-text-primary truncate mr-2">{skill}</span>
             <div className="flex items-center gap-2 shrink-0">
-              <span className="text-[11px] font-mono text-text-label">{count.toLocaleString()}</span>
+              <span className="text-[11px] font-mono text-text-label">
+                {count.toLocaleString()}
+              </span>
               <span className="skill-rate text-[10px] font-mono text-text-label w-10 text-right">
                 ({rate.toFixed(2)})
               </span>

@@ -16,7 +16,7 @@ interface ViewportBudget {
 
 export function useViewportBudget(
   pinnedWidths: { left: number; right: number },
-  panelLayout: PanelLayout,
+  panelLayout: PanelLayout
 ): ViewportBudget {
   const [viewportWidth, setViewportWidth] = useState(window.innerWidth);
 

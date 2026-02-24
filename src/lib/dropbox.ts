@@ -56,7 +56,7 @@ export function buildAuthUrl(
   clientId: string,
   redirectUri: string,
   codeChallenge: string,
-  state: string,
+  state: string
 ): string {
   const params = new URLSearchParams({
     client_id: clientId,
@@ -74,7 +74,7 @@ export async function exchangeCodeForTokens(
   clientId: string,
   redirectUri: string,
   code: string,
-  codeVerifier: string,
+  codeVerifier: string
 ): Promise<DropboxTokens> {
   const resp = await fetch(DROPBOX_TOKEN_URL, {
     method: 'POST',
@@ -101,7 +101,7 @@ export async function exchangeCodeForTokens(
 
 export async function refreshAccessToken(
   clientId: string,
-  refreshToken: string,
+  refreshToken: string
 ): Promise<DropboxTokens> {
   const resp = await fetch(DROPBOX_TOKEN_URL, {
     method: 'POST',
@@ -128,7 +128,10 @@ export async function refreshAccessToken(
 // File API
 // ---------------------------------------------------------------------------
 
-export async function listFiles(accessToken: string, folderPath: string): Promise<DropboxFileEntry[]> {
+export async function listFiles(
+  accessToken: string,
+  folderPath: string
+): Promise<DropboxFileEntry[]> {
   const resp = await fetch(`${DROPBOX_API_URL}/files/list_folder`, {
     method: 'POST',
     headers: {
@@ -152,7 +155,10 @@ export async function listFiles(accessToken: string, folderPath: string): Promis
     }));
 }
 
-export async function listFolders(accessToken: string, path: string): Promise<DropboxFolderEntry[]> {
+export async function listFolders(
+  accessToken: string,
+  path: string
+): Promise<DropboxFolderEntry[]> {
   const resp = await fetch(`${DROPBOX_API_URL}/files/list_folder`, {
     method: 'POST',
     headers: {
@@ -177,7 +183,7 @@ export async function listFolders(accessToken: string, path: string): Promise<Dr
 
 export async function downloadFile(
   accessToken: string,
-  path: string,
+  path: string
 ): Promise<{ content: string; rev: string }> {
   const resp = await fetch(`${DROPBOX_CONTENT_URL}/files/download`, {
     method: 'POST',
@@ -199,7 +205,7 @@ export async function downloadFile(
 export async function uploadFile(
   accessToken: string,
   path: string,
-  content: string,
+  content: string
 ): Promise<string> {
   const resp = await fetch(`${DROPBOX_CONTENT_URL}/files/upload`, {
     method: 'POST',

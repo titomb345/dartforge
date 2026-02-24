@@ -21,10 +21,13 @@ export function SpotlightProvider({ children }: { children: ReactNode }) {
   const [active, setActive] = useState<SpotlightStep | null>(null);
   const [tourQueue, setTourQueue] = useState<SpotlightStep[]>([]);
 
-  const highlight = useCallback((helpId: string, tooltip: string, position?: SpotlightStep['position']) => {
-    setTourQueue([]);
-    setActive({ helpId, tooltip, position });
-  }, []);
+  const highlight = useCallback(
+    (helpId: string, tooltip: string, position?: SpotlightStep['position']) => {
+      setTourQueue([]);
+      setActive({ helpId, tooltip, position });
+    },
+    []
+  );
 
   const startTour = useCallback((steps: SpotlightStep[]) => {
     if (steps.length === 0) return;
@@ -48,9 +51,17 @@ export function SpotlightProvider({ children }: { children: ReactNode }) {
     setTourQueue([]);
   }, []);
 
-  const value = useMemo(() => ({
-    active, tourQueue, highlight, startTour, advanceTour, clear,
-  }), [active, tourQueue, highlight, startTour, advanceTour, clear]);
+  const value = useMemo(
+    () => ({
+      active,
+      tourQueue,
+      highlight,
+      startTour,
+      advanceTour,
+      clear,
+    }),
+    [active, tourQueue, highlight, startTour, advanceTour, clear]
+  );
 
   return <SpotlightCtx.Provider value={value}>{children}</SpotlightCtx.Provider>;
 }

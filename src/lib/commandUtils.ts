@@ -65,7 +65,7 @@ export function parseDirective(cmd: string): ExpandedCommand {
   // /var [-g] <name> <value>
   const varMatch = trimmed.match(/^\/var\s+(-g\s+)?(\S+)\s+(.+)$/i);
   if (varMatch) {
-    const scope = varMatch[1] ? 'global' as const : 'character' as const;
+    const scope = varMatch[1] ? ('global' as const) : ('character' as const);
     return { type: 'var', name: varMatch[2], value: varMatch[3], scope };
   }
 
@@ -87,7 +87,7 @@ export function parseDirective(cmd: string): ExpandedCommand {
 export function formatCommandPreview(
   commands: ExpandedCommand[],
   expand?: (input: string) => ExpandedCommand[],
-  spamDepth = 0,
+  spamDepth = 0
 ): string[] {
   const lines: string[] = [];
   for (const cmd of commands) {
@@ -146,7 +146,7 @@ export async function executeCommands(
   commands: ExpandedCommand[],
   runner: CommandRunner,
   spamDepth = 0,
-  localVars?: Variable[],
+  localVars?: Variable[]
 ): Promise<void> {
   // Local overrides accumulate /var sets during this execution.
   // Placed BEFORE runner vars so they win on name collisions.
@@ -189,7 +189,14 @@ export async function executeCommands(
         const value = ev(cmd.value);
         runner.setVar(cmd.name, value, cmd.scope);
         // Add to local overrides so subsequent commands see it immediately
-        overrides.push({ id: '', name: cmd.name, value, enabled: true, createdAt: '', updatedAt: '' });
+        overrides.push({
+          id: '',
+          name: cmd.name,
+          value,
+          enabled: true,
+          createdAt: '',
+          updatedAt: '',
+        });
         runner.echo(`$${cmd.name} = ${value} (${cmd.scope})`);
         break;
       }

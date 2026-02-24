@@ -12,12 +12,12 @@ export interface TimerState {
       intervalSeconds: number;
       group: string;
     },
-    scope: TimerScope,
+    scope: TimerScope
   ) => TimerId;
   updateTimer: (
     id: TimerId,
     updates: Partial<Omit<Timer, 'id' | 'createdAt'>>,
-    scope: TimerScope,
+    scope: TimerScope
   ) => void;
   deleteTimer: (id: TimerId, scope: TimerScope) => void;
   toggleTimer: (id: TimerId, scope: TimerScope) => void;

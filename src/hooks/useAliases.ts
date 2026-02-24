@@ -28,10 +28,7 @@ export function useAliases(dataStore: DataStore, activeCharacter: string | null)
     if (!dataStore.ready) return;
     (async () => {
       try {
-        const savedGlobal = await dataStore.get<Record<AliasId, Alias>>(
-          ALIASES_FILE,
-          GLOBAL_KEY,
-        );
+        const savedGlobal = await dataStore.get<Record<AliasId, Alias>>(ALIASES_FILE, GLOBAL_KEY);
         if (savedGlobal) setGlobalAliases(savedGlobal);
 
         const savedSpeedwalk = await dataStore.get<boolean>(SETTINGS_FILE, SPEEDWALK_KEY);
@@ -105,7 +102,7 @@ export function useAliases(dataStore: DataStore, activeCharacter: string | null)
         body: string;
         group: string;
       },
-      scope: AliasScope,
+      scope: AliasScope
     ): AliasId => {
       const now = new Date().toISOString();
       const alias: Alias = {
@@ -126,7 +123,7 @@ export function useAliases(dataStore: DataStore, activeCharacter: string | null)
       }
       return alias.id;
     },
-    [],
+    []
   );
 
   const updateAlias = useCallback(
@@ -144,7 +141,7 @@ export function useAliases(dataStore: DataStore, activeCharacter: string | null)
         setGlobalAliases(updater);
       }
     },
-    [],
+    []
   );
 
   const deleteAlias = useCallback((id: AliasId, scope: AliasScope) => {
@@ -191,10 +188,10 @@ export function useAliases(dataStore: DataStore, activeCharacter: string | null)
           body: original.body,
           group: original.group,
         },
-        scope,
+        scope
       );
     },
-    [characterAliases, globalAliases, createAlias],
+    [characterAliases, globalAliases, createAlias]
   );
 
   // Merged list for the expansion engine (character first for priority)

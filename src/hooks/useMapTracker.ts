@@ -52,7 +52,7 @@ export interface MapTrackerActions {
 
 export function useMapTracker(
   dataStore: DataStore,
-  activeCharacter: string | null,
+  activeCharacter: string | null
 ): MapTrackerState & MapTrackerActions {
   const graphRef = useRef<MapGraph>(createGraph());
   const [state, setState] = useState<MapTrackerState>({
@@ -89,55 +89,58 @@ export function useMapTracker(
   }, []);
 
   // Handle parsed hex room
-  const handleHexRoom = useCallback((parsed: ParsedHexRoom) => {
-    const graph = graphRef.current;
-    const tracker = movementTracker.current;
+  const handleHexRoom = useCallback(
+    (parsed: ParsedHexRoom) => {
+      const graph = graphRef.current;
+      const tracker = movementTracker.current;
 
-    // Get pending movement
-    const prevRoomId = tracker.getCurrentRoomId();
-    const movement = prevRoomId ? tracker.onRoomParsed('') : null; // pass empty, we'll set it below
+      // Get pending movement
+      const prevRoomId = tracker.getCurrentRoomId();
+      const movement = prevRoomId ? tracker.onRoomParsed('') : null; // pass empty, we'll set it below
 
-    let coords: HexCoord;
-    let roomId: string;
+      let coords: HexCoord;
+      let roomId: string;
 
-    if (movement && graph.rooms[movement.fromRoomId]) {
-      // We have a movement direction + known previous hex → compute new coords
-      const fromRoom = graph.rooms[movement.fromRoomId];
-      const { coords: newCoords, collision } = assignCoords(graph, fromRoom, movement.direction);
+      if (movement && graph.rooms[movement.fromRoomId]) {
+        // We have a movement direction + known previous hex → compute new coords
+        const fromRoom = graph.rooms[movement.fromRoomId];
+        const { coords: newCoords, collision } = assignCoords(graph, fromRoom, movement.direction);
 
-      if (collision) {
-        // Room already exists at this position — revisit it
-        coords = newCoords;
-        roomId = collision;
+        if (collision) {
+          // Room already exists at this position — revisit it
+          coords = newCoords;
+          roomId = collision;
+        } else {
+          coords = newCoords;
+          roomId = makeHexRoomId(coords.q, coords.r);
+        }
+      } else if (prevRoomId && graph.rooms[prevRoomId]) {
+        // No movement context (look/survey) — stay at current position
+        coords = graph.rooms[prevRoomId].coords;
+        roomId = prevRoomId;
       } else {
-        coords = newCoords;
-        roomId = makeHexRoomId(coords.q, coords.r);
+        // First hex room ever — place at origin
+        coords = { q: 0, r: 0 };
+        roomId = makeHexRoomId(0, 0);
       }
-    } else if (prevRoomId && graph.rooms[prevRoomId]) {
-      // No movement context (look/survey) — stay at current position
-      coords = graph.rooms[prevRoomId].coords;
-      roomId = prevRoomId;
-    } else {
-      // First hex room ever — place at origin
-      coords = { q: 0, r: 0 };
-      roomId = makeHexRoomId(0, 0);
-    }
 
-    // Upsert room
-    upsertRoom(graph, roomId, coords, parsed.terrain, parsed.description, parsed.landmarks);
+      // Upsert room
+      upsertRoom(graph, roomId, coords, parsed.terrain, parsed.description, parsed.landmarks);
 
-    // Link rooms if we moved
-    if (movement && graph.rooms[movement.fromRoomId] && movement.fromRoomId !== roomId) {
-      linkRooms(graph, movement.fromRoomId, roomId, movement.direction);
-    }
+      // Link rooms if we moved
+      if (movement && graph.rooms[movement.fromRoomId] && movement.fromRoomId !== roomId) {
+        linkRooms(graph, movement.fromRoomId, roomId, movement.direction);
+      }
 
-    // Update tracker's current room to the actual room ID
-    tracker.setCurrentRoom(roomId);
+      // Update tracker's current room to the actual room ID
+      tracker.setCurrentRoom(roomId);
 
-    graph.currentRoomId = roomId;
-    syncState();
-    scheduleSave();
-  }, [syncState, scheduleSave]);
+      graph.currentRoomId = roomId;
+      syncState();
+      scheduleSave();
+    },
+    [syncState, scheduleSave]
+  );
 
   // Initialize parser
   if (!parserRef.current) {
@@ -159,10 +162,10 @@ export function useMapTracker(
     loadedCharRef.current = activeCharacter;
 
     (async () => {
-      const data = await dataStore.get<{ rooms: Record<string, MapRoom>; currentRoomId: string | null }>(
-        mapFilename(activeCharacter),
-        'mapData',
-      );
+      const data = await dataStore.get<{
+        rooms: Record<string, MapRoom>;
+        currentRoomId: string | null;
+      }>(mapFilename(activeCharacter), 'mapData');
       if (data) {
         graphRef.current = deserializeGraph(data);
         if (graphRef.current.currentRoomId) {
@@ -200,14 +203,17 @@ export function useMapTracker(
     return graphRef.current.rooms[id];
   }, []);
 
-  const setRoomNotes = useCallback((roomId: string, notes: string) => {
-    const room = graphRef.current.rooms[roomId];
-    if (room) {
-      room.notes = notes;
-      syncState();
-      scheduleSave();
-    }
-  }, [syncState, scheduleSave]);
+  const setRoomNotes = useCallback(
+    (roomId: string, notes: string) => {
+      const room = graphRef.current.rooms[roomId];
+      if (room) {
+        room.notes = notes;
+        syncState();
+        scheduleSave();
+      }
+    },
+    [syncState, scheduleSave]
+  );
 
   const clearMap = useCallback(() => {
     graphRef.current = createGraph();

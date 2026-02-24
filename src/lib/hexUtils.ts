@@ -23,12 +23,18 @@ export type Direction = 'n' | 's' | 'ne' | 'nw' | 'se' | 'sw';
 
 /** Full direction names → short codes */
 const DIR_ALIASES: Record<string, Direction> = {
-  north: 'n', south: 's',
-  northeast: 'ne', northwest: 'nw',
-  southeast: 'se', southwest: 'sw',
-  n: 'n', s: 's',
-  ne: 'ne', nw: 'nw',
-  se: 'se', sw: 'sw',
+  north: 'n',
+  south: 's',
+  northeast: 'ne',
+  northwest: 'nw',
+  southeast: 'se',
+  southwest: 'sw',
+  n: 'n',
+  s: 's',
+  ne: 'ne',
+  nw: 'nw',
+  se: 'se',
+  sw: 'sw',
 };
 
 /**
@@ -46,19 +52,22 @@ export function parseDirection(input: string): Direction | null {
  *   se: (+1,  0)    nw: (-1,  0)
  */
 const DIR_OFFSETS: Record<Direction, { dq: number; dr: number }> = {
-  n:  { dq:  0, dr: -1 },
-  s:  { dq:  0, dr:  1 },
-  ne: { dq:  1, dr: -1 },
-  sw: { dq: -1, dr:  1 },
-  se: { dq:  1, dr:  0 },
-  nw: { dq: -1, dr:  0 },
+  n: { dq: 0, dr: -1 },
+  s: { dq: 0, dr: 1 },
+  ne: { dq: 1, dr: -1 },
+  sw: { dq: -1, dr: 1 },
+  se: { dq: 1, dr: 0 },
+  nw: { dq: -1, dr: 0 },
 };
 
 /** Opposite direction mapping */
 const OPPOSITE: Record<Direction, Direction> = {
-  n: 's', s: 'n',
-  ne: 'sw', sw: 'ne',
-  nw: 'se', se: 'nw',
+  n: 's',
+  s: 'n',
+  ne: 'sw',
+  sw: 'ne',
+  nw: 'se',
+  se: 'nw',
 };
 
 export function oppositeDirection(dir: Direction): Direction {
@@ -92,7 +101,7 @@ export function getDirectionOffset(dir: Direction): { dq: number; dr: number } {
  */
 export function hexToPixel(q: number, r: number, size: number): { x: number; y: number } {
   const x = size * (3 / 2) * q;
-  const y = size * (Math.sqrt(3) / 2 * q + Math.sqrt(3) * r);
+  const y = size * ((Math.sqrt(3) / 2) * q + Math.sqrt(3) * r);
   return { x, y };
 }
 
@@ -100,8 +109,8 @@ export function hexToPixel(q: number, r: number, size: number): { x: number; y: 
  * Convert pixel position to the nearest axial hex coordinate.
  */
 export function pixelToHex(px: number, py: number, size: number): { q: number; r: number } {
-  const q = (2 / 3 * px) / size;
-  const r = (-1 / 3 * px + Math.sqrt(3) / 3 * py) / size;
+  const q = ((2 / 3) * px) / size;
+  const r = ((-1 / 3) * px + (Math.sqrt(3) / 3) * py) / size;
   return hexRound(q, r);
 }
 
@@ -153,8 +162,12 @@ export function coordKey(coord: HexCoord): string {
  * Direction label for display.
  */
 const DIR_LABELS: Record<Direction, string> = {
-  n: 'N', ne: 'NE', se: 'SE',
-  s: 'S', sw: 'SW', nw: 'NW',
+  n: 'N',
+  ne: 'NE',
+  se: 'SE',
+  s: 'S',
+  sw: 'SW',
+  nw: 'NW',
 };
 
 export function directionLabel(dir: Direction): string {

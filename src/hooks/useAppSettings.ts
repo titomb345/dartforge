@@ -5,20 +5,33 @@ import type { ChatFilters } from '../types/chat';
 
 let invoke: ((cmd: string, args?: Record<string, unknown>) => Promise<unknown>) | null = null;
 if (getPlatform() === 'tauri') {
-  import('@tauri-apps/api/core').then((m) => { invoke = m.invoke; });
+  import('@tauri-apps/api/core').then((m) => {
+    invoke = m.invoke;
+  });
 }
 
 const SETTINGS_FILE = 'settings.json';
 
 export const DEFAULT_NUMPAD_MAPPINGS: Record<string, string> = {
-  Numpad7: 'nw', Numpad8: 'n', Numpad9: 'ne',
-  Numpad4: 'w', Numpad5: 'd', Numpad6: 'e',
-  Numpad1: 'sw', Numpad2: 's', Numpad3: 'se',
-  Numpad0: 'u', NumpadAdd: 'back',
+  Numpad7: 'nw',
+  Numpad8: 'n',
+  Numpad9: 'ne',
+  Numpad4: 'w',
+  Numpad5: 'd',
+  Numpad6: 'e',
+  Numpad1: 'sw',
+  Numpad2: 's',
+  Numpad3: 'se',
+  Numpad0: 'u',
+  NumpadAdd: 'back',
 };
 
 const DEFAULT_NOTIFICATIONS: ChatFilters = {
-  say: false, shout: false, ooc: false, tell: false, sz: false,
+  say: false,
+  shout: false,
+  ooc: false,
+  tell: false,
+  sz: false,
 };
 
 export type TimestampFormat = '12h' | '24h';
@@ -67,13 +80,17 @@ export function useAppSettings() {
   const [sessionLoggingEnabled, setSessionLoggingEnabled] = useState(false);
 
   // Numpad mappings
-  const [numpadMappings, setNumpadMappings] = useState<Record<string, string>>({ ...DEFAULT_NUMPAD_MAPPINGS });
+  const [numpadMappings, setNumpadMappings] = useState<Record<string, string>>({
+    ...DEFAULT_NUMPAD_MAPPINGS,
+  });
 
   // Auto-backup
   const [autoBackupEnabled, setAutoBackupEnabled] = useState(true);
 
   // Desktop notifications per chat type
-  const [chatNotifications, setChatNotifications] = useState<ChatFilters>({ ...DEFAULT_NOTIFICATIONS });
+  const [chatNotifications, setChatNotifications] = useState<ChatFilters>({
+    ...DEFAULT_NOTIFICATIONS,
+  });
 
   // Custom chime sounds (original filename for display, null = default)
   const [customChime1, setCustomChime1] = useState<string | null>(null);
@@ -86,6 +103,13 @@ export function useAppSettings() {
   // Help guide
   const [hasSeenGuide, setHasSeenGuide] = useState(false);
 
+  // Action blocking
+  const [actionBlockingEnabled, setActionBlockingEnabled] = useState(true);
+
+  // Who list auto-refresh
+  const [whoAutoRefreshEnabled, setWhoAutoRefreshEnabled] = useState(true);
+  const [whoRefreshMinutes, setWhoRefreshMinutes] = useState(5);
+
   // Post-sync commands
   const [postSyncEnabled, setPostSyncEnabled] = useState(false);
   const [postSyncCommands, setPostSyncCommands] = useState('');
@@ -93,7 +117,9 @@ export function useAppSettings() {
   // Auto-login (names stored in settings.json, passwords in OS keyring)
   const [autoLoginEnabled, setAutoLoginEnabled] = useState(false);
   const [autoLoginActiveSlot, setAutoLoginActiveSlot] = useState<0 | 1>(0);
-  const [autoLoginCharacters, setAutoLoginCharacters] = useState<[CharacterProfile | null, CharacterProfile | null]>([null, null]);
+  const [autoLoginCharacters, setAutoLoginCharacters] = useState<
+    [CharacterProfile | null, CharacterProfile | null]
+  >([null, null]);
   const [lastLoginTimestamp, setLastLoginTimestamp] = useState<number | null>(null);
   const [lastLoginSlot, setLastLoginSlot] = useState<0 | 1 | null>(null);
 
@@ -127,9 +153,15 @@ export function useAppSettings() {
       if (savedAntiIdleCommand != null) setAntiIdleCommand(savedAntiIdleCommand);
       const savedAntiIdleMinutes = await dataStore.get<number>(SETTINGS_FILE, 'antiIdleMinutes');
       if (savedAntiIdleMinutes != null) setAntiIdleMinutes(savedAntiIdleMinutes);
-      const savedAlignmentEnabled = await dataStore.get<boolean>(SETTINGS_FILE, 'alignmentTrackingEnabled');
+      const savedAlignmentEnabled = await dataStore.get<boolean>(
+        SETTINGS_FILE,
+        'alignmentTrackingEnabled'
+      );
       if (savedAlignmentEnabled != null) setAlignmentTrackingEnabled(savedAlignmentEnabled);
-      const savedAlignmentMinutes = await dataStore.get<number>(SETTINGS_FILE, 'alignmentTrackingMinutes');
+      const savedAlignmentMinutes = await dataStore.get<number>(
+        SETTINGS_FILE,
+        'alignmentTrackingMinutes'
+      );
       if (savedAlignmentMinutes != null) setAlignmentTrackingMinutes(savedAlignmentMinutes);
       const savedBoardDates = await dataStore.get<boolean>(SETTINGS_FILE, 'boardDatesEnabled');
       if (savedBoardDates != null) setBoardDatesEnabled(savedBoardDates);
@@ -138,11 +170,14 @@ export function useAppSettings() {
 
       // New settings
       const savedScrollback = await dataStore.get<number>(SETTINGS_FILE, 'terminalScrollback');
-      if (savedScrollback != null && savedScrollback >= 1000) setTerminalScrollback(savedScrollback);
+      if (savedScrollback != null && savedScrollback >= 1000)
+        setTerminalScrollback(savedScrollback);
       const savedHistorySize = await dataStore.get<number>(SETTINGS_FILE, 'commandHistorySize');
-      if (savedHistorySize != null && savedHistorySize >= 50) setCommandHistorySize(savedHistorySize);
+      if (savedHistorySize != null && savedHistorySize >= 50)
+        setCommandHistorySize(savedHistorySize);
       const savedChatHistorySize = await dataStore.get<number>(SETTINGS_FILE, 'chatHistorySize');
-      if (savedChatHistorySize != null && savedChatHistorySize >= 50) setChatHistorySize(savedChatHistorySize);
+      if (savedChatHistorySize != null && savedChatHistorySize >= 50)
+        setChatHistorySize(savedChatHistorySize);
       const savedTsFormat = await dataStore.get<TimestampFormat>(SETTINGS_FILE, 'timestampFormat');
       if (savedTsFormat === '12h' || savedTsFormat === '24h') setTimestampFormat(savedTsFormat);
       const savedEcho = await dataStore.get<boolean>(SETTINGS_FILE, 'commandEchoEnabled');
@@ -151,14 +186,24 @@ export function useAppSettings() {
       if (savedTimerBadges != null) setShowTimerBadges(savedTimerBadges);
       const savedLogging = await dataStore.get<boolean>(SETTINGS_FILE, 'sessionLoggingEnabled');
       if (savedLogging != null) setSessionLoggingEnabled(savedLogging);
-      const savedNumpad = await dataStore.get<Record<string, string>>(SETTINGS_FILE, 'numpadMappings');
+      const savedNumpad = await dataStore.get<Record<string, string>>(
+        SETTINGS_FILE,
+        'numpadMappings'
+      );
       if (savedNumpad != null && typeof savedNumpad === 'object' && !Array.isArray(savedNumpad)) {
         setNumpadMappings(savedNumpad);
       }
       const savedAutoBackup = await dataStore.get<boolean>(SETTINGS_FILE, 'autoBackupEnabled');
       if (savedAutoBackup != null) setAutoBackupEnabled(savedAutoBackup);
-      const savedNotifications = await dataStore.get<ChatFilters>(SETTINGS_FILE, 'chatNotifications');
-      if (savedNotifications != null && typeof savedNotifications === 'object' && !Array.isArray(savedNotifications)) {
+      const savedNotifications = await dataStore.get<ChatFilters>(
+        SETTINGS_FILE,
+        'chatNotifications'
+      );
+      if (
+        savedNotifications != null &&
+        typeof savedNotifications === 'object' &&
+        !Array.isArray(savedNotifications)
+      ) {
         setChatNotifications(savedNotifications);
       }
       const savedCustomChime1 = await dataStore.get<string | null>(SETTINGS_FILE, 'customChime1');
@@ -166,11 +211,26 @@ export function useAppSettings() {
       const savedCustomChime2 = await dataStore.get<string | null>(SETTINGS_FILE, 'customChime2');
       if (savedCustomChime2 !== undefined) setCustomChime2(savedCustomChime2);
       const savedHotThreshold = await dataStore.get<number>(SETTINGS_FILE, 'counterHotThreshold');
-      if (savedHotThreshold != null && savedHotThreshold >= 0) setCounterHotThreshold(savedHotThreshold);
+      if (savedHotThreshold != null && savedHotThreshold >= 0)
+        setCounterHotThreshold(savedHotThreshold);
       const savedColdThreshold = await dataStore.get<number>(SETTINGS_FILE, 'counterColdThreshold');
-      if (savedColdThreshold != null && savedColdThreshold >= 0) setCounterColdThreshold(savedColdThreshold);
+      if (savedColdThreshold != null && savedColdThreshold >= 0)
+        setCounterColdThreshold(savedColdThreshold);
       const savedHasSeenGuide = await dataStore.get<boolean>(SETTINGS_FILE, 'hasSeenGuide');
       if (savedHasSeenGuide != null) setHasSeenGuide(savedHasSeenGuide);
+      const savedActionBlocking = await dataStore.get<boolean>(
+        SETTINGS_FILE,
+        'actionBlockingEnabled'
+      );
+      if (savedActionBlocking != null) setActionBlockingEnabled(savedActionBlocking);
+      const savedWhoAutoRefresh = await dataStore.get<boolean>(
+        SETTINGS_FILE,
+        'whoAutoRefreshEnabled'
+      );
+      if (savedWhoAutoRefresh != null) setWhoAutoRefreshEnabled(savedWhoAutoRefresh);
+      const savedWhoMinutes = await dataStore.get<number>(SETTINGS_FILE, 'whoRefreshMinutes');
+      if (savedWhoMinutes != null && savedWhoMinutes >= 1) setWhoRefreshMinutes(savedWhoMinutes);
+
       const savedPostSyncEnabled = await dataStore.get<boolean>(SETTINGS_FILE, 'postSyncEnabled');
       if (savedPostSyncEnabled != null) setPostSyncEnabled(savedPostSyncEnabled);
       const savedPostSyncCommands = await dataStore.get<string>(SETTINGS_FILE, 'postSyncCommands');
@@ -179,9 +239,16 @@ export function useAppSettings() {
       // Auto-login (names from settings, passwords from OS keyring)
       const savedAutoLoginEnabled = await dataStore.get<boolean>(SETTINGS_FILE, 'autoLoginEnabled');
       if (savedAutoLoginEnabled != null) setAutoLoginEnabled(savedAutoLoginEnabled);
-      const savedAutoLoginActiveSlot = await dataStore.get<number>(SETTINGS_FILE, 'autoLoginActiveSlot');
-      if (savedAutoLoginActiveSlot === 0 || savedAutoLoginActiveSlot === 1) setAutoLoginActiveSlot(savedAutoLoginActiveSlot);
-      const savedNames = await dataStore.get<[string | null, string | null]>(SETTINGS_FILE, 'autoLoginNames');
+      const savedAutoLoginActiveSlot = await dataStore.get<number>(
+        SETTINGS_FILE,
+        'autoLoginActiveSlot'
+      );
+      if (savedAutoLoginActiveSlot === 0 || savedAutoLoginActiveSlot === 1)
+        setAutoLoginActiveSlot(savedAutoLoginActiveSlot);
+      const savedNames = await dataStore.get<[string | null, string | null]>(
+        SETTINGS_FILE,
+        'autoLoginNames'
+      );
       if (Array.isArray(savedNames) && savedNames.length === 2) {
         // Load passwords from keyring for each slot that has a name
         const profiles: [CharacterProfile | null, CharacterProfile | null] = [null, null];
@@ -191,15 +258,22 @@ export function useAppSettings() {
             let pw: string | null = null;
             if (invoke) {
               try {
-                pw = await invoke('get_credential', { account: `dartmud-slot-${slot}` }) as string | null;
-              } catch { /* keyring unavailable */ }
+                pw = (await invoke('get_credential', { account: `dartmud-slot-${slot}` })) as
+                  | string
+                  | null;
+              } catch {
+                /* keyring unavailable */
+              }
             }
             profiles[slot] = { name, password: pw ?? '' };
           }
         }
         setAutoLoginCharacters(profiles);
       }
-      const savedLastLoginTimestamp = await dataStore.get<number | null>(SETTINGS_FILE, 'lastLoginTimestamp');
+      const savedLastLoginTimestamp = await dataStore.get<number | null>(
+        SETTINGS_FILE,
+        'lastLoginTimestamp'
+      );
       if (savedLastLoginTimestamp !== undefined) setLastLoginTimestamp(savedLastLoginTimestamp);
       const savedLastLoginSlot = await dataStore.get<number | null>(SETTINGS_FILE, 'lastLoginSlot');
       if (savedLastLoginSlot === 0 || savedLastLoginSlot === 1 || savedLastLoginSlot === null) {
@@ -211,236 +285,392 @@ export function useAppSettings() {
   }, [dataStore.ready]);
 
   // Persist helper
-  const persist = useCallback((key: string, value: unknown) => {
-    if (!loaded.current) return;
-    dataStore.set(SETTINGS_FILE, key, value).catch(console.error);
-  }, [dataStore]);
+  const persist = useCallback(
+    (key: string, value: unknown) => {
+      if (!loaded.current) return;
+      dataStore.set(SETTINGS_FILE, key, value).catch(console.error);
+    },
+    [dataStore]
+  );
 
   /* ── Change handlers (existing settings) ───────────────── */
 
-  const updateAntiIdleEnabled = useCallback((v: boolean) => {
-    setAntiIdleEnabled(v);
-    persist('antiIdleEnabled', v);
-  }, [persist]);
+  const updateAntiIdleEnabled = useCallback(
+    (v: boolean) => {
+      setAntiIdleEnabled(v);
+      persist('antiIdleEnabled', v);
+    },
+    [persist]
+  );
 
-  const updateAntiIdleCommand = useCallback((v: string) => {
-    setAntiIdleCommand(v);
-    persist('antiIdleCommand', v);
-  }, [persist]);
+  const updateAntiIdleCommand = useCallback(
+    (v: string) => {
+      setAntiIdleCommand(v);
+      persist('antiIdleCommand', v);
+    },
+    [persist]
+  );
 
-  const updateAntiIdleMinutes = useCallback((v: number) => {
-    setAntiIdleMinutes(v);
-    persist('antiIdleMinutes', v);
-  }, [persist]);
+  const updateAntiIdleMinutes = useCallback(
+    (v: number) => {
+      setAntiIdleMinutes(v);
+      persist('antiIdleMinutes', v);
+    },
+    [persist]
+  );
 
-  const updateAlignmentTrackingEnabled = useCallback((v: boolean) => {
-    setAlignmentTrackingEnabled(v);
-    persist('alignmentTrackingEnabled', v);
-    // Alignment polling replaces anti-idle — force it off when enabling
-    if (v) {
-      setAntiIdleEnabled(false);
-      persist('antiIdleEnabled', false);
-    }
-  }, [persist]);
+  const updateAlignmentTrackingEnabled = useCallback(
+    (v: boolean) => {
+      setAlignmentTrackingEnabled(v);
+      persist('alignmentTrackingEnabled', v);
+      // Alignment polling replaces anti-idle — force it off when enabling
+      if (v) {
+        setAntiIdleEnabled(false);
+        persist('antiIdleEnabled', false);
+      }
+    },
+    [persist]
+  );
 
-  const updateAlignmentTrackingMinutes = useCallback((v: number) => {
-    setAlignmentTrackingMinutes(v);
-    persist('alignmentTrackingMinutes', v);
-  }, [persist]);
+  const updateAlignmentTrackingMinutes = useCallback(
+    (v: number) => {
+      setAlignmentTrackingMinutes(v);
+      persist('alignmentTrackingMinutes', v);
+    },
+    [persist]
+  );
 
-  const updateBoardDatesEnabled = useCallback((v: boolean) => {
-    setBoardDatesEnabled(v);
-    persist('boardDatesEnabled', v);
-  }, [persist]);
+  const updateBoardDatesEnabled = useCallback(
+    (v: boolean) => {
+      setBoardDatesEnabled(v);
+      persist('boardDatesEnabled', v);
+    },
+    [persist]
+  );
 
-  const updateStripPromptsEnabled = useCallback((v: boolean) => {
-    setStripPromptsEnabled(v);
-    persist('stripPromptsEnabled', v);
-  }, [persist]);
+  const updateStripPromptsEnabled = useCallback(
+    (v: boolean) => {
+      setStripPromptsEnabled(v);
+      persist('stripPromptsEnabled', v);
+    },
+    [persist]
+  );
 
   /* ── Change handlers (new settings) ────────────────────── */
 
-  const updateTerminalScrollback = useCallback((v: number) => {
-    setTerminalScrollback(v);
-    persist('terminalScrollback', v);
-  }, [persist]);
+  const updateTerminalScrollback = useCallback(
+    (v: number) => {
+      setTerminalScrollback(v);
+      persist('terminalScrollback', v);
+    },
+    [persist]
+  );
 
-  const updateCommandHistorySize = useCallback((v: number) => {
-    setCommandHistorySize(v);
-    persist('commandHistorySize', v);
-  }, [persist]);
+  const updateCommandHistorySize = useCallback(
+    (v: number) => {
+      setCommandHistorySize(v);
+      persist('commandHistorySize', v);
+    },
+    [persist]
+  );
 
-  const updateChatHistorySize = useCallback((v: number) => {
-    setChatHistorySize(v);
-    persist('chatHistorySize', v);
-  }, [persist]);
+  const updateChatHistorySize = useCallback(
+    (v: number) => {
+      setChatHistorySize(v);
+      persist('chatHistorySize', v);
+    },
+    [persist]
+  );
 
-  const updateTimestampFormat = useCallback((v: TimestampFormat) => {
-    setTimestampFormat(v);
-    persist('timestampFormat', v);
-  }, [persist]);
+  const updateTimestampFormat = useCallback(
+    (v: TimestampFormat) => {
+      setTimestampFormat(v);
+      persist('timestampFormat', v);
+    },
+    [persist]
+  );
 
-  const updateCommandEchoEnabled = useCallback((v: boolean) => {
-    setCommandEchoEnabled(v);
-    persist('commandEchoEnabled', v);
-  }, [persist]);
+  const updateCommandEchoEnabled = useCallback(
+    (v: boolean) => {
+      setCommandEchoEnabled(v);
+      persist('commandEchoEnabled', v);
+    },
+    [persist]
+  );
 
-  const updateShowTimerBadges = useCallback((v: boolean) => {
-    setShowTimerBadges(v);
-    persist('showTimerBadges', v);
-  }, [persist]);
+  const updateShowTimerBadges = useCallback(
+    (v: boolean) => {
+      setShowTimerBadges(v);
+      persist('showTimerBadges', v);
+    },
+    [persist]
+  );
 
-  const updateSessionLoggingEnabled = useCallback((v: boolean) => {
-    setSessionLoggingEnabled(v);
-    persist('sessionLoggingEnabled', v);
-  }, [persist]);
+  const updateSessionLoggingEnabled = useCallback(
+    (v: boolean) => {
+      setSessionLoggingEnabled(v);
+      persist('sessionLoggingEnabled', v);
+    },
+    [persist]
+  );
 
-  const updateNumpadMappings = useCallback((v: Record<string, string>) => {
-    setNumpadMappings(v);
-    persist('numpadMappings', v);
-  }, [persist]);
+  const updateNumpadMappings = useCallback(
+    (v: Record<string, string>) => {
+      setNumpadMappings(v);
+      persist('numpadMappings', v);
+    },
+    [persist]
+  );
 
-  const updateAutoBackupEnabled = useCallback((v: boolean) => {
-    setAutoBackupEnabled(v);
-    persist('autoBackupEnabled', v);
-  }, [persist]);
+  const updateAutoBackupEnabled = useCallback(
+    (v: boolean) => {
+      setAutoBackupEnabled(v);
+      persist('autoBackupEnabled', v);
+    },
+    [persist]
+  );
 
-  const updateChatNotifications = useCallback((v: ChatFilters) => {
-    setChatNotifications(v);
-    persist('chatNotifications', v);
-  }, [persist]);
+  const updateChatNotifications = useCallback(
+    (v: ChatFilters) => {
+      setChatNotifications(v);
+      persist('chatNotifications', v);
+    },
+    [persist]
+  );
 
-  const updateCustomChime1 = useCallback((v: string | null) => {
-    setCustomChime1(v);
-    persist('customChime1', v);
-  }, [persist]);
+  const updateCustomChime1 = useCallback(
+    (v: string | null) => {
+      setCustomChime1(v);
+      persist('customChime1', v);
+    },
+    [persist]
+  );
 
-  const updateCustomChime2 = useCallback((v: string | null) => {
-    setCustomChime2(v);
-    persist('customChime2', v);
-  }, [persist]);
+  const updateCustomChime2 = useCallback(
+    (v: string | null) => {
+      setCustomChime2(v);
+      persist('customChime2', v);
+    },
+    [persist]
+  );
 
-  const updateCounterHotThreshold = useCallback((v: number) => {
-    setCounterHotThreshold(v);
-    persist('counterHotThreshold', v);
-  }, [persist]);
+  const updateCounterHotThreshold = useCallback(
+    (v: number) => {
+      setCounterHotThreshold(v);
+      persist('counterHotThreshold', v);
+    },
+    [persist]
+  );
 
-  const updateCounterColdThreshold = useCallback((v: number) => {
-    setCounterColdThreshold(v);
-    persist('counterColdThreshold', v);
-  }, [persist]);
+  const updateCounterColdThreshold = useCallback(
+    (v: number) => {
+      setCounterColdThreshold(v);
+      persist('counterColdThreshold', v);
+    },
+    [persist]
+  );
 
-  const updateHasSeenGuide = useCallback((v: boolean) => {
-    setHasSeenGuide(v);
-    persist('hasSeenGuide', v);
-  }, [persist]);
+  const updateHasSeenGuide = useCallback(
+    (v: boolean) => {
+      setHasSeenGuide(v);
+      persist('hasSeenGuide', v);
+    },
+    [persist]
+  );
 
-  const updatePostSyncEnabled = useCallback((v: boolean) => {
-    setPostSyncEnabled(v);
-    persist('postSyncEnabled', v);
-  }, [persist]);
+  const updateActionBlockingEnabled = useCallback(
+    (v: boolean) => {
+      setActionBlockingEnabled(v);
+      persist('actionBlockingEnabled', v);
+    },
+    [persist]
+  );
 
-  const updatePostSyncCommands = useCallback((v: string) => {
-    setPostSyncCommands(v);
-    persist('postSyncCommands', v);
-  }, [persist]);
+  const updateWhoAutoRefreshEnabled = useCallback(
+    (v: boolean) => {
+      setWhoAutoRefreshEnabled(v);
+      persist('whoAutoRefreshEnabled', v);
+    },
+    [persist]
+  );
 
-  const updateAutoLoginEnabled = useCallback((v: boolean) => {
-    setAutoLoginEnabled(v);
-    persist('autoLoginEnabled', v);
-  }, [persist]);
+  const updateWhoRefreshMinutes = useCallback(
+    (v: number) => {
+      setWhoRefreshMinutes(v);
+      persist('whoRefreshMinutes', v);
+    },
+    [persist]
+  );
 
-  const updateAutoLoginActiveSlot = useCallback((v: 0 | 1) => {
-    setAutoLoginActiveSlot(v);
-    persist('autoLoginActiveSlot', v);
-  }, [persist]);
+  const updatePostSyncEnabled = useCallback(
+    (v: boolean) => {
+      setPostSyncEnabled(v);
+      persist('postSyncEnabled', v);
+    },
+    [persist]
+  );
 
-  const updateAutoLoginCharacters = useCallback((v: [CharacterProfile | null, CharacterProfile | null]) => {
-    setAutoLoginCharacters(v);
-    // Persist only names to settings.json — passwords go to OS keyring
-    const names: [string | null, string | null] = [
-      v[0]?.name || null,
-      v[1]?.name || null,
-    ];
-    persist('autoLoginNames', names);
-    // Store/clear passwords in keyring
-    for (const slot of [0, 1] as const) {
-      const pw = v[slot]?.password;
-      if (pw) {
-        storePassword(slot, pw);
-      } else {
-        deletePassword(slot);
+  const updatePostSyncCommands = useCallback(
+    (v: string) => {
+      setPostSyncCommands(v);
+      persist('postSyncCommands', v);
+    },
+    [persist]
+  );
+
+  const updateAutoLoginEnabled = useCallback(
+    (v: boolean) => {
+      setAutoLoginEnabled(v);
+      persist('autoLoginEnabled', v);
+    },
+    [persist]
+  );
+
+  const updateAutoLoginActiveSlot = useCallback(
+    (v: 0 | 1) => {
+      setAutoLoginActiveSlot(v);
+      persist('autoLoginActiveSlot', v);
+    },
+    [persist]
+  );
+
+  const updateAutoLoginCharacters = useCallback(
+    (v: [CharacterProfile | null, CharacterProfile | null]) => {
+      setAutoLoginCharacters(v);
+      // Persist only names to settings.json — passwords go to OS keyring
+      const names: [string | null, string | null] = [v[0]?.name || null, v[1]?.name || null];
+      persist('autoLoginNames', names);
+      // Store/clear passwords in keyring
+      for (const slot of [0, 1] as const) {
+        const pw = v[slot]?.password;
+        if (pw) {
+          storePassword(slot, pw);
+        } else {
+          deletePassword(slot);
+        }
       }
-    }
-  }, [persist, storePassword, deletePassword]);
+    },
+    [persist, storePassword, deletePassword]
+  );
 
-  const updateLastLoginTimestamp = useCallback((v: number | null) => {
-    setLastLoginTimestamp(v);
-    persist('lastLoginTimestamp', v);
-  }, [persist]);
+  const updateLastLoginTimestamp = useCallback(
+    (v: number | null) => {
+      setLastLoginTimestamp(v);
+      persist('lastLoginTimestamp', v);
+    },
+    [persist]
+  );
 
-  const updateLastLoginSlot = useCallback((v: 0 | 1 | null) => {
-    setLastLoginSlot(v);
-    persist('lastLoginSlot', v);
-  }, [persist]);
+  const updateLastLoginSlot = useCallback(
+    (v: 0 | 1 | null) => {
+      setLastLoginSlot(v);
+      persist('lastLoginSlot', v);
+    },
+    [persist]
+  );
 
-  const toggleChatNotification = useCallback(async (type: keyof ChatFilters) => {
-    // On web, request browser notification permission when enabling for the first time
-    const current = chatNotifications[type];
-    if (!current && getPlatform() === 'web') {
-      if (typeof Notification !== 'undefined' && Notification.permission === 'default') {
-        const result = await Notification.requestPermission();
-        if (result !== 'granted') return;
+  const toggleChatNotification = useCallback(
+    async (type: keyof ChatFilters) => {
+      // On web, request browser notification permission when enabling for the first time
+      const current = chatNotifications[type];
+      if (!current && getPlatform() === 'web') {
+        if (typeof Notification !== 'undefined' && Notification.permission === 'default') {
+          const result = await Notification.requestPermission();
+          if (result !== 'granted') return;
+        }
       }
-    }
-    setChatNotifications((prev) => {
-      const next = { ...prev, [type]: !prev[type] };
-      persist('chatNotifications', next);
-      return next;
-    });
-  }, [persist, chatNotifications]);
+      setChatNotifications((prev) => {
+        const next = { ...prev, [type]: !prev[type] };
+        persist('chatNotifications', next);
+        return next;
+      });
+    },
+    [persist, chatNotifications]
+  );
 
   return {
     // Anti-idle
-    antiIdleEnabled, antiIdleCommand, antiIdleMinutes,
-    updateAntiIdleEnabled, updateAntiIdleCommand, updateAntiIdleMinutes,
+    antiIdleEnabled,
+    antiIdleCommand,
+    antiIdleMinutes,
+    updateAntiIdleEnabled,
+    updateAntiIdleCommand,
+    updateAntiIdleMinutes,
     // Alignment tracking
-    alignmentTrackingEnabled, alignmentTrackingMinutes,
-    updateAlignmentTrackingEnabled, updateAlignmentTrackingMinutes,
+    alignmentTrackingEnabled,
+    alignmentTrackingMinutes,
+    updateAlignmentTrackingEnabled,
+    updateAlignmentTrackingMinutes,
     // Output transforms
-    boardDatesEnabled, stripPromptsEnabled,
-    updateBoardDatesEnabled, updateStripPromptsEnabled,
+    boardDatesEnabled,
+    stripPromptsEnabled,
+    updateBoardDatesEnabled,
+    updateStripPromptsEnabled,
     // Buffer sizes
-    terminalScrollback, commandHistorySize, chatHistorySize,
-    updateTerminalScrollback, updateCommandHistorySize, updateChatHistorySize,
+    terminalScrollback,
+    commandHistorySize,
+    chatHistorySize,
+    updateTerminalScrollback,
+    updateCommandHistorySize,
+    updateChatHistorySize,
     // Timestamp
-    timestampFormat, updateTimestampFormat,
+    timestampFormat,
+    updateTimestampFormat,
     // Command echo
-    commandEchoEnabled, updateCommandEchoEnabled,
+    commandEchoEnabled,
+    updateCommandEchoEnabled,
     // Timer badges
-    showTimerBadges, updateShowTimerBadges,
+    showTimerBadges,
+    updateShowTimerBadges,
     // Session logging
-    sessionLoggingEnabled, updateSessionLoggingEnabled,
+    sessionLoggingEnabled,
+    updateSessionLoggingEnabled,
     // Numpad
-    numpadMappings, updateNumpadMappings,
+    numpadMappings,
+    updateNumpadMappings,
     // Backups
-    autoBackupEnabled, updateAutoBackupEnabled,
+    autoBackupEnabled,
+    updateAutoBackupEnabled,
     // Notifications
-    chatNotifications, updateChatNotifications, toggleChatNotification,
+    chatNotifications,
+    updateChatNotifications,
+    toggleChatNotification,
     // Custom chimes
-    customChime1, customChime2, updateCustomChime1, updateCustomChime2,
+    customChime1,
+    customChime2,
+    updateCustomChime1,
+    updateCustomChime2,
     // Counter thresholds
-    counterHotThreshold, counterColdThreshold,
-    updateCounterHotThreshold, updateCounterColdThreshold,
+    counterHotThreshold,
+    counterColdThreshold,
+    updateCounterHotThreshold,
+    updateCounterColdThreshold,
     // Help guide
-    hasSeenGuide, updateHasSeenGuide,
+    hasSeenGuide,
+    updateHasSeenGuide,
+    // Action blocking
+    actionBlockingEnabled,
+    updateActionBlockingEnabled,
+    // Who list
+    whoAutoRefreshEnabled,
+    whoRefreshMinutes,
+    updateWhoAutoRefreshEnabled,
+    updateWhoRefreshMinutes,
     // Post-sync commands
-    postSyncEnabled, postSyncCommands,
-    updatePostSyncEnabled, updatePostSyncCommands,
+    postSyncEnabled,
+    postSyncCommands,
+    updatePostSyncEnabled,
+    updatePostSyncCommands,
     // Auto-login
-    autoLoginEnabled, autoLoginActiveSlot, autoLoginCharacters,
-    lastLoginTimestamp, lastLoginSlot,
-    updateAutoLoginEnabled, updateAutoLoginActiveSlot, updateAutoLoginCharacters,
-    updateLastLoginTimestamp, updateLastLoginSlot,
+    autoLoginEnabled,
+    autoLoginActiveSlot,
+    autoLoginCharacters,
+    lastLoginTimestamp,
+    lastLoginSlot,
+    updateAutoLoginEnabled,
+    updateAutoLoginActiveSlot,
+    updateAutoLoginCharacters,
+    updateLastLoginTimestamp,
+    updateLastLoginSlot,
   };
 }

@@ -43,7 +43,9 @@ export function DropboxFolderPicker({ onClose, blocking = false }: DropboxFolder
         if (msg.includes('401')) {
           setError('Dropbox session expired. Disconnect and reconnect.');
         } else if (msg.includes('403')) {
-          setError('Missing permissions. Enable files.metadata.read in your Dropbox app, then disconnect and reconnect.');
+          setError(
+            'Missing permissions. Enable files.metadata.read in your Dropbox app, then disconnect and reconnect.'
+          );
         } else {
           setError(`Failed to list folders: ${msg}`);
         }
@@ -53,7 +55,9 @@ export function DropboxFolderPicker({ onClose, blocking = false }: DropboxFolder
     }
 
     load();
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true;
+    };
   }, [accessToken, currentPath]);
 
   function navigateUp() {
@@ -74,15 +78,13 @@ export function DropboxFolderPicker({ onClose, blocking = false }: DropboxFolder
     if (!blocking) onClose();
   }
 
-  const breadcrumbs = currentPath
-    ? currentPath.split('/').filter(Boolean)
-    : [];
+  const breadcrumbs = currentPath ? currentPath.split('/').filter(Boolean) : [];
 
   return (
     <div
       className={cn(
         'fixed inset-0 z-[9999] flex items-center justify-center',
-        blocking ? 'bg-[#0a0a0a]' : 'bg-black/70',
+        blocking ? 'bg-[#0a0a0a]' : 'bg-black/70'
       )}
       onClick={blocking ? undefined : onClose}
     >
@@ -92,13 +94,15 @@ export function DropboxFolderPicker({ onClose, blocking = false }: DropboxFolder
           <div
             className="absolute inset-0 opacity-30"
             style={{
-              background: 'radial-gradient(ellipse at 50% 30%, rgba(139,233,253,0.08) 0%, transparent 60%)',
+              background:
+                'radial-gradient(ellipse at 50% 30%, rgba(139,233,253,0.08) 0%, transparent 60%)',
             }}
           />
           <div
             className="absolute inset-0 opacity-20"
             style={{
-              background: 'radial-gradient(ellipse at 80% 80%, rgba(167,139,250,0.06) 0%, transparent 50%)',
+              background:
+                'radial-gradient(ellipse at 80% 80%, rgba(167,139,250,0.06) 0%, transparent 50%)',
             }}
           />
         </>
@@ -112,16 +116,15 @@ export function DropboxFolderPicker({ onClose, blocking = false }: DropboxFolder
         <div
           className="absolute -inset-px rounded-lg opacity-40"
           style={{
-            background: 'linear-gradient(135deg, rgba(139,233,253,0.3), rgba(167,139,250,0.15), transparent 60%)',
+            background:
+              'linear-gradient(135deg, rgba(139,233,253,0.3), rgba(167,139,250,0.15), transparent 60%)',
           }}
         />
 
         <div className="relative bg-[#111111] rounded-lg border border-[#1e1e1e] overflow-hidden flex flex-col">
           {/* Header */}
           <div className="px-5 pt-5 pb-3">
-            <div className="text-[14px] font-semibold text-[#e0e0e0]">
-              Select Dropbox Folder
-            </div>
+            <div className="text-[14px] font-semibold text-[#e0e0e0]">Select Dropbox Folder</div>
             <p className="text-[11px] text-[#666] mt-1">
               Choose the folder where your DartForge data is stored.
             </p>
@@ -134,7 +137,7 @@ export function DropboxFolderPicker({ onClose, blocking = false }: DropboxFolder
                 onClick={() => setCurrentPath('')}
                 className={cn(
                   'shrink-0 px-1 py-0.5 rounded hover:text-[#aaa] transition-colors cursor-pointer',
-                  !currentPath && 'text-cyan',
+                  !currentPath && 'text-cyan'
                 )}
               >
                 Dropbox
@@ -149,7 +152,7 @@ export function DropboxFolderPicker({ onClose, blocking = false }: DropboxFolder
                       onClick={() => setCurrentPath(path)}
                       className={cn(
                         'shrink-0 px-1 py-0.5 rounded hover:text-[#aaa] transition-colors cursor-pointer',
-                        isLast && 'text-cyan',
+                        isLast && 'text-cyan'
                       )}
                     >
                       {part}
@@ -178,7 +181,16 @@ export function DropboxFolderPicker({ onClose, blocking = false }: DropboxFolder
                     className="w-full flex items-center gap-2.5 px-5 py-2 text-left hover:bg-[#1a1a1a] transition-colors cursor-pointer"
                   >
                     <div className="flex items-center justify-center w-6 h-6 rounded bg-[#1e1e1e] text-[#555]">
-                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                      <svg
+                        width="12"
+                        height="12"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth="2.5"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                      >
                         <path d="M15 18l-6-6 6-6" />
                       </svg>
                     </div>
@@ -205,9 +217,7 @@ export function DropboxFolderPicker({ onClose, blocking = false }: DropboxFolder
                   </div>
                 )}
                 {folders.length === 0 && currentPath && (
-                  <div className="p-5 text-[11px] text-[#555] text-center">
-                    No subfolders.
-                  </div>
+                  <div className="p-5 text-[11px] text-[#555] text-center">No subfolders.</div>
                 )}
               </div>
             )}
@@ -223,7 +233,10 @@ export function DropboxFolderPicker({ onClose, blocking = false }: DropboxFolder
               </div>
             )}
             <button
-              onClick={() => { disconnect(); onClose(); }}
+              onClick={() => {
+                disconnect();
+                onClose();
+              }}
               className="px-3 py-1.5 text-[11px] text-disconnected/70 hover:text-disconnected transition-colors cursor-pointer"
             >
               Disconnect
@@ -243,7 +256,7 @@ export function DropboxFolderPicker({ onClose, blocking = false }: DropboxFolder
               className={cn(
                 'px-4 py-1.5 rounded text-[11px] font-medium transition-all cursor-pointer',
                 'bg-cyan/10 text-cyan border border-cyan/25 hover:bg-cyan/15 hover:border-cyan/40',
-                (loading || checking) && 'opacity-50 pointer-events-none',
+                (loading || checking) && 'opacity-50 pointer-events-none'
               )}
             >
               {checking ? 'Selecting...' : 'Use This Folder'}

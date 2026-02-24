@@ -35,7 +35,7 @@ export function FilterPill({
 }: FilterPillProps) {
   const activeStyle = exclusive
     ? ACCENT_STYLES.amber
-    : ACCENT_STYLES[accent] ?? ACCENT_STYLES.cyan;
+    : (ACCENT_STYLES[accent] ?? ACCENT_STYLES.cyan);
 
   return (
     <button

@@ -20,10 +20,25 @@ import { StatusReadout } from './StatusReadout';
 import type { ThemeColorKey } from '../lib/defaultTheme';
 import type { FilterFlags } from '../lib/outputFilter';
 
-export type StatusReadoutKey = 'health' | 'concentration' | 'aura' | 'hunger' | 'thirst' | 'encumbrance' | 'movement' | 'alignment';
+export type StatusReadoutKey =
+  | 'health'
+  | 'concentration'
+  | 'aura'
+  | 'hunger'
+  | 'thirst'
+  | 'encumbrance'
+  | 'movement'
+  | 'alignment';
 
 export const DEFAULT_STATUS_BAR_ORDER: StatusReadoutKey[] = [
-  'health', 'concentration', 'aura', 'hunger', 'thirst', 'encumbrance', 'movement', 'alignment',
+  'health',
+  'concentration',
+  'aura',
+  'hunger',
+  'thirst',
+  'encumbrance',
+  'movement',
+  'alignment',
 ];
 
 export interface ReadoutData {
@@ -60,9 +75,18 @@ interface SortableStatusBarProps {
 }
 
 const RAINBOW_COLORS = [
-  '#ff2020', '#ff6020', '#ffa020', '#ffe020',
-  '#a0ff20', '#20ff40', '#20ffa0', '#20e0ff',
-  '#2080ff', '#6040ff', '#a020ff', '#ff20e0',
+  '#ff2020',
+  '#ff6020',
+  '#ffa020',
+  '#ffe020',
+  '#a0ff20',
+  '#20ff40',
+  '#20ffa0',
+  '#20e0ff',
+  '#2080ff',
+  '#6040ff',
+  '#a020ff',
+  '#ff20e0',
 ];
 
 function randomizeColors(length: number): string[] {
@@ -91,7 +115,9 @@ function RainbowText({ text }: { text: string }) {
   return (
     <>
       {text.split('').map((ch, i) => (
-        <span key={i} style={{ color: colors[i], transition: 'color 0.5s ease' }}>{ch}</span>
+        <span key={i} style={{ color: colors[i], transition: 'color 0.5s ease' }}>
+          {ch}
+        </span>
       ))}
     </>
   );
@@ -172,7 +198,7 @@ export function SortableStatusBar({
   // Require 5px of movement before starting a drag so clicks still work
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
-    useSensor(KeyboardSensor),
+    useSensor(KeyboardSensor)
   );
 
   // Build a map for O(1) lookup
@@ -203,24 +229,27 @@ export function SortableStatusBar({
   // Only include items that have data (are visible)
   const visibleIds = useMemo(
     () => sortedIds.filter((id) => itemMap.get(id)?.data != null),
-    [sortedIds, itemMap],
+    [sortedIds, itemMap]
   );
 
   const handleDragStart = useCallback((event: DragStartEvent) => {
     setDraggingId(String(event.active.id));
   }, []);
 
-  const handleDragEnd = useCallback((event: DragEndEvent) => {
-    setDraggingId(null);
-    const { active, over } = event;
-    if (!over || active.id === over.id) return;
+  const handleDragEnd = useCallback(
+    (event: DragEndEvent) => {
+      setDraggingId(null);
+      const { active, over } = event;
+      if (!over || active.id === over.id) return;
 
-    const oldIndex = sortedIds.indexOf(active.id as StatusReadoutKey);
-    const newIndex = sortedIds.indexOf(over.id as StatusReadoutKey);
-    if (oldIndex === -1 || newIndex === -1) return;
+      const oldIndex = sortedIds.indexOf(active.id as StatusReadoutKey);
+      const newIndex = sortedIds.indexOf(over.id as StatusReadoutKey);
+      if (oldIndex === -1 || newIndex === -1) return;
 
-    onReorder(arrayMove(sortedIds, oldIndex, newIndex));
-  }, [sortedIds, onReorder]);
+      onReorder(arrayMove(sortedIds, oldIndex, newIndex));
+    },
+    [sortedIds, onReorder]
+  );
 
   return (
     <DndContext

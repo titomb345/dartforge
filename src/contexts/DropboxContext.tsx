@@ -1,10 +1,28 @@
-import { createContext, useContext, useState, useEffect, useCallback, useRef, type ReactNode } from 'react';
 import {
-  loadTokens, saveTokens, clearTokens, isTokenExpired,
-  refreshAccessToken, exchangeCodeForTokens,
-  generateCodeVerifier, generateCodeChallenge,
-  buildAuthUrl, savePkceState, loadPkceState, clearPkceState,
-  loadFolderPath, saveFolderPath, clearFolderPath,
+  createContext,
+  useContext,
+  useState,
+  useEffect,
+  useCallback,
+  useRef,
+  type ReactNode,
+} from 'react';
+import {
+  loadTokens,
+  saveTokens,
+  clearTokens,
+  isTokenExpired,
+  refreshAccessToken,
+  exchangeCodeForTokens,
+  generateCodeVerifier,
+  generateCodeChallenge,
+  buildAuthUrl,
+  savePkceState,
+  loadPkceState,
+  clearPkceState,
+  loadFolderPath,
+  saveFolderPath,
+  clearFolderPath,
   clearStorageMode,
   type DropboxTokens,
 } from '../lib/dropbox';
@@ -138,7 +156,7 @@ export function DropboxProvider({ children }: { children: ReactNode }) {
 
     window.addEventListener('message', handleMessage);
     return () => window.removeEventListener('message', handleMessage);
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  }, []);
 
   // Auto-refresh token periodically (only check local timestamp, API call only if expired)
   useEffect(() => {
@@ -213,7 +231,9 @@ export function DropboxProvider({ children }: { children: ReactNode }) {
   }, []);
 
   return (
-    <DropboxContext.Provider value={{ status, accessToken, folderPath, connect, disconnect, selectFolder }}>
+    <DropboxContext.Provider
+      value={{ status, accessToken, folderPath, connect, disconnect, selectFolder }}
+    >
       {children}
     </DropboxContext.Provider>
   );

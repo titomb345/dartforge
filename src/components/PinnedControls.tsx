@@ -3,8 +3,20 @@ import { createPortal } from 'react-dom';
 import type { PinnablePanel } from '../types';
 import { usePinnedControls } from '../contexts/PinnedControlsContext';
 import {
-  PinOffIcon, ArrowLeftIcon, ArrowRightIcon, ChevronUpIcon, ChevronDownIcon,
-  SwapHorizontalIcon, TrendingUpIcon, ChatIcon, CounterIcon, NotesIcon, MapIcon, AllocIcon, CoinIcon,
+  PinOffIcon,
+  ArrowLeftIcon,
+  ArrowRightIcon,
+  ChevronUpIcon,
+  ChevronDownIcon,
+  SwapHorizontalIcon,
+  TrendingUpIcon,
+  ChatIcon,
+  CounterIcon,
+  NotesIcon,
+  MapIcon,
+  AllocIcon,
+  CoinIcon,
+  WhoIcon,
 } from './icons';
 
 const PANEL_INFO: Record<PinnablePanel, { label: string; icon: ReactNode }> = {
@@ -15,9 +27,14 @@ const PANEL_INFO: Record<PinnablePanel, { label: string; icon: ReactNode }> = {
   map: { label: 'Map', icon: <MapIcon size={10} /> },
   alloc: { label: 'Allocations', icon: <AllocIcon size={10} /> },
   currency: { label: 'Currency', icon: <CoinIcon size={10} /> },
+  who: { label: 'Who', icon: <WhoIcon size={10} /> },
 };
 
-export function HeaderBtn({ onClick, title, children }: {
+export function HeaderBtn({
+  onClick,
+  title,
+  children,
+}: {
   onClick: () => void;
   title: string;
   children: ReactNode;
@@ -33,7 +50,11 @@ export function HeaderBtn({ onClick, title, children }: {
   );
 }
 
-function SwapPicker({ side, otherSidePanels, onSwapWith }: {
+function SwapPicker({
+  side,
+  otherSidePanels,
+  onSwapWith,
+}: {
   side: 'left' | 'right';
   otherSidePanels: PinnablePanel[];
   onSwapWith: (target: PinnablePanel) => void;
@@ -57,8 +78,10 @@ function SwapPicker({ side, otherSidePanels, onSwapWith }: {
     updatePos();
     function handleClickOutside(e: MouseEvent) {
       if (
-        btnRef.current && !btnRef.current.contains(e.target as Node) &&
-        dropdownRef.current && !dropdownRef.current.contains(e.target as Node)
+        btnRef.current &&
+        !btnRef.current.contains(e.target as Node) &&
+        dropdownRef.current &&
+        !dropdownRef.current.contains(e.target as Node)
       ) {
         setOpen(false);
       }
@@ -71,38 +94,48 @@ function SwapPicker({ side, otherSidePanels, onSwapWith }: {
 
   return (
     <div ref={btnRef}>
-      <HeaderBtn onClick={() => { updatePos(); setOpen((v) => !v); }} title={`Swap with ${dirLabel} panel`}>
+      <HeaderBtn
+        onClick={() => {
+          updatePos();
+          setOpen((v) => !v);
+        }}
+        title={`Swap with ${dirLabel} panel`}
+      >
         <SwapHorizontalIcon size={9} />
       </HeaderBtn>
-      {open && createPortal(
-        <div
-          ref={dropdownRef}
-          className="fixed z-[9999] flex flex-col gap-0.5 bg-bg-secondary border border-border rounded-md p-1 shadow-lg min-w-[120px]"
-          data-panel-dropdown
-          style={{
-            top: pos.top,
-            ...(side === 'left' ? { left: pos.left } : { right: window.innerWidth - pos.left }),
-          }}
-        >
-          <div className="px-2 py-0.5 text-[9px] uppercase tracking-wider text-text-dim select-none">
-            Swap with
-          </div>
-          {otherSidePanels.map((targetId) => {
-            const info = PANEL_INFO[targetId];
-            return (
-              <button
-                key={targetId}
-                onClick={() => { onSwapWith(targetId); setOpen(false); }}
-                className="flex items-center gap-1.5 px-2 py-1 rounded text-[11px] text-text-label hover:bg-bg-primary hover:text-text-primary cursor-pointer transition-colors duration-100"
-              >
-                <span className="text-text-dim">{info.icon}</span>
-                {info.label}
-              </button>
-            );
-          })}
-        </div>,
-        document.body,
-      )}
+      {open &&
+        createPortal(
+          <div
+            ref={dropdownRef}
+            className="fixed z-[9999] flex flex-col gap-0.5 bg-bg-secondary border border-border rounded-md p-1 shadow-lg min-w-[120px]"
+            data-panel-dropdown
+            style={{
+              top: pos.top,
+              ...(side === 'left' ? { left: pos.left } : { right: window.innerWidth - pos.left }),
+            }}
+          >
+            <div className="px-2 py-0.5 text-[9px] uppercase tracking-wider text-text-dim select-none">
+              Swap with
+            </div>
+            {otherSidePanels.map((targetId) => {
+              const info = PANEL_INFO[targetId];
+              return (
+                <button
+                  key={targetId}
+                  onClick={() => {
+                    onSwapWith(targetId);
+                    setOpen(false);
+                  }}
+                  className="flex items-center gap-1.5 px-2 py-1 rounded text-[11px] text-text-label hover:bg-bg-primary hover:text-text-primary cursor-pointer transition-colors duration-100"
+                >
+                  <span className="text-text-dim">{info.icon}</span>
+                  {info.label}
+                </button>
+              );
+            })}
+          </div>,
+          document.body
+        )}
     </div>
   );
 }
@@ -116,7 +149,17 @@ export function PinnedControls() {
   const ctx = usePinnedControls();
   if (!ctx) return null;
 
-  const { side, onSwapSide, canMoveUp, onMoveUp, canMoveDown, onMoveDown, onUnpin, otherSidePanels, onSwapWith } = ctx;
+  const {
+    side,
+    onSwapSide,
+    canMoveUp,
+    onMoveUp,
+    canMoveDown,
+    onMoveDown,
+    onUnpin,
+    otherSidePanels,
+    onSwapWith,
+  } = ctx;
 
   const swapButton = onSwapSide ? (
     <HeaderBtn
@@ -125,7 +168,7 @@ export function PinnedControls() {
     >
       {side === 'right' ? <ArrowLeftIcon size={9} /> : <ArrowRightIcon size={9} />}
     </HeaderBtn>
-  ) : (otherSidePanels && otherSidePanels.length > 0 && onSwapWith) ? (
+  ) : otherSidePanels && otherSidePanels.length > 0 && onSwapWith ? (
     <SwapPicker side={side} otherSidePanels={otherSidePanels} onSwapWith={onSwapWith} />
   ) : null;
 

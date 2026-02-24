@@ -5,14 +5,11 @@ export interface VariableState {
   characterVariables: Record<VariableId, Variable>;
   globalVariables: Record<VariableId, Variable>;
   mergedVariables: Variable[];
-  createVariable: (
-    partial: { name: string; value: string },
-    scope: VariableScope,
-  ) => VariableId;
+  createVariable: (partial: { name: string; value: string }, scope: VariableScope) => VariableId;
   updateVariable: (
     id: VariableId,
     updates: Partial<Omit<Variable, 'id' | 'createdAt'>>,
-    scope: VariableScope,
+    scope: VariableScope
   ) => void;
   deleteVariable: (id: VariableId, scope: VariableScope) => void;
   toggleVariable: (id: VariableId, scope: VariableScope) => void;

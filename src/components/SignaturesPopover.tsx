@@ -98,15 +98,13 @@ export function SignaturesSection() {
       <div className="max-h-[160px] overflow-y-auto">
         {sortedMappings.length === 0 && (
           <div className="px-3 py-2.5 text-[11px] text-text-dim text-center">
-            No signatures yet. Use <span className="text-amber">?</span> on anonymous messages or add above.
+            No signatures yet. Use <span className="text-amber">?</span> on anonymous messages or
+            add above.
           </div>
         )}
         {sortedMappings.map((mapping) =>
           editingId === mapping.id ? (
-            <div
-              key={mapping.id}
-              className="flex items-center gap-1.5 px-3 py-1 bg-cyan/5"
-            >
+            <div key={mapping.id} className="flex items-center gap-1.5 px-3 py-1 bg-cyan/5">
               <MudInput
                 ref={editSigRef}
                 accent="cyan"
@@ -147,12 +145,19 @@ export function SignaturesSection() {
               className="group/row flex items-center justify-between gap-2 px-3 py-1 hover:bg-cyan/5 cursor-pointer transition-colors duration-100"
             >
               <div className="flex items-center gap-1.5 min-w-0 truncate">
-                <span className="text-[12px] font-mono text-text-dim shrink-0">{mapping.signature}</span>
+                <span className="text-[12px] font-mono text-text-dim shrink-0">
+                  {mapping.signature}
+                </span>
                 <span className="text-[10px] text-text-dim/60 shrink-0">&rarr;</span>
-                <span className="text-[12px] font-mono text-text-label truncate">{mapping.playerName}</span>
+                <span className="text-[12px] font-mono text-text-label truncate">
+                  {mapping.playerName}
+                </span>
               </div>
               <button
-                onClick={(e) => { e.stopPropagation(); deleteMapping(mapping.id); }}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  deleteMapping(mapping.id);
+                }}
                 className="text-[12px] font-mono text-text-dim hover:text-red cursor-pointer shrink-0 opacity-0 group-hover/row:opacity-100 transition-all duration-150"
                 title="Delete mapping"
               >

@@ -1,4 +1,4 @@
-@import "tailwindcss";
+@import 'tailwindcss';
 
 @theme {
   --color-bg-canvas: #040404;
@@ -89,7 +89,6 @@
   border-style: dashed;
 }
 
-
 /* Status readout — instrument gauge styling */
 .status-readout:hover {
   background: color-mix(in srgb, var(--readout-color) 6%, transparent);
@@ -112,14 +111,24 @@
 }
 
 @keyframes holiday-glow {
-  0%, 100% { opacity: 0.85; }
-  50% { opacity: 1; }
+  0%,
+  100% {
+    opacity: 0.85;
+  }
+  50% {
+    opacity: 1;
+  }
 }
 
 /* Status readout danger pulse — critical severity states */
 @keyframes danger-pulse {
-  0%, 100% { border-left-color: var(--readout-color); }
-  50% { border-left-color: transparent; }
+  0%,
+  100% {
+    border-left-color: var(--readout-color);
+  }
+  50% {
+    border-left-color: transparent;
+  }
 }
 .status-readout-danger {
   animation: danger-pulse 1.5s ease-in-out infinite;
@@ -147,8 +156,17 @@
 }
 
 @keyframes spotlight-ring-pulse {
-  0%, 100% { box-shadow: 0 0 20px rgba(217, 175, 80, 0.2), inset 0 0 20px rgba(217, 175, 80, 0.1); }
-  50% { box-shadow: 0 0 30px rgba(217, 175, 80, 0.35), inset 0 0 30px rgba(217, 175, 80, 0.15); }
+  0%,
+  100% {
+    box-shadow:
+      0 0 20px rgba(217, 175, 80, 0.2),
+      inset 0 0 20px rgba(217, 175, 80, 0.1);
+  }
+  50% {
+    box-shadow:
+      0 0 30px rgba(217, 175, 80, 0.35),
+      inset 0 0 30px rgba(217, 175, 80, 0.15);
+  }
 }
 
 .spotlight-tooltip {
@@ -156,8 +174,14 @@
 }
 
 @keyframes spotlight-tooltip-in {
-  from { opacity: 0; transform: translateY(4px); }
-  to { opacity: 1; transform: translateY(0); }
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
 /* ── Help Panel ──────────────────────────────────────────── */
@@ -187,7 +211,8 @@
 /* ── Counter skill hot/cold effects ─────────────────────── */
 
 @keyframes skill-hot-pulse {
-  0%, 100% {
+  0%,
+  100% {
     background: rgba(245, 158, 11, 0.04);
     border-left-color: rgba(245, 158, 11, 0.5);
   }
@@ -207,7 +232,8 @@
 }
 
 @keyframes skill-cold-pulse {
-  0%, 100% {
+  0%,
+  100% {
     background: rgba(139, 233, 253, 0.03);
     border-left-color: rgba(139, 233, 253, 0.3);
   }
