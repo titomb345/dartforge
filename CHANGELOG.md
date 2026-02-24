@@ -9,6 +9,17 @@ The `[Unreleased]` header controls automatic version bumping on merge:
 - `[Unreleased-minor]` → 0.1.0 → 0.2.0
 - `[Unreleased-major]` → 0.1.0 → 1.0.0
 
+## [Unreleased-minor]
+
+### Added
+- Auto-login: store up to 2 character profiles in Settings > Characters — name and password are sent automatically on connect
+- Passwords stored securely in the OS credential manager (Windows Credential Manager / macOS Keychain / Linux Secret Service) via the `keyring` crate — never written to settings.json
+- Character switching with 20-minute cooldown enforcement (DartMUD server rule) — cooldown is timestamp-based and survives app restarts
+- "Switch to [name]" button with live countdown timer, disabled while connected
+- Active character indicator and slot selector pills in the Characters settings section
+- Web build: character form uses `autocomplete="username"` / `autocomplete="current-password"` so browser password managers (1Password, LastPass, etc.) can detect, save, and autofill credentials
+- Wrong-credential safety: auto-login only attempts once per connection — if login fails, the user types manually
+
 ## [1.1.0] - 2026-02-23
 
 ### Added

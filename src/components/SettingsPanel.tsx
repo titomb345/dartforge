@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, type ReactNode } from 'react';
-import { TimerIcon, FolderIcon, TrashIcon, CheckCircleIcon, ClockIcon, ChevronDownSmallIcon, FilterIcon, GearIcon, NotesIcon, RotateCcwIcon, Volume2Icon, PlayIcon, CounterIcon } from './icons';
+import { TimerIcon, FolderIcon, TrashIcon, CheckCircleIcon, ClockIcon, ChevronDownSmallIcon, FilterIcon, GearIcon, NotesIcon, RotateCcwIcon, Volume2Icon, PlayIcon, CounterIcon, UserIcon } from './icons';
 import { DEFAULT_NUMPAD_MAPPINGS } from '../hooks/useAppSettings';
 import { MudInput, MudTextarea, MudNumberInput } from './shared';
 import { cn } from '../lib/cn';
@@ -168,8 +168,55 @@ export function SettingsPanel() {
     updateCounterHotThreshold, updateCounterColdThreshold,
     postSyncEnabled, postSyncCommands,
     updatePostSyncEnabled, updatePostSyncCommands,
+    autoLoginEnabled, autoLoginActiveSlot, autoLoginCharacters,
+    lastLoginTimestamp, lastLoginSlot,
+    updateAutoLoginEnabled, updateAutoLoginActiveSlot, updateAutoLoginCharacters,
+    onSwitchCharacter, connected,
   } = settings;
   const isTauri = getPlatform() === 'tauri';
+
+  // Character switch cooldown (20 minutes)
+  const SWITCH_COOLDOWN_MS = 20 * 60 * 1000;
+  const [cooldownRemaining, setCooldownRemaining] = useState<number>(0);
+  const otherSlot = (autoLoginActiveSlot === 0 ? 1 : 0) as 0 | 1;
+  const otherCharacter = autoLoginCharacters[otherSlot];
+
+  // Cooldown logic:
+  // - lastLoginSlot = the slot that LAST successfully logged in
+  // - That same slot can always re-login (no cooldown)
+  // - The other slot must wait 20 minutes from lastLoginTimestamp
+  // - So cooldown applies when switching TO a slot that is NOT lastLoginSlot
+  const otherSlotNeedsCooldown = lastLoginTimestamp != null && lastLoginSlot != null && lastLoginSlot !== otherSlot;
+
+  useEffect(() => {
+    const tick = () => {
+      if (!otherSlotNeedsCooldown || lastLoginTimestamp == null) {
+        setCooldownRemaining(0);
+        return;
+      }
+      const elapsed = Date.now() - lastLoginTimestamp;
+      setCooldownRemaining(Math.max(0, SWITCH_COOLDOWN_MS - elapsed));
+    };
+    tick();
+    const id = setInterval(tick, 1000);
+    return () => clearInterval(id);
+  }, [lastLoginTimestamp, otherSlotNeedsCooldown]);
+
+  const switchCooldownActive = otherSlotNeedsCooldown && cooldownRemaining > 0;
+
+  const formatCooldown = (ms: number) => {
+    const totalSec = Math.ceil(ms / 1000);
+    const min = Math.floor(totalSec / 60);
+    const sec = totalSec % 60;
+    return `${min}:${sec.toString().padStart(2, '0')}`;
+  };
+
+  const updateCharacterField = (slot: 0 | 1, field: 'name' | 'password', value: string) => {
+    const updated = [...autoLoginCharacters] as [typeof autoLoginCharacters[0], typeof autoLoginCharacters[1]];
+    const current = updated[slot] ?? { name: '', password: '' };
+    updated[slot] = { ...current, [field]: value };
+    updateAutoLoginCharacters(updated);
+  };
 
   return (
     <div className="w-[360px] h-full bg-bg-primary border-l border-border-subtle flex flex-col overflow-hidden">
@@ -180,6 +227,118 @@ export function SettingsPanel() {
 
       {/* Scrollable sections */}
       <div className="flex-1 overflow-y-auto px-2 py-2 space-y-2">
+        {/* Characters */}
+        <SettingsSection
+          icon={<UserIcon size={13} />}
+          title="Characters"
+          accent="#56b6c2"
+          open={openSection === 'characters'}
+          onToggle={() => toggle('characters')}
+        >
+          <FieldRow label="Auto-login">
+            <ToggleSwitch
+              checked={autoLoginEnabled}
+              onChange={updateAutoLoginEnabled}
+              accent="#56b6c2"
+            />
+          </FieldRow>
+
+          {([0, 1] as const).map((slot) => (
+            <div key={slot} className={slot === 0 ? 'mt-2' : 'mt-3'}>
+              <div className="flex items-center gap-2 mb-1.5">
+                <span className="text-[10px] font-semibold text-text-muted tracking-wide uppercase">Character {slot + 1}</span>
+                <span className={cn(
+                  'text-[8px] font-mono px-1.5 py-0.5 rounded border transition-opacity duration-150',
+                  autoLoginActiveSlot === slot
+                    ? 'bg-[#56b6c2]/10 text-[#56b6c2] border-[#56b6c2]/20 opacity-100'
+                    : 'opacity-0 border-transparent',
+                )}>active</span>
+              </div>
+              {/* Use <form> with autocomplete hints so password managers can detect and fill */}
+              <form className="space-y-1.5" onSubmit={(e) => e.preventDefault()} autoComplete="on">
+                <input type="hidden" name={`dartmud-slot-${slot}`} value={`dartmud-slot-${slot}`} />
+                <FieldRow label="Name">
+                  <MudInput
+                    accent="cyan"
+                    size="sm"
+                    name="username"
+                    autoComplete="username"
+                    value={autoLoginCharacters[slot]?.name ?? ''}
+                    onChange={(e) => updateCharacterField(slot, 'name', e.target.value)}
+                    placeholder="Character name"
+                    className="w-[140px] text-right"
+                  />
+                </FieldRow>
+                <FieldRow label="Password">
+                  <MudInput
+                    type="password"
+                    accent="cyan"
+                    size="sm"
+                    name="password"
+                    autoComplete="current-password"
+                    value={autoLoginCharacters[slot]?.password ?? ''}
+                    onChange={(e) => updateCharacterField(slot, 'password', e.target.value)}
+                    placeholder="Password"
+                    className="w-[140px] text-right"
+                  />
+                </FieldRow>
+              </form>
+            </div>
+          ))}
+
+          {/* Active slot selector */}
+          <FieldRow label="Active">
+            <div className="flex gap-1">
+              {([0, 1] as const).map((slot) => {
+                const char = autoLoginCharacters[slot];
+                const label = char?.name || `Slot ${slot + 1}`;
+                return (
+                  <button
+                    key={slot}
+                    onClick={() => updateAutoLoginActiveSlot(slot)}
+                    className={cn(
+                      'text-[10px] font-mono px-2 py-0.5 rounded border cursor-pointer transition-colors duration-150',
+                      autoLoginActiveSlot === slot
+                        ? 'text-[#56b6c2] border-[#56b6c2]/40 bg-[#56b6c2]/10'
+                        : 'text-text-dim border-border-dim hover:border-[#56b6c2]/30 hover:text-text-muted',
+                    )}
+                  >
+                    {label}
+                  </button>
+                );
+              })}
+            </div>
+          </FieldRow>
+
+          {/* Switch & reconnect */}
+          {otherCharacter?.name && (
+            <div className="mt-2">
+              <button
+                onClick={onSwitchCharacter}
+                disabled={connected || switchCooldownActive || !autoLoginEnabled}
+                className={cn(
+                  'w-full text-[10px] font-mono py-1.5 px-3 rounded border transition-all duration-200',
+                  connected || switchCooldownActive || !autoLoginEnabled
+                    ? 'text-text-dim border-border-dim opacity-40 cursor-default'
+                    : 'text-[#56b6c2] border-[#56b6c2]/30 bg-[#56b6c2]/5 hover:bg-[#56b6c2]/10 hover:border-[#56b6c2]/50 cursor-pointer',
+                )}
+              >
+                {connected
+                  ? 'Disconnect first'
+                  : switchCooldownActive
+                    ? `Switch to ${otherCharacter.name} (${formatCooldown(cooldownRemaining)})`
+                    : `Switch to ${otherCharacter.name}`}
+              </button>
+            </div>
+          )}
+
+          <div className="text-[9px] text-text-dim font-mono leading-relaxed mt-2">
+            {isTauri
+              ? 'Passwords are stored securely in your operating system\'s credential manager. When enabled, name and password are sent automatically on connect.'
+              : 'Your browser\'s password manager can save these credentials. Passwords are not stored by DartForge on web — they are held in memory for this session only.'}
+          </div>
+        </SettingsSection>
+
         {/* Timers */}
         <SettingsSection
           icon={<TimerIcon size={13} />}

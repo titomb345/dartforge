@@ -44,6 +44,10 @@ export const HELP_CATEGORIES: HelpCategory[] = [
         description: 'Type in the command input and press Enter. Use Shift+Enter for multi-line input. Press Escape to clear the input.',
         helpId: 'command-input',
       },
+      {
+        title: 'Auto-Login',
+        description: 'Store up to two character profiles in Settings > Characters. When enabled, your name and password are sent automatically on connect.',
+      },
     ],
   },
   {
@@ -121,6 +125,11 @@ export const HELP_CATEGORIES: HelpCategory[] = [
     title: 'Hidden Powers',
     iconName: 'sparkle',
     items: [
+      {
+        title: 'Quick Character Switch',
+        description: 'In Settings > Characters, click "Switch to [name]" to disconnect and immediately reconnect as your other character. A 20-minute cooldown applies between different characters (DartMUD server rule).',
+        interaction: 'click',
+      },
       {
         title: 'Filter Status Readouts',
         description: 'Click any status (hunger, thirst, aura, etc.) in the bottom bar to filter that status from the terminal output. A dashed border indicates a filtered status.',

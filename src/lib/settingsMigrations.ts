@@ -7,7 +7,7 @@ import type { DataStore } from '../contexts/DataStoreContext';
  * baseline. Existing beta users (version > 1) are normalized to 1 so
  * future migrations apply correctly to everyone.
  */
-export const CURRENT_VERSION = 4;
+export const CURRENT_VERSION = 5;
 
 /** Raw store contents — all keys are optional since older stores may lack them. */
 export type StoreData = Record<string, unknown>;
@@ -134,6 +134,17 @@ const MIGRATIONS: MigrationFn[] = [
   (data) => {
     if (!('timersEnabled' in data)) data.timersEnabled = true;
     if (!('showTimerBadges' in data)) data.showTimerBadges = true;
+    return data;
+  },
+  // v4 → v5: Auto-login character profiles (passwords stored in OS keyring, not here)
+  (data) => {
+    if (!('autoLoginEnabled' in data)) data.autoLoginEnabled = false;
+    if (!('autoLoginActiveSlot' in data)) data.autoLoginActiveSlot = 0;
+    if (!('autoLoginNames' in data)) data.autoLoginNames = [null, null];
+    if (!('lastLoginTimestamp' in data)) data.lastLoginTimestamp = null;
+    if (!('lastLoginSlot' in data)) data.lastLoginSlot = null;
+    // Clean up legacy key if it was stored during development
+    delete data.autoLoginCharacters;
     return data;
   },
 ];

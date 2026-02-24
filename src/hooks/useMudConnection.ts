@@ -85,6 +85,12 @@ function annotateAnsi(data: string): string {
   });
 }
 
+export interface AutoLoginConfig {
+  enabled: boolean;
+  name: string;
+  password: string;
+}
+
 export function useMudConnection(
   terminalRef: React.MutableRefObject<Terminal | null>,
   debugModeRef: React.RefObject<boolean>,
@@ -93,6 +99,7 @@ export function useMudConnection(
   onCharacterName?: (name: string) => void,
   outputFilterRef?: React.RefObject<OutputFilter | null>,
   onLogin?: () => void,
+  autoLoginRef?: React.RefObject<AutoLoginConfig | null>,
 ) {
   const [connected, setConnected] = useState(false);
   const [statusMessage, setStatusMessage] = useState('Connecting...');
@@ -105,6 +112,7 @@ export function useMudConnection(
   const captureNameRef = useRef(false);
   const loginFiredRef = useRef(false);
   const pendingNameRef = useRef<string | null>(null);
+  const autoLoginAttemptedRef = useRef(false);
 
   // Store latest callback refs to avoid re-subscribing on every change
   const onOutputChunkRef = useRef(onOutputChunk);
@@ -137,10 +145,33 @@ export function useMudConnection(
               skipHistoryRef.current = true;
               setPasswordMode(true);
               setSkipHistory(true);
+              // Auto-login: auto-send password (no attemptedRef check — this always follows a name send)
+              const al = autoLoginRef?.current;
+              if (al?.enabled && al.password && autoLoginAttemptedRef.current) {
+                setTimeout(() => {
+                  transportRef.current.sendCommand(al.password);
+                  passwordModeRef.current = false;
+                  setPasswordMode(false);
+                  skipHistoryRef.current = false;
+                  setSkipHistory(false);
+                }, 100);
+              }
             } else if (/name:/i.test(data)) {
               captureNameRef.current = true;
               skipHistoryRef.current = true;
               setSkipHistory(true);
+              // Auto-login: auto-send name
+              const al = autoLoginRef?.current;
+              if (al?.enabled && al.name && !autoLoginAttemptedRef.current) {
+                autoLoginAttemptedRef.current = true;
+                captureNameRef.current = false;
+                pendingNameRef.current = al.name;
+                setTimeout(() => {
+                  transportRef.current.sendCommand(al.name);
+                  skipHistoryRef.current = false;
+                  setSkipHistory(false);
+                }, 100);
+              }
             }
             // Detect successful login or reconnect
             if (
@@ -244,6 +275,7 @@ export function useMudConnection(
             filteringBannerRef.current = false;
             bannerBufferRef.current = '';
             pendingNameRef.current = null;
+            autoLoginAttemptedRef.current = false;
             passwordModeRef.current = false;
             setPasswordMode(false);
             skipHistoryRef.current = false;

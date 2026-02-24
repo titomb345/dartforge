@@ -3,6 +3,11 @@ import { useDataStore } from '../contexts/DataStoreContext';
 import { getPlatform } from '../lib/platform';
 import type { ChatFilters } from '../types/chat';
 
+let invoke: ((cmd: string, args?: Record<string, unknown>) => Promise<unknown>) | null = null;
+if (getPlatform() === 'tauri') {
+  import('@tauri-apps/api/core').then((m) => { invoke = m.invoke; });
+}
+
 const SETTINGS_FILE = 'settings.json';
 
 export const DEFAULT_NUMPAD_MAPPINGS: Record<string, string> = {
@@ -17,6 +22,11 @@ const DEFAULT_NOTIFICATIONS: ChatFilters = {
 };
 
 export type TimestampFormat = '12h' | '24h';
+
+export interface CharacterProfile {
+  name: string;
+  password: string;
+}
 
 export function useAppSettings() {
   const dataStore = useDataStore();
@@ -80,6 +90,32 @@ export function useAppSettings() {
   const [postSyncEnabled, setPostSyncEnabled] = useState(false);
   const [postSyncCommands, setPostSyncCommands] = useState('');
 
+  // Auto-login (names stored in settings.json, passwords in OS keyring)
+  const [autoLoginEnabled, setAutoLoginEnabled] = useState(false);
+  const [autoLoginActiveSlot, setAutoLoginActiveSlot] = useState<0 | 1>(0);
+  const [autoLoginCharacters, setAutoLoginCharacters] = useState<[CharacterProfile | null, CharacterProfile | null]>([null, null]);
+  const [lastLoginTimestamp, setLastLoginTimestamp] = useState<number | null>(null);
+  const [lastLoginSlot, setLastLoginSlot] = useState<0 | 1 | null>(null);
+
+  // Keyring helpers — store/retrieve passwords via OS credential manager
+  const storePassword = useCallback(async (slot: 0 | 1, password: string) => {
+    if (!invoke) return;
+    try {
+      await invoke('store_credential', { account: `dartmud-slot-${slot}`, password });
+    } catch (e) {
+      console.error('Failed to store credential:', e);
+    }
+  }, []);
+
+  const deletePassword = useCallback(async (slot: 0 | 1) => {
+    if (!invoke) return;
+    try {
+      await invoke('delete_credential', { account: `dartmud-slot-${slot}` });
+    } catch (e) {
+      console.error('Failed to delete credential:', e);
+    }
+  }, []);
+
   // Load from settings
   useEffect(() => {
     if (!dataStore.ready) return;
@@ -139,6 +175,36 @@ export function useAppSettings() {
       if (savedPostSyncEnabled != null) setPostSyncEnabled(savedPostSyncEnabled);
       const savedPostSyncCommands = await dataStore.get<string>(SETTINGS_FILE, 'postSyncCommands');
       if (savedPostSyncCommands != null) setPostSyncCommands(savedPostSyncCommands);
+
+      // Auto-login (names from settings, passwords from OS keyring)
+      const savedAutoLoginEnabled = await dataStore.get<boolean>(SETTINGS_FILE, 'autoLoginEnabled');
+      if (savedAutoLoginEnabled != null) setAutoLoginEnabled(savedAutoLoginEnabled);
+      const savedAutoLoginActiveSlot = await dataStore.get<number>(SETTINGS_FILE, 'autoLoginActiveSlot');
+      if (savedAutoLoginActiveSlot === 0 || savedAutoLoginActiveSlot === 1) setAutoLoginActiveSlot(savedAutoLoginActiveSlot);
+      const savedNames = await dataStore.get<[string | null, string | null]>(SETTINGS_FILE, 'autoLoginNames');
+      if (Array.isArray(savedNames) && savedNames.length === 2) {
+        // Load passwords from keyring for each slot that has a name
+        const profiles: [CharacterProfile | null, CharacterProfile | null] = [null, null];
+        for (const slot of [0, 1] as const) {
+          const name = savedNames[slot];
+          if (name) {
+            let pw: string | null = null;
+            if (invoke) {
+              try {
+                pw = await invoke('get_credential', { account: `dartmud-slot-${slot}` }) as string | null;
+              } catch { /* keyring unavailable */ }
+            }
+            profiles[slot] = { name, password: pw ?? '' };
+          }
+        }
+        setAutoLoginCharacters(profiles);
+      }
+      const savedLastLoginTimestamp = await dataStore.get<number | null>(SETTINGS_FILE, 'lastLoginTimestamp');
+      if (savedLastLoginTimestamp !== undefined) setLastLoginTimestamp(savedLastLoginTimestamp);
+      const savedLastLoginSlot = await dataStore.get<number | null>(SETTINGS_FILE, 'lastLoginSlot');
+      if (savedLastLoginSlot === 0 || savedLastLoginSlot === 1 || savedLastLoginSlot === null) {
+        setLastLoginSlot(savedLastLoginSlot as 0 | 1 | null);
+      }
 
       loaded.current = true;
     })().catch(console.error);
@@ -279,6 +345,45 @@ export function useAppSettings() {
     persist('postSyncCommands', v);
   }, [persist]);
 
+  const updateAutoLoginEnabled = useCallback((v: boolean) => {
+    setAutoLoginEnabled(v);
+    persist('autoLoginEnabled', v);
+  }, [persist]);
+
+  const updateAutoLoginActiveSlot = useCallback((v: 0 | 1) => {
+    setAutoLoginActiveSlot(v);
+    persist('autoLoginActiveSlot', v);
+  }, [persist]);
+
+  const updateAutoLoginCharacters = useCallback((v: [CharacterProfile | null, CharacterProfile | null]) => {
+    setAutoLoginCharacters(v);
+    // Persist only names to settings.json — passwords go to OS keyring
+    const names: [string | null, string | null] = [
+      v[0]?.name || null,
+      v[1]?.name || null,
+    ];
+    persist('autoLoginNames', names);
+    // Store/clear passwords in keyring
+    for (const slot of [0, 1] as const) {
+      const pw = v[slot]?.password;
+      if (pw) {
+        storePassword(slot, pw);
+      } else {
+        deletePassword(slot);
+      }
+    }
+  }, [persist, storePassword, deletePassword]);
+
+  const updateLastLoginTimestamp = useCallback((v: number | null) => {
+    setLastLoginTimestamp(v);
+    persist('lastLoginTimestamp', v);
+  }, [persist]);
+
+  const updateLastLoginSlot = useCallback((v: 0 | 1 | null) => {
+    setLastLoginSlot(v);
+    persist('lastLoginSlot', v);
+  }, [persist]);
+
   const toggleChatNotification = useCallback(async (type: keyof ChatFilters) => {
     // On web, request browser notification permission when enabling for the first time
     const current = chatNotifications[type];
@@ -332,5 +437,10 @@ export function useAppSettings() {
     // Post-sync commands
     postSyncEnabled, postSyncCommands,
     updatePostSyncEnabled, updatePostSyncCommands,
+    // Auto-login
+    autoLoginEnabled, autoLoginActiveSlot, autoLoginCharacters,
+    lastLoginTimestamp, lastLoginSlot,
+    updateAutoLoginEnabled, updateAutoLoginActiveSlot, updateAutoLoginCharacters,
+    updateLastLoginTimestamp, updateLastLoginSlot,
   };
 }

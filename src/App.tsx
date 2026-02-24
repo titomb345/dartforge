@@ -74,6 +74,7 @@ import { useResize } from './hooks/useResize';
 import { useViewportBudget, MIN_TERMINAL_WIDTH } from './hooks/useViewportBudget';
 import { AllocLineParser, parseAllocCommand, applyAllocUpdates, MagicLineParser, parseMagicAllocCommand, applyMagicAllocUpdates } from './lib/allocPatterns';
 import { useAppSettings } from './hooks/useAppSettings';
+import type { AutoLoginConfig } from './hooks/useMudConnection';
 import { useCommandHistory } from './hooks/useCommandHistory';
 import { useTimerEngines } from './hooks/useTimerEngines';
 import { CommandInputProvider } from './contexts/CommandInputContext';
@@ -142,7 +143,19 @@ function AppMain() {
     alignmentTrackingEnabled, alignmentTrackingMinutes,
     boardDatesEnabled, stripPromptsEnabled,
     postSyncEnabled, postSyncCommands,
+    autoLoginEnabled, autoLoginActiveSlot, autoLoginCharacters,
   } = appSettings;
+
+  // Auto-login ref — kept in sync with settings, passed to useMudConnection
+  const autoLoginRef = useRef<AutoLoginConfig | null>(null);
+  useEffect(() => {
+    const activeChar = autoLoginCharacters[autoLoginActiveSlot];
+    if (autoLoginEnabled && activeChar?.name && activeChar?.password) {
+      autoLoginRef.current = { enabled: true, name: activeChar.name, password: activeChar.password };
+    } else {
+      autoLoginRef.current = null;
+    }
+  }, [autoLoginEnabled, autoLoginActiveSlot, autoLoginCharacters]);
 
   const dataStore = useDataStore();
   const settingsLoadedRef = useRef(false);
@@ -655,18 +668,22 @@ function AppMain() {
     setActiveCharacter(name);
   }, [setActiveCharacter]);
 
+  const autoLoginActiveSlotRef = useLatestRef(autoLoginActiveSlot);
   const onLogin = useCallback(() => {
     outputFilterRef.current?.startSync();
     for (const cmd of LOGIN_COMMANDS) {
       sendCommandRef.current?.(cmd);
     }
     setLoggedIn(true);
+    // Record login timestamp for character switch cooldown
+    appSettings.updateLastLoginTimestamp(Date.now());
+    appSettings.updateLastLoginSlot(autoLoginActiveSlotRef.current);
   }, []);
 
   const transport = useTransport();
 
   const { connected, passwordMode, skipHistory, sendCommand, reconnect, disconnect } =
-    useMudConnection(terminalRef, debugModeRef, transport, onOutputChunk, onCharacterName, outputFilterRef, onLogin);
+    useMudConnection(terminalRef, debugModeRef, transport, onOutputChunk, onCharacterName, outputFilterRef, onLogin, autoLoginRef);
 
   // Session logger
   const { logOutput, logCommand } = useSessionLogger(appSettings.sessionLoggingEnabled, passwordMode, appSettings.timestampFormat);
@@ -984,8 +1001,22 @@ function AppMain() {
     appSettings.updateAntiIdleEnabled, appSettings.updateAlignmentTrackingEnabled,
   ]);
 
+  // Character switch: swap active slot, disconnect, reconnect
+  const switchCharacter = useCallback(() => {
+    const newSlot = (autoLoginActiveSlot === 0 ? 1 : 0) as 0 | 1;
+    appSettings.updateAutoLoginActiveSlot(newSlot);
+    disconnect();
+    setTimeout(() => reconnect(), 300);
+  }, [autoLoginActiveSlot, appSettings.updateAutoLoginActiveSlot, disconnect, reconnect]);
+
+  const appSettingsWithExtras = useMemo(() => ({
+    ...appSettings,
+    onSwitchCharacter: switchCharacter,
+    connected,
+  }), [appSettings, switchCharacter, connected]);
+
   return (
-    <AppSettingsProvider value={appSettings}>
+    <AppSettingsProvider value={appSettingsWithExtras}>
     <CommandInputProvider value={commandInputValue}>
     <VariableProvider value={variableState}>
     <AliasProvider value={aliasState}>
