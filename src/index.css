@@ -120,6 +120,21 @@
   }
 }
 
+/* Movement mode badge slow pulse */
+.animate-pulse-slow {
+  animation: pulse-slow 3s ease-in-out infinite;
+}
+
+@keyframes pulse-slow {
+  0%,
+  100% {
+    opacity: 0.6;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+
 /* Status readout danger pulse — critical severity states */
 @keyframes danger-pulse {
   0%,

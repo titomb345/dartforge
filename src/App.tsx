@@ -73,6 +73,7 @@ import { useSignatureMappings } from './hooks/useSignatureMappings';
 import { matchTriggers, expandTriggerBody, resetTriggerCooldowns } from './lib/triggerEngine';
 import { smartWrite } from './lib/terminalUtils';
 import { ActionBlocker, type ActionBlockerState } from './lib/actionBlocker';
+import { type MovementMode, getNextMode, applyMovementMode, movementModeLabel } from './lib/movementMode';
 import { shouldGagLine } from './lib/gagPatterns';
 import { stripAnsi } from './lib/ansiUtils';
 import { SignatureProvider } from './contexts/SignatureContext';
@@ -686,6 +687,10 @@ function AppMain() {
   const actionBlockingEnabledRef = useLatestRef(appSettings.actionBlockingEnabled);
   const gagGroupsRef = useLatestRef(appSettings.gagGroups);
 
+  // Movement mode — direction command prefixing (lead/row/sneak)
+  const [movementMode, setMovementMode] = useState<MovementMode>('normal');
+  const movementModeRef = useLatestRef(movementMode);
+
   // Skill tracker — needs sendCommand ref (set after useMudConnection)
   const sendCommandRef = useRef<((cmd: string) => Promise<void>) | null>(null);
   const {
@@ -699,6 +704,19 @@ function AppMain() {
     updateSkillCount,
     deleteSkill,
   } = useSkillTracker(sendCommandRef, processorRef, terminalRef, dataStore);
+  const skillDataRef = useLatestRef(skillData);
+
+  const cycleMovementMode = useCallback(() => {
+    const hasSneaking = !!skillDataRef.current.skills['sneaking'];
+    const next = getNextMode(movementModeRef.current, hasSneaking);
+    setMovementMode(next);
+    if (terminalRef.current) {
+      smartWrite(
+        terminalRef.current,
+        `\x1b[36m[Movement mode: ${movementModeLabel(next)}]\x1b[0m\r\n`
+      );
+    }
+  }, [skillDataRef, movementModeRef, terminalRef]);
 
   // Improve counter hook
   const improveCounters = useImproveCounters();
@@ -1047,6 +1065,12 @@ function AppMain() {
         return;
       }
 
+      // Built-in /movemode — cycle movement mode
+      if (/^\/movemode\b/i.test(rawInput.trim())) {
+        cycleMovementMode();
+        return;
+      }
+
       // Built-in /convert command — intercept before alias expansion
       if (/^\/convert\b/i.test(rawInput.trim())) {
         if (terminalRef.current) {
@@ -1130,7 +1154,13 @@ function AppMain() {
         return;
       }
 
-      const result = expandInput(rawInput, mergedAliasesRef.current, {
+      // Movement mode — prepend direction prefix if active
+      const effectiveInput =
+        movementModeRef.current !== 'normal'
+          ? applyMovementMode(rawInput, movementModeRef.current)
+          : rawInput;
+
+      const result = expandInput(effectiveInput, mergedAliasesRef.current, {
         enableSpeedwalk: enableSpeedwalkRef.current,
         activeCharacter: activeCharacterRef.current,
       });
@@ -1192,12 +1222,13 @@ function AppMain() {
     [sendCommand]
   );
 
-  // Clear logged-in state, reset trigger cooldowns, and clear action blocker on disconnect
+  // Clear logged-in state, reset trigger cooldowns, action blocker, and movement mode on disconnect
   useEffect(() => {
     if (!connected) {
       setLoggedIn(false);
       resetTriggerCooldowns();
       actionBlockerRef.current.reset();
+      setMovementMode('normal');
     }
   }, [connected]);
 
@@ -1435,6 +1466,8 @@ function AppMain() {
       actionBlocked: blockerState.blocked,
       actionBlockLabel: blockerState.blockLabel,
       actionQueueLength: blockerState.queueLength,
+      movementMode,
+      onToggleMovementMode: cycleMovementMode,
     }),
     [
       connected,
@@ -1460,6 +1493,8 @@ function AppMain() {
       appSettings.updateAntiIdleEnabled,
       appSettings.updateAlignmentTrackingEnabled,
       blockerState,
+      movementMode,
+      cycleMovementMode,
     ]
   );
 

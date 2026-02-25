@@ -1,5 +1,6 @@
 import { createContext, useContext } from 'react';
 import type { ActiveTimerBadge } from '../hooks/useTimerEngines';
+import type { MovementMode } from '../lib/movementMode';
 
 export interface CommandInputState {
   // Connection
@@ -31,6 +32,9 @@ export interface CommandInputState {
   actionBlocked: boolean;
   actionBlockLabel: string | null;
   actionQueueLength: number;
+  // Movement mode
+  movementMode: MovementMode;
+  onToggleMovementMode: () => void;
   // Custom timers
   activeTimers: ActiveTimerBadge[];
   onToggleTimer: (id: string) => void;

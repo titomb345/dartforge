@@ -104,6 +104,8 @@ export const CommandInput = forwardRef<HTMLTextAreaElement, CommandInputProps>(
       actionBlocked,
       actionBlockLabel,
       actionQueueLength,
+      movementMode,
+      onToggleMovementMode,
     } = useCommandInputContext();
     const { commandHistorySize, numpadMappings, showTimerBadges } = useAppSettingsContext();
     const { active: spotlightActive } = useSpotlight();
@@ -111,6 +113,8 @@ export const CommandInput = forwardRef<HTMLTextAreaElement, CommandInputProps>(
     numpadRef.current = numpadMappings;
     const toggleCounterRef = useRef(onToggleCounter);
     toggleCounterRef.current = onToggleCounter;
+    const toggleMovementModeRef = useRef(onToggleMovementMode);
+    toggleMovementModeRef.current = onToggleMovementMode;
     const onHistoryChangeRef = useRef(onHistoryChange);
     onHistoryChangeRef.current = onHistoryChange;
     const [value, setValue] = useState('');
@@ -229,6 +233,13 @@ export const CommandInput = forwardRef<HTMLTextAreaElement, CommandInputProps>(
         if (e.code === 'NumpadMultiply' && toggleCounterRef.current) {
           e.preventDefault();
           toggleCounterRef.current();
+          return;
+        }
+
+        // Numpad / — cycle movement mode
+        if (e.code === 'NumpadDivide') {
+          e.preventDefault();
+          toggleMovementModeRef.current();
           return;
         }
 
@@ -382,6 +393,18 @@ export const CommandInput = forwardRef<HTMLTextAreaElement, CommandInputProps>(
           >
             <span>{actionBlockLabel ?? 'BLOCKED'}</span>
             {actionQueueLength > 0 && <span>({actionQueueLength})</span>}
+          </span>
+        )}
+
+        {/* Movement mode badge (only when not normal) */}
+        {movementMode !== 'normal' && (
+          <span
+            title={`Movement mode: ${movementMode} — Numpad / or /movemode to cycle`}
+            onClick={onToggleMovementMode}
+            className="flex items-center gap-1 px-1.5 py-1 rounded border text-[9px] font-mono self-center shrink-0 ml-1 text-[#2dd4bf] border-[#2dd4bf]/30 bg-[#2dd4bf]/8 cursor-pointer select-none animate-pulse-slow"
+            style={{ filter: 'drop-shadow(0 0 3px rgba(45, 212, 191, 0.25))' }}
+          >
+            <span>{movementMode.charAt(0).toUpperCase() + movementMode.slice(1)}</span>
           </span>
         )}
 

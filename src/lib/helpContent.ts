@@ -235,6 +235,12 @@ export const HELP_CATEGORIES: HelpCategory[] = [
         kbd: ['Numpad *'],
       },
       {
+        title: 'Cycle Movement Mode',
+        description:
+          'Cycle through movement modes: Normal → Leading → Rowing. Active mode prefixes all direction commands automatically.',
+        kbd: ['Numpad /'],
+      },
+      {
         title: 'Tab Completion',
         description:
           'Press Tab to auto-complete from recent terminal output. Press Tab again to cycle through matches.',
@@ -315,6 +321,11 @@ export const HELP_CATEGORIES: HelpCategory[] = [
       {
         title: '/unblock',
         description: 'Manually release action blocking and send all queued commands immediately.',
+      },
+      {
+        title: '/movemode',
+        description:
+          'Cycle movement mode: Normal → Leading → Rowing. When active, direction commands are automatically prefixed (e.g. "e" becomes "lead e"). Also toggleable via Numpad /.',
       },
     ],
   },

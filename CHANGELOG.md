@@ -18,6 +18,7 @@ The `[Unreleased]` header controls automatic version bumping on merge:
 - Who auto-refresh countdown badge next to command input (matches alignment/anti-idle pattern); double-click to disable
 - Complete spell database (`spellData.ts`) with abbreviations, cast times, and aura costs for all 93+ spells
 - Non-spell skill database (`skillData.ts`) with optional abbreviations and category assignments; category sets in `skillCategories.ts` are now derived from these databases automatically
+- Movement mode system — cycle through Normal → Leading → Rowing to automatically prefix direction commands (e.g. `e` becomes `lead e`); toggle via Numpad `/` or `/movemode` command; teal pulsing badge shows active mode; resets on disconnect
 - Action blocking — automatically queues commands during channeled actions (cast, study, hunt, gather, search, invoke, inscribe, write, revise, learn book, summon armor) to prevent accidental interruption; queued commands flush on completion with chain-aware re-queuing
 - `/block` and `/unblock` built-in commands for manual blocking control
 - Auto-login: store up to 2 character profiles in Settings > Characters — name and password are sent automatically on connect
