@@ -7,6 +7,12 @@ import { smartWrite } from '../lib/terminalUtils';
 import { stripAnsi } from '../lib/ansiUtils';
 import type { OutputFilter } from '../lib/outputFilter';
 
+/** ANSI SGR foreground color names (indexed 0-7 → 30-37 / 90-97). */
+const SGR_FG_NAMES = ['black', 'red', 'green', 'yellow', 'blue', 'magenta', 'cyan', 'white'];
+
+/** Pre-compiled regex for matching ANSI SGR sequences. */
+const ANSI_SGR_RE = /\x1b\[[0-9;]*m/g;
+
 /** End marker for the DartMUD ASCII banner */
 const BANNER_END_MARKER = 'Ferdarchi';
 /** Max bytes to buffer before giving up on banner detection */
@@ -30,7 +36,7 @@ function stripPrompt(data: string): string {
   const clean = stripAnsi(data);
   // Bare prompt only — preserve any ANSI codes (especially color resets)
   if (clean.trim() === '>' || clean.trim() === '') {
-    const ansiCodes = data.match(/\x1b\[[0-9;]*m/g);
+    const ansiCodes = data.match(ANSI_SGR_RE);
     return ansiCodes ? ansiCodes.join('') : '';
   }
   // Strip trailing prompt after newline
@@ -39,11 +45,10 @@ function stripPrompt(data: string): string {
 
 /** Map a single ANSI SGR code to a human-readable name */
 function sgrName(code: number): string | null {
-  const FG = ['black', 'red', 'green', 'yellow', 'blue', 'magenta', 'cyan', 'white'];
-  if (code >= 30 && code <= 37) return FG[code - 30];
-  if (code >= 90 && code <= 97) return 'bright ' + FG[code - 90];
-  if (code >= 40 && code <= 47) return 'bg:' + FG[code - 40];
-  if (code >= 100 && code <= 107) return 'bg:bright ' + FG[code - 100];
+  if (code >= 30 && code <= 37) return SGR_FG_NAMES[code - 30];
+  if (code >= 90 && code <= 97) return 'bright ' + SGR_FG_NAMES[code - 90];
+  if (code >= 40 && code <= 47) return 'bg:' + SGR_FG_NAMES[code - 40];
+  if (code >= 100 && code <= 107) return 'bg:bright ' + SGR_FG_NAMES[code - 100];
   if (code === 2) return 'dim';
   if (code === 3) return 'italic';
   if (code === 4) return 'underline';
@@ -195,6 +200,25 @@ export function useMudConnection(
             }
           };
 
+          /** Shared pipeline: detect prompts → filter → annotate → strip → write. */
+          const processData = (data: string) => {
+            detectPrompts(data);
+            onOutputChunkRef.current?.(data);
+            const filtered = outputFilterRef?.current
+              ? outputFilterRef.current.filter(data)
+              : data;
+            if (filtered) {
+              let out = debugModeRef.current ? annotateAnsi(filtered) : filtered;
+              const shouldStrip = outputFilterRef?.current?.stripPrompts ?? true;
+              if (payload.ga && shouldStrip) {
+                out = stripPrompt(out);
+              } else if (endsWithPrompt(filtered)) {
+                out += '\n';
+              }
+              if (out) smartWrite(term, out);
+            }
+          };
+
           // Banner filtering: suppress the server's ASCII splash on connect
           if (filteringBannerRef.current) {
             bannerBufferRef.current += payload.data;
@@ -207,66 +231,18 @@ export function useMudConnection(
               const afterBanner =
                 lineEnd >= 0 ? bannerBufferRef.current.substring(lineEnd + 1) : '';
               bannerBufferRef.current = '';
-              if (afterBanner.length > 0) {
-                detectPrompts(afterBanner);
-                onOutputChunkRef.current?.(afterBanner);
-                const filteredAfter = outputFilterRef?.current
-                  ? outputFilterRef.current.filter(afterBanner)
-                  : afterBanner;
-                if (filteredAfter) {
-                  let afterOutput = debugModeRef.current
-                    ? annotateAnsi(filteredAfter)
-                    : filteredAfter;
-                  const shouldStrip = outputFilterRef?.current?.stripPrompts ?? true;
-                  if (payload.ga && shouldStrip) {
-                    afterOutput = stripPrompt(afterOutput);
-                  } else if (endsWithPrompt(filteredAfter)) {
-                    afterOutput += '\n';
-                  }
-                  if (afterOutput) smartWrite(term, afterOutput);
-                }
-              }
+              if (afterBanner.length > 0) processData(afterBanner);
             } else if (bannerBufferRef.current.length > BANNER_MAX_BUFFER) {
               // Safety: too much data without finding banner, flush it all
               filteringBannerRef.current = false;
               const rawBuffer = bannerBufferRef.current;
               bannerBufferRef.current = '';
-              detectPrompts(rawBuffer);
-              onOutputChunkRef.current?.(rawBuffer);
-              const filteredBuffer = outputFilterRef?.current
-                ? outputFilterRef.current.filter(rawBuffer)
-                : rawBuffer;
-              if (filteredBuffer) {
-                let flushOutput = debugModeRef.current
-                  ? annotateAnsi(filteredBuffer)
-                  : filteredBuffer;
-                const shouldStrip2 = outputFilterRef?.current?.stripPrompts ?? true;
-                if (payload.ga && shouldStrip2) {
-                  flushOutput = stripPrompt(flushOutput);
-                } else if (endsWithPrompt(filteredBuffer)) {
-                  flushOutput += '\n';
-                }
-                if (flushOutput) smartWrite(term, flushOutput);
-              }
+              processData(rawBuffer);
             }
             return;
           }
 
-          detectPrompts(payload.data);
-          onOutputChunkRef.current?.(payload.data);
-          const filtered = outputFilterRef?.current
-            ? outputFilterRef.current.filter(payload.data)
-            : payload.data;
-          if (filtered) {
-            let output = debugModeRef.current ? annotateAnsi(filtered) : filtered;
-            const shouldStrip3 = outputFilterRef?.current?.stripPrompts ?? true;
-            if (payload.ga && shouldStrip3) {
-              output = stripPrompt(output);
-            } else if (endsWithPrompt(filtered)) {
-              output += '\n';
-            }
-            if (output) smartWrite(term, output);
-          }
+          processData(payload.data);
         },
 
         onStatus: (payload: ConnectionStatusPayload) => {

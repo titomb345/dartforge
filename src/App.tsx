@@ -170,6 +170,13 @@ function AppMain() {
   const [debugMode, setDebugMode] = useState(false);
   const [activePanel, setActivePanel] = useState<Panel | null>(null);
   const togglePanel = (panel: Panel) => setActivePanel((v) => (v === panel ? null : panel));
+  const closePanel = useCallback(() => setActivePanel(null), []);
+  const writeToTerm = useCallback(
+    (text: string) => {
+      if (terminalRef.current) smartWrite(terminalRef.current, text);
+    },
+    []
+  );
   const [panelLayout, setPanelLayout] = useState<PanelLayout>({ left: [], right: [] });
   const [pinnedWidths, setPinnedWidths] = useState<{ left: number; right: number }>({
     left: 320,
@@ -383,29 +390,14 @@ function AppMain() {
     });
   }, []);
 
-  // Persist panel layout
+  // Persist panel layout, widths, heights, and collapsed state
   useEffect(() => {
     if (!panelLayoutLoadedRef.current) return;
     dataStore.set('settings.json', 'panelLayout', panelLayout).catch(console.error);
-  }, [panelLayout]);
-
-  // Persist pinned panel widths
-  useEffect(() => {
-    if (!panelLayoutLoadedRef.current) return;
     dataStore.set('settings.json', 'pinnedWidths', pinnedWidths).catch(console.error);
-  }, [pinnedWidths]);
-
-  // Persist vertical panel height ratios
-  useEffect(() => {
-    if (!panelLayoutLoadedRef.current) return;
     dataStore.set('settings.json', 'panelHeights', panelHeights).catch(console.error);
-  }, [panelHeights]);
-
-  // Persist collapsed sides
-  useEffect(() => {
-    if (!panelLayoutLoadedRef.current) return;
     dataStore.set('settings.json', 'collapsedSides', collapsedSides).catch(console.error);
-  }, [collapsedSides]);
+  }, [panelLayout, pinnedWidths, panelHeights, collapsedSides]);
 
   // Clear collapsed flag when a side has no pinned panels
   useEffect(() => {
@@ -516,36 +508,16 @@ function AppMain() {
   const outputFilterRef = useRef<OutputFilter | null>(null);
   if (!outputFilterRef.current) {
     outputFilterRef.current = new OutputFilter({
-      onConcentration: (match) => {
-        updateConcentrationRef.current(match);
-      },
-      onHealth: (match) => {
-        updateHealthRef.current(match);
-      },
-      onHunger: (level) => {
-        updateHungerRef.current(level);
-      },
-      onThirst: (level) => {
-        updateThirstRef.current(level);
-      },
-      onAura: (match) => {
-        updateAuraRef.current(match);
-      },
-      onEncumbrance: (match) => {
-        updateEncumbranceRef.current(match);
-      },
-      onMovement: (match) => {
-        updateMovementRef.current(match);
-      },
-      onAlignment: (match) => {
-        updateAlignmentRef.current(match);
-      },
-      onChat: (msg) => {
-        handleChatMessageRef.current(msg);
-      },
-      onWho: (snapshot) => {
-        updateWhoSnapshotRef.current(snapshot);
-      },
+      onConcentration: (match) => updateConcentrationRef.current(match),
+      onHealth: (match) => updateHealthRef.current(match),
+      onHunger: (level) => updateHungerRef.current(level),
+      onThirst: (level) => updateThirstRef.current(level),
+      onAura: (match) => updateAuraRef.current(match),
+      onEncumbrance: (match) => updateEncumbranceRef.current(match),
+      onMovement: (match) => updateMovementRef.current(match),
+      onAlignment: (match) => updateAlignmentRef.current(match),
+      onChat: (msg) => handleChatMessageRef.current(msg),
+      onWho: (snapshot) => updateWhoSnapshotRef.current(snapshot),
       onLine: (stripped, raw) => {
         // Action blocker — check for unblock triggers
         const blocker = actionBlockerRef.current;
@@ -556,13 +528,11 @@ function AppMain() {
         ) {
           const { toSend, reblocked } = blocker.flush();
           const remaining = reblocked ? blocker.queueLength : 0;
-          if (terminalRef.current) {
-            let msg = '[UNBLOCKED';
-            if (toSend.length > 0) msg += ` — sending ${toSend.length} queued`;
-            if (remaining > 0) msg += `, re-queuing ${remaining} behind ${blocker.blockLabel}`;
-            msg += ']';
-            smartWrite(terminalRef.current, `\x1b[32m${msg}\x1b[0m\r\n`);
-          }
+          let msg = '[UNBLOCKED';
+          if (toSend.length > 0) msg += ` — sending ${toSend.length} queued`;
+          if (remaining > 0) msg += `, re-queuing ${remaining} behind ${blocker.blockLabel}`;
+          msg += ']';
+          writeToTerm(`\x1b[32m${msg}\x1b[0m\r\n`);
           // Flush queued commands via raw sendCommand (bypasses blocker)
           (async () => {
             for (const cmd of toSend) {
@@ -753,13 +723,8 @@ function AppMain() {
     const hasSneaking = !!skillDataRef.current.skills['sneaking'];
     const next = getNextMode(movementModeRef.current, hasSneaking);
     setMovementMode(next);
-    if (terminalRef.current) {
-      smartWrite(
-        terminalRef.current,
-        `\x1b[36m[Movement mode: ${movementModeLabel(next)}]\x1b[0m\r\n`
-      );
-    }
-  }, [skillDataRef, movementModeRef, terminalRef]);
+    writeToTerm(`\x1b[36m[Movement mode: ${movementModeLabel(next)}]\x1b[0m\r\n`);
+  }, [skillDataRef, movementModeRef, writeToTerm]);
 
   // Improve counter hook
   const improveCounters = useImproveCounters();
@@ -825,14 +790,9 @@ function AppMain() {
         },
         'global'
       );
-      if (terminalRef.current) {
-        smartWrite(
-          terminalRef.current,
-          `\x1b[90m[Gag trigger created for: ${selectedText}]\x1b[0m\r\n`
-        );
-      }
+      writeToTerm(`\x1b[90m[Gag trigger created for: ${selectedText}]\x1b[0m\r\n`);
     },
-    [triggerState.createTrigger]
+    [triggerState.createTrigger, writeToTerm]
   );
 
   // Context menu → notes panel integration
@@ -970,9 +930,7 @@ function AppMain() {
     const blocker = actionBlockerRef.current;
     if (actionBlockingEnabledRef.current && blocker.blocked) {
       blocker.enqueue(command);
-      if (terminalRef.current) {
-        smartWrite(terminalRef.current, `\x1b[33mQUEUED: ${command}\x1b[0m\r\n`);
-      }
+      writeToTerm(`\x1b[33mQUEUED: ${command}\x1b[0m\r\n`);
       return;
     }
     if (actionBlockingEnabledRef.current) {
@@ -987,11 +945,7 @@ function AppMain() {
     send: async (text) => {
       await sendCommandRef.current?.(text);
     },
-    echo: (text) => {
-      if (terminalRef.current) {
-        smartWrite(terminalRef.current, `\x1b[36m${text}\x1b[0m\r\n`);
-      }
-    },
+    echo: (text) => writeToTerm(`\x1b[36m${text}\x1b[0m\r\n`),
     expand: (input) =>
       expandInput(input, mergedAliasesRef.current, {
         enableSpeedwalk: enableSpeedwalkRef.current,
@@ -1003,10 +957,9 @@ function AppMain() {
     convert: (args) => {
       const parsed = parseConvertCommand(`/convert ${args}`);
       if (typeof parsed === 'string') {
-        if (terminalRef.current) smartWrite(terminalRef.current, `\x1b[31m${parsed}\x1b[0m\r\n`);
+        writeToTerm(`\x1b[31m${parsed}\x1b[0m\r\n`);
       } else {
-        if (terminalRef.current)
-          smartWrite(terminalRef.current, `${formatMultiConversion(parsed)}\r\n`);
+        writeToTerm(`${formatMultiConversion(parsed)}\r\n`);
       }
     },
     getVariables: () => mergedVariablesRef.current,
@@ -1019,9 +972,7 @@ function AppMain() {
       if (!postSyncEnabledRef.current) return;
       const raw = postSyncCommandsRef.current.trim();
       if (!raw) return;
-      if (terminalRef.current) {
-        smartWrite(terminalRef.current, '\x1b[90m[login commands]\x1b[0m\r\n');
-      }
+      writeToTerm('\x1b[90m[login commands]\x1b[0m\r\n');
       const result = expandInput(raw, mergedAliasesRef.current, {
         enableSpeedwalk: enableSpeedwalkRef.current,
         activeCharacter: activeCharacterRef.current,
@@ -1040,65 +991,49 @@ function AppMain() {
   // Alias-expanded send: preprocesses input through the alias engine
   const handleSend = useCallback(
     async (rawInput: string) => {
+      const trimmed = rawInput.trim();
+
       // Command echo — write dimmed line to terminal before processing
-      if (commandEchoRef.current && terminalRef.current && rawInput.trim()) {
+      if (commandEchoRef.current && trimmed) {
         if (passwordModeRef.current) {
-          smartWrite(terminalRef.current, '\x1b[90m> ******\x1b[0m\r\n');
+          writeToTerm('\x1b[90m> ******\x1b[0m\r\n');
         } else {
-          smartWrite(terminalRef.current, `\x1b[90m> ${rawInput}\x1b[0m\r\n`);
+          writeToTerm(`\x1b[90m> ${rawInput}\x1b[0m\r\n`);
         }
       }
 
       // Session logging — log sent command
-      if (rawInput.trim()) logCommandRef.current?.(rawInput);
+      if (trimmed) logCommandRef.current?.(rawInput);
 
       // Built-in /notify test command — fires a test notification to debug the backend
-      if (/^\/notify\b/i.test(rawInput.trim())) {
-        const msg = rawInput.trim().slice(7).trim() || 'Test notification from DartForge';
-        if (terminalRef.current) {
-          smartWrite(terminalRef.current, `\x1b[36mSending test notification...\x1b[0m\r\n`);
-        }
+      if (/^\/notify\b/i.test(trimmed)) {
+        const msg = trimmed.slice(7).trim() || 'Test notification from DartForge';
+        writeToTerm('\x1b[36mSending test notification...\x1b[0m\r\n');
         alertUser('DartForge', msg)
-          .then(() => {
-            if (terminalRef.current)
-              smartWrite(terminalRef.current, `\x1b[32mNotification sent (no error).\x1b[0m\r\n`);
-          })
-          .catch((e) => {
-            if (terminalRef.current)
-              smartWrite(terminalRef.current, `\x1b[31mNotification error: ${e}\x1b[0m\r\n`);
-          });
+          .then(() => writeToTerm('\x1b[32mNotification sent (no error).\x1b[0m\r\n'))
+          .catch((e) => writeToTerm(`\x1b[31mNotification error: ${e}\x1b[0m\r\n`));
         return;
       }
 
       // Built-in /block — manually activate action blocking
-      if (/^\/block\b/i.test(rawInput.trim())) {
+      if (/^\/block\b/i.test(trimmed)) {
         const blocker = actionBlockerRef.current;
         if (blocker.blocked) {
-          if (terminalRef.current) {
-            smartWrite(
-              terminalRef.current,
-              `\x1b[33m[Already blocked: ${blocker.blockLabel}]\x1b[0m\r\n`
-            );
-          }
+          writeToTerm(`\x1b[33m[Already blocked: ${blocker.blockLabel}]\x1b[0m\r\n`);
         } else {
           blocker.block({ key: 'manual', label: 'Manual', pattern: /^$/ });
-          if (terminalRef.current) {
-            smartWrite(terminalRef.current, '\x1b[33m[BLOCKED — manual]\x1b[0m\r\n');
-          }
+          writeToTerm('\x1b[33m[BLOCKED — manual]\x1b[0m\r\n');
         }
         return;
       }
 
       // Built-in /unblock — manually release block and flush queue
-      if (/^\/unblock\b/i.test(rawInput.trim())) {
+      if (/^\/unblock\b/i.test(trimmed)) {
         const blocker = actionBlockerRef.current;
         const queued = blocker.forceUnblock();
-        if (terminalRef.current) {
-          smartWrite(
-            terminalRef.current,
-            `\x1b[32m[UNBLOCKED — ${queued.length} queued command(s) released]\x1b[0m\r\n`
-          );
-        }
+        writeToTerm(
+          `\x1b[32m[UNBLOCKED — ${queued.length} queued command(s) released]\x1b[0m\r\n`
+        );
         // Send queued commands via raw sendCommand (bypasses blocker)
         (async () => {
           for (const cmd of queued) {
@@ -1109,89 +1044,78 @@ function AppMain() {
       }
 
       // Built-in /movemode — cycle movement mode
-      if (/^\/movemode\b/i.test(rawInput.trim())) {
+      if (/^\/movemode\b/i.test(trimmed)) {
         cycleMovementMode();
         return;
       }
 
       // Built-in /convert command — intercept before alias expansion
-      if (/^\/convert\b/i.test(rawInput.trim())) {
-        if (terminalRef.current) {
-          const parsed = parseConvertCommand(rawInput.trim());
-          if (typeof parsed === 'string') {
-            smartWrite(terminalRef.current, `\x1b[31m${parsed}\x1b[0m\r\n`);
-          } else {
-            const output = formatMultiConversion(parsed);
-            smartWrite(terminalRef.current, `${output}\r\n`);
-          }
+      if (/^\/convert\b/i.test(trimmed)) {
+        const parsed = parseConvertCommand(trimmed);
+        if (typeof parsed === 'string') {
+          writeToTerm(`\x1b[31m${parsed}\x1b[0m\r\n`);
+        } else {
+          writeToTerm(`${formatMultiConversion(parsed)}\r\n`);
         }
         return;
       }
 
       // Built-in /var command — manage user variables
-      if (/^\/var\b/i.test(rawInput.trim())) {
-        const varInput = rawInput.trim().slice(4).trim();
-        if (terminalRef.current) {
-          if (!varInput) {
-            // /var — list all variables
-            const vars = mergedVariablesRef.current.filter((v) => v.enabled);
-            if (vars.length === 0) {
-              smartWrite(terminalRef.current, '\x1b[36mNo variables set.\x1b[0m\r\n');
-            } else {
-              smartWrite(terminalRef.current, '\x1b[36m--- Variables ---\x1b[0m\r\n');
-              for (const v of vars) {
-                smartWrite(terminalRef.current, `\x1b[36m  $${v.name} = ${v.value}\x1b[0m\r\n`);
-              }
+      if (/^\/var\b/i.test(trimmed)) {
+        const varInput = trimmed.slice(4).trim();
+        if (!varInput) {
+          // /var — list all variables
+          const vars = mergedVariablesRef.current.filter((v) => v.enabled);
+          if (vars.length === 0) {
+            writeToTerm('\x1b[36mNo variables set.\x1b[0m\r\n');
+          } else {
+            writeToTerm('\x1b[36m--- Variables ---\x1b[0m\r\n');
+            for (const v of vars) {
+              writeToTerm(`\x1b[36m  $${v.name} = ${v.value}\x1b[0m\r\n`);
             }
-          } else if (varInput.startsWith('-d ')) {
-            // /var -d <name> — delete variable
-            const name = varInput.slice(3).trim();
-            if (deleteVariableByNameRef.current(name)) {
-              smartWrite(terminalRef.current, `\x1b[36mDeleted variable $${name}\x1b[0m\r\n`);
+          }
+        } else if (varInput.startsWith('-d ')) {
+          // /var -d <name> — delete variable
+          const name = varInput.slice(3).trim();
+          if (deleteVariableByNameRef.current(name)) {
+            writeToTerm(`\x1b[36mDeleted variable $${name}\x1b[0m\r\n`);
+          } else {
+            writeToTerm(`\x1b[31mVariable "$${name}" not found.\x1b[0m\r\n`);
+          }
+        } else {
+          // /var <name> <value> or /var -g <name> <value>
+          let scope: 'character' | 'global' = 'character';
+          let rest = varInput;
+          if (rest.startsWith('-g ')) {
+            scope = 'global';
+            rest = rest.slice(3).trim();
+          }
+          const spaceIdx = rest.indexOf(' ');
+          if (spaceIdx === -1) {
+            // /var <name> — search variables by name (regex)
+            const query = rest;
+            let re: RegExp;
+            try {
+              re = new RegExp(query, 'i');
+            } catch {
+              re = new RegExp(query.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i');
+            }
+            const matches = mergedVariablesRef.current.filter(
+              (v) => v.enabled && re.test(v.name)
+            );
+            if (matches.length === 0) {
+              writeToTerm(`\x1b[36mNo variables matching "${query}".\x1b[0m\r\n`);
             } else {
-              smartWrite(terminalRef.current, `\x1b[31mVariable "$${name}" not found.\x1b[0m\r\n`);
+              writeToTerm(`\x1b[36m--- Variables matching "${query}" ---\x1b[0m\r\n`);
+              for (const v of matches) {
+                writeToTerm(`\x1b[36m  $${v.name} = ${v.value}\x1b[0m\r\n`);
+              }
             }
           } else {
-            // /var <name> <value> or /var -g <name> <value>
-            let scope: 'character' | 'global' = 'character';
-            let rest = varInput;
-            if (rest.startsWith('-g ')) {
-              scope = 'global';
-              rest = rest.slice(3).trim();
-            }
-            const spaceIdx = rest.indexOf(' ');
-            if (spaceIdx === -1) {
-              // /var <name> — search variables by name (regex)
-              const query = rest;
-              let re: RegExp;
-              try {
-                re = new RegExp(query, 'i');
-              } catch {
-                re = new RegExp(query.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i');
-              }
-              const matches = mergedVariablesRef.current.filter(
-                (v) => v.enabled && re.test(v.name)
-              );
-              if (matches.length === 0) {
-                smartWrite(
-                  terminalRef.current,
-                  `\x1b[36mNo variables matching "${query}".\x1b[0m\r\n`
-                );
-              } else {
-                smartWrite(
-                  terminalRef.current,
-                  `\x1b[36m--- Variables matching "${query}" ---\x1b[0m\r\n`
-                );
-                for (const v of matches) {
-                  smartWrite(terminalRef.current, `\x1b[36m  $${v.name} = ${v.value}\x1b[0m\r\n`);
-                }
-              }
-            } else {
-              const name = rest.slice(0, spaceIdx);
-              const value = rest.slice(spaceIdx + 1);
-              setVarRef.current(name, value, scope);
-              smartWrite(terminalRef.current, `\x1b[36m$${name} = ${value} (${scope})\x1b[0m\r\n`);
-            }
+            const name = rest.slice(0, spaceIdx);
+            const value = rest.slice(spaceIdx + 1);
+            setVarRef.current(name, value, scope);
+            writeToTerm(`\x1b[36m$${name} = ${value} (${scope})\x1b[0m\r\n`);
           }
         }
         return;
@@ -1208,6 +1132,7 @@ function AppMain() {
         activeCharacter: activeCharacterRef.current,
       });
       await executeCommands(result.commands, {
+        ...triggerRunnerRef.current,
         send: async (text) => {
           // TODO: Re-enable when automapper is ready
           // mapTrackCommandRef.current(text);
@@ -1236,30 +1161,6 @@ function AppMain() {
             handleMagicParseRef.current({ alloc: updated, arcane: 0 });
           }
         },
-        echo: (text) => {
-          if (terminalRef.current) {
-            smartWrite(terminalRef.current, `\x1b[36m${text}\x1b[0m\r\n`);
-          }
-        },
-        expand: (input) =>
-          expandInput(input, mergedAliasesRef.current, {
-            enableSpeedwalk: enableSpeedwalkRef.current,
-            activeCharacter: activeCharacterRef.current,
-          }).commands,
-        setVar: (name, value, scope) => {
-          setVarRef.current(name, value, scope);
-        },
-        convert: (args) => {
-          const parsed = parseConvertCommand(`/convert ${args}`);
-          if (typeof parsed === 'string') {
-            if (terminalRef.current)
-              smartWrite(terminalRef.current, `\x1b[31m${parsed}\x1b[0m\r\n`);
-          } else {
-            if (terminalRef.current)
-              smartWrite(terminalRef.current, `${formatMultiConversion(parsed)}\r\n`);
-          }
-        },
-        getVariables: () => mergedVariablesRef.current,
       });
     },
     [sendCommand]
@@ -1562,6 +1463,16 @@ function AppMain() {
     setTimeout(() => reconnect(), 300);
   }, [autoLoginActiveSlot, appSettings.updateAutoLoginActiveSlot, disconnect, reconnect]);
 
+  // Memoized toolbar callbacks to avoid re-renders
+  const handleReconnect = useCallback(() => {
+    reconnect();
+    requestAnimationFrame(() => inputRef.current?.focus());
+  }, [reconnect]);
+  const handleDisconnect = useCallback(() => {
+    disconnect();
+    requestAnimationFrame(() => inputRef.current?.focus());
+  }, [disconnect]);
+
   const appSettingsWithExtras = useMemo(
     () => ({
       ...appSettings,
@@ -1569,6 +1480,15 @@ function AppMain() {
       connected,
     }),
     [appSettings, switchCharacter, connected]
+  );
+
+  const handleMapWalkTo = useCallback(
+    async (directions: string[]) => {
+      for (const dir of directions) {
+        await sendCommand(dir);
+      }
+    },
+    [sendCommand]
   );
 
   return (
@@ -1597,14 +1517,8 @@ function AppMain() {
                                     <div className="flex flex-col h-screen bg-bg-canvas text-text-primary relative p-1 gap-1">
                                       <Toolbar
                                         connected={connected}
-                                        onReconnect={() => {
-                                          reconnect();
-                                          requestAnimationFrame(() => inputRef.current?.focus());
-                                        }}
-                                        onDisconnect={() => {
-                                          disconnect();
-                                          requestAnimationFrame(() => inputRef.current?.focus());
-                                        }}
+                                        onReconnect={handleReconnect}
+                                        onDisconnect={handleDisconnect}
                                       />
                                       <div className="flex-1 overflow-hidden flex flex-row gap-1 relative">
                                         {/* Left pinned region — full, collapsed strip, or hidden */}
@@ -1786,26 +1700,19 @@ function AppMain() {
                                           <NotesPanel mode="slideout" />
                                         </SlideOut>
                                         <SlideOut panel="aliases">
-                                          <AliasPanel onClose={() => setActivePanel(null)} />
+                                          <AliasPanel onClose={closePanel} />
                                         </SlideOut>
                                         <SlideOut panel="triggers">
-                                          <TriggerPanel onClose={() => setActivePanel(null)} />
+                                          <TriggerPanel onClose={closePanel} />
                                         </SlideOut>
                                         <SlideOut panel="timers">
-                                          <TimerPanel onClose={() => setActivePanel(null)} />
+                                          <TimerPanel onClose={closePanel} />
                                         </SlideOut>
                                         <SlideOut panel="variables">
-                                          <VariablePanel onClose={() => setActivePanel(null)} />
+                                          <VariablePanel onClose={closePanel} />
                                         </SlideOut>
                                         <SlideOut panel="map" pinnable="map">
-                                          <MapPanel
-                                            mode="slideout"
-                                            onWalkTo={async (directions) => {
-                                              for (const dir of directions) {
-                                                await sendCommand(dir);
-                                              }
-                                            }}
-                                          />
+                                          <MapPanel mode="slideout" onWalkTo={handleMapWalkTo} />
                                         </SlideOut>
                                         <SlideOut panel="alloc" pinnable="alloc">
                                           <AllocPanel mode="slideout" />

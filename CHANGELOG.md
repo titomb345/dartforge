@@ -20,6 +20,7 @@ The `[Unreleased]` header controls automatic version bumping on merge:
 - "Bashing" skill is now correctly categorized as Other instead of Combat
 
 ### Changed
+- Performance: DRY refactor across App.tsx, useAppSettings, useMudConnection, useTimerEngines, and outputFilter — extracted shared helpers, eliminated redundant computations, and memoized callbacks (~400 lines removed)
 - Skill panel filter bar is more compact (smaller padding and input size)
 - Chat panel timestamps now use smart tiered display — recent messages show relative time (`now`, `12m`, `3h`), older messages include day context (`Yest 2:30 PM`, `Mon 2:30 PM`, `Jan 15 2:30 PM`)
 - Chat panel now shows day separator bars (Today, Yesterday, full date) between message groups from different days

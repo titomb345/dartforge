@@ -11,6 +11,32 @@ import { executeCommands } from '../lib/commandUtils';
 import { smartWrite } from '../lib/terminalUtils';
 import { DEFAULT_BABEL_PHRASES } from '../lib/babelPhrases';
 
+/** Shared hook for the recurring guard → setInterval → cleanup pattern. */
+function usePollingTimer(
+  active: boolean,
+  intervalMs: number,
+  onTick: () => void,
+): number | null {
+  const onTickRef = useLatestRef(onTick);
+  const [nextAt, setNextAt] = useState<number | null>(null);
+  useEffect(() => {
+    if (!active) {
+      setNextAt(null);
+      return;
+    }
+    setNextAt(Date.now() + intervalMs);
+    const id = setInterval(() => {
+      onTickRef.current();
+      setNextAt(Date.now() + intervalMs);
+    }, intervalMs);
+    return () => {
+      clearInterval(id);
+      setNextAt(null);
+    };
+  }, [active, intervalMs]);
+  return nextAt;
+}
+
 export interface ActiveTimerBadge {
   id: string;
   name: string;
@@ -69,16 +95,11 @@ export function useTimerEngines({
   // Anti-idle timer — sends command at interval when connected + logged in + enabled
   const antiIdleEnabledRef = useLatestRef(antiIdleEnabled);
   const antiIdleCommandRef = useLatestRef(antiIdleCommand);
-  const [antiIdleNextAt, setAntiIdleNextAt] = useState<number | null>(null);
 
-  useEffect(() => {
-    if (!connected || !loggedIn || !antiIdleEnabled) {
-      setAntiIdleNextAt(null);
-      return;
-    }
-    const ms = antiIdleMinutes * 60_000;
-    setAntiIdleNextAt(Date.now() + ms);
-    const id = setInterval(() => {
+  const antiIdleNextAt = usePollingTimer(
+    connected && loggedIn && antiIdleEnabled,
+    antiIdleMinutes * 60_000,
+    () => {
       const cmd = antiIdleCommandRef.current;
       if (sendCommandRef.current && antiIdleEnabledRef.current) {
         if (terminalRef.current) {
@@ -86,62 +107,39 @@ export function useTimerEngines({
         }
         sendCommandRef.current(cmd);
       }
-      setAntiIdleNextAt(Date.now() + ms);
-    }, ms);
-    return () => {
-      clearInterval(id);
-      setAntiIdleNextAt(null);
-    };
-  }, [connected, loggedIn, antiIdleEnabled, antiIdleMinutes]);
+    },
+  );
 
   // Alignment tracking timer — polls "show alignment" at interval when enabled
   const alignmentTrackingEnabledRef = useLatestRef(alignmentTrackingEnabled);
-  const [alignmentNextAt, setAlignmentNextAt] = useState<number | null>(null);
 
-  useEffect(() => {
-    if (!connected || !loggedIn || !alignmentTrackingEnabled) {
-      setAlignmentNextAt(null);
-      return;
-    }
-    const ms = alignmentTrackingMinutes * 60_000;
-    setAlignmentNextAt(Date.now() + ms);
-    const id = setInterval(() => {
+  const alignmentNextAt = usePollingTimer(
+    connected && loggedIn && alignmentTrackingEnabled,
+    alignmentTrackingMinutes * 60_000,
+    () => {
       if (sendCommandRef.current && alignmentTrackingEnabledRef.current) {
         if (terminalRef.current && !outputFilterRef.current?.filterFlags.alignment) {
           smartWrite(terminalRef.current, `\x1b[90m[alignment sync]\x1b[0m\r\n`);
         }
         sendCommandRef.current('show alignment');
       }
-      setAlignmentNextAt(Date.now() + ms);
-    }, ms);
-    return () => {
-      clearInterval(id);
-      setAlignmentNextAt(null);
-    };
-  }, [connected, loggedIn, alignmentTrackingEnabled, alignmentTrackingMinutes]);
+    },
+  );
+
+  // Shared who refresh: gag output via sync, then send `who`
+  const refreshWho = useCallback(() => {
+    if (sendCommandRef.current && outputFilterRef.current) {
+      outputFilterRef.current.startWhoSync();
+      sendCommandRef.current('who');
+    }
+  }, []);
 
   // Who list auto-refresh — sends `who` at interval, gagged via OutputFilter
-  const [whoNextAt, setWhoNextAt] = useState<number | null>(null);
-
-  useEffect(() => {
-    if (!connected || !loggedIn || !whoAutoRefreshEnabled) {
-      setWhoNextAt(null);
-      return;
-    }
-    const ms = whoRefreshMinutes * 60_000;
-    setWhoNextAt(Date.now() + ms);
-    const id = setInterval(() => {
-      if (sendCommandRef.current && outputFilterRef.current) {
-        outputFilterRef.current.startWhoSync();
-        sendCommandRef.current('who');
-      }
-      setWhoNextAt(Date.now() + ms);
-    }, ms);
-    return () => {
-      clearInterval(id);
-      setWhoNextAt(null);
-    };
-  }, [connected, loggedIn, whoAutoRefreshEnabled, whoRefreshMinutes]);
+  const whoNextAt = usePollingTimer(
+    connected && loggedIn && whoAutoRefreshEnabled,
+    whoRefreshMinutes * 60_000,
+    refreshWho,
+  );
 
   // Babel language trainer — sends a random phrase in a target language at interval
   const babelEnabledRef = useLatestRef(babelEnabled);
@@ -178,17 +176,20 @@ export function useTimerEngines({
       clearInterval(id);
       setBabelNextAt(null);
     };
-  }, [connected, loggedIn, babelEnabled, babelIntervalSeconds, babelPhrases]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- babelPhrasesRef used inside callback; no restart needed on phrase edits
+  }, [connected, loggedIn, babelEnabled, babelLanguage, babelIntervalSeconds]);
 
   // Custom timer engine — manages per-timer setIntervals, only fires when connected + logged in
   const timerIntervalsRef = useRef<Map<string, ReturnType<typeof setInterval>>>(new Map());
+  const clearTimerIntervals = useCallback(() => {
+    for (const id of timerIntervalsRef.current.values()) clearInterval(id);
+    timerIntervalsRef.current.clear();
+  }, []);
   const mergedTimersRef = useLatestRef(mergedTimers);
   const [timerNextFires, setTimerNextFires] = useState<Record<string, number>>({});
 
   useEffect(() => {
-    // Clear all existing intervals
-    for (const id of timerIntervalsRef.current.values()) clearInterval(id);
-    timerIntervalsRef.current.clear();
+    clearTimerIntervals();
 
     if (!connected || !loggedIn) {
       setTimerNextFires({});
@@ -225,8 +226,7 @@ export function useTimerEngines({
     setTimerNextFires(nextFires);
 
     return () => {
-      for (const id of timerIntervalsRef.current.values()) clearInterval(id);
-      timerIntervalsRef.current.clear();
+      clearTimerIntervals();
       setTimerNextFires({});
     };
   }, [connected, loggedIn, mergedTimers]);
@@ -249,14 +249,6 @@ export function useTimerEngines({
     },
     [timerState]
   );
-
-  // Manual who refresh — trigger from the panel's refresh button
-  const refreshWho = useCallback(() => {
-    if (sendCommandRef.current && outputFilterRef.current) {
-      outputFilterRef.current.startWhoSync();
-      sendCommandRef.current('who');
-    }
-  }, []);
 
   return {
     antiIdleNextAt,

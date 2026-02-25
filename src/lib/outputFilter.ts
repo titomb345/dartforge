@@ -11,6 +11,19 @@ import { isWhoHeaderLine, isWhoFinalLine, buildWhoSnapshot, type WhoSnapshot } f
 import type { ChatMessage } from '../types/chat';
 import { stripAnsi } from './ansiUtils';
 
+/** Sync gag flag keys. */
+type SyncGagFlags = { hp: boolean; score: boolean; combatAlloc: boolean; magicAlloc: boolean; alignment: boolean; who: boolean };
+
+/** Default sync gag flags (all disabled). */
+const SYNC_GAGS_CLEAR: SyncGagFlags = {
+  hp: false,
+  score: false,
+  combatAlloc: false,
+  magicAlloc: false,
+  alignment: false,
+  who: false,
+};
+
 /** Pre-compiled regexes for score block detection (avoid recompiling on every call) */
 const SCORE_NAME_RE = /^You are .+ the .+\.\s+You are a /;
 const SCORE_STATUS_RE = /^(Needs|Encumbrance|Concentration|Movement|Aura)\s*:/i;
@@ -101,14 +114,7 @@ export class OutputFilter {
 
   /* ---- Sync gag state (pattern-based, NOT blanket suppression) ---- */
   private syncActive = false;
-  private syncGags = {
-    hp: false,
-    score: false,
-    combatAlloc: false,
-    magicAlloc: false,
-    alignment: false,
-    who: false,
-  };
+  private syncGags = { ...SYNC_GAGS_CLEAR };
   /** True while inside the multi-line score block during sync. */
   private syncInScoreBlock = false;
   /** True while a limb header was seen, waiting for its values line. */
@@ -135,6 +141,52 @@ export class OutputFilter {
     this.callbacks = callbacks;
   }
 
+  /** Reset all who-related tracking state (sync + passive). */
+  private resetWhoState(): void {
+    this.syncInWhoBlock = false;
+    this.syncWhoLines = [];
+    this.syncWhoRawLines = [];
+    this.passiveWhoActive = false;
+    this.passiveWhoLines = [];
+    this.passiveWhoRawLines = [];
+  }
+
+  /**
+   * Accumulate a who-list line and fire onWho when the footer is reached.
+   * Returns true when the block is complete.
+   */
+  private accumulateWhoLine(
+    stripped: string,
+    raw: string,
+    lines: string[],
+    rawLines: string[],
+  ): boolean {
+    lines.push(stripped);
+    rawLines.push(raw);
+    if (isWhoFinalLine(stripped)) {
+      this.callbacks.onWho?.(buildWhoSnapshot(lines, rawLines));
+      return true;
+    }
+    return false;
+  }
+
+  /** Clear any pending sync safety timer. */
+  private clearSyncTimer(): void {
+    if (this.syncTimer) {
+      clearTimeout(this.syncTimer);
+      this.syncTimer = null;
+    }
+  }
+
+  /** Start (or restart) the sync safety timer. */
+  private startSyncTimer(ms: number): void {
+    this.clearSyncTimer();
+    this.syncTimer = setTimeout(() => {
+      this.syncTimer = null;
+      this.endSync();
+    }, ms);
+  }
+
   /**
    * Begin sync gagging for login command responses.
    * Only specific patterns (hp, score, alloc, magic) are suppressed.
@@ -142,30 +194,13 @@ export class OutputFilter {
    */
   startSync(): void {
     this.syncActive = true;
-    this.syncGags = {
-      hp: true,
-      score: true,
-      combatAlloc: true,
-      magicAlloc: true,
-      alignment: true,
-      who: true,
-    };
+    this.syncGags = { hp: true, score: true, combatAlloc: true, magicAlloc: true, alignment: true, who: true };
     this.syncInScoreBlock = false;
     this.syncAllocPending = false;
     this.syncAllocHasData = false;
     this.syncMagicPending = false;
-    this.syncInWhoBlock = false;
-    this.syncWhoLines = [];
-    this.syncWhoRawLines = [];
-    // Abort any in-progress passive who tracking (sync takes over)
-    this.passiveWhoActive = false;
-    this.passiveWhoLines = [];
-    this.passiveWhoRawLines = [];
-    if (this.syncTimer) clearTimeout(this.syncTimer);
-    this.syncTimer = setTimeout(() => {
-      this.syncTimer = null;
-      this.endSync();
-    }, 5000);
+    this.resetWhoState();
+    this.startSyncTimer(5000);
   }
 
   /**
@@ -175,43 +210,21 @@ export class OutputFilter {
   startWhoSync(): void {
     this.syncActive = true;
     this.syncGags.who = true;
-    this.syncInWhoBlock = false;
-    this.syncWhoLines = [];
-    this.syncWhoRawLines = [];
-    // Abort any in-progress passive who tracking (sync takes over)
-    this.passiveWhoActive = false;
-    this.passiveWhoLines = [];
-    this.passiveWhoRawLines = [];
-    if (this.syncTimer) clearTimeout(this.syncTimer);
-    this.syncTimer = setTimeout(() => {
-      this.syncTimer = null;
-      this.endSync();
-    }, 5000);
+    this.resetWhoState();
+    this.startSyncTimer(5000);
   }
 
   /** End sync gagging. */
   endSync(): void {
     const wasActive = this.syncActive;
     this.syncActive = false;
-    this.syncGags = {
-      hp: false,
-      score: false,
-      combatAlloc: false,
-      magicAlloc: false,
-      alignment: false,
-      who: false,
-    };
+    this.syncGags = { ...SYNC_GAGS_CLEAR };
     this.syncInScoreBlock = false;
     this.syncAllocPending = false;
     this.syncAllocHasData = false;
     this.syncMagicPending = false;
-    this.syncInWhoBlock = false;
-    this.syncWhoLines = [];
-    this.syncWhoRawLines = [];
-    if (this.syncTimer) {
-      clearTimeout(this.syncTimer);
-      this.syncTimer = null;
-    }
+    this.resetWhoState();
+    this.clearSyncTimer();
     if (wasActive) this.onSyncEnd?.();
   }
 
@@ -222,20 +235,10 @@ export class OutputFilter {
 
   /** Check if all sync gags are consumed and end sync after a short grace period for the trailing prompt. */
   private checkSyncDone(): void {
-    if (
-      !this.syncGags.hp &&
-      !this.syncGags.score &&
-      !this.syncGags.combatAlloc &&
-      !this.syncGags.magicAlloc &&
-      !this.syncGags.alignment &&
-      !this.syncGags.who
-    ) {
+    const allDone = Object.values(this.syncGags).every((v) => !v);
+    if (allDone) {
       // Brief delay so the trailing ">" prompt from the last command gets gagged too
-      if (this.syncTimer) clearTimeout(this.syncTimer);
-      this.syncTimer = setTimeout(() => {
-        this.syncTimer = null;
-        this.endSync();
-      }, 250);
+      this.startSyncTimer(250);
     }
   }
 
@@ -253,11 +256,7 @@ export class OutputFilter {
       return;
     }
 
-    this.passiveWhoLines.push(stripped);
-    this.passiveWhoRawLines.push(raw);
-    if (isWhoFinalLine(stripped)) {
-      const snapshot = buildWhoSnapshot(this.passiveWhoLines, this.passiveWhoRawLines);
-      this.callbacks.onWho?.(snapshot);
+    if (this.accumulateWhoLine(stripped, raw, this.passiveWhoLines, this.passiveWhoRawLines)) {
       this.passiveWhoActive = false;
       this.passiveWhoLines = [];
       this.passiveWhoRawLines = [];
@@ -379,12 +378,7 @@ export class OutputFilter {
         return true;
       }
       if (this.syncInWhoBlock) {
-        this.syncWhoLines.push(stripped);
-        this.syncWhoRawLines.push(raw);
-        if (isWhoFinalLine(stripped)) {
-          // End of who block — build snapshot and fire callback
-          const snapshot = buildWhoSnapshot(this.syncWhoLines, this.syncWhoRawLines);
-          this.callbacks.onWho?.(snapshot);
+        if (this.accumulateWhoLine(stripped, raw, this.syncWhoLines, this.syncWhoRawLines)) {
           this.syncInWhoBlock = false;
           this.syncWhoLines = [];
           this.syncGags.who = false;
@@ -404,18 +398,18 @@ export class OutputFilter {
   filter(data: string): string {
     this.buffer += data;
 
-    // Extract complete lines (preserving original line endings)
+    // Extract complete lines (preserving original line endings).
+    // Uses an index cursor to avoid O(n²) substring copies.
     const segments: string[] = [];
-    let remaining = this.buffer;
-
+    let start = 0;
+    const buf = this.buffer;
     while (true) {
-      const idx = remaining.indexOf('\n');
+      const idx = buf.indexOf('\n', start);
       if (idx < 0) break;
-      segments.push(remaining.substring(0, idx + 1));
-      remaining = remaining.substring(idx + 1);
+      segments.push(buf.substring(start, idx + 1));
+      start = idx + 1;
     }
-
-    this.buffer = remaining;
+    this.buffer = buf.substring(start);
 
     let output = '';
 
@@ -424,14 +418,13 @@ export class OutputFilter {
       // When prompt + response arrive in the same TCP chunk, the prompt
       // gets prepended to the next response line, e.g. "> There is no exit."
       let seg = segment;
-      if (this.stripPrompts) {
-        const rawStripped = stripAnsi(segment);
-        if (/^> \S/.test(rawStripped)) {
-          seg = segment.replace(/^((?:\x1b\[[0-9;]*m)*)> /, '$1');
-        }
+      const rawStripped = stripAnsi(segment);
+      if (this.stripPrompts && /^> \S/.test(rawStripped)) {
+        seg = segment.replace(/^((?:\x1b\[[0-9;]*m)*)> /, '$1');
       }
 
-      let stripped = stripAnsi(seg).trim();
+      // Reuse rawStripped when segment wasn't modified; otherwise re-strip
+      let stripped = (seg === segment ? rawStripped : stripAnsi(seg)).trim();
       // Always strip server prompt prefix for parsing, even when display keeps it.
       // Without this, "> upper left hand:" won't match limb/magic header regexes.
       // A bare "> " prompt (no content) becomes just ">" after trim — normalize to "".
