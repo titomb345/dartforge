@@ -6,13 +6,17 @@ interface VerticalResizeHandleProps {
   isDragging: boolean;
 }
 
-export function VerticalResizeHandle({ index, onMouseDown, isDragging }: VerticalResizeHandleProps) {
+export function VerticalResizeHandle({
+  index,
+  onMouseDown,
+  isDragging,
+}: VerticalResizeHandleProps) {
   return (
     <div
       onMouseDown={(e) => onMouseDown(index, e)}
       className={cn(
         'h-1 flex-shrink-0 cursor-row-resize transition-colors duration-150 rounded-full',
-        isDragging ? 'bg-cyan/40' : 'bg-transparent hover:bg-border',
+        isDragging ? 'bg-cyan/40' : 'bg-transparent hover:bg-border'
       )}
     />
   );

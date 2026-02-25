@@ -18,20 +18,40 @@ interface StatusReadoutProps {
   onToggleCompact?: () => void;
 }
 
-export function StatusReadout({ icon, label, color, tooltip, glow, compact, autoCompact, filtered, danger, labelNode, onClick, onToggleCompact }: StatusReadoutProps) {
+export function StatusReadout({
+  icon,
+  label,
+  color,
+  tooltip,
+  glow,
+  compact,
+  autoCompact,
+  filtered,
+  danger,
+  labelNode,
+  onClick,
+  onToggleCompact,
+}: StatusReadoutProps) {
   const [hovered, setHovered] = useState(false);
   const showExpanded = !compact || (hovered && !!autoCompact);
 
   return (
     <button
       onClick={onClick}
-      onContextMenu={onToggleCompact ? (e) => { e.preventDefault(); onToggleCompact(); } : undefined}
+      onContextMenu={
+        onToggleCompact
+          ? (e) => {
+              e.preventDefault();
+              onToggleCompact();
+            }
+          : undefined
+      }
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
       title={tooltip}
       className={cn(
         'status-readout relative flex items-center rounded-[3px] select-none border border-transparent transition-all duration-200',
-        (onClick || onToggleCompact) ? 'cursor-pointer' : 'cursor-default',
+        onClick || onToggleCompact ? 'cursor-pointer' : 'cursor-default',
         danger && !filtered && 'status-readout-danger'
       )}
       style={

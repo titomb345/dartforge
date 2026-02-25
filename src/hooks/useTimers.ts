@@ -25,10 +25,7 @@ export function useTimers(dataStore: DataStore, activeCharacter: string | null) 
     if (!dataStore.ready) return;
     (async () => {
       try {
-        const savedGlobal = await dataStore.get<Record<TimerId, Timer>>(
-          TIMERS_FILE,
-          GLOBAL_KEY,
-        );
+        const savedGlobal = await dataStore.get<Record<TimerId, Timer>>(TIMERS_FILE, GLOBAL_KEY);
         if (savedGlobal) setGlobalTimers(savedGlobal);
       } catch (e) {
         console.error('Failed to load global timers:', e);
@@ -87,7 +84,7 @@ export function useTimers(dataStore: DataStore, activeCharacter: string | null) 
         intervalSeconds: number;
         group: string;
       },
-      scope: TimerScope,
+      scope: TimerScope
     ): TimerId => {
       const now = new Date().toISOString();
       const timer: Timer = {
@@ -108,7 +105,7 @@ export function useTimers(dataStore: DataStore, activeCharacter: string | null) 
       }
       return timer.id;
     },
-    [],
+    []
   );
 
   const updateTimer = useCallback(
@@ -126,7 +123,7 @@ export function useTimers(dataStore: DataStore, activeCharacter: string | null) 
         setGlobalTimers(updater);
       }
     },
-    [],
+    []
   );
 
   const deleteTimer = useCallback((id: TimerId, scope: TimerScope) => {
@@ -173,10 +170,10 @@ export function useTimers(dataStore: DataStore, activeCharacter: string | null) 
           intervalSeconds: original.intervalSeconds,
           group: original.group,
         },
-        scope,
+        scope
       );
     },
-    [characterTimers, globalTimers, createTimer],
+    [characterTimers, globalTimers, createTimer]
   );
 
   // Merged list for the timer engine (character first for priority)

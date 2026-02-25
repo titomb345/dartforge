@@ -27,7 +27,7 @@ export function useVariables(dataStore: DataStore, activeCharacter: string | nul
       try {
         const savedGlobal = await dataStore.get<Record<VariableId, Variable>>(
           VARIABLES_FILE,
-          GLOBAL_KEY,
+          GLOBAL_KEY
         );
         if (savedGlobal) setGlobalVariables(savedGlobal);
       } catch (e) {
@@ -98,11 +98,15 @@ export function useVariables(dataStore: DataStore, activeCharacter: string | nul
       }
       return variable.id;
     },
-    [],
+    []
   );
 
   const updateVariable = useCallback(
-    (id: VariableId, updates: Partial<Omit<Variable, 'id' | 'createdAt'>>, scope: VariableScope) => {
+    (
+      id: VariableId,
+      updates: Partial<Omit<Variable, 'id' | 'createdAt'>>,
+      scope: VariableScope
+    ) => {
       const now = new Date().toISOString();
       const updater = (prev: Record<VariableId, Variable>) => {
         const existing = prev[id];
@@ -116,7 +120,7 @@ export function useVariables(dataStore: DataStore, activeCharacter: string | nul
         setGlobalVariables(updater);
       }
     },
-    [],
+    []
   );
 
   const deleteVariable = useCallback((id: VariableId, scope: VariableScope) => {
@@ -158,7 +162,7 @@ export function useVariables(dataStore: DataStore, activeCharacter: string | nul
     (name: string, value: string, scope: VariableScope): void => {
       const source = scope === 'character' ? characterVariables : globalVariables;
       const existing = Object.values(source).find(
-        (v) => v.name.toLowerCase() === name.toLowerCase(),
+        (v) => v.name.toLowerCase() === name.toLowerCase()
       );
 
       if (existing) {
@@ -167,7 +171,7 @@ export function useVariables(dataStore: DataStore, activeCharacter: string | nul
         createVariable({ name, value }, scope);
       }
     },
-    [characterVariables, globalVariables, updateVariable, createVariable],
+    [characterVariables, globalVariables, updateVariable, createVariable]
   );
 
   /**
@@ -177,7 +181,7 @@ export function useVariables(dataStore: DataStore, activeCharacter: string | nul
   const deleteVariableByName = useCallback(
     (name: string): boolean => {
       const charMatch = Object.values(characterVariables).find(
-        (v) => v.name.toLowerCase() === name.toLowerCase(),
+        (v) => v.name.toLowerCase() === name.toLowerCase()
       );
       if (charMatch) {
         deleteVariable(charMatch.id, 'character');
@@ -185,7 +189,7 @@ export function useVariables(dataStore: DataStore, activeCharacter: string | nul
       }
 
       const globalMatch = Object.values(globalVariables).find(
-        (v) => v.name.toLowerCase() === name.toLowerCase(),
+        (v) => v.name.toLowerCase() === name.toLowerCase()
       );
       if (globalMatch) {
         deleteVariable(globalMatch.id, 'global');
@@ -194,7 +198,7 @@ export function useVariables(dataStore: DataStore, activeCharacter: string | nul
 
       return false;
     },
-    [characterVariables, globalVariables, deleteVariable],
+    [characterVariables, globalVariables, deleteVariable]
   );
 
   // Merged list for expansion (character first for priority)

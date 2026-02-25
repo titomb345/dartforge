@@ -102,10 +102,7 @@ const MATCH_MODE_PRIORITY: Record<AliasMatchMode, number> = {
  * so that e.g. an exact "port" fires before a prefix "port".
  * Returns the matched alias and extracted arguments, or null.
  */
-function matchAlias(
-  segment: string,
-  aliases: Alias[],
-): { alias: Alias; args: string[] } | null {
+function matchAlias(segment: string, aliases: Alias[]): { alias: Alias; args: string[] } | null {
   const trimmed = segment.trim();
   if (!trimmed) return null;
 
@@ -114,7 +111,7 @@ function matchAlias(
 
   // Sort by specificity so exact matches always win over prefix over regex
   const sorted = [...aliases].sort(
-    (a, b) => MATCH_MODE_PRIORITY[a.matchMode] - MATCH_MODE_PRIORITY[b.matchMode],
+    (a, b) => MATCH_MODE_PRIORITY[a.matchMode] - MATCH_MODE_PRIORITY[b.matchMode]
   );
 
   for (const alias of sorted) {
@@ -155,10 +152,7 @@ function matchAlias(
         if (re) {
           const match = re.exec(trimmed);
           if (match) {
-            const args =
-              match.length > 1
-                ? match.slice(1).map((g) => g ?? '')
-                : restParts;
+            const args = match.length > 1 ? match.slice(1).map((g) => g ?? '') : restParts;
             return { alias, args };
           }
         }
@@ -179,7 +173,7 @@ function expandSegment(
   aliases: Alias[],
   enableSpeedwalk: boolean,
   depth: number,
-  subOptions?: SubstitutionOptions,
+  subOptions?: SubstitutionOptions
 ): ExpandedCommand[] {
   const trimmed = segment.trim();
   if (!trimmed) return [{ type: 'send', text: '' }];
@@ -265,7 +259,7 @@ function findNextSplit(input: string): number {
 export function expandInput(
   input: string,
   aliases: Alias[],
-  options?: { enableSpeedwalk?: boolean; activeCharacter?: string | null },
+  options?: { enableSpeedwalk?: boolean; activeCharacter?: string | null }
 ): ExpansionResult {
   const enableSpeedwalk = options?.enableSpeedwalk ?? true;
   const subOptions: SubstitutionOptions = {
@@ -285,8 +279,7 @@ export function expandInput(
     // (/spam, /var). Otherwise split normally so that e.g.
     // "ta scrip;wear scrip" becomes two separate commands.
     const fullMatch = matchAlias(trimmed, aliases);
-    const argsStartWithDirective =
-      fullMatch && /^\/(?:spam|var)$/i.test(fullMatch.args[0] ?? '');
+    const argsStartWithDirective = fullMatch && /^\/(?:spam|var)$/i.test(fullMatch.args[0] ?? '');
     if (
       fullMatch &&
       fullMatch.alias.matchMode === 'prefix' &&

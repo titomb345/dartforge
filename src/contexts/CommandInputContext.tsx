@@ -1,5 +1,6 @@
 import { createContext, useContext } from 'react';
 import type { ActiveTimerBadge } from '../hooks/useTimerEngines';
+import type { MovementMode } from '../lib/movementMode';
 
 export interface CommandInputState {
   // Connection
@@ -22,6 +23,23 @@ export interface CommandInputState {
   alignmentTrackingMinutes: number;
   alignmentNextAt: number | null;
   onToggleAlignmentTracking: () => void;
+  // Who auto-refresh
+  whoAutoRefreshEnabled: boolean;
+  whoRefreshMinutes: number;
+  whoNextAt: number | null;
+  onToggleWhoAutoRefresh: () => void;
+  // Action blocking
+  actionBlocked: boolean;
+  actionBlockLabel: string | null;
+  actionQueueLength: number;
+  // Movement mode
+  movementMode: MovementMode;
+  onToggleMovementMode: () => void;
+  // Babel
+  babelEnabled: boolean;
+  babelLanguage: string;
+  babelNextAt: number | null;
+  onToggleBabel: () => void;
   // Custom timers
   activeTimers: ActiveTimerBadge[];
   onToggleTimer: (id: string) => void;

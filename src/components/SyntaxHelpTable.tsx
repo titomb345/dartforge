@@ -34,9 +34,7 @@ export function SyntaxHelpTable({ rows, accentColor, footer }: SyntaxHelpTablePr
               </td>
               <td className="px-2 py-1 text-text-label align-top">
                 {row.desc}
-                {row.example && (
-                  <div className="font-mono text-text-dim mt-0.5">{row.example}</div>
-                )}
+                {row.example && <div className="font-mono text-text-dim mt-0.5">{row.example}</div>}
               </td>
             </tr>
           ))}

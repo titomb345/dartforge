@@ -76,19 +76,22 @@ export function WebSetupScreen({ onChooseDropbox, onChooseLocal }: WebSetupScree
       <div
         className="absolute inset-0 opacity-25"
         style={{
-          background: 'radial-gradient(ellipse at 50% 25%, rgba(255,107,157,0.07) 0%, transparent 55%)',
+          background:
+            'radial-gradient(ellipse at 50% 25%, rgba(255,107,157,0.07) 0%, transparent 55%)',
         }}
       />
       <div
         className="absolute inset-0 opacity-20"
         style={{
-          background: 'radial-gradient(ellipse at 30% 75%, rgba(51,204,255,0.05) 0%, transparent 50%)',
+          background:
+            'radial-gradient(ellipse at 30% 75%, rgba(51,204,255,0.05) 0%, transparent 50%)',
         }}
       />
       <div
         className="absolute inset-0 opacity-15"
         style={{
-          background: 'radial-gradient(ellipse at 80% 60%, rgba(124,107,245,0.05) 0%, transparent 45%)',
+          background:
+            'radial-gradient(ellipse at 80% 60%, rgba(124,107,245,0.05) 0%, transparent 45%)',
         }}
       />
 
@@ -108,7 +111,9 @@ export function WebSetupScreen({ onChooseDropbox, onChooseLocal }: WebSetupScree
           {BANNER_ROWS.map((segs, i) => (
             <div key={i} className="whitespace-pre">
               {segs.map((seg, j) => (
-                <span key={j} style={{ color: seg.color }}>{seg.text}</span>
+                <span key={j} style={{ color: seg.color }}>
+                  {seg.text}
+                </span>
               ))}
             </div>
           ))}
@@ -129,9 +134,10 @@ export function WebSetupScreen({ onChooseDropbox, onChooseLocal }: WebSetupScree
                   key={j}
                   style={{
                     color: seg.color,
-                    textShadow: seg.color !== 'transparent'
-                      ? `0 0 6px ${seg.color}55, 0 0 20px ${seg.color}22`
-                      : 'none',
+                    textShadow:
+                      seg.color !== 'transparent'
+                        ? `0 0 6px ${seg.color}55, 0 0 20px ${seg.color}22`
+                        : 'none',
                   }}
                 >
                   {seg.text}
@@ -156,10 +162,7 @@ export function WebSetupScreen({ onChooseDropbox, onChooseLocal }: WebSetupScree
       </div>
 
       {/* Subtitle */}
-      <div
-        className="font-mono mb-8"
-        style={{ fontSize: 'clamp(8px, 1vw, 10px)', color: '#333' }}
-      >
+      <div className="font-mono mb-8" style={{ fontSize: 'clamp(8px, 1vw, 10px)', color: '#333' }}>
         Welcome to The Lands of Ferdarchi
       </div>
 
@@ -169,7 +172,8 @@ export function WebSetupScreen({ onChooseDropbox, onChooseLocal }: WebSetupScree
         <div
           className="absolute -inset-px rounded-lg opacity-30"
           style={{
-            background: 'linear-gradient(135deg, rgba(139,233,253,0.2), rgba(167,139,250,0.1), transparent 60%)',
+            background:
+              'linear-gradient(135deg, rgba(139,233,253,0.2), rgba(167,139,250,0.1), transparent 60%)',
           }}
         />
 
@@ -178,7 +182,9 @@ export function WebSetupScreen({ onChooseDropbox, onChooseLocal }: WebSetupScree
           <div className="px-5 pt-4 pb-3">
             <div className="flex items-center gap-2">
               <span className="text-[13px] font-semibold text-[#ccc]">DartForge</span>
-              <span className="text-[9px] font-mono text-cyan/40 uppercase tracking-widest">Setup</span>
+              <span className="text-[9px] font-mono text-cyan/40 uppercase tracking-widest">
+                Setup
+              </span>
             </div>
             <p className="text-[11px] text-[#555] mt-2">
               Choose how DartForge stores your settings and skill data.
@@ -195,7 +201,7 @@ export function WebSetupScreen({ onChooseDropbox, onChooseLocal }: WebSetupScree
               className={cn(
                 'w-full flex items-center gap-3 px-3.5 py-2.5 rounded transition-all',
                 'border border-[#222] bg-[#111] hover:border-cyan/25 hover:bg-cyan/5',
-                'cursor-pointer group',
+                'cursor-pointer group'
               )}
             >
               <div className="flex items-center justify-center w-7 h-7 rounded bg-[#1a1a1a] text-[#444] group-hover:text-cyan transition-colors">
@@ -222,11 +228,20 @@ export function WebSetupScreen({ onChooseDropbox, onChooseLocal }: WebSetupScree
               className={cn(
                 'w-full flex items-center gap-3 px-3.5 py-2.5 rounded transition-all',
                 'border border-[#222] bg-[#111] hover:border-[#333] hover:bg-[#151515]',
-                'cursor-pointer group',
+                'cursor-pointer group'
               )}
             >
               <div className="flex items-center justify-center w-7 h-7 rounded bg-[#1a1a1a] text-[#444] group-hover:text-[#666] transition-colors">
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <svg
+                  width="14"
+                  height="14"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                >
                   <rect x="2" y="6" width="20" height="12" rx="2" />
                   <path d="M6 12h.01" />
                   <path d="M10 12h.01" />

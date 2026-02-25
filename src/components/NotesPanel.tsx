@@ -23,14 +23,15 @@ type NotesPanelProps = PinnablePanelProps;
 
 /** Slugify a tab name for use in filenames: lowercase, spaces → hyphens, strip non-alphanumeric. */
 function slugify(name: string): string {
-  return name
-    .toLowerCase()
-    .trim()
-    .replace(/\s+/g, '-')
-    .replace(/[^a-z0-9-]/g, '')
-    .replace(/-+/g, '-')
-    .replace(/^-|-$/g, '')
-    || 'untitled';
+  return (
+    name
+      .toLowerCase()
+      .trim()
+      .replace(/\s+/g, '-')
+      .replace(/[^a-z0-9-]/g, '')
+      .replace(/-+/g, '-')
+      .replace(/^-|-$/g, '') || 'untitled'
+  );
 }
 
 /**
@@ -77,11 +78,16 @@ function InlineField({
   if (!editing) {
     return (
       <button
-        onClick={() => { setDraft(value); setEditing(true); }}
+        onClick={() => {
+          setDraft(value);
+          setEditing(true);
+        }}
         className={cn(
           'text-[11px] truncate cursor-pointer transition-colors duration-100',
-          value ? 'text-text-heading hover:text-text-primary' : 'text-text-dim hover:text-text-label italic',
-          className,
+          value
+            ? 'text-text-heading hover:text-text-primary'
+            : 'text-text-dim hover:text-text-label italic',
+          className
         )}
         title="Click to rename"
       >
@@ -103,12 +109,17 @@ function InlineField({
         setEditing(false);
       }}
       onKeyDown={(e) => {
-        if (e.key === 'Enter') { e.currentTarget.blur(); }
-        if (e.key === 'Escape') { setDraft(value); setEditing(false); }
+        if (e.key === 'Enter') {
+          e.currentTarget.blur();
+        }
+        if (e.key === 'Escape') {
+          setDraft(value);
+          setEditing(false);
+        }
       }}
       className={cn(
         'bg-bg-canvas border border-border rounded px-1 py-0 text-[11px] text-text-primary outline-none',
-        className,
+        className
       )}
       placeholder={placeholder}
     />
@@ -117,9 +128,7 @@ function InlineField({
 
 /* ── NotesPanel ─────────────────────────────────────────────── */
 
-export function NotesPanel({
-  mode = 'slideout',
-}: NotesPanelProps) {
+export function NotesPanel({ mode = 'slideout' }: NotesPanelProps) {
   const isPinned = mode === 'pinned';
   const dataStore = useDataStore();
   const { activeCharacter } = useSkillTrackerContext();
@@ -140,18 +149,19 @@ export function NotesPanel({
   contentRef.current = content;
 
   /** Get the slug for a tab name, checking for collisions with other tabs. */
-  const slugForTab = useCallback((name: string, exclude?: string): string => {
-    const base = slugify(name);
-    const otherSlugs = new Set(
-      tabs.filter(t => t !== exclude).map(t => slugify(t)),
-    );
-    if (!otherSlugs.has(base)) return base;
-    // Append a number to resolve collision
-    for (let i = 2; ; i++) {
-      const candidate = `${base}-${i}`;
-      if (!otherSlugs.has(candidate)) return candidate;
-    }
-  }, [tabs]);
+  const slugForTab = useCallback(
+    (name: string, exclude?: string): string => {
+      const base = slugify(name);
+      const otherSlugs = new Set(tabs.filter((t) => t !== exclude).map((t) => slugify(t)));
+      if (!otherSlugs.has(base)) return base;
+      // Append a number to resolve collision
+      for (let i = 2; ; i++) {
+        const candidate = `${base}-${i}`;
+        if (!otherSlugs.has(candidate)) return candidate;
+      }
+    },
+    [tabs]
+  );
 
   // Flush any pending debounced save immediately
   const flushSave = useCallback(() => {
@@ -162,16 +172,21 @@ export function NotesPanel({
     const char = characterRef.current;
     const tab = activeTabRef.current;
     if (char && tab) {
-      dataStore.writeText(contentFileName(char, slugify(tab)), contentRef.current).catch(console.error);
+      dataStore
+        .writeText(contentFileName(char, slugify(tab)), contentRef.current)
+        .catch(console.error);
     }
   }, [dataStore]);
 
   // Persist metadata helper
-  const persistMeta = useCallback(async (character: string, newTabs: string[], activeTabName: string) => {
-    const meta = metaFileName(character);
-    await dataStore.set(meta, 'tabs', newTabs);
-    await dataStore.set(meta, 'activeTab', activeTabName);
-  }, [dataStore]);
+  const persistMeta = useCallback(
+    async (character: string, newTabs: string[], activeTabName: string) => {
+      const meta = metaFileName(character);
+      await dataStore.set(meta, 'tabs', newTabs);
+      await dataStore.set(meta, 'activeTab', activeTabName);
+    },
+    [dataStore]
+  );
 
   // Load notes when character changes
   useEffect(() => {
@@ -233,16 +248,19 @@ export function NotesPanel({
   }, []);
 
   // Debounced content save
-  const saveContent = useCallback((value: string) => {
-    if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
-    saveTimeoutRef.current = setTimeout(() => {
-      const char = characterRef.current;
-      const tab = activeTabRef.current;
-      if (char && tab) {
-        dataStore.writeText(contentFileName(char, slugify(tab)), value).catch(console.error);
-      }
-    }, SAVE_DEBOUNCE_MS);
-  }, [dataStore]);
+  const saveContent = useCallback(
+    (value: string) => {
+      if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
+      saveTimeoutRef.current = setTimeout(() => {
+        const char = characterRef.current;
+        const tab = activeTabRef.current;
+        if (char && tab) {
+          dataStore.writeText(contentFileName(char, slugify(tab)), value).catch(console.error);
+        }
+      }, SAVE_DEBOUNCE_MS);
+    },
+    [dataStore]
+  );
 
   // Consume pending append from context menu "Open in Notes"
   useEffect(() => {
@@ -262,40 +280,46 @@ export function NotesPanel({
   };
 
   // Switch to a different tab
-  const switchToTab = useCallback(async (tabName: string) => {
-    if (tabName === activeTabRef.current) return;
-    const char = characterRef.current;
-    if (!char) return;
+  const switchToTab = useCallback(
+    async (tabName: string) => {
+      if (tabName === activeTabRef.current) return;
+      const char = characterRef.current;
+      if (!char) return;
 
-    // Flush current content before switching
-    if (saveTimeoutRef.current) {
-      clearTimeout(saveTimeoutRef.current);
-      saveTimeoutRef.current = null;
-    }
-    const oldTab = activeTabRef.current;
-    if (oldTab) {
-      await dataStore.writeText(contentFileName(char, slugify(oldTab)), contentRef.current);
-    }
+      // Flush current content before switching
+      if (saveTimeoutRef.current) {
+        clearTimeout(saveTimeoutRef.current);
+        saveTimeoutRef.current = null;
+      }
+      const oldTab = activeTabRef.current;
+      if (oldTab) {
+        await dataStore.writeText(contentFileName(char, slugify(oldTab)), contentRef.current);
+      }
 
-    setActiveTab(tabName);
-    setConfirmDelete(false);
-    await dataStore.set(metaFileName(char), 'activeTab', tabName);
+      setActiveTab(tabName);
+      setConfirmDelete(false);
+      await dataStore.set(metaFileName(char), 'activeTab', tabName);
 
-    const tabContent = await dataStore.readText(contentFileName(char, slugify(tabName)));
-    if (characterRef.current !== char) return;
-    setContent(tabContent ?? '');
-  }, [dataStore]);
+      const tabContent = await dataStore.readText(contentFileName(char, slugify(tabName)));
+      if (characterRef.current !== char) return;
+      setContent(tabContent ?? '');
+    },
+    [dataStore]
+  );
 
   // Navigate prev/next
-  const navigateNote = useCallback((direction: 'prev' | 'next') => {
-    if (tabs.length <= 1) return;
-    const currentIndex = tabs.indexOf(activeTab ?? '');
-    if (currentIndex === -1) return;
-    const delta = direction === 'prev' ? -1 : 1;
-    const nextIndex = (currentIndex + delta + tabs.length) % tabs.length;
-    flushSave();
-    switchToTab(tabs[nextIndex]);
-  }, [tabs, activeTab, switchToTab, flushSave]);
+  const navigateNote = useCallback(
+    (direction: 'prev' | 'next') => {
+      if (tabs.length <= 1) return;
+      const currentIndex = tabs.indexOf(activeTab ?? '');
+      if (currentIndex === -1) return;
+      const delta = direction === 'prev' ? -1 : 1;
+      const nextIndex = (currentIndex + delta + tabs.length) % tabs.length;
+      flushSave();
+      switchToTab(tabs[nextIndex]);
+    },
+    [tabs, activeTab, switchToTab, flushSave]
+  );
 
   // Create new note
   const createNote = useCallback(async () => {
@@ -307,8 +331,11 @@ export function NotesPanel({
 
     // Find next available "Note N" name
     const existingNums = tabs
-      .map(t => { const m = t.match(/^Note (\d+)$/); return m ? parseInt(m[1], 10) : 0; })
-      .filter(n => n > 0);
+      .map((t) => {
+        const m = t.match(/^Note (\d+)$/);
+        return m ? parseInt(m[1], 10) : 0;
+      })
+      .filter((n) => n > 0);
     const num = existingNums.length > 0 ? Math.max(...existingNums) + 1 : 1;
     const name = `Note ${num}`;
 
@@ -323,81 +350,84 @@ export function NotesPanel({
   }, [tabs, dataStore, flushSave, persistMeta]);
 
   // Rename current tab
-  const renameTab = useCallback(async (oldName: string, newName: string) => {
-    const char = characterRef.current;
-    if (!char) return;
-    const trimmed = newName.slice(0, MAX_NAME_LENGTH).trim();
-    if (!trimmed || trimmed === oldName) return;
+  const renameTab = useCallback(
+    async (oldName: string, newName: string) => {
+      const char = characterRef.current;
+      if (!char) return;
+      const trimmed = newName.slice(0, MAX_NAME_LENGTH).trim();
+      if (!trimmed || trimmed === oldName) return;
 
-    // Check for duplicate names (case-insensitive)
-    if (tabs.some(t => t !== oldName && t.toLowerCase() === trimmed.toLowerCase())) return;
+      // Check for duplicate names (case-insensitive)
+      if (tabs.some((t) => t !== oldName && t.toLowerCase() === trimmed.toLowerCase())) return;
 
-    // Flush current content
-    flushSave();
+      // Flush current content
+      flushSave();
 
-    const oldSlug = slugify(oldName);
-    const newSlug = slugForTab(trimmed, oldName);
+      const oldSlug = slugify(oldName);
+      const newSlug = slugForTab(trimmed, oldName);
 
-    // Read content, write to new filename, delete old
-    const oldContent = await dataStore.readText(contentFileName(char, oldSlug));
-    await dataStore.writeText(contentFileName(char, newSlug), oldContent ?? '');
-    if (oldSlug !== newSlug) {
-      await dataStore.deleteText(contentFileName(char, oldSlug));
-    }
+      // Read content, write to new filename, delete old
+      const oldContent = await dataStore.readText(contentFileName(char, oldSlug));
+      await dataStore.writeText(contentFileName(char, newSlug), oldContent ?? '');
+      if (oldSlug !== newSlug) {
+        await dataStore.deleteText(contentFileName(char, oldSlug));
+      }
 
-    const newTabs = tabs.map(t => t === oldName ? trimmed : t);
-    setTabs(newTabs);
-    if (activeTab === oldName) setActiveTab(trimmed);
-    await persistMeta(char, newTabs, activeTab === oldName ? trimmed : activeTab ?? trimmed);
-  }, [tabs, activeTab, dataStore, flushSave, slugForTab, persistMeta]);
+      const newTabs = tabs.map((t) => (t === oldName ? trimmed : t));
+      setTabs(newTabs);
+      if (activeTab === oldName) setActiveTab(trimmed);
+      await persistMeta(char, newTabs, activeTab === oldName ? trimmed : (activeTab ?? trimmed));
+    },
+    [tabs, activeTab, dataStore, flushSave, slugForTab, persistMeta]
+  );
 
   // Delete current tab
-  const deleteTab = useCallback(async (tabName: string) => {
-    if (tabs.length <= 1) return;
-    const char = characterRef.current;
-    if (!char) return;
+  const deleteTab = useCallback(
+    async (tabName: string) => {
+      if (tabs.length <= 1) return;
+      const char = characterRef.current;
+      if (!char) return;
 
-    const index = tabs.indexOf(tabName);
-    if (index === -1) return;
+      const index = tabs.indexOf(tabName);
+      if (index === -1) return;
 
-    const newTabs = tabs.filter(t => t !== tabName);
-    const adjacent = newTabs[Math.min(index, newTabs.length - 1)];
+      const newTabs = tabs.filter((t) => t !== tabName);
+      const adjacent = newTabs[Math.min(index, newTabs.length - 1)];
 
-    setTabs(newTabs);
-    setConfirmDelete(false);
+      setTabs(newTabs);
+      setConfirmDelete(false);
 
-    // Delete the .txt file
-    await dataStore.deleteText(contentFileName(char, slugify(tabName)));
+      // Delete the .txt file
+      await dataStore.deleteText(contentFileName(char, slugify(tabName)));
 
-    // Switch to adjacent tab
-    setActiveTab(adjacent);
-    await persistMeta(char, newTabs, adjacent);
+      // Switch to adjacent tab
+      setActiveTab(adjacent);
+      await persistMeta(char, newTabs, adjacent);
 
-    const adjacentContent = await dataStore.readText(contentFileName(char, slugify(adjacent)));
-    if (characterRef.current !== char) return;
-    setContent(adjacentContent ?? '');
-  }, [tabs, dataStore, persistMeta]);
+      const adjacentContent = await dataStore.readText(contentFileName(char, slugify(adjacent)));
+      if (characterRef.current !== char) return;
+      setContent(adjacentContent ?? '');
+    },
+    [tabs, dataStore, persistMeta]
+  );
 
   // Derived values
   const currentIndex = tabs.indexOf(activeTab ?? '');
   const total = tabs.length;
 
-  const pinControls = isPinned ? (
-    <PinnedControls />
-  ) : (
-    <PinMenuButton panel="notes" />
-  );
+  const pinControls = isPinned ? <PinnedControls /> : <PinMenuButton panel="notes" />;
 
   return (
     <div className={panelRootClass(isPinned)}>
       {/* Header */}
       <div className="flex items-center justify-between px-3 py-2.5 border-b border-border-subtle shrink-0">
         <span className="text-[13px] font-semibold text-text-heading flex items-center gap-1.5">
-          <NotesIcon size={12} /> Notes{activeCharacter ? ` — ${activeCharacter.charAt(0).toUpperCase() + activeCharacter.slice(1)}` : ''}
+          <NotesIcon size={12} /> Notes
+          {activeCharacter
+            ? ` — ${activeCharacter.charAt(0).toUpperCase() + activeCharacter.slice(1)}`
+            : ''}
         </span>
-        <div className="flex items-center gap-1.5 shrink-0">
-          {pinControls}
-        </div>
+        <div className="flex items-center gap-1.5 shrink-0">{pinControls}</div>
       </div>
 
       {activeCharacter && loaded && (
@@ -412,7 +442,9 @@ export function NotesPanel({
             <ChevronLeftIcon size={10} />
           </button>
           <span className="text-[11px] font-mono text-text-label w-[40px] text-center tabular-nums">
-            {total > 0 ? `${String(currentIndex + 1).padStart(2, '0')}/${String(total).padStart(2, '0')}` : '--/--'}
+            {total > 0
+              ? `${String(currentIndex + 1).padStart(2, '0')}/${String(total).padStart(2, '0')}`
+              : '--/--'}
           </span>
           <button
             onClick={() => navigateNote('next')}
@@ -451,7 +483,9 @@ export function NotesPanel({
             <>
               {confirmDelete ? (
                 <button
-                  onClick={() => { deleteTab(activeTab); }}
+                  onClick={() => {
+                    deleteTab(activeTab);
+                  }}
                   onBlur={() => setConfirmDelete(false)}
                   className="text-[8px] font-mono text-red border border-red/40 rounded px-1 py-px cursor-pointer hover:bg-red/10 transition-colors duration-150"
                 >

@@ -13,8 +13,22 @@ import { ChatPanel } from './components/ChatPanel';
 import { CounterPanel } from './components/CounterPanel';
 import { NotesPanel } from './components/NotesPanel';
 import { GameClock } from './components/GameClock';
-import { SortableStatusBar, DEFAULT_STATUS_BAR_ORDER, type StatusReadoutKey, type ReadoutConfig } from './components/SortableStatusBar';
-import { HeartIcon, FocusIcon, FoodIcon, DropletIcon, AuraIcon, WeightIcon, BootIcon, AlignmentIcon } from './components/icons';
+import {
+  SortableStatusBar,
+  DEFAULT_STATUS_BAR_ORDER,
+  type StatusReadoutKey,
+  type ReadoutConfig,
+} from './components/SortableStatusBar';
+import {
+  HeartIcon,
+  FocusIcon,
+  FoodIcon,
+  DropletIcon,
+  AuraIcon,
+  WeightIcon,
+  BootIcon,
+  AlignmentIcon,
+} from './components/icons';
 import { useMudConnection } from './hooks/useMudConnection';
 import { useTransport } from './contexts/TransportContext';
 import { useThemeColors } from './hooks/useThemeColors';
@@ -58,6 +72,9 @@ import { TimerPanel } from './components/TimerPanel';
 import { useSignatureMappings } from './hooks/useSignatureMappings';
 import { matchTriggers, expandTriggerBody, resetTriggerCooldowns } from './lib/triggerEngine';
 import { smartWrite } from './lib/terminalUtils';
+import { ActionBlocker, type ActionBlockerState } from './lib/actionBlocker';
+import { type MovementMode, getNextMode, applyMovementMode, movementModeLabel } from './lib/movementMode';
+import { shouldGagLine } from './lib/gagPatterns';
 import { stripAnsi } from './lib/ansiUtils';
 import { SignatureProvider } from './contexts/SignatureContext';
 import { parseConvertCommand, formatMultiConversion } from './lib/currency';
@@ -69,14 +86,29 @@ import { useAllocations } from './hooks/useAllocations';
 import { AllocProvider } from './contexts/AllocContext';
 import { AllocPanel } from './components/AllocPanel';
 import { CurrencyPanel } from './components/CurrencyPanel';
+import { BabelPanel } from './components/BabelPanel';
+import { WhoPanel } from './components/WhoPanel';
+import { WhoProvider } from './contexts/WhoContext';
+import { WhoTitleProvider } from './contexts/WhoTitleContext';
+import { useWhoTitleMappings } from './hooks/useWhoTitleMappings';
+import type { WhoSnapshot } from './lib/whoPatterns';
 import { ResizeHandle } from './components/ResizeHandle';
 import { useResize } from './hooks/useResize';
 import { useViewportBudget, MIN_TERMINAL_WIDTH } from './hooks/useViewportBudget';
-import { AllocLineParser, parseAllocCommand, applyAllocUpdates, MagicLineParser, parseMagicAllocCommand, applyMagicAllocUpdates } from './lib/allocPatterns';
+import {
+  AllocLineParser,
+  parseAllocCommand,
+  applyAllocUpdates,
+  MagicLineParser,
+  parseMagicAllocCommand,
+  applyMagicAllocUpdates,
+} from './lib/allocPatterns';
 import { useAppSettings } from './hooks/useAppSettings';
+import type { AutoLoginConfig } from './hooks/useMudConnection';
 import { useCommandHistory } from './hooks/useCommandHistory';
 import { useTimerEngines } from './hooks/useTimerEngines';
 import { CommandInputProvider } from './contexts/CommandInputContext';
+import { TerminalThemeProvider } from './contexts/TerminalThemeContext';
 import { useSessionLogger } from './hooks/useSessionLogger';
 import { useCustomChimes } from './hooks/useCustomChimes';
 import { AppSettingsProvider } from './contexts/AppSettingsContext';
@@ -85,7 +117,14 @@ import { SpotlightOverlay } from './components/SpotlightOverlay';
 import { HelpPanel } from './components/HelpPanel';
 
 /** Commands to send automatically after login */
-const LOGIN_COMMANDS = ['hp', 'score', 'show combat allocation:all', 'show magic allocation', 'show alignment'];
+const LOGIN_COMMANDS = [
+  'hp',
+  'score',
+  'show combat allocation:all',
+  'show magic allocation',
+  'show alignment',
+  'who',
+];
 
 /** Max recent output lines kept for tab completion */
 const MAX_RECENT_LINES = 500;
@@ -100,9 +139,11 @@ function App() {
 
   // Set window title regardless of setup state
   useEffect(() => {
-    getAppVersion().then((v) => {
-      setWindowTitle(`DartForge v${v}`);
-    }).catch(console.error);
+    getAppVersion()
+      .then((v) => {
+        setWindowTitle(`DartForge v${v}`);
+      })
+      .catch(console.error);
   }, []);
 
   if (dataStore.needsSetup) {
@@ -113,7 +154,11 @@ function App() {
     return null;
   }
 
-  return <NotesProvider><AppMain /></NotesProvider>;
+  return (
+    <NotesProvider>
+      <AppMain />
+    </NotesProvider>
+  );
 }
 
 /** Main client — only mounts after data location is configured and ready. */
@@ -124,25 +169,56 @@ function AppMain() {
   const debugModeRef = useRef(false);
   const [debugMode, setDebugMode] = useState(false);
   const [activePanel, setActivePanel] = useState<Panel | null>(null);
-  const togglePanel = (panel: Panel) => setActivePanel((v) => v === panel ? null : panel);
+  const togglePanel = (panel: Panel) => setActivePanel((v) => (v === panel ? null : panel));
   const [panelLayout, setPanelLayout] = useState<PanelLayout>({ left: [], right: [] });
-  const [pinnedWidths, setPinnedWidths] = useState<{ left: number; right: number }>({ left: 320, right: 320 });
-  const [panelHeights, setPanelHeights] = useState<{ left: number[]; right: number[] }>({ left: [], right: [] });
+  const [pinnedWidths, setPinnedWidths] = useState<{ left: number; right: number }>({
+    left: 320,
+    right: 320,
+  });
+  const [panelHeights, setPanelHeights] = useState<{ left: number[]; right: number[] }>({
+    left: [],
+    right: [],
+  });
   const panelLayoutLoadedRef = useRef(false);
   const [compactReadouts, setCompactReadouts] = useState<Record<string, boolean>>({});
   const [filterFlags, setFilterFlags] = useState<FilterFlags>({ ...DEFAULT_FILTER_FLAGS });
-  const [statusBarOrder, setStatusBarOrder] = useState<StatusReadoutKey[]>([...DEFAULT_STATUS_BAR_ORDER]);
+  const [statusBarOrder, setStatusBarOrder] = useState<StatusReadoutKey[]>([
+    ...DEFAULT_STATUS_BAR_ORDER,
+  ]);
   const [loggedIn, setLoggedIn] = useState(false);
   const statusBarRef = useRef<HTMLDivElement | null>(null);
   const [autoCompact, setAutoCompact] = useState(false);
 
   const appSettings = useAppSettings();
   const {
-    antiIdleEnabled, antiIdleCommand, antiIdleMinutes,
-    alignmentTrackingEnabled, alignmentTrackingMinutes,
-    boardDatesEnabled, stripPromptsEnabled,
-    postSyncEnabled, postSyncCommands,
+    antiIdleEnabled,
+    antiIdleCommand,
+    antiIdleMinutes,
+    alignmentTrackingEnabled,
+    alignmentTrackingMinutes,
+    boardDatesEnabled,
+    stripPromptsEnabled,
+    postSyncEnabled,
+    postSyncCommands,
+    autoLoginEnabled,
+    autoLoginActiveSlot,
+    autoLoginCharacters,
   } = appSettings;
+
+  // Auto-login ref — kept in sync with settings, passed to useMudConnection
+  const autoLoginRef = useRef<AutoLoginConfig | null>(null);
+  useEffect(() => {
+    const activeChar = autoLoginCharacters[autoLoginActiveSlot];
+    if (autoLoginEnabled && activeChar?.name && activeChar?.password) {
+      autoLoginRef.current = {
+        enabled: true,
+        name: activeChar.name,
+        password: activeChar.password,
+      };
+    } else {
+      autoLoginRef.current = null;
+    }
+  }, [autoLoginEnabled, autoLoginActiveSlot, autoLoginCharacters]);
 
   const dataStore = useDataStore();
   const settingsLoadedRef = useRef(false);
@@ -151,12 +227,23 @@ function AppMain() {
   // Load compact mode + filter flags + panel layout from settings (with validation)
   useEffect(() => {
     (async () => {
-      const savedCompact = await dataStore.get<Record<string, boolean>>('settings.json', 'compactReadouts');
-      if (savedCompact != null && typeof savedCompact === 'object' && !Array.isArray(savedCompact)) {
+      const savedCompact = await dataStore.get<Record<string, boolean>>(
+        'settings.json',
+        'compactReadouts'
+      );
+      if (
+        savedCompact != null &&
+        typeof savedCompact === 'object' &&
+        !Array.isArray(savedCompact)
+      ) {
         setCompactReadouts(savedCompact);
       }
       const savedFilters = await dataStore.get<FilterFlags>('settings.json', 'filteredStatuses');
-      if (savedFilters != null && typeof savedFilters === 'object' && !Array.isArray(savedFilters)) {
+      if (
+        savedFilters != null &&
+        typeof savedFilters === 'object' &&
+        !Array.isArray(savedFilters)
+      ) {
         setFilterFlags({ ...DEFAULT_FILTER_FLAGS, ...savedFilters });
       }
       const savedLayout = await dataStore.get<PanelLayout>('settings.json', 'panelLayout');
@@ -168,15 +255,32 @@ function AppMain() {
       ) {
         setPanelLayout(savedLayout);
       }
-      const savedWidths = await dataStore.get<{ left: number; right: number }>('settings.json', 'pinnedWidths');
-      if (savedWidths != null && typeof savedWidths.left === 'number' && typeof savedWidths.right === 'number') {
+      const savedWidths = await dataStore.get<{ left: number; right: number }>(
+        'settings.json',
+        'pinnedWidths'
+      );
+      if (
+        savedWidths != null &&
+        typeof savedWidths.left === 'number' &&
+        typeof savedWidths.right === 'number'
+      ) {
         setPinnedWidths(savedWidths);
       }
-      const savedHeights = await dataStore.get<{ left: number[]; right: number[] }>('settings.json', 'panelHeights');
-      if (savedHeights != null && Array.isArray(savedHeights.left) && Array.isArray(savedHeights.right)) {
+      const savedHeights = await dataStore.get<{ left: number[]; right: number[] }>(
+        'settings.json',
+        'panelHeights'
+      );
+      if (
+        savedHeights != null &&
+        Array.isArray(savedHeights.left) &&
+        Array.isArray(savedHeights.right)
+      ) {
         setPanelHeights(savedHeights);
       }
-      const savedStatusOrder = await dataStore.get<StatusReadoutKey[]>('settings.json', 'statusBarOrder');
+      const savedStatusOrder = await dataStore.get<StatusReadoutKey[]>(
+        'settings.json',
+        'statusBarOrder'
+      );
       if (Array.isArray(savedStatusOrder) && savedStatusOrder.length > 0) {
         setStatusBarOrder(savedStatusOrder);
       }
@@ -307,7 +411,8 @@ function AppMain() {
     onWidthChange: useCallback((w: number) => setPinnedWidths((p) => ({ ...p, right: w })), []),
   });
 
-  const { theme, updateColor, resetColor, display, updateDisplay, resetDisplay, resetAll } = useThemeColors();
+  const { theme, updateColor, resetColor, display, updateDisplay, resetDisplay, resetAll } =
+    useThemeColors();
   const xtermTheme = buildXtermTheme(theme);
 
   // Output processor for skill detection
@@ -323,8 +428,21 @@ function AppMain() {
   // Chat messages hook
   const chatNotificationsRef = useRef(appSettings.chatNotifications);
   chatNotificationsRef.current = appSettings.chatNotifications;
-  const { messages: chatMessages, filters: chatFilters, mutedSenders, soundAlerts: chatSoundAlerts, newestFirst: chatNewestFirst, handleChatMessage, toggleFilter: toggleChatFilter, setAllFilters: setAllChatFilters, toggleSoundAlert: toggleChatSoundAlert, toggleNewestFirst: toggleChatNewestFirst, muteSender, unmuteSender, updateSender } =
-    useChatMessages(appSettings.chatHistorySize, chatNotificationsRef, chimesRef);
+  const {
+    messages: chatMessages,
+    filters: chatFilters,
+    mutedSenders,
+    soundAlerts: chatSoundAlerts,
+    newestFirst: chatNewestFirst,
+    handleChatMessage,
+    toggleFilter: toggleChatFilter,
+    setAllFilters: setAllChatFilters,
+    toggleSoundAlert: toggleChatSoundAlert,
+    toggleNewestFirst: toggleChatNewestFirst,
+    muteSender,
+    unmuteSender,
+    updateSender,
+  } = useChatMessages(appSettings.chatHistorySize, chatNotificationsRef, chimesRef);
   const handleChatMessageRef = useLatestRef(handleChatMessage);
 
   // Status trackers
@@ -350,19 +468,67 @@ function AppMain() {
   const { alignment, updateAlignment } = useAlignment();
   const updateAlignmentRef = useLatestRef(updateAlignment);
 
+  const [whoSnapshot, setWhoSnapshot] = useState<WhoSnapshot | null>(null);
+  const updateWhoSnapshotRef = useLatestRef(setWhoSnapshot);
+
   const outputFilterRef = useRef<OutputFilter | null>(null);
   if (!outputFilterRef.current) {
     outputFilterRef.current = new OutputFilter({
-      onConcentration: (match) => { updateConcentrationRef.current(match); },
-      onHealth: (match) => { updateHealthRef.current(match); },
-      onHunger: (level) => { updateHungerRef.current(level); },
-      onThirst: (level) => { updateThirstRef.current(level); },
-      onAura: (match) => { updateAuraRef.current(match); },
-      onEncumbrance: (match) => { updateEncumbranceRef.current(match); },
-      onMovement: (match) => { updateMovementRef.current(match); },
-      onAlignment: (match) => { updateAlignmentRef.current(match); },
-      onChat: (msg) => { handleChatMessageRef.current(msg); },
+      onConcentration: (match) => {
+        updateConcentrationRef.current(match);
+      },
+      onHealth: (match) => {
+        updateHealthRef.current(match);
+      },
+      onHunger: (level) => {
+        updateHungerRef.current(level);
+      },
+      onThirst: (level) => {
+        updateThirstRef.current(level);
+      },
+      onAura: (match) => {
+        updateAuraRef.current(match);
+      },
+      onEncumbrance: (match) => {
+        updateEncumbranceRef.current(match);
+      },
+      onMovement: (match) => {
+        updateMovementRef.current(match);
+      },
+      onAlignment: (match) => {
+        updateAlignmentRef.current(match);
+      },
+      onChat: (msg) => {
+        handleChatMessageRef.current(msg);
+      },
+      onWho: (snapshot) => {
+        updateWhoSnapshotRef.current(snapshot);
+      },
       onLine: (stripped, raw) => {
+        // Action blocker — check for unblock triggers
+        const blocker = actionBlockerRef.current;
+        if (
+          actionBlockingEnabledRef.current &&
+          blocker.blocked &&
+          blocker.processServerLine(stripped)
+        ) {
+          const { toSend, reblocked } = blocker.flush();
+          const remaining = reblocked ? blocker.queueLength : 0;
+          if (terminalRef.current) {
+            let msg = '[UNBLOCKED';
+            if (toSend.length > 0) msg += ` — sending ${toSend.length} queued`;
+            if (remaining > 0) msg += `, re-queuing ${remaining} behind ${blocker.blockLabel}`;
+            msg += ']';
+            smartWrite(terminalRef.current, `\x1b[32m${msg}\x1b[0m\r\n`);
+          }
+          // Flush queued commands via raw sendCommand (bypasses blocker)
+          (async () => {
+            for (const cmd of toSend) {
+              await sendCommand(cmd);
+            }
+          })();
+        }
+
         // TODO: Re-enable when automapper is ready
         // mapFeedLineRef.current(stripped);
 
@@ -376,6 +542,11 @@ function AppMain() {
         const magicResult = magicParserRef.current?.feedLine(stripped);
         if (magicResult) {
           handleMagicParseRef.current(magicResult);
+        }
+
+        // Gag groups — suppress line before trigger evaluation
+        if (shouldGagLine(stripped, gagGroupsRef.current)) {
+          return { gag: true, highlight: null };
         }
 
         if (triggerFiringRef.current) return;
@@ -396,16 +567,10 @@ function AppMain() {
 
           // Expand and execute trigger body asynchronously
           if (match.trigger.body.trim()) {
-            const raw = expandTriggerBody(
-              match.trigger.body,
-              match,
-              activeCharacterRef.current,
-            );
+            const raw = expandTriggerBody(match.trigger.body, match, activeCharacterRef.current);
             // Re-expand send commands through the alias engine so aliases work in trigger bodies
             const commands = raw.flatMap((cmd) =>
-              cmd.type === 'send'
-                ? triggerRunnerRef.current.expand(cmd.text)
-                : [cmd],
+              cmd.type === 'send' ? triggerRunnerRef.current.expand(cmd.text) : [cmd]
             );
             triggerFiringRef.current = true;
             (async () => {
@@ -460,7 +625,9 @@ function AppMain() {
         try {
           const { getCurrentWindow } = await import('@tauri-apps/api/window');
           await getCurrentWindow().requestUserAttention(null);
-        } catch { /* ignore */ }
+        } catch {
+          /* ignore */
+        }
       }
     };
     window.addEventListener('focus', handleFocus);
@@ -507,10 +674,50 @@ function AppMain() {
     setCompactReadouts((prev) => ({ ...prev, [key]: !prev[key] }));
   }, []);
 
+  // Action blocker — command queueing for channeled actions
+  const actionBlockerRef = useRef(new ActionBlocker());
+  const [blockerState, setBlockerState] = useState<ActionBlockerState>(() =>
+    actionBlockerRef.current.getState()
+  );
+  useEffect(() => {
+    actionBlockerRef.current.onChange = () => setBlockerState(actionBlockerRef.current.getState());
+    return () => {
+      actionBlockerRef.current.onChange = null;
+    };
+  }, []);
+  const actionBlockingEnabledRef = useLatestRef(appSettings.actionBlockingEnabled);
+  const gagGroupsRef = useLatestRef(appSettings.gagGroups);
+
+  // Movement mode — direction command prefixing (lead/row/sneak)
+  const [movementMode, setMovementMode] = useState<MovementMode>('normal');
+  const movementModeRef = useLatestRef(movementMode);
+
   // Skill tracker — needs sendCommand ref (set after useMudConnection)
   const sendCommandRef = useRef<((cmd: string) => Promise<void>) | null>(null);
-  const { activeCharacter, skillData, setActiveCharacter, handleSkillMatch, showInlineImproves, toggleInlineImproves, addSkill, updateSkillCount, deleteSkill } =
-    useSkillTracker(sendCommandRef, processorRef, terminalRef, dataStore);
+  const {
+    activeCharacter,
+    skillData,
+    setActiveCharacter,
+    handleSkillMatch,
+    showInlineImproves,
+    toggleInlineImproves,
+    addSkill,
+    updateSkillCount,
+    deleteSkill,
+  } = useSkillTracker(sendCommandRef, processorRef, terminalRef, dataStore);
+  const skillDataRef = useLatestRef(skillData);
+
+  const cycleMovementMode = useCallback(() => {
+    const hasSneaking = !!skillDataRef.current.skills['sneaking'];
+    const next = getNextMode(movementModeRef.current, hasSneaking);
+    setMovementMode(next);
+    if (terminalRef.current) {
+      smartWrite(
+        terminalRef.current,
+        `\x1b[36m[Movement mode: ${movementModeLabel(next)}]\x1b[0m\r\n`
+      );
+    }
+  }, [skillDataRef, movementModeRef, terminalRef]);
 
   // Improve counter hook
   const improveCounters = useImproveCounters();
@@ -550,39 +757,57 @@ function AppMain() {
   const { mergedTimers } = timerState;
 
   // Context menu → trigger panel integration
-  const handleAddToTrigger = useCallback((selectedText: string) => {
-    triggerState.setTriggerPrefill({
-      pattern: selectedText,
-      matchMode: 'substring',
-      gag: false,
-      body: '',
-      group: 'General',
-    });
-    setActivePanel('triggers');
-  }, [triggerState.setTriggerPrefill]);
+  const handleAddToTrigger = useCallback(
+    (selectedText: string) => {
+      triggerState.setTriggerPrefill({
+        pattern: selectedText,
+        matchMode: 'substring',
+        gag: false,
+        body: '',
+        group: 'General',
+      });
+      setActivePanel('triggers');
+    },
+    [triggerState.setTriggerPrefill]
+  );
 
-  const handleGagLine = useCallback((selectedText: string) => {
-    triggerState.createTrigger({
-      pattern: selectedText,
-      matchMode: 'substring',
-      body: '',
-      group: 'Gags',
-      gag: true,
-    }, 'global');
-    if (terminalRef.current) {
-      smartWrite(terminalRef.current, `\x1b[90m[Gag trigger created for: ${selectedText}]\x1b[0m\r\n`);
-    }
-  }, [triggerState.createTrigger]);
+  const handleGagLine = useCallback(
+    (selectedText: string) => {
+      triggerState.createTrigger(
+        {
+          pattern: selectedText,
+          matchMode: 'substring',
+          body: '',
+          group: 'Gags',
+          gag: true,
+        },
+        'global'
+      );
+      if (terminalRef.current) {
+        smartWrite(
+          terminalRef.current,
+          `\x1b[90m[Gag trigger created for: ${selectedText}]\x1b[0m\r\n`
+        );
+      }
+    },
+    [triggerState.createTrigger]
+  );
 
   // Context menu → notes panel integration
   const { appendToNotes } = useNotesContext();
-  const handleOpenInNotes = useCallback((text: string) => {
-    appendToNotes(text);
-    setActivePanel('notes');
-  }, [appendToNotes]);
+  const handleOpenInNotes = useCallback(
+    (text: string) => {
+      appendToNotes(text);
+      setActivePanel('notes');
+    },
+    [appendToNotes]
+  );
 
   // Signature mapping system
   const signatureState = useSignatureMappings(dataStore, activeCharacter);
+
+  // Who title mapping system
+  const whoTitleState = useWhoTitleMappings(dataStore, activeCharacter);
   const { resolveSignature } = signatureState;
   const resolveSignatureRef = useLatestRef(resolveSignature);
 
@@ -633,68 +858,113 @@ function AppMain() {
   const logCommandRef = useRef<((cmd: string) => void) | null>(null);
 
   // Process output chunks through the skill detection pipeline + buffer for tab completion
-  const onOutputChunk = useCallback((data: string) => {
-    logOutputRef.current?.(data);
+  const onOutputChunk = useCallback(
+    (data: string) => {
+      logOutputRef.current?.(data);
 
-    const matches = processorRef.current?.processChunk(data);
-    if (!matches) return;
-    for (const match of matches) {
-      handleSkillMatch(match);
-      handleCounterMatchRef.current(match);
-    }
+      const matches = processorRef.current?.processChunk(data);
+      if (!matches) return;
+      for (const match of matches) {
+        handleSkillMatch(match);
+        handleCounterMatchRef.current(match);
+      }
 
-    // Buffer recent lines for tab completion
-    const stripped = stripAnsi(data);
-    const lines = stripped.split(/\r?\n/).filter((l) => l.trim());
-    if (lines.length > 0) {
-      recentLinesRef.current = [...lines, ...recentLinesRef.current].slice(0, MAX_RECENT_LINES);
-    }
-  }, [handleSkillMatch]);
+      // Buffer recent lines for tab completion
+      const stripped = stripAnsi(data);
+      const lines = stripped.split(/\r?\n/).filter((l) => l.trim());
+      if (lines.length > 0) {
+        recentLinesRef.current = [...lines, ...recentLinesRef.current].slice(0, MAX_RECENT_LINES);
+      }
+    },
+    [handleSkillMatch]
+  );
 
-  const onCharacterName = useCallback((name: string) => {
-    setActiveCharacter(name);
-  }, [setActiveCharacter]);
+  const onCharacterName = useCallback(
+    (name: string) => {
+      setActiveCharacter(name);
+    },
+    [setActiveCharacter]
+  );
 
+  const autoLoginActiveSlotRef = useLatestRef(autoLoginActiveSlot);
   const onLogin = useCallback(() => {
     outputFilterRef.current?.startSync();
     for (const cmd of LOGIN_COMMANDS) {
       sendCommandRef.current?.(cmd);
     }
     setLoggedIn(true);
+    // Record login timestamp for character switch cooldown
+    appSettings.updateLastLoginTimestamp(Date.now());
+    appSettings.updateLastLoginSlot(autoLoginActiveSlotRef.current);
   }, []);
 
   const transport = useTransport();
 
   const { connected, passwordMode, skipHistory, sendCommand, reconnect, disconnect } =
-    useMudConnection(terminalRef, debugModeRef, transport, onOutputChunk, onCharacterName, outputFilterRef, onLogin);
+    useMudConnection(
+      terminalRef,
+      debugModeRef,
+      transport,
+      onOutputChunk,
+      onCharacterName,
+      outputFilterRef,
+      onLogin,
+      autoLoginRef
+    );
 
   // Session logger
-  const { logOutput, logCommand } = useSessionLogger(appSettings.sessionLoggingEnabled, passwordMode, appSettings.timestampFormat);
+  const { logOutput, logCommand } = useSessionLogger(
+    appSettings.sessionLoggingEnabled,
+    passwordMode,
+    appSettings.timestampFormat
+  );
   logOutputRef.current = logOutput;
   logCommandRef.current = logCommand;
 
-  // Keep sendCommand ref up to date for login commands
-  sendCommandRef.current = sendCommand;
+  // Wrap sendCommand with action blocker — all senders (timers, triggers,
+  // skill tracker, allocations, user commands) go through this ref.
+  // Raw sendCommand is used directly only when flushing the queue.
+  sendCommandRef.current = async (command: string) => {
+    const blocker = actionBlockerRef.current;
+    if (actionBlockingEnabledRef.current && blocker.blocked) {
+      blocker.enqueue(command);
+      if (terminalRef.current) {
+        smartWrite(terminalRef.current, `\x1b[33mQUEUED: ${command}\x1b[0m\r\n`);
+      }
+      return;
+    }
+    if (actionBlockingEnabledRef.current) {
+      const cat = blocker.shouldBlock(command);
+      if (cat) blocker.block(cat);
+    }
+    await sendCommand(command);
+  };
 
   // Keep trigger runner in sync for use in the output filter closure
   triggerRunnerRef.current = {
-    send: async (text) => { await sendCommandRef.current?.(text); },
+    send: async (text) => {
+      await sendCommandRef.current?.(text);
+    },
     echo: (text) => {
       if (terminalRef.current) {
         smartWrite(terminalRef.current, `\x1b[36m${text}\x1b[0m\r\n`);
       }
     },
-    expand: (input) => expandInput(input, mergedAliasesRef.current, {
-      enableSpeedwalk: enableSpeedwalkRef.current,
-      activeCharacter: activeCharacterRef.current,
-    }).commands,
-    setVar: (name, value, scope) => { setVarRef.current(name, value, scope); },
+    expand: (input) =>
+      expandInput(input, mergedAliasesRef.current, {
+        enableSpeedwalk: enableSpeedwalkRef.current,
+        activeCharacter: activeCharacterRef.current,
+      }).commands,
+    setVar: (name, value, scope) => {
+      setVarRef.current(name, value, scope);
+    },
     convert: (args) => {
       const parsed = parseConvertCommand(`/convert ${args}`);
       if (typeof parsed === 'string') {
         if (terminalRef.current) smartWrite(terminalRef.current, `\x1b[31m${parsed}\x1b[0m\r\n`);
       } else {
-        if (terminalRef.current) smartWrite(terminalRef.current, `${formatMultiConversion(parsed)}\r\n`);
+        if (terminalRef.current)
+          smartWrite(terminalRef.current, `${formatMultiConversion(parsed)}\r\n`);
       }
     },
     getVariables: () => mergedVariablesRef.current,
@@ -716,7 +986,9 @@ function AppMain() {
       });
       executeCommands(result.commands, triggerRunnerRef.current);
     };
-    return () => { if (outputFilterRef.current) outputFilterRef.current.onSyncEnd = null; };
+    return () => {
+      if (outputFilterRef.current) outputFilterRef.current.onSyncEnd = null;
+    };
   }, []);
 
   // Command echo ref (used in handleSend callback)
@@ -724,164 +996,240 @@ function AppMain() {
   const passwordModeRef = useLatestRef(passwordMode);
 
   // Alias-expanded send: preprocesses input through the alias engine
-  const handleSend = useCallback(async (rawInput: string) => {
-    // Command echo — write dimmed line to terminal before processing
-    if (commandEchoRef.current && terminalRef.current && rawInput.trim()) {
-      if (passwordModeRef.current) {
-        smartWrite(terminalRef.current, '\x1b[90m> ******\x1b[0m\r\n');
-      } else {
-        smartWrite(terminalRef.current, `\x1b[90m> ${rawInput}\x1b[0m\r\n`);
-      }
-    }
-
-    // Session logging — log sent command
-    if (rawInput.trim()) logCommandRef.current?.(rawInput);
-
-    // Built-in /notify test command — fires a test notification to debug the backend
-    if (/^\/notify\b/i.test(rawInput.trim())) {
-      const msg = rawInput.trim().slice(7).trim() || 'Test notification from DartForge';
-      if (terminalRef.current) {
-        smartWrite(terminalRef.current, `\x1b[36mSending test notification...\x1b[0m\r\n`);
-      }
-      alertUser('DartForge', msg)
-        .then(() => {
-          if (terminalRef.current) smartWrite(terminalRef.current, `\x1b[32mNotification sent (no error).\x1b[0m\r\n`);
-        })
-        .catch((e) => {
-          if (terminalRef.current) smartWrite(terminalRef.current, `\x1b[31mNotification error: ${e}\x1b[0m\r\n`);
-        });
-      return;
-    }
-
-    // Built-in /convert command — intercept before alias expansion
-    if (/^\/convert\b/i.test(rawInput.trim())) {
-      if (terminalRef.current) {
-        const parsed = parseConvertCommand(rawInput.trim());
-        if (typeof parsed === 'string') {
-          smartWrite(terminalRef.current, `\x1b[31m${parsed}\x1b[0m\r\n`);
+  const handleSend = useCallback(
+    async (rawInput: string) => {
+      // Command echo — write dimmed line to terminal before processing
+      if (commandEchoRef.current && terminalRef.current && rawInput.trim()) {
+        if (passwordModeRef.current) {
+          smartWrite(terminalRef.current, '\x1b[90m> ******\x1b[0m\r\n');
         } else {
-          const output = formatMultiConversion(parsed);
-          smartWrite(terminalRef.current, `${output}\r\n`);
+          smartWrite(terminalRef.current, `\x1b[90m> ${rawInput}\x1b[0m\r\n`);
         }
       }
-      return;
-    }
 
-    // Built-in /var command — manage user variables
-    if (/^\/var\b/i.test(rawInput.trim())) {
-      const varInput = rawInput.trim().slice(4).trim();
-      if (terminalRef.current) {
-        if (!varInput) {
-          // /var — list all variables
-          const vars = mergedVariablesRef.current.filter((v) => v.enabled);
-          if (vars.length === 0) {
-            smartWrite(terminalRef.current, '\x1b[36mNo variables set.\x1b[0m\r\n');
-          } else {
-            smartWrite(terminalRef.current, '\x1b[36m--- Variables ---\x1b[0m\r\n');
-            for (const v of vars) {
-              smartWrite(terminalRef.current, `\x1b[36m  $${v.name} = ${v.value}\x1b[0m\r\n`);
-            }
-          }
-        } else if (varInput.startsWith('-d ')) {
-          // /var -d <name> — delete variable
-          const name = varInput.slice(3).trim();
-          if (deleteVariableByNameRef.current(name)) {
-            smartWrite(terminalRef.current, `\x1b[36mDeleted variable $${name}\x1b[0m\r\n`);
-          } else {
-            smartWrite(terminalRef.current, `\x1b[31mVariable "$${name}" not found.\x1b[0m\r\n`);
+      // Session logging — log sent command
+      if (rawInput.trim()) logCommandRef.current?.(rawInput);
+
+      // Built-in /notify test command — fires a test notification to debug the backend
+      if (/^\/notify\b/i.test(rawInput.trim())) {
+        const msg = rawInput.trim().slice(7).trim() || 'Test notification from DartForge';
+        if (terminalRef.current) {
+          smartWrite(terminalRef.current, `\x1b[36mSending test notification...\x1b[0m\r\n`);
+        }
+        alertUser('DartForge', msg)
+          .then(() => {
+            if (terminalRef.current)
+              smartWrite(terminalRef.current, `\x1b[32mNotification sent (no error).\x1b[0m\r\n`);
+          })
+          .catch((e) => {
+            if (terminalRef.current)
+              smartWrite(terminalRef.current, `\x1b[31mNotification error: ${e}\x1b[0m\r\n`);
+          });
+        return;
+      }
+
+      // Built-in /block — manually activate action blocking
+      if (/^\/block\b/i.test(rawInput.trim())) {
+        const blocker = actionBlockerRef.current;
+        if (blocker.blocked) {
+          if (terminalRef.current) {
+            smartWrite(
+              terminalRef.current,
+              `\x1b[33m[Already blocked: ${blocker.blockLabel}]\x1b[0m\r\n`
+            );
           }
         } else {
-          // /var <name> <value> or /var -g <name> <value>
-          let scope: 'character' | 'global' = 'character';
-          let rest = varInput;
-          if (rest.startsWith('-g ')) {
-            scope = 'global';
-            rest = rest.slice(3).trim();
+          blocker.block({ key: 'manual', label: 'Manual', pattern: /^$/ });
+          if (terminalRef.current) {
+            smartWrite(terminalRef.current, '\x1b[33m[BLOCKED — manual]\x1b[0m\r\n');
           }
-          const spaceIdx = rest.indexOf(' ');
-          if (spaceIdx === -1) {
-            // /var <name> — search variables by name (regex)
-            const query = rest;
-            let re: RegExp;
-            try {
-              re = new RegExp(query, 'i');
-            } catch {
-              re = new RegExp(query.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i');
-            }
-            const matches = mergedVariablesRef.current.filter((v) => v.enabled && re.test(v.name));
-            if (matches.length === 0) {
-              smartWrite(terminalRef.current, `\x1b[36mNo variables matching "${query}".\x1b[0m\r\n`);
+        }
+        return;
+      }
+
+      // Built-in /unblock — manually release block and flush queue
+      if (/^\/unblock\b/i.test(rawInput.trim())) {
+        const blocker = actionBlockerRef.current;
+        const queued = blocker.forceUnblock();
+        if (terminalRef.current) {
+          smartWrite(
+            terminalRef.current,
+            `\x1b[32m[UNBLOCKED — ${queued.length} queued command(s) released]\x1b[0m\r\n`
+          );
+        }
+        // Send queued commands via raw sendCommand (bypasses blocker)
+        (async () => {
+          for (const cmd of queued) {
+            await sendCommand(cmd);
+          }
+        })();
+        return;
+      }
+
+      // Built-in /movemode — cycle movement mode
+      if (/^\/movemode\b/i.test(rawInput.trim())) {
+        cycleMovementMode();
+        return;
+      }
+
+      // Built-in /convert command — intercept before alias expansion
+      if (/^\/convert\b/i.test(rawInput.trim())) {
+        if (terminalRef.current) {
+          const parsed = parseConvertCommand(rawInput.trim());
+          if (typeof parsed === 'string') {
+            smartWrite(terminalRef.current, `\x1b[31m${parsed}\x1b[0m\r\n`);
+          } else {
+            const output = formatMultiConversion(parsed);
+            smartWrite(terminalRef.current, `${output}\r\n`);
+          }
+        }
+        return;
+      }
+
+      // Built-in /var command — manage user variables
+      if (/^\/var\b/i.test(rawInput.trim())) {
+        const varInput = rawInput.trim().slice(4).trim();
+        if (terminalRef.current) {
+          if (!varInput) {
+            // /var — list all variables
+            const vars = mergedVariablesRef.current.filter((v) => v.enabled);
+            if (vars.length === 0) {
+              smartWrite(terminalRef.current, '\x1b[36mNo variables set.\x1b[0m\r\n');
             } else {
-              smartWrite(terminalRef.current, `\x1b[36m--- Variables matching "${query}" ---\x1b[0m\r\n`);
-              for (const v of matches) {
+              smartWrite(terminalRef.current, '\x1b[36m--- Variables ---\x1b[0m\r\n');
+              for (const v of vars) {
                 smartWrite(terminalRef.current, `\x1b[36m  $${v.name} = ${v.value}\x1b[0m\r\n`);
               }
             }
+          } else if (varInput.startsWith('-d ')) {
+            // /var -d <name> — delete variable
+            const name = varInput.slice(3).trim();
+            if (deleteVariableByNameRef.current(name)) {
+              smartWrite(terminalRef.current, `\x1b[36mDeleted variable $${name}\x1b[0m\r\n`);
+            } else {
+              smartWrite(terminalRef.current, `\x1b[31mVariable "$${name}" not found.\x1b[0m\r\n`);
+            }
           } else {
-            const name = rest.slice(0, spaceIdx);
-            const value = rest.slice(spaceIdx + 1);
-            setVarRef.current(name, value, scope);
-            smartWrite(terminalRef.current, `\x1b[36m$${name} = ${value} (${scope})\x1b[0m\r\n`);
+            // /var <name> <value> or /var -g <name> <value>
+            let scope: 'character' | 'global' = 'character';
+            let rest = varInput;
+            if (rest.startsWith('-g ')) {
+              scope = 'global';
+              rest = rest.slice(3).trim();
+            }
+            const spaceIdx = rest.indexOf(' ');
+            if (spaceIdx === -1) {
+              // /var <name> — search variables by name (regex)
+              const query = rest;
+              let re: RegExp;
+              try {
+                re = new RegExp(query, 'i');
+              } catch {
+                re = new RegExp(query.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i');
+              }
+              const matches = mergedVariablesRef.current.filter(
+                (v) => v.enabled && re.test(v.name)
+              );
+              if (matches.length === 0) {
+                smartWrite(
+                  terminalRef.current,
+                  `\x1b[36mNo variables matching "${query}".\x1b[0m\r\n`
+                );
+              } else {
+                smartWrite(
+                  terminalRef.current,
+                  `\x1b[36m--- Variables matching "${query}" ---\x1b[0m\r\n`
+                );
+                for (const v of matches) {
+                  smartWrite(terminalRef.current, `\x1b[36m  $${v.name} = ${v.value}\x1b[0m\r\n`);
+                }
+              }
+            } else {
+              const name = rest.slice(0, spaceIdx);
+              const value = rest.slice(spaceIdx + 1);
+              setVarRef.current(name, value, scope);
+              smartWrite(terminalRef.current, `\x1b[36m$${name} = ${value} (${scope})\x1b[0m\r\n`);
+            }
           }
         }
+        return;
       }
-      return;
-    }
 
-    const result = expandInput(rawInput, mergedAliasesRef.current, {
-      enableSpeedwalk: enableSpeedwalkRef.current,
-      activeCharacter: activeCharacterRef.current,
-    });
-    await executeCommands(result.commands, {
-      send: async (text) => {
-        // TODO: Re-enable when automapper is ready
-        // mapTrackCommandRef.current(text);
-        await sendCommand(text);
-        // Update live allocs directly from outgoing set commands
-        const parsed = parseAllocCommand(text);
-        if (parsed) {
-          const base = liveAllocationsRef.current[parsed.limb]
-            ?? { bonus: 0, daring: 0, speed: 0, aiming: 0, parry: 0, control: 0 };
-          const updated = applyAllocUpdates(base, parsed.updates);
-          handleAllocParseRef.current({
-            limbs: [{ limb: parsed.limb, alloc: updated, null: 0 }],
-          });
-        }
-        // Update live magic allocs from outgoing set magic allocation commands
-        const parsedMagic = parseMagicAllocCommand(text);
-        if (parsedMagic) {
-          const base = liveMagicAllocRef.current;
-          const updated = applyMagicAllocUpdates(base, parsedMagic.updates, parsedMagic.reset);
-          handleMagicParseRef.current({ alloc: updated, arcane: 0 });
-        }
-      },
-      echo: (text) => {
-        if (terminalRef.current) {
-          smartWrite(terminalRef.current, `\x1b[36m${text}\x1b[0m\r\n`);
-        }
-      },
-      expand: (input) => expandInput(input, mergedAliasesRef.current, {
+      // Movement mode — prepend direction prefix if active
+      const effectiveInput =
+        movementModeRef.current !== 'normal'
+          ? applyMovementMode(rawInput, movementModeRef.current)
+          : rawInput;
+
+      const result = expandInput(effectiveInput, mergedAliasesRef.current, {
         enableSpeedwalk: enableSpeedwalkRef.current,
         activeCharacter: activeCharacterRef.current,
-      }).commands,
-      setVar: (name, value, scope) => { setVarRef.current(name, value, scope); },
-      convert: (args) => {
-        const parsed = parseConvertCommand(`/convert ${args}`);
-        if (typeof parsed === 'string') {
-          if (terminalRef.current) smartWrite(terminalRef.current, `\x1b[31m${parsed}\x1b[0m\r\n`);
-        } else {
-          if (terminalRef.current) smartWrite(terminalRef.current, `${formatMultiConversion(parsed)}\r\n`);
-        }
-      },
-      getVariables: () => mergedVariablesRef.current,
-    });
-  }, [sendCommand]);
+      });
+      await executeCommands(result.commands, {
+        send: async (text) => {
+          // TODO: Re-enable when automapper is ready
+          // mapTrackCommandRef.current(text);
+          await sendCommandRef.current?.(text);
+          // Update live allocs directly from outgoing set commands
+          const parsed = parseAllocCommand(text);
+          if (parsed) {
+            const base = liveAllocationsRef.current[parsed.limb] ?? {
+              bonus: 0,
+              daring: 0,
+              speed: 0,
+              aiming: 0,
+              parry: 0,
+              control: 0,
+            };
+            const updated = applyAllocUpdates(base, parsed.updates);
+            handleAllocParseRef.current({
+              limbs: [{ limb: parsed.limb, alloc: updated, null: 0 }],
+            });
+          }
+          // Update live magic allocs from outgoing set magic allocation commands
+          const parsedMagic = parseMagicAllocCommand(text);
+          if (parsedMagic) {
+            const base = liveMagicAllocRef.current;
+            const updated = applyMagicAllocUpdates(base, parsedMagic.updates, parsedMagic.reset);
+            handleMagicParseRef.current({ alloc: updated, arcane: 0 });
+          }
+        },
+        echo: (text) => {
+          if (terminalRef.current) {
+            smartWrite(terminalRef.current, `\x1b[36m${text}\x1b[0m\r\n`);
+          }
+        },
+        expand: (input) =>
+          expandInput(input, mergedAliasesRef.current, {
+            enableSpeedwalk: enableSpeedwalkRef.current,
+            activeCharacter: activeCharacterRef.current,
+          }).commands,
+        setVar: (name, value, scope) => {
+          setVarRef.current(name, value, scope);
+        },
+        convert: (args) => {
+          const parsed = parseConvertCommand(`/convert ${args}`);
+          if (typeof parsed === 'string') {
+            if (terminalRef.current)
+              smartWrite(terminalRef.current, `\x1b[31m${parsed}\x1b[0m\r\n`);
+          } else {
+            if (terminalRef.current)
+              smartWrite(terminalRef.current, `${formatMultiConversion(parsed)}\r\n`);
+          }
+        },
+        getVariables: () => mergedVariablesRef.current,
+      });
+    },
+    [sendCommand]
+  );
 
-  // Clear logged-in state and reset trigger cooldowns on disconnect
+  // Clear logged-in state, reset trigger cooldowns, action blocker, and movement mode on disconnect
   useEffect(() => {
     if (!connected) {
       setLoggedIn(false);
       resetTriggerCooldowns();
+      actionBlockerRef.current.reset();
+      setMovementMode('normal');
     }
   }, [connected]);
 
@@ -895,23 +1243,50 @@ function AppMain() {
     setFilterFlags((prev) => ({ ...prev, [key]: !prev[key] }));
   }, []);
 
-  const reorderStatusBar = useCallback((newOrder: StatusReadoutKey[]) => {
-    setStatusBarOrder(newOrder);
-    dataStore.set('settings.json', 'statusBarOrder', newOrder).catch(console.error);
-  }, [dataStore]);
+  const reorderStatusBar = useCallback(
+    (newOrder: StatusReadoutKey[]) => {
+      setStatusBarOrder(newOrder);
+      dataStore.set('settings.json', 'statusBarOrder', newOrder).catch(console.error);
+    },
+    [dataStore]
+  );
 
   // Post-sync commands
   const postSyncEnabledRef = useLatestRef(postSyncEnabled);
   const postSyncCommandsRef = useLatestRef(postSyncCommands);
 
-  // Timer engines (anti-idle, alignment tracking, custom timers)
-  const { antiIdleNextAt, alignmentNextAt, activeTimerBadges, handleToggleTimer } = useTimerEngines({
-    connected, loggedIn,
-    antiIdleEnabled, antiIdleCommand, antiIdleMinutes,
-    alignmentTrackingEnabled, alignmentTrackingMinutes,
-    mergedTimers, timerState,
-    sendCommandRef, terminalRef, outputFilterRef,
-    mergedAliasesRef, enableSpeedwalkRef, activeCharacterRef, triggerRunnerRef,
+  // Timer engines (anti-idle, alignment tracking, who refresh, babel, custom timers)
+  const {
+    antiIdleNextAt,
+    alignmentNextAt,
+    whoNextAt,
+    babelNextAt,
+    activeTimerBadges,
+    handleToggleTimer,
+    refreshWho,
+  } = useTimerEngines({
+    connected,
+    loggedIn,
+    antiIdleEnabled,
+    antiIdleCommand,
+    antiIdleMinutes,
+    alignmentTrackingEnabled,
+    alignmentTrackingMinutes,
+    whoAutoRefreshEnabled: appSettings.whoAutoRefreshEnabled,
+    whoRefreshMinutes: appSettings.whoRefreshMinutes,
+    babelEnabled: appSettings.babelEnabled,
+    babelLanguage: appSettings.babelLanguage,
+    babelIntervalSeconds: appSettings.babelIntervalSeconds,
+    babelPhrases: appSettings.babelPhrases,
+    mergedTimers,
+    timerState,
+    sendCommandRef,
+    terminalRef,
+    outputFilterRef,
+    mergedAliasesRef,
+    enableSpeedwalkRef,
+    activeCharacterRef,
+    triggerRunnerRef,
   });
 
   // First-launch: auto-open Guide panel
@@ -921,32 +1296,139 @@ function AppMain() {
     return () => clearTimeout(timer);
   }, [appSettings.hasSeenGuide]);
 
-  const readoutConfigs: ReadoutConfig[] = useMemo(() => [
-    { id: 'health', data: health, icon: <HeartIcon size={11} />, tooltip: (d) => d.message ?? '', dangerThreshold: 5 },
-    { id: 'concentration', data: concentration, icon: <FocusIcon size={11} />, tooltip: (d) => d.message ?? '', filterKey: 'concentration', dangerThreshold: 6 },
-    { id: 'aura', data: aura, icon: <AuraIcon size={11} />, tooltip: (d) => d.key === 'none' ? 'You have no aura.' : `Your aura appears to be ${d.descriptor}.`, filterKey: 'aura', dangerThreshold: 99 },
-    { id: 'hunger', data: hunger, icon: <FoodIcon size={11} />, tooltip: (d) => `You are ${d.descriptor}.`, filterKey: 'hunger', dangerThreshold: 6 },
-    { id: 'thirst', data: thirst, icon: <DropletIcon size={11} />, tooltip: (d) => `You are ${d.descriptor}.`, filterKey: 'thirst', dangerThreshold: 6 },
-    { id: 'encumbrance', data: encumbrance, icon: <WeightIcon size={11} />, tooltip: (d) => d.descriptor ?? '', filterKey: 'encumbrance', dangerThreshold: 5 },
-    { id: 'movement', data: movement, icon: <BootIcon size={11} />, tooltip: (d) => d.descriptor ?? '', filterKey: 'movement', dangerThreshold: 6 },
-    { id: 'alignment', data: alignment, icon: <AlignmentIcon size={11} />, tooltip: (d) => d.key === 'none' ? "You don't feel strongly about anything." : `${d.label}`, filterKey: 'alignment', dangerThreshold: 99 },
-  ], [health, concentration, aura, hunger, thirst, encumbrance, movement, alignment]);
+  const readoutConfigs: ReadoutConfig[] = useMemo(
+    () => [
+      {
+        id: 'health',
+        data: health,
+        icon: <HeartIcon size={11} />,
+        tooltip: (d) => d.message ?? '',
+        dangerThreshold: 5,
+      },
+      {
+        id: 'concentration',
+        data: concentration,
+        icon: <FocusIcon size={11} />,
+        tooltip: (d) => d.message ?? '',
+        filterKey: 'concentration',
+        dangerThreshold: 6,
+      },
+      {
+        id: 'aura',
+        data: aura,
+        icon: <AuraIcon size={11} />,
+        tooltip: (d) =>
+          d.key === 'none' ? 'You have no aura.' : `Your aura appears to be ${d.descriptor}.`,
+        filterKey: 'aura',
+        dangerThreshold: 99,
+      },
+      {
+        id: 'hunger',
+        data: hunger,
+        icon: <FoodIcon size={11} />,
+        tooltip: (d) => `You are ${d.descriptor}.`,
+        filterKey: 'hunger',
+        dangerThreshold: 6,
+      },
+      {
+        id: 'thirst',
+        data: thirst,
+        icon: <DropletIcon size={11} />,
+        tooltip: (d) => `You are ${d.descriptor}.`,
+        filterKey: 'thirst',
+        dangerThreshold: 6,
+      },
+      {
+        id: 'encumbrance',
+        data: encumbrance,
+        icon: <WeightIcon size={11} />,
+        tooltip: (d) => d.descriptor ?? '',
+        filterKey: 'encumbrance',
+        dangerThreshold: 5,
+      },
+      {
+        id: 'movement',
+        data: movement,
+        icon: <BootIcon size={11} />,
+        tooltip: (d) => d.descriptor ?? '',
+        filterKey: 'movement',
+        dangerThreshold: 6,
+      },
+      {
+        id: 'alignment',
+        data: alignment,
+        icon: <AlignmentIcon size={11} />,
+        tooltip: (d) =>
+          d.key === 'none' ? "You don't feel strongly about anything." : `${d.label}`,
+        filterKey: 'alignment',
+        dangerThreshold: 99,
+      },
+    ],
+    [health, concentration, aura, hunger, thirst, encumbrance, movement, alignment]
+  );
 
-  const skillTrackerValue = useMemo(() => (
-    { activeCharacter, skillData, showInlineImproves, toggleInlineImproves, addSkill, updateSkillCount, deleteSkill }
-  ), [activeCharacter, skillData, showInlineImproves, toggleInlineImproves, addSkill, updateSkillCount, deleteSkill]);
+  const skillTrackerValue = useMemo(
+    () => ({
+      activeCharacter,
+      skillData,
+      showInlineImproves,
+      toggleInlineImproves,
+      addSkill,
+      updateSkillCount,
+      deleteSkill,
+    }),
+    [
+      activeCharacter,
+      skillData,
+      showInlineImproves,
+      toggleInlineImproves,
+      addSkill,
+      updateSkillCount,
+      deleteSkill,
+    ]
+  );
 
-  const chatValue = useMemo(() => (
-    { messages: chatMessages, filters: chatFilters, mutedSenders, soundAlerts: chatSoundAlerts, newestFirst: chatNewestFirst, toggleFilter: toggleChatFilter, setAllFilters: setAllChatFilters, toggleSoundAlert: toggleChatSoundAlert, toggleNewestFirst: toggleChatNewestFirst, muteSender, unmuteSender, updateSender }
-  ), [chatMessages, chatFilters, mutedSenders, chatSoundAlerts, chatNewestFirst, toggleChatFilter, setAllChatFilters, toggleChatSoundAlert, toggleChatNewestFirst, muteSender, unmuteSender, updateSender]);
+  const chatValue = useMemo(
+    () => ({
+      messages: chatMessages,
+      filters: chatFilters,
+      mutedSenders,
+      soundAlerts: chatSoundAlerts,
+      newestFirst: chatNewestFirst,
+      toggleFilter: toggleChatFilter,
+      setAllFilters: setAllChatFilters,
+      toggleSoundAlert: toggleChatSoundAlert,
+      toggleNewestFirst: toggleChatNewestFirst,
+      muteSender,
+      unmuteSender,
+      updateSender,
+    }),
+    [
+      chatMessages,
+      chatFilters,
+      mutedSenders,
+      chatSoundAlerts,
+      chatNewestFirst,
+      toggleChatFilter,
+      setAllChatFilters,
+      toggleChatSoundAlert,
+      toggleChatNewestFirst,
+      muteSender,
+      unmuteSender,
+      updateSender,
+    ]
+  );
 
-  const counterValue = useMemo(() => improveCounters,
+  const counterValue = useMemo(
+    () => improveCounters,
     // eslint-disable-next-line react-hooks/exhaustive-deps -- callbacks are stable (useCallback), only state values change
-    [improveCounters.counters, improveCounters.activeCounterId, improveCounters.periodLengthMinutes]);
+    [improveCounters.counters, improveCounters.activeCounterId, improveCounters.periodLengthMinutes]
+  );
 
   // Toggle active counter: stopped→running, running→paused, paused→running
   const toggleActiveCounter = useCallback(() => {
-    const { activeCounterId, counters, startCounter, pauseCounter, resumeCounter } = improveCounters;
+    const { activeCounterId, counters, startCounter, pauseCounter, resumeCounter } =
+      improveCounters;
     if (!activeCounterId) return;
     const counter = counters.find((c) => c.id === activeCounterId);
     if (!counter) return;
@@ -955,239 +1437,357 @@ function AppMain() {
     else startCounter(activeCounterId);
   }, [improveCounters]);
 
+  // Who list context value
+  const whoValue = useMemo(
+    () => ({ snapshot: whoSnapshot, refresh: refreshWho }),
+    [whoSnapshot, refreshWho]
+  );
+
   // CommandInput context value
-  const commandInputValue = useMemo(() => ({
-    connected,
-    disabled: !connected,
-    passwordMode,
-    skipHistory,
-    recentLinesRef,
-    onToggleCounter: toggleActiveCounter,
-    antiIdleEnabled,
-    antiIdleCommand,
-    antiIdleMinutes,
-    antiIdleNextAt,
-    onToggleAntiIdle: () => appSettings.updateAntiIdleEnabled(false),
-    alignmentTrackingEnabled,
-    alignmentTrackingMinutes,
-    alignmentNextAt,
-    onToggleAlignmentTracking: () => appSettings.updateAlignmentTrackingEnabled(false),
-    activeTimers: activeTimerBadges,
-    onToggleTimer: handleToggleTimer,
-    initialHistory: commandHistory,
-    onHistoryChange: handleHistoryChange,
-  }), [
-    connected, passwordMode, skipHistory, recentLinesRef, toggleActiveCounter,
-    antiIdleEnabled, antiIdleCommand, antiIdleMinutes, antiIdleNextAt,
-    alignmentTrackingEnabled, alignmentTrackingMinutes, alignmentNextAt,
-    activeTimerBadges, handleToggleTimer, commandHistory, handleHistoryChange,
-    appSettings.updateAntiIdleEnabled, appSettings.updateAlignmentTrackingEnabled,
-  ]);
+  const commandInputValue = useMemo(
+    () => ({
+      connected,
+      disabled: !connected,
+      passwordMode,
+      skipHistory,
+      recentLinesRef,
+      onToggleCounter: toggleActiveCounter,
+      antiIdleEnabled,
+      antiIdleCommand,
+      antiIdleMinutes,
+      antiIdleNextAt,
+      onToggleAntiIdle: () => appSettings.updateAntiIdleEnabled(false),
+      alignmentTrackingEnabled,
+      alignmentTrackingMinutes,
+      alignmentNextAt,
+      onToggleAlignmentTracking: () => appSettings.updateAlignmentTrackingEnabled(false),
+      whoAutoRefreshEnabled: appSettings.whoAutoRefreshEnabled,
+      whoRefreshMinutes: appSettings.whoRefreshMinutes,
+      whoNextAt,
+      onToggleWhoAutoRefresh: () => appSettings.updateWhoAutoRefreshEnabled(false),
+      activeTimers: activeTimerBadges,
+      onToggleTimer: handleToggleTimer,
+      initialHistory: commandHistory,
+      onHistoryChange: handleHistoryChange,
+      actionBlocked: blockerState.blocked,
+      actionBlockLabel: blockerState.blockLabel,
+      actionQueueLength: blockerState.queueLength,
+      movementMode,
+      onToggleMovementMode: cycleMovementMode,
+      babelEnabled: appSettings.babelEnabled,
+      babelLanguage: appSettings.babelLanguage,
+      babelNextAt,
+      onToggleBabel: () => appSettings.updateBabelEnabled(false),
+    }),
+    [
+      connected,
+      passwordMode,
+      skipHistory,
+      recentLinesRef,
+      toggleActiveCounter,
+      antiIdleEnabled,
+      antiIdleCommand,
+      antiIdleMinutes,
+      antiIdleNextAt,
+      alignmentTrackingEnabled,
+      alignmentTrackingMinutes,
+      alignmentNextAt,
+      appSettings.whoAutoRefreshEnabled,
+      appSettings.whoRefreshMinutes,
+      whoNextAt,
+      appSettings.updateWhoAutoRefreshEnabled,
+      activeTimerBadges,
+      handleToggleTimer,
+      commandHistory,
+      handleHistoryChange,
+      appSettings.updateAntiIdleEnabled,
+      appSettings.updateAlignmentTrackingEnabled,
+      blockerState,
+      movementMode,
+      cycleMovementMode,
+      appSettings.babelEnabled,
+      appSettings.babelLanguage,
+      babelNextAt,
+      appSettings.updateBabelEnabled,
+    ]
+  );
+
+  // Character switch: swap active slot, disconnect, reconnect
+  const switchCharacter = useCallback(() => {
+    const newSlot = (autoLoginActiveSlot === 0 ? 1 : 0) as 0 | 1;
+    appSettings.updateAutoLoginActiveSlot(newSlot);
+    disconnect();
+    setTimeout(() => reconnect(), 300);
+  }, [autoLoginActiveSlot, appSettings.updateAutoLoginActiveSlot, disconnect, reconnect]);
+
+  const appSettingsWithExtras = useMemo(
+    () => ({
+      ...appSettings,
+      onSwitchCharacter: switchCharacter,
+      connected,
+    }),
+    [appSettings, switchCharacter, connected]
+  );
 
   return (
-    <AppSettingsProvider value={appSettings}>
-    <CommandInputProvider value={commandInputValue}>
-    <VariableProvider value={variableState}>
-    <AliasProvider value={aliasState}>
-    <TriggerProvider value={triggerState}>
-    <TimerProvider value={timerState}>
-    <SignatureProvider value={signatureState}>
-    <SkillTrackerProvider value={skillTrackerValue}>
-    <ChatProvider value={chatValue}>
-    <ImproveCounterProvider value={counterValue}>
-    <MapProvider value={mapTracker}>
-    <AllocProvider value={allocState}>
-    <PanelProvider layout={panelLayout} activePanel={activePanel} togglePanel={togglePanel} pinPanel={pinPanel}>
-    <SpotlightProvider>
-    <div className="flex flex-col h-screen bg-bg-canvas text-text-primary relative p-1 gap-1">
-      <Toolbar
-        connected={connected}
-        onReconnect={() => { reconnect(); requestAnimationFrame(() => inputRef.current?.focus()); }}
-        onDisconnect={() => { disconnect(); requestAnimationFrame(() => inputRef.current?.focus()); }}
-      />
-      <div className="flex-1 overflow-hidden flex flex-row gap-1 relative">
-        {/* Left pinned region — full, collapsed strip, or hidden */}
-        {budget.effectiveLeftWidth > 0 ? (
-          <>
-            <PinnedRegion
-              side="left"
-              panels={panelLayout.left}
-              width={budget.effectiveLeftWidth}
-              otherSidePanels={panelLayout.right}
-              onUnpin={unpinPanel}
-              onSwapSide={swapPanelSide}
-              onSwapWith={swapPanelsWith}
-              onMovePanel={movePanel}
-              heightRatios={panelHeights.left}
-              onHeightRatiosChange={onLeftHeightRatiosChange}
-            />
-            {panelLayout.left.length > 0 && (
-              <ResizeHandle side="left" onMouseDown={leftResize.handleMouseDown} isDragging={leftResize.isDragging} constrained={budget.effectiveLeftWidth < pinnedWidths.left} />
-            )}
-          </>
-        ) : budget.leftCollapsed && panelLayout.left.length > 0 ? (
-          <CollapsedPanelStrip
-            side="left"
-            panels={panelLayout.left}
-            panelWidth={pinnedWidths.left}
-            otherSidePanels={panelLayout.right}
-            onUnpin={unpinPanel}
-            onSwapSide={swapPanelSide}
-            onSwapWith={swapPanelsWith}
-            onMovePanel={movePanel}
-          />
-        ) : null}
+    <TerminalThemeProvider value={theme}>
+      <AppSettingsProvider value={appSettingsWithExtras}>
+        <CommandInputProvider value={commandInputValue}>
+          <VariableProvider value={variableState}>
+            <AliasProvider value={aliasState}>
+              <TriggerProvider value={triggerState}>
+                <TimerProvider value={timerState}>
+                  <SignatureProvider value={signatureState}>
+                    <SkillTrackerProvider value={skillTrackerValue}>
+                      <ChatProvider value={chatValue}>
+                        <ImproveCounterProvider value={counterValue}>
+                          <MapProvider value={mapTracker}>
+                            <AllocProvider value={allocState}>
+                              <WhoProvider value={whoValue}>
+                                <WhoTitleProvider value={whoTitleState}>
+                                <PanelProvider
+                                  layout={panelLayout}
+                                  activePanel={activePanel}
+                                  togglePanel={togglePanel}
+                                  pinPanel={pinPanel}
+                                >
+                                  <SpotlightProvider>
+                                    <div className="flex flex-col h-screen bg-bg-canvas text-text-primary relative p-1 gap-1">
+                                      <Toolbar
+                                        connected={connected}
+                                        onReconnect={() => {
+                                          reconnect();
+                                          requestAnimationFrame(() => inputRef.current?.focus());
+                                        }}
+                                        onDisconnect={() => {
+                                          disconnect();
+                                          requestAnimationFrame(() => inputRef.current?.focus());
+                                        }}
+                                      />
+                                      <div className="flex-1 overflow-hidden flex flex-row gap-1 relative">
+                                        {/* Left pinned region — full, collapsed strip, or hidden */}
+                                        {budget.effectiveLeftWidth > 0 ? (
+                                          <>
+                                            <PinnedRegion
+                                              side="left"
+                                              panels={panelLayout.left}
+                                              width={budget.effectiveLeftWidth}
+                                              otherSidePanels={panelLayout.right}
+                                              onUnpin={unpinPanel}
+                                              onSwapSide={swapPanelSide}
+                                              onSwapWith={swapPanelsWith}
+                                              onMovePanel={movePanel}
+                                              heightRatios={panelHeights.left}
+                                              onHeightRatiosChange={onLeftHeightRatiosChange}
+                                            />
+                                            {panelLayout.left.length > 0 && (
+                                              <ResizeHandle
+                                                side="left"
+                                                onMouseDown={leftResize.handleMouseDown}
+                                                isDragging={leftResize.isDragging}
+                                                constrained={
+                                                  budget.effectiveLeftWidth < pinnedWidths.left
+                                                }
+                                              />
+                                            )}
+                                          </>
+                                        ) : budget.leftCollapsed && panelLayout.left.length > 0 ? (
+                                          <CollapsedPanelStrip
+                                            side="left"
+                                            panels={panelLayout.left}
+                                            panelWidth={pinnedWidths.left}
+                                            otherSidePanels={panelLayout.right}
+                                            onUnpin={unpinPanel}
+                                            onSwapSide={swapPanelSide}
+                                            onSwapWith={swapPanelsWith}
+                                            onMovePanel={movePanel}
+                                          />
+                                        ) : null}
 
-        {/* Center: Terminal + bottom controls */}
-        <div className="flex-1 overflow-hidden flex flex-col gap-1" style={{ minWidth: MIN_TERMINAL_WIDTH }}>
-          <div className="flex-1 overflow-hidden rounded-lg flex flex-col">
-            <Terminal terminalRef={terminalRef} inputRef={inputRef} theme={xtermTheme} display={display} onUpdateDisplay={updateDisplay} onAddToTrigger={handleAddToTrigger} onGagLine={handleGagLine} onOpenInNotes={handleOpenInNotes} />
-          </div>
-          {/* Status bar + command input */}
-          <div className="rounded-lg bg-bg-primary overflow-hidden shrink-0">
-            <div
-              ref={statusBarRef}
-              data-help-id="status-bar"
-              className="flex items-center gap-1 px-1.5 py-0.5"
-              style={{ background: 'linear-gradient(to bottom, #1e1e1e, #1a1a1a)' }}
-            >
-              {loggedIn && (
-                <SortableStatusBar
-                  items={readoutConfigs}
-                  order={statusBarOrder}
-                  onReorder={reorderStatusBar}
-                  theme={theme}
-                  autoCompact={autoCompact}
-                  compactReadouts={compactReadouts}
-                  filterFlags={filterFlags}
-                  toggleFilter={toggleFilter}
-                  toggleCompactReadout={toggleCompactReadout}
-                />
-              )}
-              <div className="ml-auto">
-                <GameClock
-                  compact={autoCompact || !!compactReadouts.clock}
-                  onToggleCompact={() => toggleCompactReadout('clock')}
-                />
-              </div>
-            </div>
-            <CommandInput
-              ref={inputRef}
-              onSend={handleSend}
-              onReconnect={reconnect}
-            />
-          </div>
-        </div>
+                                        {/* Center: Terminal + bottom controls */}
+                                        <div
+                                          className="flex-1 overflow-hidden flex flex-col gap-1"
+                                          style={{ minWidth: MIN_TERMINAL_WIDTH }}
+                                        >
+                                          <div className="flex-1 overflow-hidden rounded-lg flex flex-col">
+                                            <Terminal
+                                              terminalRef={terminalRef}
+                                              inputRef={inputRef}
+                                              theme={xtermTheme}
+                                              display={display}
+                                              onUpdateDisplay={updateDisplay}
+                                              onAddToTrigger={handleAddToTrigger}
+                                              onGagLine={handleGagLine}
+                                              onOpenInNotes={handleOpenInNotes}
+                                            />
+                                          </div>
+                                          {/* Status bar + command input */}
+                                          <div className="rounded-lg bg-bg-primary overflow-hidden shrink-0">
+                                            <div
+                                              ref={statusBarRef}
+                                              data-help-id="status-bar"
+                                              className="flex items-center gap-1 px-1.5 py-0.5"
+                                              style={{
+                                                background:
+                                                  'linear-gradient(to bottom, #1e1e1e, #1a1a1a)',
+                                              }}
+                                            >
+                                              {loggedIn && (
+                                                <SortableStatusBar
+                                                  items={readoutConfigs}
+                                                  order={statusBarOrder}
+                                                  onReorder={reorderStatusBar}
+                                                  theme={theme}
+                                                  autoCompact={autoCompact}
+                                                  compactReadouts={compactReadouts}
+                                                  filterFlags={filterFlags}
+                                                  toggleFilter={toggleFilter}
+                                                  toggleCompactReadout={toggleCompactReadout}
+                                                />
+                                              )}
+                                              <div className="ml-auto">
+                                                <GameClock
+                                                  compact={autoCompact || !!compactReadouts.clock}
+                                                  onToggleCompact={() =>
+                                                    toggleCompactReadout('clock')
+                                                  }
+                                                />
+                                              </div>
+                                            </div>
+                                            <CommandInput
+                                              ref={inputRef}
+                                              onSend={handleSend}
+                                              onReconnect={reconnect}
+                                            />
+                                          </div>
+                                        </div>
 
-        {/* Right pinned region — full, collapsed strip, or hidden */}
-        {budget.effectiveRightWidth > 0 ? (
-          <>
-            {panelLayout.right.length > 0 && (
-              <ResizeHandle side="right" onMouseDown={rightResize.handleMouseDown} isDragging={rightResize.isDragging} constrained={budget.effectiveRightWidth < pinnedWidths.right} />
-            )}
-            <PinnedRegion
-              side="right"
-              panels={panelLayout.right}
-              width={budget.effectiveRightWidth}
-              otherSidePanels={panelLayout.left}
-              onUnpin={unpinPanel}
-              onSwapSide={swapPanelSide}
-              onSwapWith={swapPanelsWith}
-              onMovePanel={movePanel}
-              heightRatios={panelHeights.right}
-              onHeightRatiosChange={onRightHeightRatiosChange}
-            />
-          </>
-        ) : budget.rightCollapsed && panelLayout.right.length > 0 ? (
-          <CollapsedPanelStrip
-            side="right"
-            panels={panelLayout.right}
-            panelWidth={pinnedWidths.right}
-            otherSidePanels={panelLayout.left}
-            onUnpin={unpinPanel}
-            onSwapSide={swapPanelSide}
-            onSwapWith={swapPanelsWith}
-            onMovePanel={movePanel}
-          />
-        ) : null}
+                                        {/* Right pinned region — full, collapsed strip, or hidden */}
+                                        {budget.effectiveRightWidth > 0 ? (
+                                          <>
+                                            {panelLayout.right.length > 0 && (
+                                              <ResizeHandle
+                                                side="right"
+                                                onMouseDown={rightResize.handleMouseDown}
+                                                isDragging={rightResize.isDragging}
+                                                constrained={
+                                                  budget.effectiveRightWidth < pinnedWidths.right
+                                                }
+                                              />
+                                            )}
+                                            <PinnedRegion
+                                              side="right"
+                                              panels={panelLayout.right}
+                                              width={budget.effectiveRightWidth}
+                                              otherSidePanels={panelLayout.left}
+                                              onUnpin={unpinPanel}
+                                              onSwapSide={swapPanelSide}
+                                              onSwapWith={swapPanelsWith}
+                                              onMovePanel={movePanel}
+                                              heightRatios={panelHeights.right}
+                                              onHeightRatiosChange={onRightHeightRatiosChange}
+                                            />
+                                          </>
+                                        ) : budget.rightCollapsed &&
+                                          panelLayout.right.length > 0 ? (
+                                          <CollapsedPanelStrip
+                                            side="right"
+                                            panels={panelLayout.right}
+                                            panelWidth={pinnedWidths.right}
+                                            otherSidePanels={panelLayout.left}
+                                            onUnpin={unpinPanel}
+                                            onSwapSide={swapPanelSide}
+                                            onSwapWith={swapPanelsWith}
+                                            onMovePanel={movePanel}
+                                          />
+                                        ) : null}
 
-        {/* Slide-out overlays */}
-        <SlideOut panel="appearance">
-          <ColorSettings
-            theme={theme}
-            onUpdateColor={updateColor}
-            onResetColor={resetColor}
-            onReset={resetAll}
-            display={display}
-            onUpdateDisplay={updateDisplay}
-            onResetDisplay={resetDisplay}
-            debugMode={debugMode}
-            onToggleDebug={toggleDebug}
-          />
-        </SlideOut>
-        <SlideOut panel="settings">
-          <SettingsPanel />
-        </SlideOut>
-        <SlideOut panel="skills" pinnable="skills">
-          <SkillPanel mode="slideout" />
-        </SlideOut>
-        <SlideOut panel="chat" pinnable="chat">
-          <ChatPanel mode="slideout" />
-        </SlideOut>
-        <SlideOut panel="counter" pinnable="counter">
-          <CounterPanel mode="slideout" />
-        </SlideOut>
-        <SlideOut panel="notes" pinnable="notes">
-          <NotesPanel mode="slideout" />
-        </SlideOut>
-        <SlideOut panel="aliases">
-          <AliasPanel onClose={() => setActivePanel(null)} />
-        </SlideOut>
-        <SlideOut panel="triggers">
-          <TriggerPanel onClose={() => setActivePanel(null)} />
-        </SlideOut>
-        <SlideOut panel="timers">
-          <TimerPanel onClose={() => setActivePanel(null)} />
-        </SlideOut>
-        <SlideOut panel="variables">
-          <VariablePanel onClose={() => setActivePanel(null)} />
-        </SlideOut>
-        <SlideOut panel="map" pinnable="map">
-          <MapPanel
-            mode="slideout"
-            onWalkTo={async (directions) => {
-              for (const dir of directions) {
-                await sendCommand(dir);
-              }
-            }}
-          />
-        </SlideOut>
-        <SlideOut panel="alloc" pinnable="alloc">
-          <AllocPanel mode="slideout" />
-        </SlideOut>
-        <SlideOut panel="currency" pinnable="currency">
-          <CurrencyPanel mode="slideout" />
-        </SlideOut>
-        <SlideOut panel="help">
-          <HelpPanel />
-        </SlideOut>
-      </div>
-    </div>
-    <SpotlightOverlay />
-    </SpotlightProvider>
-    </PanelProvider>
-    </AllocProvider>
-    </MapProvider>
-    </ImproveCounterProvider>
-    </ChatProvider>
-    </SkillTrackerProvider>
-    </SignatureProvider>
-    </TimerProvider>
-    </TriggerProvider>
-    </AliasProvider>
-    </VariableProvider>
-    </CommandInputProvider>
-    </AppSettingsProvider>
+                                        {/* Slide-out overlays */}
+                                        <SlideOut panel="appearance">
+                                          <ColorSettings
+                                            theme={theme}
+                                            onUpdateColor={updateColor}
+                                            onResetColor={resetColor}
+                                            onReset={resetAll}
+                                            display={display}
+                                            onUpdateDisplay={updateDisplay}
+                                            onResetDisplay={resetDisplay}
+                                            debugMode={debugMode}
+                                            onToggleDebug={toggleDebug}
+                                          />
+                                        </SlideOut>
+                                        <SlideOut panel="settings">
+                                          <SettingsPanel />
+                                        </SlideOut>
+                                        <SlideOut panel="skills" pinnable="skills">
+                                          <SkillPanel mode="slideout" />
+                                        </SlideOut>
+                                        <SlideOut panel="chat" pinnable="chat">
+                                          <ChatPanel mode="slideout" />
+                                        </SlideOut>
+                                        <SlideOut panel="counter" pinnable="counter">
+                                          <CounterPanel mode="slideout" />
+                                        </SlideOut>
+                                        <SlideOut panel="notes" pinnable="notes">
+                                          <NotesPanel mode="slideout" />
+                                        </SlideOut>
+                                        <SlideOut panel="aliases">
+                                          <AliasPanel onClose={() => setActivePanel(null)} />
+                                        </SlideOut>
+                                        <SlideOut panel="triggers">
+                                          <TriggerPanel onClose={() => setActivePanel(null)} />
+                                        </SlideOut>
+                                        <SlideOut panel="timers">
+                                          <TimerPanel onClose={() => setActivePanel(null)} />
+                                        </SlideOut>
+                                        <SlideOut panel="variables">
+                                          <VariablePanel onClose={() => setActivePanel(null)} />
+                                        </SlideOut>
+                                        <SlideOut panel="map" pinnable="map">
+                                          <MapPanel
+                                            mode="slideout"
+                                            onWalkTo={async (directions) => {
+                                              for (const dir of directions) {
+                                                await sendCommand(dir);
+                                              }
+                                            }}
+                                          />
+                                        </SlideOut>
+                                        <SlideOut panel="alloc" pinnable="alloc">
+                                          <AllocPanel mode="slideout" />
+                                        </SlideOut>
+                                        <SlideOut panel="currency" pinnable="currency">
+                                          <CurrencyPanel mode="slideout" />
+                                        </SlideOut>
+                                        <SlideOut panel="babel" pinnable="babel">
+                                          <BabelPanel mode="slideout" />
+                                        </SlideOut>
+                                        <SlideOut panel="who" pinnable="who">
+                                          <WhoPanel mode="slideout" />
+                                        </SlideOut>
+                                        <SlideOut panel="help">
+                                          <HelpPanel />
+                                        </SlideOut>
+                                      </div>
+                                    </div>
+                                    <SpotlightOverlay />
+                                  </SpotlightProvider>
+                                </PanelProvider>
+                                </WhoTitleProvider>
+                              </WhoProvider>
+                            </AllocProvider>
+                          </MapProvider>
+                        </ImproveCounterProvider>
+                      </ChatProvider>
+                    </SkillTrackerProvider>
+                  </SignatureProvider>
+                </TimerProvider>
+              </TriggerProvider>
+            </AliasProvider>
+          </VariableProvider>
+        </CommandInputProvider>
+      </AppSettingsProvider>
+    </TerminalThemeProvider>
   );
 }
 

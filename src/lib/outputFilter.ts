@@ -7,6 +7,7 @@ import { matchMovementLine, type MovementMatch } from './movementPatterns';
 import { matchAlignmentLine, type AlignmentMatch } from './alignmentPatterns';
 import { matchChatLine } from './chatPatterns';
 import { transformBoardDateLine } from './boardDatePatterns';
+import { isWhoHeaderLine, isWhoFinalLine, buildWhoSnapshot, type WhoSnapshot } from './whoPatterns';
 import type { ChatMessage } from '../types/chat';
 import { stripAnsi } from './ansiUtils';
 
@@ -49,6 +50,7 @@ export interface OutputFilterCallbacks {
   onMovement?: (match: MovementMatch) => void;
   onAlignment?: (match: AlignmentMatch) => void;
   onChat?: (msg: ChatMessage) => void;
+  onWho?: (snapshot: WhoSnapshot) => void;
   /** Fired for every complete line with stripped + raw text. Return gag/highlight directives. */
   onLine?: (stripped: string, raw: string) => LineCallbackResult | void;
 }
@@ -87,7 +89,9 @@ export class OutputFilter {
   /** Active character name for own-message detection in chat matching. */
   activeCharacter: string | null = null;
   /** Optional resolver for anonymous tell/SZ signatures → player names. */
-  signatureResolver: ((messageBody: string) => { playerName: string; message: string } | null) | null = null;
+  signatureResolver:
+    | ((messageBody: string) => { playerName: string; message: string } | null)
+    | null = null;
   /** When true, convert in-game bulletin board dates to real-world dates. */
   boardDatesEnabled = true;
   /** When true, strip server prompt prefix ("> ") from terminal output. */
@@ -97,7 +101,14 @@ export class OutputFilter {
 
   /* ---- Sync gag state (pattern-based, NOT blanket suppression) ---- */
   private syncActive = false;
-  private syncGags = { hp: false, score: false, combatAlloc: false, magicAlloc: false, alignment: false };
+  private syncGags = {
+    hp: false,
+    score: false,
+    combatAlloc: false,
+    magicAlloc: false,
+    alignment: false,
+    who: false,
+  };
   /** True while inside the multi-line score block during sync. */
   private syncInScoreBlock = false;
   /** True while a limb header was seen, waiting for its values line. */
@@ -106,8 +117,19 @@ export class OutputFilter {
   private syncAllocHasData = false;
   /** True after "elemental affinity:" header seen, waiting for values. */
   private syncMagicPending = false;
+  /** True while inside the who list block during sync. */
+  private syncInWhoBlock = false;
+  /** Accumulated who list lines during sync (stripped). */
+  private syncWhoLines: string[] = [];
+  /** Accumulated who list raw lines during sync (with ANSI). */
+  private syncWhoRawLines: string[] = [];
   /** Safety timer to auto-end sync. */
   private syncTimer: ReturnType<typeof setTimeout> | null = null;
+
+  /* ---- Passive who tracking (captures manual `who` output without gagging) ---- */
+  private passiveWhoActive = false;
+  private passiveWhoLines: string[] = [];
+  private passiveWhoRawLines: string[] = [];
 
   constructor(callbacks: OutputFilterCallbacks = {}) {
     this.callbacks = callbacks;
@@ -120,11 +142,46 @@ export class OutputFilter {
    */
   startSync(): void {
     this.syncActive = true;
-    this.syncGags = { hp: true, score: true, combatAlloc: true, magicAlloc: true, alignment: true };
+    this.syncGags = {
+      hp: true,
+      score: true,
+      combatAlloc: true,
+      magicAlloc: true,
+      alignment: true,
+      who: true,
+    };
     this.syncInScoreBlock = false;
     this.syncAllocPending = false;
     this.syncAllocHasData = false;
     this.syncMagicPending = false;
+    this.syncInWhoBlock = false;
+    this.syncWhoLines = [];
+    this.syncWhoRawLines = [];
+    // Abort any in-progress passive who tracking (sync takes over)
+    this.passiveWhoActive = false;
+    this.passiveWhoLines = [];
+    this.passiveWhoRawLines = [];
+    if (this.syncTimer) clearTimeout(this.syncTimer);
+    this.syncTimer = setTimeout(() => {
+      this.syncTimer = null;
+      this.endSync();
+    }, 5000);
+  }
+
+  /**
+   * Begin sync gagging for just the `who` command response.
+   * Used for periodic background refreshes (not full login sync).
+   */
+  startWhoSync(): void {
+    this.syncActive = true;
+    this.syncGags.who = true;
+    this.syncInWhoBlock = false;
+    this.syncWhoLines = [];
+    this.syncWhoRawLines = [];
+    // Abort any in-progress passive who tracking (sync takes over)
+    this.passiveWhoActive = false;
+    this.passiveWhoLines = [];
+    this.passiveWhoRawLines = [];
     if (this.syncTimer) clearTimeout(this.syncTimer);
     this.syncTimer = setTimeout(() => {
       this.syncTimer = null;
@@ -136,11 +193,21 @@ export class OutputFilter {
   endSync(): void {
     const wasActive = this.syncActive;
     this.syncActive = false;
-    this.syncGags = { hp: false, score: false, combatAlloc: false, magicAlloc: false, alignment: false };
+    this.syncGags = {
+      hp: false,
+      score: false,
+      combatAlloc: false,
+      magicAlloc: false,
+      alignment: false,
+      who: false,
+    };
     this.syncInScoreBlock = false;
     this.syncAllocPending = false;
     this.syncAllocHasData = false;
     this.syncMagicPending = false;
+    this.syncInWhoBlock = false;
+    this.syncWhoLines = [];
+    this.syncWhoRawLines = [];
     if (this.syncTimer) {
       clearTimeout(this.syncTimer);
       this.syncTimer = null;
@@ -155,7 +222,14 @@ export class OutputFilter {
 
   /** Check if all sync gags are consumed and end sync after a short grace period for the trailing prompt. */
   private checkSyncDone(): void {
-    if (!this.syncGags.hp && !this.syncGags.score && !this.syncGags.combatAlloc && !this.syncGags.magicAlloc && !this.syncGags.alignment) {
+    if (
+      !this.syncGags.hp &&
+      !this.syncGags.score &&
+      !this.syncGags.combatAlloc &&
+      !this.syncGags.magicAlloc &&
+      !this.syncGags.alignment &&
+      !this.syncGags.who
+    ) {
       // Brief delay so the trailing ">" prompt from the last command gets gagged too
       if (this.syncTimer) clearTimeout(this.syncTimer);
       this.syncTimer = setTimeout(() => {
@@ -166,10 +240,35 @@ export class OutputFilter {
   }
 
   /**
+   * Track who list output passively (no gagging).
+   * Used for manual `who` typed by the player — updates the panel without suppressing output.
+   */
+  private trackPassiveWho(stripped: string, raw: string): void {
+    if (!this.passiveWhoActive) {
+      if (isWhoHeaderLine(stripped)) {
+        this.passiveWhoActive = true;
+        this.passiveWhoLines = [];
+        this.passiveWhoRawLines = [];
+      }
+      return;
+    }
+
+    this.passiveWhoLines.push(stripped);
+    this.passiveWhoRawLines.push(raw);
+    if (isWhoFinalLine(stripped)) {
+      const snapshot = buildWhoSnapshot(this.passiveWhoLines, this.passiveWhoRawLines);
+      this.callbacks.onWho?.(snapshot);
+      this.passiveWhoActive = false;
+      this.passiveWhoLines = [];
+      this.passiveWhoRawLines = [];
+    }
+  }
+
+  /**
    * Check if a line should be gagged as part of a sync command response.
    * Returns true if the line should be suppressed.
    */
-  private shouldSyncGag(stripped: string, healthMatch: HealthMatch | null): boolean {
+  private shouldSyncGag(stripped: string, raw: string, healthMatch: HealthMatch | null): boolean {
     if (!this.syncActive) return false;
 
     // Bare prompt lines ("> " → empty after stripping) between sync command responses
@@ -269,6 +368,30 @@ export class OutputFilter {
       this.syncGags.alignment = false;
       this.checkSyncDone();
       return true;
+    }
+
+    // Who list block — multi-line (header → player rows → footer)
+    if (this.syncGags.who) {
+      if (!this.syncInWhoBlock && isWhoHeaderLine(stripped)) {
+        this.syncInWhoBlock = true;
+        this.syncWhoLines = [];
+        this.syncWhoRawLines = [];
+        return true;
+      }
+      if (this.syncInWhoBlock) {
+        this.syncWhoLines.push(stripped);
+        this.syncWhoRawLines.push(raw);
+        if (isWhoFinalLine(stripped)) {
+          // End of who block — build snapshot and fire callback
+          const snapshot = buildWhoSnapshot(this.syncWhoLines, this.syncWhoRawLines);
+          this.callbacks.onWho?.(snapshot);
+          this.syncInWhoBlock = false;
+          this.syncWhoLines = [];
+          this.syncGags.who = false;
+          this.checkSyncDone();
+        }
+        return true;
+      }
     }
 
     return false;
@@ -372,24 +495,26 @@ export class OutputFilter {
       // --- Sync gagging (pattern-based, only login command responses) ---
       // Check if this line is a sync response that should be suppressed.
       // Callbacks (onLine, etc.) still fire so parsers always run.
-      if (this.syncActive && this.shouldSyncGag(stripped, healthMatch)) {
+      if (this.syncActive && this.shouldSyncGag(stripped, seg, healthMatch)) {
         // Fire onLine so alloc/magic parsers and triggers still process
         this.callbacks.onLine?.(stripped, seg);
         continue; // suppress only this specific sync response line
       }
 
+      // --- Passive who tracking (manual `who` → updates panel without gagging) ---
+      this.trackPassiveWho(stripped, seg);
+
       // --- Compact mode: strip status lines from terminal ---
 
       if (
-        !isScoreBlockLine(stripped) && (
-          (this.filterFlags.concentration && concMatch) ||
+        !isScoreBlockLine(stripped) &&
+        ((this.filterFlags.concentration && concMatch) ||
           (this.filterFlags.hunger && needsMatch?.hunger) ||
           (this.filterFlags.thirst && needsMatch?.thirst) ||
           (this.filterFlags.aura && auraMatch) ||
           (this.filterFlags.encumbrance && encumbranceMatch) ||
           (this.filterFlags.movement && movementMatch) ||
-          (this.filterFlags.alignment && alignmentMatch)
-        )
+          (this.filterFlags.alignment && alignmentMatch))
       ) {
         continue;
       }
@@ -437,6 +562,9 @@ export class OutputFilter {
   /** Reset buffer state (call on disconnect/reconnect) */
   reset(): void {
     this.buffer = '';
+    this.passiveWhoActive = false;
+    this.passiveWhoLines = [];
+    this.passiveWhoRawLines = [];
     this.endSync();
   }
 }

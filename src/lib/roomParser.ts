@@ -23,9 +23,7 @@ export interface ParsedHexRoom {
   landmarks: string[];
 }
 
-export type RoomParserEvent =
-  | { type: 'hex-room'; room: ParsedHexRoom }
-  | { type: 'move-failed' };
+export type RoomParserEvent = { type: 'hex-room'; room: ParsedHexRoom } | { type: 'move-failed' };
 
 // ---------------------------------------------------------------------------
 // Patterns
@@ -44,25 +42,26 @@ const HEX_BORDER_RE = /^(?:> )*\s*-[-\s]+$/;
 const HEX_SIDE_RE = /^(?:> )*\s*[/\\][ .^~"whsx-]*[/\\]\s*$/;
 
 /** Wilderness room starts — description lines */
-const WILDERNESS_START_RE = /^(?:> )*(?:You are (?:in|on|at|standing)|This is (?:a |an |the )|The ground is |A vast |The )/;
+const WILDERNESS_START_RE =
+  /^(?:> )*(?:You are (?:in|on|at|standing)|This is (?:a |an |the )|The ground is |A vast |The )/;
 
 /** Lighting sentences that end room descriptions */
-const LIGHTING_RE = /It is (?:shadowy|dim|bright|painfully bright|blindingly bright|extremely light here|well lit here|pitch black|dark here|dark)\./;
+const LIGHTING_RE =
+  /It is (?:shadowy|dim|bright|painfully bright|blindingly bright|extremely light here|well lit here|pitch black|dark here|dark)\./;
 
 /** Failed movement messages */
-const MOVE_FAIL_RE = /^(?:> )*(?:There is no exit in that direction\.|The .+ is closed\.|You (?:can't|cannot) go that way\.|You can't see to move!)/;
+const MOVE_FAIL_RE =
+  /^(?:> )*(?:There is no exit in that direction\.|The .+ is closed\.|You (?:can't|cannot) go that way\.|You can't see to move!)/;
 
 /** Lines that are clearly NOT part of a wilderness description */
-const NON_WILDERNESS_RE = /^(?:> )*(?:There (?:is one obvious exit|are (?:two|three|four|five|six|seven|eight|nine|ten|many) exits):|< .+ >$|Held|Worn|Concentration|Encumbrance|Movement|Aura|Needs|\* |> $|\(|$)/;
+const NON_WILDERNESS_RE =
+  /^(?:> )*(?:There (?:is one obvious exit|are (?:two|three|four|five|six|seven|eight|nine|ten|many) exits):|< .+ >$|Held|Worn|Concentration|Encumbrance|Movement|Aura|Needs|\* |> $|\(|$)/;
 
 // ---------------------------------------------------------------------------
 // State machine
 // ---------------------------------------------------------------------------
 
-type ParserState =
-  | 'idle'
-  | 'skipping-hex-art'
-  | 'reading-description';
+type ParserState = 'idle' | 'skipping-hex-art' | 'reading-description';
 
 export class RoomParser {
   private state: ParserState = 'idle';

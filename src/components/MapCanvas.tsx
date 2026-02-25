@@ -85,7 +85,9 @@ export function MapCanvas({ width, height, showLabels, showFog, onWalkTo }: MapC
   // Pan/zoom state
   const panRef = useRef({ x: 0, y: 0 });
   const zoomRef = useRef(1);
-  const dragRef = useRef<{ startX: number; startY: number; panX: number; panY: number } | null>(null);
+  const dragRef = useRef<{ startX: number; startY: number; panX: number; panY: number } | null>(
+    null
+  );
   const [tooltip, setTooltip] = useState<{ x: number; y: number; room: MapRoom } | null>(null);
   const animFrameRef = useRef<number>(0);
 
@@ -173,85 +175,100 @@ export function MapCanvas({ width, height, showLabels, showFog, onWalkTo }: MapC
     };
   }, []);
 
-  const handleMouseMove = useCallback((e: React.MouseEvent) => {
-    if (dragRef.current) {
-      const dx = (e.clientX - dragRef.current.startX) / zoomRef.current;
-      const dy = (e.clientY - dragRef.current.startY) / zoomRef.current;
-      panRef.current = {
-        x: dragRef.current.panX + dx,
-        y: dragRef.current.panY + dy,
-      };
-      if (animFrameRef.current) cancelAnimationFrame(animFrameRef.current);
-      animFrameRef.current = requestAnimationFrame(() => requestRedraw());
-    }
-  }, [requestRedraw]);
+  const handleMouseMove = useCallback(
+    (e: React.MouseEvent) => {
+      if (dragRef.current) {
+        const dx = (e.clientX - dragRef.current.startX) / zoomRef.current;
+        const dy = (e.clientY - dragRef.current.startY) / zoomRef.current;
+        panRef.current = {
+          x: dragRef.current.panX + dx,
+          y: dragRef.current.panY + dy,
+        };
+        if (animFrameRef.current) cancelAnimationFrame(animFrameRef.current);
+        animFrameRef.current = requestAnimationFrame(() => requestRedraw());
+      }
+    },
+    [requestRedraw]
+  );
 
   const handleMouseUp = useCallback(() => {
     dragRef.current = null;
   }, []);
 
-  const handleWheel = useCallback((e: React.WheelEvent) => {
-    e.preventDefault();
-    const delta = e.deltaY > 0 ? 0.9 : 1.1;
-    zoomRef.current = Math.max(0.2, Math.min(4, zoomRef.current * delta));
-    requestRedraw();
-  }, [requestRedraw]);
+  const handleWheel = useCallback(
+    (e: React.WheelEvent) => {
+      e.preventDefault();
+      const delta = e.deltaY > 0 ? 0.9 : 1.1;
+      zoomRef.current = Math.max(0.2, Math.min(4, zoomRef.current * delta));
+      requestRedraw();
+    },
+    [requestRedraw]
+  );
 
-  const handleClick = useCallback((e: React.MouseEvent) => {
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-    const rect = canvas.getBoundingClientRect();
-    const zoom = zoomRef.current;
-    const pan = panRef.current;
+  const handleClick = useCallback(
+    (e: React.MouseEvent) => {
+      const canvas = canvasRef.current;
+      if (!canvas) return;
+      const rect = canvas.getBoundingClientRect();
+      const zoom = zoomRef.current;
+      const pan = panRef.current;
 
-    // Convert click position to world coordinates
-    const worldX = (e.clientX - rect.left - rect.width / 2) / zoom - pan.x;
-    const worldY = (e.clientY - rect.top - rect.height / 2) / zoom - pan.y;
+      // Convert click position to world coordinates
+      const worldX = (e.clientX - rect.left - rect.width / 2) / zoom - pan.x;
+      const worldY = (e.clientY - rect.top - rect.height / 2) / zoom - pan.y;
 
-    const hex = pixelToHex(worldX, worldY, HEX_SIZE);
+      const hex = pixelToHex(worldX, worldY, HEX_SIZE);
 
-    // Find room at this hex
-    const room = Object.values(graph.rooms).find(
-      (r) => r.coords.q === hex.q && r.coords.r === hex.r,
-    );
+      // Find room at this hex
+      const room = Object.values(graph.rooms).find(
+        (r) => r.coords.q === hex.q && r.coords.r === hex.r
+      );
 
-    if (room) {
-      setTooltip({
-        x: e.clientX - rect.left,
-        y: e.clientY - rect.top,
-        room,
-      });
-    } else {
-      setTooltip(null);
-    }
-  }, [graph]);
-
-  const handleContextMenu = useCallback((e: React.MouseEvent) => {
-    e.preventDefault();
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-    const rect = canvas.getBoundingClientRect();
-    const zoom = zoomRef.current;
-    const pan = panRef.current;
-
-    const worldX = (e.clientX - rect.left - rect.width / 2) / zoom - pan.x;
-    const worldY = (e.clientY - rect.top - rect.height / 2) / zoom - pan.y;
-    const hex = pixelToHex(worldX, worldY, HEX_SIZE);
-
-    const room = Object.values(graph.rooms).find(
-      (r) => r.coords.q === hex.q && r.coords.r === hex.r,
-    );
-
-    if (room && onWalkTo) {
-      const path = findPathTo(room.id);
-      if (path && path.directions.length > 0) {
-        onWalkTo(room.id, path.directions);
+      if (room) {
+        setTooltip({
+          x: e.clientX - rect.left,
+          y: e.clientY - rect.top,
+          room,
+        });
+      } else {
+        setTooltip(null);
       }
-    }
-  }, [graph, findPathTo, onWalkTo]);
+    },
+    [graph]
+  );
+
+  const handleContextMenu = useCallback(
+    (e: React.MouseEvent) => {
+      e.preventDefault();
+      const canvas = canvasRef.current;
+      if (!canvas) return;
+      const rect = canvas.getBoundingClientRect();
+      const zoom = zoomRef.current;
+      const pan = panRef.current;
+
+      const worldX = (e.clientX - rect.left - rect.width / 2) / zoom - pan.x;
+      const worldY = (e.clientY - rect.top - rect.height / 2) / zoom - pan.y;
+      const hex = pixelToHex(worldX, worldY, HEX_SIZE);
+
+      const room = Object.values(graph.rooms).find(
+        (r) => r.coords.q === hex.q && r.coords.r === hex.r
+      );
+
+      if (room && onWalkTo) {
+        const path = findPathTo(room.id);
+        if (path && path.directions.length > 0) {
+          onWalkTo(room.id, path.directions);
+        }
+      }
+    },
+    [graph, findPathTo, onWalkTo]
+  );
 
   return (
-    <div className="relative" style={{ width, height, cursor: dragRef.current ? 'grabbing' : 'grab' }}>
+    <div
+      className="relative"
+      style={{ width, height, cursor: dragRef.current ? 'grabbing' : 'grab' }}
+    >
       <canvas
         ref={canvasRef}
         style={{ width, height, display: 'block' }}
@@ -283,9 +300,11 @@ export function MapCanvas({ width, height, showLabels, showFog, onWalkTo }: MapC
 
 function drawBackgroundGrid(
   ctx: CanvasRenderingContext2D,
-  w: number, h: number,
-  cx: number, cy: number,
-  zoom: number,
+  w: number,
+  h: number,
+  cx: number,
+  cy: number,
+  zoom: number
 ) {
   ctx.strokeStyle = GRID_COLOR;
   ctx.lineWidth = 0.5;
@@ -331,7 +350,7 @@ function drawExitLines(ctx: CanvasRenderingContext2D, room: MapRoom, graph: MapG
       const offset = getDirectionOffset(dir);
       const stubLen = HEX_SIZE * 0.6;
       // Convert axial offset to approximate pixel direction
-      const dx = offset.dq * 1.5 + offset.dr * (-0.5);
+      const dx = offset.dq * 1.5 + offset.dr * -0.5;
       const dy = offset.dr * Math.sqrt(3) * 0.5 + offset.dq * Math.sqrt(3) * 0.25;
       const len = Math.sqrt(dx * dx + dy * dy) || 1;
 
@@ -351,7 +370,7 @@ function drawHex(
   ctx: CanvasRenderingContext2D,
   room: MapRoom,
   isCurrent: boolean,
-  showFog: boolean,
+  showFog: boolean
 ) {
   const { x, y } = hexToPixel(room.coords.q, room.coords.r, HEX_SIZE);
   const corners = hexCorners(x, y, HEX_SIZE - 1);
@@ -499,7 +518,10 @@ function RoomTooltip({
         boxShadow: '0 4px 16px rgba(0,0,0,0.5)',
       }}
     >
-      <div className="text-[11px] font-semibold mb-1" style={{ color: isCurrent ? CURRENT_ROOM_GLOW : TOOLTIP_TEXT }}>
+      <div
+        className="text-[11px] font-semibold mb-1"
+        style={{ color: isCurrent ? CURRENT_ROOM_GLOW : TOOLTIP_TEXT }}
+      >
         {terrainLabel}
         <span className="font-normal opacity-50 ml-1.5">
           ({room.coords.q}, {room.coords.r})
@@ -511,14 +533,9 @@ function RoomTooltip({
       {room.landmarks.length > 0 && (
         <div className="text-[9px] opacity-50 mb-1 italic">{room.landmarks[0]}</div>
       )}
-      {exits.length > 0 && (
-        <div className="text-[9px] opacity-50">
-          Exits: {exits.join(', ')}
-        </div>
-      )}
+      {exits.length > 0 && <div className="text-[9px] opacity-50">Exits: {exits.join(', ')}</div>}
       <div className="text-[9px] opacity-40 mt-0.5">
-        Visited {room.visitCount}x
-        {room.notes ? ' · Has notes' : ''}
+        Visited {room.visitCount}x{room.notes ? ' · Has notes' : ''}
       </div>
       {!isCurrent && (
         <div className="text-[9px] opacity-40 mt-0.5 italic">Right-click to walk here</div>

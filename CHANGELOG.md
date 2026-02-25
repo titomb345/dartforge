@@ -9,6 +9,41 @@ The `[Unreleased]` header controls automatic version bumping on merge:
 - `[Unreleased-minor]` → 0.1.0 → 0.2.0
 - `[Unreleased-major]` → 0.1.0 → 1.0.0
 
+## [Unreleased-minor]
+
+### Added
+- Who List panel — shows online players with guild tags, ANSI name colors, and idle status; auto-refreshes in the background (configurable interval), pinnable to left/right side; manual `who` command also updates the panel without suppressing terminal output
+- Who title tracking — players using custom who titles (names that don't match "Name the race") can be mapped to suspected or confirmed player names; hover a title row and click "?" to add, click an annotation to edit, right-click to toggle confirmed/suspected; mappings are character-scoped and persisted
+- Who panel now supports all 5 player states: Online, Away, Busy, Walkup, and Idle — each with theme-aware colored indicators
+- Who auto-refresh countdown badge next to command input (matches alignment/anti-idle pattern); double-click to disable
+- Complete spell database (`spellData.ts`) with abbreviations, cast times, and aura costs for all 93+ spells
+- Non-spell skill database (`skillData.ts`) with optional abbreviations and category assignments; category sets in `skillCategories.ts` are now derived from these databases automatically
+- Movement mode system — cycle through Normal → Leading → Rowing to automatically prefix direction commands (e.g. `e` becomes `lead e`); toggle via Numpad `/` or `/movemode` command; teal pulsing badge shows active mode; resets on disconnect
+- Action blocking — automatically queues commands during channeled actions (cast, study, hunt, gather, search, invoke, inscribe, write, revise, learn book, summon armor) to prevent accidental interruption; queued commands flush on completion with chain-aware re-queuing
+- `/block` and `/unblock` built-in commands for manual blocking control
+- Auto-login: store up to 2 character profiles in Settings > Characters — name and password are sent automatically on connect
+- Passwords stored securely in the OS credential manager (Windows Credential Manager / macOS Keychain / Linux Secret Service) via the `keyring` crate — never written to settings.json
+- Character switching with 20-minute cooldown enforcement (DartMUD server rule) — cooldown is timestamp-based and survives app restarts
+- "Switch to [name]" button with live countdown timer, disabled while connected
+- Web build: character form uses `autocomplete="username"` / `autocomplete="current-password"` so browser password managers (1Password, LastPass, etc.) can detect, save, and autofill credentials
+- Wrong-credential safety: auto-login only attempts once per connection — if login fails, the user types manually
+
+- Babel language trainer — automatically speaks phrases in a target language at configurable intervals to train language skills; language dropdown populated from learned `language#*` skills; default phrase bank of 30 fantasy-themed phrases with support for custom phrases (inline edit, add, delete, import from `.txt` file); fires immediately on start; language switchable while running
+- Babel toolbar button and pinnable panel with collapsible phrase list, interval control, and start/stop toggle
+- Babel countdown badge next to command input (purple-pink pulsing indicator); click to stop; language shown in tooltip
+- Chat history persistence — chat messages are saved to disk and restored across sessions, so you don't lose conversation history on disconnect or restart
+- Relative timestamps in the Chat panel — messages less than 2 hours old show "now", "5m ago", "1 hr ago" instead of a fixed clock time; updates every 30 seconds
+- Gag Groups — built-in pattern sets (ported from dartmudlet) that suppress noisy MUD output; 7 toggleable groups: Pets, Creatures, Citizens, Trainers, Sparring, Channels, Quests; accessible via a collapsible section in the Triggers panel
+
+### Changed
+- Bumped Who panel player name font size from 11px to 12px
+- Added ESLint 9 + Prettier project configuration with `lint`, `lint:fix`, `format`, and `format:check` npm scripts
+- Character settings: removed active slot selector buttons (caused cooldown bypass); active character now indicated with a read-only badge, switchable only via the "Switch to" button
+- Character 2 inputs disabled until Character 1 is configured
+
+### Fixed
+- Character switch cooldown bypass — clicking the active slot selector could invert the cooldown check, allowing immediate switching
+
 ## [1.1.0] - 2026-02-23
 
 ### Added

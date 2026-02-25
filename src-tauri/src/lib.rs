@@ -87,6 +87,39 @@ async fn disconnect(app: tauri::AppHandle, state: tauri::State<'_, ConnectionSta
     Ok(())
 }
 
+const KEYRING_SERVICE: &str = "dartforge";
+
+#[tauri::command]
+fn store_credential(account: String, password: String) -> Result<(), String> {
+    let entry = keyring::Entry::new(KEYRING_SERVICE, &account)
+        .map_err(|e| format!("Keyring error: {e}"))?;
+    entry.set_password(&password)
+        .map_err(|e| format!("Failed to store credential: {e}"))?;
+    Ok(())
+}
+
+#[tauri::command]
+fn get_credential(account: String) -> Result<Option<String>, String> {
+    let entry = keyring::Entry::new(KEYRING_SERVICE, &account)
+        .map_err(|e| format!("Keyring error: {e}"))?;
+    match entry.get_password() {
+        Ok(password) => Ok(Some(password)),
+        Err(keyring::Error::NoEntry) => Ok(None),
+        Err(e) => Err(format!("Failed to get credential: {e}")),
+    }
+}
+
+#[tauri::command]
+fn delete_credential(account: String) -> Result<(), String> {
+    let entry = keyring::Entry::new(KEYRING_SERVICE, &account)
+        .map_err(|e| format!("Keyring error: {e}"))?;
+    match entry.delete_credential() {
+        Ok(()) => Ok(()),
+        Err(keyring::Error::NoEntry) => Ok(()), // Already gone
+        Err(e) => Err(format!("Failed to delete credential: {e}")),
+    }
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     env_logger::init();
@@ -120,6 +153,9 @@ pub fn run() {
             storage::import_sound_file,
             storage::get_sound_base64,
             storage::remove_custom_sound,
+            store_credential,
+            get_credential,
+            delete_credential,
         ])
         .setup(|app| {
             // Initialize storage state with default app data dir

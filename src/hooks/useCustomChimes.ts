@@ -1,10 +1,9 @@
 import { useEffect, useRef } from 'react';
 import { getPlatform } from '../lib/platform';
 
-const invokePromise: Promise<(cmd: string, args?: Record<string, unknown>) => Promise<unknown>> | null =
-  getPlatform() === 'tauri'
-    ? import('@tauri-apps/api/core').then((m) => m.invoke)
-    : null;
+const invokePromise: Promise<
+  (cmd: string, args?: Record<string, unknown>) => Promise<unknown>
+> | null = getPlatform() === 'tauri' ? import('@tauri-apps/api/core').then((m) => m.invoke) : null;
 
 const defaultChime1 = new Audio('/chime1.wav');
 const defaultChime2 = new Audio('/chime2.wav');
@@ -30,12 +29,12 @@ export function useCustomChimes(customChime1: string | null, customChime2: strin
     async function loadChime(
       invoke: (cmd: string, args?: Record<string, unknown>) => Promise<unknown>,
       chimeId: 'chime1' | 'chime2',
-      hasCustom: boolean,
+      hasCustom: boolean
     ) {
       const fallback = chimeId === 'chime1' ? defaultChime1 : defaultChime2;
       if (!hasCustom) return fallback;
       try {
-        const dataUrl = await invoke('get_sound_base64', { chimeId }) as string | null;
+        const dataUrl = (await invoke('get_sound_base64', { chimeId })) as string | null;
         if (cancelled) return null;
         if (dataUrl) return new Audio(dataUrl);
       } catch (e) {
@@ -69,8 +68,14 @@ export function useCustomChimes(customChime1: string | null, customChime2: strin
       // Reset ref to defaults so playback works during the async reload gap
       chimesRef.current = { chime1: defaultChime1, chime2: defaultChime2 };
       // Then release the old custom Audio objects
-      if (created1) { created1.src = ''; created1 = null; }
-      if (created2) { created2.src = ''; created2 = null; }
+      if (created1) {
+        created1.src = '';
+        created1 = null;
+      }
+      if (created2) {
+        created2.src = '';
+        created2 = null;
+      }
     };
   }, [customChime1, customChime2]);
 

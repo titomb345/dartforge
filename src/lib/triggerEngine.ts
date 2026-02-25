@@ -30,7 +30,7 @@ let pruneCounter = 0;
 export function matchTriggers(
   strippedLine: string,
   rawLine: string,
-  triggers: Trigger[],
+  triggers: Trigger[]
 ): TriggerMatch[] {
   const now = Date.now();
 
@@ -50,7 +50,7 @@ export function matchTriggers(
 
   // Sort by specificity
   const sorted = [...triggers].sort(
-    (a, b) => MATCH_MODE_PRIORITY[a.matchMode] - MATCH_MODE_PRIORITY[b.matchMode],
+    (a, b) => MATCH_MODE_PRIORITY[a.matchMode] - MATCH_MODE_PRIORITY[b.matchMode]
   );
 
   for (const trigger of sorted) {
@@ -121,7 +121,7 @@ function matchSingle(stripped: string, raw: string, trigger: Trigger): TriggerMa
 export function expandTriggerBody(
   body: string,
   match: TriggerMatch,
-  activeCharacter?: string | null,
+  activeCharacter?: string | null
 ): ExpandedCommand[] {
   let result = body;
 

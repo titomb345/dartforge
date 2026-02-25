@@ -27,7 +27,12 @@ export function PinMenuButton({ panel }: PinMenuButtonProps) {
       {showMenu && (
         <div className="absolute top-full right-0 mt-1 z-50 flex flex-col gap-0.5 bg-bg-secondary border border-border rounded-md p-1 shadow-lg min-w-[100px]">
           <button
-            onClick={() => { if (!leftFull) { pinPanel(panel, 'left'); setShowMenu(false); } }}
+            onClick={() => {
+              if (!leftFull) {
+                pinPanel(panel, 'left');
+                setShowMenu(false);
+              }
+            }}
             disabled={leftFull}
             className={`flex items-center gap-1.5 px-2 py-1 rounded text-[11px] transition-colors duration-100 ${
               leftFull
@@ -38,7 +43,12 @@ export function PinMenuButton({ panel }: PinMenuButtonProps) {
             <ArrowLeftIcon size={9} /> Pin Left{leftFull ? ' (full)' : ''}
           </button>
           <button
-            onClick={() => { if (!rightFull) { pinPanel(panel, 'right'); setShowMenu(false); } }}
+            onClick={() => {
+              if (!rightFull) {
+                pinPanel(panel, 'right');
+                setShowMenu(false);
+              }
+            }}
             disabled={rightFull}
             className={`flex items-center gap-1.5 px-2 py-1 rounded text-[11px] transition-colors duration-100 ${
               rightFull

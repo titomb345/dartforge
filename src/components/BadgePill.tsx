@@ -25,7 +25,8 @@ export function BadgePill({
       onClick={onClick}
       className={`text-[9px] font-mono px-1.5 py-0.5 rounded-full border cursor-pointer transition-colors duration-150 whitespace-nowrap ${accentStyles[accent]}`}
     >
-      {label}{count > 0 ? ` (${count})` : ''}
+      {label}
+      {count > 0 ? ` (${count})` : ''}
     </button>
   );
 }

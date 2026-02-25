@@ -17,10 +17,7 @@ type MapPanelProps = PinnablePanelProps & {
   onWalkTo?: (directions: Direction[]) => void;
 };
 
-export function MapPanel({
-  mode = 'slideout',
-  onWalkTo,
-}: MapPanelProps) {
+export function MapPanel({ mode = 'slideout', onWalkTo }: MapPanelProps) {
   const isPinned = mode === 'pinned';
   const { currentRoomId, roomCount, getRoom, centerOnPlayer, clearMap } = useMapContext();
   const bodyRef = useRef<HTMLDivElement>(null);
@@ -46,11 +43,7 @@ export function MapPanel({
 
   const currentRoom = currentRoomId ? getRoom(currentRoomId) : null;
 
-  const pinControls = isPinned ? (
-    <PinnedControls />
-  ) : (
-    <PinMenuButton panel="map" />
-  );
+  const pinControls = isPinned ? <PinnedControls /> : <PinMenuButton panel="map" />;
 
   const handleWalkTo = (_roomId: string, directions: Direction[]) => {
     if (onWalkTo) onWalkTo(directions);
@@ -64,13 +57,12 @@ export function MapPanel({
           <MapIcon size={12} /> Map
           {currentRoom && (
             <span className="text-text-dim font-normal ml-1.5">
-              — {TERRAIN_LABELS[currentRoom.terrain] ?? 'Hex'} ({currentRoom.coords.q}, {currentRoom.coords.r})
+              — {TERRAIN_LABELS[currentRoom.terrain] ?? 'Hex'} ({currentRoom.coords.q},{' '}
+              {currentRoom.coords.r})
             </span>
           )}
         </span>
-        <div className="flex items-center gap-1.5 shrink-0">
-          {pinControls}
-        </div>
+        <div className="flex items-center gap-1.5 shrink-0">{pinControls}</div>
       </div>
 
       {/* Toolbar row */}

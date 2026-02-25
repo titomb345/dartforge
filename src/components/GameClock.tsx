@@ -5,9 +5,18 @@ import { SunIcon, MoonIcon, SunriseIcon, SunsetIcon } from './icons';
 function TimeIcon({ hour, accent }: { hour: number; accent: string }) {
   const style = { filter: `drop-shadow(0 0 3px ${accent})` };
   if (hour >= 4 && hour < 6) return <SunriseIcon size={11} />;
-  if (hour >= 6 && hour < 18) return <span style={style}><SunIcon size={11} /></span>;
+  if (hour >= 6 && hour < 18)
+    return (
+      <span style={style}>
+        <SunIcon size={11} />
+      </span>
+    );
   if (hour >= 18 && hour < 20) return <SunsetIcon size={11} />;
-  return <span style={style}><MoonIcon size={11} /></span>;
+  return (
+    <span style={style}>
+      <MoonIcon size={11} />
+    </span>
+  );
 }
 
 interface GameClockProps {
@@ -30,7 +39,14 @@ export function GameClock({ compact, onToggleCompact }: GameClockProps) {
   return (
     <button
       onClick={cycleReckoning}
-      onContextMenu={onToggleCompact ? (e) => { e.preventDefault(); onToggleCompact(); } : undefined}
+      onContextMenu={
+        onToggleCompact
+          ? (e) => {
+              e.preventDefault();
+              onToggleCompact();
+            }
+          : undefined
+      }
       title={`${timeOfDay}\n${allDates}`}
       data-help-id="game-clock"
       className="game-clock relative flex items-center gap-2.5 h-[20px] rounded-[3px] select-none cursor-pointer border border-transparent transition-all duration-300"

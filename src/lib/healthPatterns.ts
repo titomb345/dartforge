@@ -15,15 +15,63 @@ export interface HealthLevel {
  * Mined from 916 days of DartMUD logs.
  */
 export const HEALTH_LEVELS: HealthLevel[] = [
-  { key: 'perfect', label: 'Perfect Health', message: 'You are in perfect health.', themeColor: 'green', severity: 0 },
-  { key: 'very-healthy', label: 'Very Healthy', message: 'You are very healthy.', themeColor: 'brightGreen', severity: 1 },
-  { key: 'healthy', label: 'Healthy', message: 'You are healthy.', themeColor: 'brightGreen', severity: 2 },
-  { key: 'fairly', label: 'Fairly Healthy', message: 'You are fairly healthy.', themeColor: 'brightYellow', severity: 3 },
+  {
+    key: 'perfect',
+    label: 'Perfect Health',
+    message: 'You are in perfect health.',
+    themeColor: 'green',
+    severity: 0,
+  },
+  {
+    key: 'very-healthy',
+    label: 'Very Healthy',
+    message: 'You are very healthy.',
+    themeColor: 'brightGreen',
+    severity: 1,
+  },
+  {
+    key: 'healthy',
+    label: 'Healthy',
+    message: 'You are healthy.',
+    themeColor: 'brightGreen',
+    severity: 2,
+  },
+  {
+    key: 'fairly',
+    label: 'Fairly Healthy',
+    message: 'You are fairly healthy.',
+    themeColor: 'brightYellow',
+    severity: 3,
+  },
   { key: 'bad-off', label: 'Bad Off', message: 'You are bad off.', themeColor: 'red', severity: 4 },
-  { key: 'very-bad-off', label: 'Very Bad Off', message: 'You are very bad off.', themeColor: 'red', severity: 5 },
-  { key: 'near-death', label: 'Near Death', message: 'You are near death.', themeColor: 'red', severity: 6 },
-  { key: 'almost-dead', label: 'Almost Dead', message: 'You are almost dead.', themeColor: 'red', severity: 7 },
-  { key: 'very-near-death', label: 'Very Near Death', message: 'You are very near death.', themeColor: 'red', severity: 8 },
+  {
+    key: 'very-bad-off',
+    label: 'Very Bad Off',
+    message: 'You are very bad off.',
+    themeColor: 'red',
+    severity: 5,
+  },
+  {
+    key: 'near-death',
+    label: 'Near Death',
+    message: 'You are near death.',
+    themeColor: 'red',
+    severity: 6,
+  },
+  {
+    key: 'almost-dead',
+    label: 'Almost Dead',
+    message: 'You are almost dead.',
+    themeColor: 'red',
+    severity: 7,
+  },
+  {
+    key: 'very-near-death',
+    label: 'Very Near Death',
+    message: 'You are very near death.',
+    themeColor: 'red',
+    severity: 8,
+  },
   { key: 'dead', label: 'Dead', message: 'You have died!', themeColor: 'red', severity: 9 },
 ];
 

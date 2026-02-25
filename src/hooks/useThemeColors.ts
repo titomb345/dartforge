@@ -62,7 +62,10 @@ export function useThemeColors() {
         if (cancelled) return;
         if (savedDisplay) {
           // If saved font is no longer available, fall back to default
-          if (savedDisplay.fontFamily && !(FONT_OPTIONS as readonly string[]).includes(savedDisplay.fontFamily)) {
+          if (
+            savedDisplay.fontFamily &&
+            !(FONT_OPTIONS as readonly string[]).includes(savedDisplay.fontFamily)
+          ) {
             savedDisplay.fontFamily = DEFAULT_DISPLAY.fontFamily;
           }
           setDisplay({ ...DEFAULT_DISPLAY, ...savedDisplay });
@@ -72,45 +75,59 @@ export function useThemeColors() {
       }
       if (!cancelled) setLoaded(true);
     })();
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true;
+    };
   }, [dataStore.ready]);
 
-  const updateColor = useCallback((key: ThemeColorKey, value: string) => {
-    setTheme((prev) => {
-      const next = { ...prev, [key]: value };
-      dataStore.set(STORE_FILE, STORE_KEY, next).catch(console.error);
-      return next;
-    });
-  }, [dataStore]);
+  const updateColor = useCallback(
+    (key: ThemeColorKey, value: string) => {
+      setTheme((prev) => {
+        const next = { ...prev, [key]: value };
+        dataStore.set(STORE_FILE, STORE_KEY, next).catch(console.error);
+        return next;
+      });
+    },
+    [dataStore]
+  );
 
-  const resetColor = useCallback((key: ThemeColorKey) => {
-    setTheme((prev) => {
-      const next = { ...prev, [key]: DEFAULT_THEME[key] };
-      dataStore.set(STORE_FILE, STORE_KEY, next).catch(console.error);
-      return next;
-    });
-  }, [dataStore]);
+  const resetColor = useCallback(
+    (key: ThemeColorKey) => {
+      setTheme((prev) => {
+        const next = { ...prev, [key]: DEFAULT_THEME[key] };
+        dataStore.set(STORE_FILE, STORE_KEY, next).catch(console.error);
+        return next;
+      });
+    },
+    [dataStore]
+  );
 
   const resetColors = useCallback(() => {
     setTheme({ ...DEFAULT_THEME });
     dataStore.delete(STORE_FILE, STORE_KEY).catch(console.error);
   }, [dataStore]);
 
-  const updateDisplay = useCallback(<K extends keyof DisplaySettings>(key: K, value: DisplaySettings[K]) => {
-    setDisplay((prev) => {
-      const next = { ...prev, [key]: value };
-      dataStore.set(STORE_FILE, DISPLAY_KEY, next).catch(console.error);
-      return next;
-    });
-  }, [dataStore]);
+  const updateDisplay = useCallback(
+    <K extends keyof DisplaySettings>(key: K, value: DisplaySettings[K]) => {
+      setDisplay((prev) => {
+        const next = { ...prev, [key]: value };
+        dataStore.set(STORE_FILE, DISPLAY_KEY, next).catch(console.error);
+        return next;
+      });
+    },
+    [dataStore]
+  );
 
-  const resetDisplay = useCallback((key: keyof DisplaySettings) => {
-    setDisplay((prev) => {
-      const next = { ...prev, [key]: DEFAULT_DISPLAY[key] };
-      dataStore.set(STORE_FILE, DISPLAY_KEY, next).catch(console.error);
-      return next;
-    });
-  }, [dataStore]);
+  const resetDisplay = useCallback(
+    (key: keyof DisplaySettings) => {
+      setDisplay((prev) => {
+        const next = { ...prev, [key]: DEFAULT_DISPLAY[key] };
+        dataStore.set(STORE_FILE, DISPLAY_KEY, next).catch(console.error);
+        return next;
+      });
+    },
+    [dataStore]
+  );
 
   const resetAll = useCallback(() => {
     setTheme({ ...DEFAULT_THEME });
@@ -122,8 +139,14 @@ export function useThemeColors() {
   }, [dataStore]);
 
   return {
-    theme, updateColor, resetColor, resetColors,
-    display, updateDisplay, resetDisplay,
-    resetAll, loaded,
+    theme,
+    updateColor,
+    resetColor,
+    resetColors,
+    display,
+    updateDisplay,
+    resetDisplay,
+    resetAll,
+    loaded,
   };
 }

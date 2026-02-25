@@ -44,11 +44,17 @@ export function DropboxButton() {
           'flex items-center justify-center w-[30px] h-[30px] p-0 rounded-[6px]',
           'select-none leading-none transition-all duration-200 ease-in-out border',
           isConnecting && 'cursor-default text-text-dim border-border-dim animate-pulse',
-          !isConnecting && !isConnected && !isError &&
+          !isConnecting &&
+            !isConnected &&
+            !isError &&
             'cursor-pointer text-text-dim border-border-faint hover:text-text-muted hover:border-border-dim',
-          isConnected && folderPath && 'cursor-pointer text-connected border-connected/25 bg-connected/8',
-          isConnected && !folderPath && 'cursor-pointer text-yellow-400 border-yellow-400/25 bg-yellow-400/8',
-          isError && 'cursor-pointer text-disconnected border-disconnected/25 bg-disconnected/8',
+          isConnected &&
+            folderPath &&
+            'cursor-pointer text-connected border-connected/25 bg-connected/8',
+          isConnected &&
+            !folderPath &&
+            'cursor-pointer text-yellow-400 border-yellow-400/25 bg-yellow-400/8',
+          isError && 'cursor-pointer text-disconnected border-disconnected/25 bg-disconnected/8'
         )}
         style={
           isConnected && folderPath
@@ -61,9 +67,7 @@ export function DropboxButton() {
         <CloudIcon />
       </button>
 
-      {showPicker && isConnected && (
-        <DropboxFolderPicker onClose={() => setShowPicker(false)} />
-      )}
+      {showPicker && isConnected && <DropboxFolderPicker onClose={() => setShowPicker(false)} />}
     </>
   );
 }

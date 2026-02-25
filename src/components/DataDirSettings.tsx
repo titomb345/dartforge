@@ -56,7 +56,11 @@ export function DataDirSettings() {
 
   async function addDirectory() {
     try {
-      const selected = await open({ directory: true, multiple: false, title: 'Select Data Directory' });
+      const selected = await open({
+        directory: true,
+        multiple: false,
+        title: 'Select Data Directory',
+      });
       if (!selected) return;
 
       const path = selected as string;
@@ -217,7 +221,10 @@ function DirectoriesTab({
         </div>
         <div className="flex items-center gap-2 px-2 py-1.5 bg-bg-secondary rounded border border-border-dim">
           <CheckCircleIcon size={12} />
-          <span className="text-[11px] text-text-label font-mono truncate flex-1" title={activeDir ?? ''}>
+          <span
+            className="text-[11px] text-text-label font-mono truncate flex-1"
+            title={activeDir ?? ''}
+          >
             {activeDir ?? 'Default'}
           </span>
         </div>
@@ -229,8 +236,8 @@ function DirectoriesTab({
           Search Locations
         </div>
         <div className="text-[10px] text-text-dim mb-2">
-          On startup, DartForge checks each path in order and uses the first valid one.
-          If none are valid, the default app data directory is used.
+          On startup, DartForge checks each path in order and uses the first valid one. If none are
+          valid, the default app data directory is used.
         </div>
         {candidates.length === 0 ? (
           <div className="text-[11px] text-text-dim italic px-2 py-1.5">
@@ -244,10 +251,7 @@ function DirectoriesTab({
                 className="flex items-center gap-2 px-2 py-1.5 bg-bg-secondary rounded border border-border-dim group"
               >
                 <FolderIcon size={12} />
-                <span
-                  className="text-[11px] text-text-label font-mono truncate flex-1"
-                  title={dir}
-                >
+                <span className="text-[11px] text-text-label font-mono truncate flex-1" title={dir}>
                   {dir}
                 </span>
                 {dir === activeDir && (

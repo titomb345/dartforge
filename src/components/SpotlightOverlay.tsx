@@ -15,7 +15,7 @@ const TOOLTIP_MAX_W = 300;
 
 function calculateTooltipStyle(
   rect: Rect,
-  preferred?: 'above' | 'below' | 'left' | 'right',
+  preferred?: 'above' | 'below' | 'left' | 'right'
 ): React.CSSProperties {
   const vw = window.innerWidth;
   const vh = window.innerHeight;
@@ -133,12 +133,7 @@ export function SpotlightOverlay() {
             />
           </mask>
         </defs>
-        <rect
-          width="100%"
-          height="100%"
-          fill="rgba(0,0,0,0.78)"
-          mask="url(#spotlight-mask)"
-        />
+        <rect width="100%" height="100%" fill="rgba(0,0,0,0.78)" mask="url(#spotlight-mask)" />
       </svg>
 
       {/* Glow ring */}
@@ -175,10 +170,7 @@ export function SpotlightOverlay() {
             boxShadow: '0 0 30px rgba(217, 175, 80, 0.1), 0 4px 20px rgba(0,0,0,0.5)',
           }}
         >
-          <p
-            className="leading-relaxed"
-            style={{ fontSize: 12, color: '#e0e0e0' }}
-          >
+          <p className="leading-relaxed" style={{ fontSize: 12, color: '#e0e0e0' }}>
             {active.tooltip}
           </p>
           <div className="flex items-center justify-between mt-2">
@@ -186,7 +178,10 @@ export function SpotlightOverlay() {
               {tourQueue.length > 0 ? `${tourQueue.length} more` : ''}
             </span>
             <button
-              onClick={(e) => { e.stopPropagation(); handleClick(); }}
+              onClick={(e) => {
+                e.stopPropagation();
+                handleClick();
+              }}
               className="cursor-pointer transition-colors duration-150"
               style={{
                 fontSize: 10,
@@ -205,6 +200,6 @@ export function SpotlightOverlay() {
         </div>
       </div>
     </div>,
-    document.body,
+    document.body
   );
 }

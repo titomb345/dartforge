@@ -6,8 +6,11 @@ import type { PinnablePanelProps } from '../types';
 import { panelRootClass, charDisplayName } from '../lib/panelUtils';
 import { getTierForCount, getImprovesToNextTier } from '../lib/skillTiers';
 import {
-  getSkillCategory, getSkillSubcategory,
-  CATEGORY_LABELS, CATEGORY_ORDER, SUBCATEGORY_ORDER,
+  getSkillCategory,
+  getSkillSubcategory,
+  CATEGORY_LABELS,
+  CATEGORY_ORDER,
+  SUBCATEGORY_ORDER,
 } from '../lib/skillCategories';
 import { TrashIcon, TrendingUpIcon } from './icons';
 import { FilterPill } from './FilterPill';
@@ -36,11 +39,19 @@ function sortSkills(skills: SkillRecord[], mode: SortMode): SkillRecord[] {
   return [...skills].sort((a, b) =>
     mode === 'name'
       ? a.skill.localeCompare(b.skill)
-      : b.count - a.count || a.skill.localeCompare(b.skill),
+      : b.count - a.count || a.skill.localeCompare(b.skill)
   );
 }
 
-function SkillRow({ record, displayName, petName }: { record: SkillRecord; displayName?: string; petName?: string }) {
+function SkillRow({
+  record,
+  displayName,
+  petName,
+}: {
+  record: SkillRecord;
+  displayName?: string;
+  petName?: string;
+}) {
   const { updateSkillCount, deleteSkill } = useSkillTrackerContext();
   const tier = getTierForCount(record.count);
   const toNext = getImprovesToNextTier(record.count);
@@ -74,7 +85,10 @@ function SkillRow({ record, displayName, petName }: { record: SkillRecord; displ
     <div className="group flex items-center gap-1 px-2 py-1 hover:bg-bg-secondary rounded transition-[background] duration-150">
       {confirmingDelete ? (
         <button
-          onClick={() => { deleteSkill(record.skill, petName); setConfirmingDelete(false); }}
+          onClick={() => {
+            deleteSkill(record.skill, petName);
+            setConfirmingDelete(false);
+          }}
           onBlur={() => setConfirmingDelete(false)}
           className="text-[8px] font-mono text-red border border-red/40 rounded px-1 py-px cursor-pointer hover:bg-red/10 shrink-0 transition-colors duration-150"
         >
@@ -89,7 +103,9 @@ function SkillRow({ record, displayName, petName }: { record: SkillRecord; displ
           <TrashIcon size={9} />
         </button>
       )}
-      <span className="text-xs text-text-label flex-1 truncate" title={record.skill}>{displayName ?? record.skill}</span>
+      <span className="text-xs text-text-label flex-1 truncate" title={record.skill}>
+        {displayName ?? record.skill}
+      </span>
       {editing ? (
         <input
           ref={inputRef}
@@ -100,7 +116,9 @@ function SkillRow({ record, displayName, petName }: { record: SkillRecord; displ
           onBlur={commit}
           onKeyDown={(e) => {
             if (e.key === 'Enter') (e.target as HTMLInputElement).blur();
-            else if (e.key === 'Escape') { setEditing(false); }
+            else if (e.key === 'Escape') {
+              setEditing(false);
+            }
           }}
           className="text-[11px] font-mono text-text-heading w-[34px] shrink-0 text-right bg-bg-input border border-cyan/40 rounded px-0.5 py-0 outline-none [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
         />
@@ -136,10 +154,10 @@ function ColumnHeaders() {
 
 /** Accent colors for subcategory dividers (combat + fallback for pets) */
 const SUB_GROUP_COLORS: Record<string, string> = {
-  Weapons: '#f59e0b',  // amber
-  SODA: '#22c55e',     // green
-  Defense: '#a78bfa',  // purple
-  General: '#8be9fd',  // cyan
+  Weapons: '#f59e0b', // amber
+  SODA: '#22c55e', // green
+  Defense: '#a78bfa', // purple
+  General: '#8be9fd', // cyan
 };
 
 /** Default color for pet name dividers */
@@ -189,35 +207,46 @@ function SkillSection({
         </div>
       )}
       <ColumnHeaders />
-      {subGroups ? (
-        subGroups.map((group) => {
-          const color = SUB_GROUP_COLORS[group.name] ?? subGroupColor ?? '#666';
-          return group.skills.length > 0 ? (
-            <div key={group.name}>
-              <div className="flex items-center gap-1.5 px-2 pt-1.5 pb-0.5">
-                <div className="h-px flex-1" style={{ background: `color-mix(in srgb, ${color} 40%, transparent)` }} />
-                <span
-                  className="text-[9px] font-mono uppercase tracking-wider"
-                  style={{ color }}
-                >
-                  {group.name}
-                </span>
-                <div className="h-px flex-1" style={{ background: `color-mix(in srgb, ${color} 40%, transparent)` }} />
+      {subGroups
+        ? subGroups.map((group) => {
+            const color = SUB_GROUP_COLORS[group.name] ?? subGroupColor ?? '#666';
+            return group.skills.length > 0 ? (
+              <div key={group.name}>
+                <div className="flex items-center gap-1.5 px-2 pt-1.5 pb-0.5">
+                  <div
+                    className="h-px flex-1"
+                    style={{ background: `color-mix(in srgb, ${color} 40%, transparent)` }}
+                  />
+                  <span className="text-[9px] font-mono uppercase tracking-wider" style={{ color }}>
+                    {group.name}
+                  </span>
+                  <div
+                    className="h-px flex-1"
+                    style={{ background: `color-mix(in srgb, ${color} 40%, transparent)` }}
+                  />
+                </div>
+                {group.skills.map((record) => (
+                  <SkillRow
+                    key={record.skill}
+                    record={record}
+                    displayName={
+                      displayContext ? getSkillDisplayName(record.skill, displayContext) : undefined
+                    }
+                    petName={group.key}
+                  />
+                ))}
               </div>
-              {group.skills.map((record) => (
-                <SkillRow key={record.skill} record={record}
-                  displayName={displayContext ? getSkillDisplayName(record.skill, displayContext) : undefined}
-                  petName={group.key} />
-              ))}
-            </div>
-          ) : null;
-        })
-      ) : (
-        skills.map((record) => (
-          <SkillRow key={record.skill} record={record}
-            displayName={displayContext ? getSkillDisplayName(record.skill, displayContext) : undefined} />
-        ))
-      )}
+            ) : null;
+          })
+        : skills.map((record) => (
+            <SkillRow
+              key={record.skill}
+              record={record}
+              displayName={
+                displayContext ? getSkillDisplayName(record.skill, displayContext) : undefined
+              }
+            />
+          ))}
     </div>
   );
 }
@@ -225,7 +254,7 @@ function SkillSection({
 function buildSubGroups(
   skills: SkillRecord[],
   category: SkillCategory,
-  sort: SortMode,
+  sort: SortMode
 ): SubGroup[] | undefined {
   const order = SUBCATEGORY_ORDER[category];
   if (!order) return undefined;
@@ -247,9 +276,7 @@ function buildSubGroups(
     }));
 }
 
-export function SkillPanel({
-  mode = 'slideout',
-}: SkillPanelProps) {
+export function SkillPanel({ mode = 'slideout' }: SkillPanelProps) {
   const pinnedCtx = usePinnedControls();
   const side = pinnedCtx?.side;
   const { activeCharacter, skillData, addSkill } = useSkillTrackerContext();
@@ -299,7 +326,15 @@ export function SkillPanel({
 
   const categorizedSkills = useMemo(() => {
     const groups: Record<SkillCategory, SkillRecord[]> = {
-      combat: [], magic: [], spells: [], crafting: [], movement: [], language: [], thief: [], pets: [], other: [],
+      combat: [],
+      magic: [],
+      spells: [],
+      crafting: [],
+      movement: [],
+      language: [],
+      thief: [],
+      pets: [],
+      other: [],
     };
     for (const record of Object.values(skillData.skills)) {
       const cats = getSkillCategory(record.skill);
@@ -360,7 +395,10 @@ export function SkillPanel({
 
   const addButton = activeCharacter ? (
     <button
-      onClick={() => { setShowAddSkill((v) => !v); if (!showAddSkill) requestAnimationFrame(() => addSkillRef.current?.focus()); }}
+      onClick={() => {
+        setShowAddSkill((v) => !v);
+        if (!showAddSkill) requestAnimationFrame(() => addSkillRef.current?.focus());
+      }}
       title={showAddSkill ? 'Close add skill' : 'Add skill'}
       className={`flex items-center rounded text-[10px] cursor-pointer px-1.5 py-[2px] transition-all duration-200 ease-in-out border ${
         showAddSkill
@@ -375,7 +413,9 @@ export function SkillPanel({
   const sortButton = (
     <button
       onClick={() => setSort(sort === 'name' ? 'count' : 'name')}
-      title={sort === 'name' ? 'Sorted by name — click for count' : 'Sorted by count — click for name'}
+      title={
+        sort === 'name' ? 'Sorted by name — click for count' : 'Sorted by count — click for name'
+      }
       className={`flex items-center rounded text-[10px] cursor-pointer px-1.5 py-[2px] transition-all duration-200 ease-in-out border ${
         sort === 'count'
           ? 'bg-cyan/15 border-cyan/40 text-cyan'
@@ -390,13 +430,25 @@ export function SkillPanel({
     <div className={panelRootClass(isPinned)}>
       {/* Header */}
       <div className="flex items-center justify-between px-3 py-2.5 border-b border-border-subtle shrink-0">
-        <span className="text-[13px] font-semibold text-text-heading flex items-center gap-1.5"><TrendingUpIcon size={12} /> {titleText}</span>
+        <span className="text-[13px] font-semibold text-text-heading flex items-center gap-1.5">
+          <TrendingUpIcon size={12} /> {titleText}
+        </span>
         <div className="flex items-center gap-1.5">
           {isPinned ? (
             <>
-              {side === 'left' && <>{addButton}{sortButton}</>}
+              {side === 'left' && (
+                <>
+                  {addButton}
+                  {sortButton}
+                </>
+              )}
               <PinnedControls />
-              {side === 'right' && <>{sortButton}{addButton}</>}
+              {side === 'right' && (
+                <>
+                  {sortButton}
+                  {addButton}
+                </>
+              )}
             </>
           ) : (
             <>
@@ -427,7 +479,7 @@ export function SkillPanel({
                   }
                 }}
               />
-            ) : null,
+            ) : null
           )}
         </div>
       )}
@@ -456,7 +508,10 @@ export function SkillPanel({
 
       {/* Add skill form */}
       {showAddSkill && activeCharacter && (
-        <form onSubmit={handleAddSkill} className="flex items-center gap-1.5 px-3 py-2 border-b border-border-subtle shrink-0">
+        <form
+          onSubmit={handleAddSkill}
+          className="flex items-center gap-1.5 px-3 py-2 border-b border-border-subtle shrink-0"
+        >
           <MudInput
             ref={addSkillRef}
             accent="cyan"
@@ -491,9 +546,7 @@ export function SkillPanel({
       {/* Skills list */}
       <div className="flex-1 overflow-y-auto px-1 py-3">
         {!activeCharacter && (
-          <div className="px-2 text-xs text-text-dim">
-            Log in to track skills.
-          </div>
+          <div className="px-2 text-xs text-text-dim">Log in to track skills.</div>
         )}
 
         {activeCharacter && !hasAnySkills && (
@@ -509,9 +562,11 @@ export function SkillPanel({
           /* Single category view — with subcategories for combat */
           visibleCategories.map((cat) => {
             const subGroups =
-              cat === 'combat' && showSubs ? buildSubGroups(categorizedSkills[cat], cat, sort) :
-              cat === 'pets' ? petSubGroups :
-              undefined;
+              cat === 'combat' && showSubs
+                ? buildSubGroups(categorizedSkills[cat], cat, sort)
+                : cat === 'pets'
+                  ? petSubGroups
+                  : undefined;
             return (
               <SkillSection
                 key={cat}
@@ -523,9 +578,7 @@ export function SkillPanel({
             );
           })
         )}
-
       </div>
     </div>
   );
 }
-

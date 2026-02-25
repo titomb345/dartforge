@@ -6,11 +6,7 @@ import {
   type TerminalTheme,
   type ThemeColorKey,
 } from '../lib/defaultTheme';
-import {
-  FONT_OPTIONS,
-  DEFAULT_DISPLAY,
-  type DisplaySettings,
-} from '../hooks/useThemeColors';
+import { FONT_OPTIONS, DEFAULT_DISPLAY, type DisplaySettings } from '../hooks/useThemeColors';
 import { cn } from '../lib/cn';
 import { PaletteIcon } from './icons';
 
@@ -56,7 +52,10 @@ function ColorSwatch({
 
   /** Strip to just hex digits, max 6 */
   const sanitizeHex = (raw: string) =>
-    raw.replace(/^#/, '').replace(/[^0-9a-fA-F]/g, '').slice(0, 6);
+    raw
+      .replace(/^#/, '')
+      .replace(/[^0-9a-fA-F]/g, '')
+      .slice(0, 6);
 
   // The color to display in the picker/swatch: padded with 0s for live preview
   const previewColor = (() => {
@@ -139,9 +138,7 @@ function ColorSwatch({
             style={{ width: '100%', height: '140px' }}
           />
           <div className="flex items-center w-full bg-bg-input border border-border rounded overflow-hidden">
-            <span className="pl-2.5 py-1 text-[#555] text-xs font-mono select-none">
-              #
-            </span>
+            <span className="pl-2.5 py-1 text-[#555] text-xs font-mono select-none">#</span>
             <input
               type="text"
               value={hexInput}
@@ -162,7 +159,17 @@ function ColorSwatch({
   );
 }
 
-export function ColorSettings({ theme, onUpdateColor, onResetColor, onReset, display, onUpdateDisplay, onResetDisplay, debugMode, onToggleDebug }: ColorSettingsProps) {
+export function ColorSettings({
+  theme,
+  onUpdateColor,
+  onResetColor,
+  onReset,
+  display,
+  onUpdateDisplay,
+  onResetDisplay,
+  debugMode,
+  onToggleDebug,
+}: ColorSettingsProps) {
   const base = THEME_COLOR_META.filter((m) => m.group === 'base');
   const normal = THEME_COLOR_META.filter((m) => m.group === 'normal');
   const bright = THEME_COLOR_META.filter((m) => m.group === 'bright');
@@ -177,7 +184,9 @@ export function ColorSettings({ theme, onUpdateColor, onResetColor, onReset, dis
     <div className="w-[360px] h-full bg-bg-primary border-l border-border-subtle flex flex-col overflow-hidden">
       {/* Header */}
       <div className="flex items-center justify-between px-3 py-2.5 border-b border-border-subtle">
-        <span className="text-[13px] font-semibold text-text-heading flex items-center gap-1.5"><PaletteIcon size={12} /> Appearance</span>
+        <span className="text-[13px] font-semibold text-text-heading flex items-center gap-1.5">
+          <PaletteIcon size={12} /> Appearance
+        </span>
         <button
           onClick={onToggleDebug}
           title="Show ANSI color names in terminal output"
@@ -197,7 +206,9 @@ export function ColorSettings({ theme, onUpdateColor, onResetColor, onReset, dis
       <div ref={scrollRef} className="flex-1 overflow-y-auto px-1 py-3">
         {/* Display section */}
         <div className="mb-4">
-          <div className="text-[10px] font-semibold uppercase tracking-[0.08em] text-[#555] mb-1.5 px-2">Display</div>
+          <div className="text-[10px] font-semibold uppercase tracking-[0.08em] text-[#555] mb-1.5 px-2">
+            Display
+          </div>
 
           {/* Font family */}
           <div className="px-2 py-1 flex items-center gap-2">
@@ -207,7 +218,9 @@ export function ColorSettings({ theme, onUpdateColor, onResetColor, onReset, dis
                 onClick={() => onResetDisplay('fontFamily')}
                 className="bg-transparent border-none text-[#555] hover:text-text-label text-sm cursor-pointer px-0.5 leading-none"
                 title="Reset to default"
-              >↺</button>
+              >
+                ↺
+              </button>
             )}
             <select
               value={display.fontFamily}
@@ -216,7 +229,9 @@ export function ColorSettings({ theme, onUpdateColor, onResetColor, onReset, dis
               style={{ fontFamily: display.fontFamily }}
             >
               {FONT_OPTIONS.map((f) => (
-                <option key={f} value={f} style={{ fontFamily: f }}>{f}</option>
+                <option key={f} value={f} style={{ fontFamily: f }}>
+                  {f}
+                </option>
               ))}
             </select>
           </div>
@@ -229,26 +244,34 @@ export function ColorSettings({ theme, onUpdateColor, onResetColor, onReset, dis
                 onClick={() => onResetDisplay('fontSize')}
                 className="bg-transparent border-none text-[#555] hover:text-text-label text-sm cursor-pointer px-0.5 leading-none"
                 title="Reset to default"
-              >↺</button>
+              >
+                ↺
+              </button>
             )}
             <div className="flex items-center gap-1">
               <button
                 onClick={() => onUpdateDisplay('fontSize', Math.max(8, display.fontSize - 1))}
                 className="w-[22px] h-[22px] bg-bg-input border border-border rounded text-text-label text-sm cursor-pointer flex items-center justify-center leading-none p-0"
-              >−</button>
+              >
+                −
+              </button>
               <span className="text-xs font-mono text-text-heading min-w-[28px] text-center">
                 {display.fontSize}px
               </span>
               <button
                 onClick={() => onUpdateDisplay('fontSize', Math.min(28, display.fontSize + 1))}
                 className="w-[22px] h-[22px] bg-bg-input border border-border rounded text-text-label text-sm cursor-pointer flex items-center justify-center leading-none p-0"
-              >+</button>
+              >
+                +
+              </button>
             </div>
           </div>
         </div>
 
         <div className="mb-4">
-          <div className="text-[10px] font-semibold uppercase tracking-[0.08em] text-[#555] mb-1.5 px-2">Base</div>
+          <div className="text-[10px] font-semibold uppercase tracking-[0.08em] text-[#555] mb-1.5 px-2">
+            Base
+          </div>
           {base.map((m) => (
             <ColorSwatch
               key={m.key}
@@ -264,7 +287,9 @@ export function ColorSettings({ theme, onUpdateColor, onResetColor, onReset, dis
         </div>
 
         <div className="mb-4">
-          <div className="text-[10px] font-semibold uppercase tracking-[0.08em] text-[#555] mb-1.5 px-2">Normal</div>
+          <div className="text-[10px] font-semibold uppercase tracking-[0.08em] text-[#555] mb-1.5 px-2">
+            Normal
+          </div>
           {normal.map((m) => (
             <ColorSwatch
               key={m.key}
@@ -280,7 +305,9 @@ export function ColorSettings({ theme, onUpdateColor, onResetColor, onReset, dis
         </div>
 
         <div className="mb-4">
-          <div className="text-[10px] font-semibold uppercase tracking-[0.08em] text-[#555] mb-1.5 px-2">Bright</div>
+          <div className="text-[10px] font-semibold uppercase tracking-[0.08em] text-[#555] mb-1.5 px-2">
+            Bright
+          </div>
           {bright.map((m) => (
             <ColorSwatch
               key={m.key}

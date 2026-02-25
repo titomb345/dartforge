@@ -22,14 +22,16 @@ export function useSkillTracker(
   sendCommandRef: React.RefObject<((cmd: string) => Promise<void>) | null>,
   processorRef: React.RefObject<OutputProcessor | null>,
   terminalRef: React.RefObject<XTerm | null>,
-  dataStore: DataStore,
+  dataStore: DataStore
 ) {
   const [activeCharacter, setActiveCharacterState] = useState<string | null>(null);
   const activeCharacterRef = useRef<string | null>(null);
   const [skillData, setSkillData] = useState<CharacterSkillFile>({ ...EMPTY_SKILL_FILE });
   const skillDataRef = useRef<CharacterSkillFile>(skillData);
   skillDataRef.current = skillData;
-  const lastImproveRef = useRef<{ who: 'self' | string; skill: string; prevCount: number } | null>(null);
+  const lastImproveRef = useRef<{ who: 'self' | string; skill: string; prevCount: number } | null>(
+    null
+  );
 
   // Inline improve toggle
   const [showInlineImproves, setShowInlineImproves] = useState(false);
@@ -124,146 +126,150 @@ export function useSkillTracker(
     }
   }, []);
 
-  const handleSkillMatch = useCallback((match: SkillMatchResult) => {
-    const charName = activeCharacterRef.current;
-    if (!charName && match.type !== 'mistake') return;
+  const handleSkillMatch = useCallback(
+    (match: SkillMatchResult) => {
+      const charName = activeCharacterRef.current;
+      if (!charName && match.type !== 'mistake') return;
 
-    if (match.type === 'self-improve') {
-      // Read current count from ref for inline display
-      const prevCount = skillDataRef.current.skills[match.skill]?.count ?? 0;
-      const newCount = prevCount + 1;
+      if (match.type === 'self-improve') {
+        // Read current count from ref for inline display
+        const prevCount = skillDataRef.current.skills[match.skill]?.count ?? 0;
+        const newCount = prevCount + 1;
 
-      // Set ref outside updater
-      lastImproveRef.current = { who: 'self', skill: match.skill, prevCount };
+        // Set ref outside updater
+        lastImproveRef.current = { who: 'self', skill: match.skill, prevCount };
 
-      // Write inline outside updater (executes once)
-      if (showInlineImprovesRef.current && terminalRef.current) {
-        const tier = getTierForCount(newCount);
-        const toNext = getImprovesToNextTier(newCount);
-        const nextInfo = toNext > 0 ? ` | ${toNext} to next` : '';
-        const line = `\x1b[36m[${match.skill} +1 \u2192 ${newCount} (${tier.abbr})${nextInfo}]\x1b[0m\r\n`;
-        smartWrite(terminalRef.current, line);
-      }
+        // Write inline outside updater (executes once)
+        if (showInlineImprovesRef.current && terminalRef.current) {
+          const tier = getTierForCount(newCount);
+          const toNext = getImprovesToNextTier(newCount);
+          const nextInfo = toNext > 0 ? ` | ${toNext} to next` : '';
+          const line = `\x1b[36m[${match.skill} +1 \u2192 ${newCount} (${tier.abbr})${nextInfo}]\x1b[0m\r\n`;
+          smartWrite(terminalRef.current, line);
+        }
 
-      // Send verification command outside updater
-      if (sendCommandRef.current) {
-        sendCommandRef.current(`show skills ${match.skill}`).catch(console.error);
-      }
-      if (processorRef.current) {
-        processorRef.current.registerTempMatcher(
-          (line: string) => {
+        // Send verification command outside updater
+        if (sendCommandRef.current) {
+          sendCommandRef.current(`show skills ${match.skill}`).catch(console.error);
+        }
+        if (processorRef.current) {
+          processorRef.current.registerTempMatcher((line: string) => {
             const result = matchSkillLine(line);
             if (result && result.type === 'shown-skill') return result;
             return null;
-          },
-          SHOW_SKILL_TIMEOUT_MS,
-        );
-      }
+          }, SHOW_SKILL_TIMEOUT_MS);
+        }
 
-      // Pure state update
-      const now = new Date().toISOString();
-      setSkillData((prev) => {
-        const existing = prev.skills[match.skill];
-        const pc = existing?.count ?? 0;
-        const nc = pc + 1;
-        const record: SkillRecord = { skill: match.skill, count: nc, lastImproveAt: now };
-        return { ...prev, skills: { ...prev.skills, [match.skill]: record } };
-      });
+        // Pure state update
+        const now = new Date().toISOString();
+        setSkillData((prev) => {
+          const existing = prev.skills[match.skill];
+          const pc = existing?.count ?? 0;
+          const nc = pc + 1;
+          const record: SkillRecord = { skill: match.skill, count: nc, lastImproveAt: now };
+          return { ...prev, skills: { ...prev.skills, [match.skill]: record } };
+        });
+      } else if (match.type === 'pet-improve') {
+        const petSkills = skillDataRef.current.pets[match.pet] ?? {};
+        const prevCount = petSkills[match.skill]?.count ?? 0;
+        const newCount = prevCount + 1;
 
-    } else if (match.type === 'pet-improve') {
-      const petSkills = skillDataRef.current.pets[match.pet] ?? {};
-      const prevCount = petSkills[match.skill]?.count ?? 0;
-      const newCount = prevCount + 1;
+        lastImproveRef.current = { who: match.pet, skill: match.skill, prevCount };
 
-      lastImproveRef.current = { who: match.pet, skill: match.skill, prevCount };
+        if (showInlineImprovesRef.current && terminalRef.current) {
+          const tier = getTierForCount(newCount);
+          const toNext = getImprovesToNextTier(newCount);
+          const nextInfo = toNext > 0 ? ` | ${toNext} to next` : '';
+          const line = `\x1b[35m[${match.pet}: ${match.skill} +1 \u2192 ${newCount} (${tier.abbr})${nextInfo}]\x1b[0m\r\n`;
+          smartWrite(terminalRef.current, line);
+        }
 
-      if (showInlineImprovesRef.current && terminalRef.current) {
-        const tier = getTierForCount(newCount);
-        const toNext = getImprovesToNextTier(newCount);
-        const nextInfo = toNext > 0 ? ` | ${toNext} to next` : '';
-        const line = `\x1b[35m[${match.pet}: ${match.skill} +1 \u2192 ${newCount} (${tier.abbr})${nextInfo}]\x1b[0m\r\n`;
-        smartWrite(terminalRef.current, line);
-      }
+        const now = new Date().toISOString();
+        setSkillData((prev) => {
+          const ps = prev.pets[match.pet] ?? {};
+          const existing = ps[match.skill];
+          const pc = existing?.count ?? 0;
+          const nc = pc + 1;
+          const record: SkillRecord = { skill: match.skill, count: nc, lastImproveAt: now };
+          return {
+            ...prev,
+            pets: { ...prev.pets, [match.pet]: { ...ps, [match.skill]: record } },
+          };
+        });
+      } else if (match.type === 'mistake') {
+        // Read and clear ref OUTSIDE updater (critical for StrictMode)
+        const last = lastImproveRef.current;
+        if (!last) return;
+        lastImproveRef.current = null;
 
-      const now = new Date().toISOString();
-      setSkillData((prev) => {
-        const ps = prev.pets[match.pet] ?? {};
-        const existing = ps[match.skill];
-        const pc = existing?.count ?? 0;
-        const nc = pc + 1;
-        const record: SkillRecord = { skill: match.skill, count: nc, lastImproveAt: now };
-        return {
-          ...prev,
-          pets: { ...prev.pets, [match.pet]: { ...ps, [match.skill]: record } },
-        };
-      });
+        // Write inline correction outside updater
+        if (showInlineImprovesRef.current && terminalRef.current) {
+          const tier = getTierForCount(last.prevCount);
+          const label = last.who === 'self' ? last.skill : `${last.who}: ${last.skill}`;
+          const line = `\x1b[33m[${label} -1 (mistake) \u2192 ${last.prevCount} (${tier.abbr})]\x1b[0m\r\n`;
+          smartWrite(terminalRef.current, line);
+        }
 
-    } else if (match.type === 'mistake') {
-      // Read and clear ref OUTSIDE updater (critical for StrictMode)
-      const last = lastImproveRef.current;
-      if (!last) return;
-      lastImproveRef.current = null;
-
-      // Write inline correction outside updater
-      if (showInlineImprovesRef.current && terminalRef.current) {
-        const tier = getTierForCount(last.prevCount);
-        const label = last.who === 'self' ? last.skill : `${last.who}: ${last.skill}`;
-        const line = `\x1b[33m[${label} -1 (mistake) \u2192 ${last.prevCount} (${tier.abbr})]\x1b[0m\r\n`;
-        smartWrite(terminalRef.current, line);
-      }
-
-      // Pure state update using captured `last`
-      setSkillData((prev) => {
-        if (last.who === 'self') {
-          const existing = prev.skills[last.skill];
+        // Pure state update using captured `last`
+        setSkillData((prev) => {
+          if (last.who === 'self') {
+            const existing = prev.skills[last.skill];
+            if (!existing) return prev;
+            return {
+              ...prev,
+              skills: { ...prev.skills, [last.skill]: { ...existing, count: last.prevCount } },
+            };
+          } else {
+            const petSkills = prev.pets[last.who];
+            if (!petSkills?.[last.skill]) return prev;
+            return {
+              ...prev,
+              pets: {
+                ...prev.pets,
+                [last.who]: {
+                  ...petSkills,
+                  [last.skill]: { ...petSkills[last.skill], count: last.prevCount },
+                },
+              },
+            };
+          }
+        });
+      } else if (match.type === 'shown-skill') {
+        // Pure — no side effects needed
+        setSkillData((prev) => {
+          const existing = prev.skills[match.skill];
           if (!existing) return prev;
-          return {
-            ...prev,
-            skills: { ...prev.skills, [last.skill]: { ...existing, count: last.prevCount } },
-          };
-        } else {
-          const petSkills = prev.pets[last.who];
-          if (!petSkills?.[last.skill]) return prev;
-          return {
-            ...prev,
-            pets: {
-              ...prev.pets,
-              [last.who]: { ...petSkills, [last.skill]: { ...petSkills[last.skill], count: last.prevCount } },
-            },
-          };
-        }
-      });
 
-    } else if (match.type === 'shown-skill') {
-      // Pure — no side effects needed
-      setSkillData((prev) => {
-        const existing = prev.skills[match.skill];
-        if (!existing) return prev;
+          const expectedTier = getTierForCount(existing.count);
+          const reportedTier = getTierByName(match.level);
+          if (!reportedTier) return prev;
 
-        const expectedTier = getTierForCount(existing.count);
-        const reportedTier = getTierByName(match.level);
-        if (!reportedTier) return prev;
-
-        if (expectedTier.level !== reportedTier.level) {
-          console.log(
-            `Skill mismatch: ${match.skill} expected ${expectedTier.name} (${existing.count}) but MUD reports ${reportedTier.name}. Resetting to ${reportedTier.min}.`,
-          );
-          return {
-            ...prev,
-            skills: { ...prev.skills, [match.skill]: { ...existing, count: reportedTier.min } },
-          };
-        }
-        return prev;
-      });
-    }
-  }, [sendCommandRef, processorRef, terminalRef]);
+          if (expectedTier.level !== reportedTier.level) {
+            console.log(
+              `Skill mismatch: ${match.skill} expected ${expectedTier.name} (${existing.count}) but MUD reports ${reportedTier.name}. Resetting to ${reportedTier.min}.`
+            );
+            return {
+              ...prev,
+              skills: { ...prev.skills, [match.skill]: { ...existing, count: reportedTier.min } },
+            };
+          }
+          return prev;
+        });
+      }
+    },
+    [sendCommandRef, processorRef, terminalRef]
+  );
 
   const addSkill = useCallback((skill: string, count = 0) => {
     const lower = skill.toLowerCase();
     const clamped = Math.max(0, Math.round(count));
     setSkillData((prev) => {
       if (prev.skills[lower]) return prev;
-      const record: SkillRecord = { skill: lower, count: clamped, lastImproveAt: new Date().toISOString() };
+      const record: SkillRecord = {
+        skill: lower,
+        count: clamped,
+        lastImproveAt: new Date().toISOString(),
+      };
       return { ...prev, skills: { ...prev.skills, [lower]: record } };
     });
   }, []);

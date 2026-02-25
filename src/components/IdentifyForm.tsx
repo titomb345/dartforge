@@ -68,19 +68,10 @@ export function IdentifyForm({
         placeholder="Player name"
         className="w-20"
       />
-      <MudButton
-        type="submit"
-        size="sm"
-        disabled={!signature.trim() || !playerName.trim()}
-      >
+      <MudButton type="submit" size="sm" disabled={!signature.trim() || !playerName.trim()}>
         Save
       </MudButton>
-      <MudButton
-        type="button"
-        variant="ghost"
-        size="sm"
-        onClick={onCancel}
-      >
+      <MudButton type="button" variant="ghost" size="sm" onClick={onCancel}>
         Cancel
       </MudButton>
     </form>

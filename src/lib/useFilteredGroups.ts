@@ -20,7 +20,7 @@ function capitalize(s: string): string {
 export function useFilteredGroups<T extends Groupable>(
   items: T[],
   groupFilter: string | null,
-  searchText: string,
+  searchText: string
 ) {
   const groups = useMemo(() => {
     const set = new Set<string>();
@@ -30,7 +30,8 @@ export function useFilteredGroups<T extends Groupable>(
 
   const filtered = useMemo(() => {
     let list = items;
-    if (groupFilter) list = list.filter((item) => capitalize(item.group || 'General') === groupFilter);
+    if (groupFilter)
+      list = list.filter((item) => capitalize(item.group || 'General') === groupFilter);
     if (searchText) {
       const lower = searchText.toLowerCase();
       list = list.filter((item) => item.pattern.toLowerCase().includes(lower));

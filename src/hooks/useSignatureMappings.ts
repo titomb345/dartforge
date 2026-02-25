@@ -35,7 +35,7 @@ export function useSignatureMappings(dataStore: DataStore, activeCharacter: stri
       try {
         const saved = await dataStore.get<Record<SignatureId, SignatureMapping>>(
           SIGNATURES_FILE,
-          charKey,
+          charKey
         );
         setMappings(saved ?? {});
       } catch (e) {
@@ -71,7 +71,7 @@ export function useSignatureMappings(dataStore: DataStore, activeCharacter: stri
         return { ...prev, [id]: { ...existing, ...updates } };
       });
     },
-    [],
+    []
   );
 
   const deleteMapping = useCallback((id: SignatureId) => {
@@ -98,7 +98,7 @@ export function useSignatureMappings(dataStore: DataStore, activeCharacter: stri
       }
       return null;
     },
-    [sortedMappings],
+    [sortedMappings]
   );
 
   return {

@@ -1,6 +1,12 @@
 import { useState, useCallback, useEffect, useRef, useMemo } from 'react';
 import type { DataStore } from '../contexts/DataStoreContext';
-import type { Trigger, TriggerId, TriggerMatchMode, TriggerPrefill, TriggerScope } from '../types/trigger';
+import type {
+  Trigger,
+  TriggerId,
+  TriggerMatchMode,
+  TriggerPrefill,
+  TriggerScope,
+} from '../types/trigger';
 
 const TRIGGERS_FILE = 'triggers.json';
 const GLOBAL_KEY = 'global';
@@ -27,7 +33,7 @@ export function useTriggers(dataStore: DataStore, activeCharacter: string | null
       try {
         const savedGlobal = await dataStore.get<Record<TriggerId, Trigger>>(
           TRIGGERS_FILE,
-          GLOBAL_KEY,
+          GLOBAL_KEY
         );
         if (savedGlobal) setGlobalTriggers(savedGlobal);
       } catch (e) {
@@ -91,7 +97,7 @@ export function useTriggers(dataStore: DataStore, activeCharacter: string | null
         highlight?: string | null;
         soundAlert?: boolean;
       },
-      scope: TriggerScope,
+      scope: TriggerScope
     ): TriggerId => {
       const now = new Date().toISOString();
       const trigger: Trigger = {
@@ -116,7 +122,7 @@ export function useTriggers(dataStore: DataStore, activeCharacter: string | null
       }
       return trigger.id;
     },
-    [],
+    []
   );
 
   const updateTrigger = useCallback(
@@ -134,7 +140,7 @@ export function useTriggers(dataStore: DataStore, activeCharacter: string | null
         setGlobalTriggers(updater);
       }
     },
-    [],
+    []
   );
 
   const deleteTrigger = useCallback((id: TriggerId, scope: TriggerScope) => {
@@ -185,10 +191,10 @@ export function useTriggers(dataStore: DataStore, activeCharacter: string | null
           highlight: original.highlight,
           soundAlert: original.soundAlert,
         },
-        scope,
+        scope
       );
     },
-    [characterTriggers, globalTriggers, createTrigger],
+    [characterTriggers, globalTriggers, createTrigger]
   );
 
   // Trigger prefill state (for context menu → trigger panel)

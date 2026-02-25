@@ -43,6 +43,8 @@ export async function alertUser(title: string, body: string, tag?: string): Prom
       if (Notification.permission === 'granted') {
         new Notification(title, { body, tag });
       }
-    } catch { /* ignore */ }
+    } catch {
+      /* ignore */
+    }
   }
 }

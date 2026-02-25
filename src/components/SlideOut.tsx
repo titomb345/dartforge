@@ -23,7 +23,7 @@ export function SlideOut({ panel, pinnable, children }: SlideOutProps) {
     <div
       className={cn(
         'absolute top-0 right-0 bottom-0 z-[100] transition-transform duration-300 ease-in-out',
-        isOpen ? 'translate-x-0' : 'translate-x-full',
+        isOpen ? 'translate-x-0' : 'translate-x-full'
       )}
     >
       {children}

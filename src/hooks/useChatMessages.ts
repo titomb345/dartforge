@@ -1,10 +1,12 @@
 import { useState, useCallback, useEffect, useRef } from 'react';
 import { useDataStore } from '../contexts/DataStoreContext';
 import { alertUser } from '../lib/platform';
+import { setChatIdCounter } from '../lib/chatPatterns';
 import type { ChatMessage, ChatType, ChatFilters } from '../types/chat';
 import type { Chimes } from './useCustomChimes';
 
 const SETTINGS_FILE = 'settings.json';
+const CHAT_HISTORY_FILE = 'chat-history.json';
 const MAX_MESSAGES = 500;
 
 const DEFAULT_FILTERS: ChatFilters = {
@@ -23,10 +25,31 @@ const DEFAULT_SOUND_ALERTS: ChatFilters = {
   sz: true,
 };
 
+/** Serialize ChatMessage[] for JSON storage (Date → ISO string). */
+function serializeMessages(
+  msgs: ChatMessage[]
+): Array<Omit<ChatMessage, 'timestamp'> & { timestamp: string }> {
+  return msgs.map((m) => ({ ...m, timestamp: m.timestamp.toISOString() }));
+}
+
+/** Deserialize stored messages back to ChatMessage[] (ISO string → Date). */
+function deserializeMessages(
+  raw: Array<Record<string, unknown>> | null
+): ChatMessage[] {
+  if (!raw || !Array.isArray(raw)) return [];
+  return raw
+    .map((r) => {
+      const ts = typeof r.timestamp === 'string' ? new Date(r.timestamp) : new Date();
+      if (isNaN(ts.getTime())) return null;
+      return { ...r, timestamp: ts } as ChatMessage;
+    })
+    .filter((m): m is ChatMessage => m != null);
+}
+
 export function useChatMessages(
   maxMessages = MAX_MESSAGES,
   notificationsRef?: React.RefObject<ChatFilters | null>,
-  chimesRef?: React.RefObject<Chimes>,
+  chimesRef?: React.RefObject<Chimes>
 ) {
   const dataStore = useDataStore();
   const [messages, setMessages] = useState<ChatMessage[]>([]);
@@ -35,6 +58,7 @@ export function useChatMessages(
   const [soundAlerts, setSoundAlerts] = useState<ChatFilters>({ ...DEFAULT_SOUND_ALERTS });
   const [newestFirst, setNewestFirst] = useState(true);
   const loaded = useRef(false);
+  const historyLoaded = useRef(false);
 
   // Refs for current values (used in handleChatMessage callback)
   const mutedSendersRef = useRef(mutedSenders);
@@ -61,6 +85,40 @@ export function useChatMessages(
       loaded.current = true;
     })();
   }, [dataStore.ready]);
+
+  // Load persisted chat history
+  useEffect(() => {
+    if (!dataStore.ready) return;
+    (async () => {
+      try {
+        const raw = await dataStore.get<Array<Record<string, unknown>>>(
+          CHAT_HISTORY_FILE,
+          'messages'
+        );
+        const restored = deserializeMessages(raw);
+        if (restored.length > 0) {
+          // Trim to current max
+          const trimmed =
+            restored.length > maxMessages ? restored.slice(-maxMessages) : restored;
+          // Set ID counter past the highest restored ID
+          const maxId = trimmed.reduce((max, m) => Math.max(max, m.id), 0);
+          setChatIdCounter(maxId + 1);
+          setMessages(trimmed);
+        }
+      } catch (e) {
+        console.error('Failed to load chat history:', e);
+      }
+      historyLoaded.current = true;
+    })();
+  }, [dataStore.ready]);
+
+  // Persist chat history when messages change
+  useEffect(() => {
+    if (!historyLoaded.current) return;
+    dataStore
+      .set(CHAT_HISTORY_FILE, 'messages', serializeMessages(messages))
+      .catch((e) => console.error('Failed to persist chat history:', e));
+  }, [messages]);
 
   // Persist on change
   useEffect(() => {
@@ -90,9 +148,10 @@ export function useChatMessages(
     // Sound alert
     const s = soundAlertsRef.current;
     if (!msg.isOwn && s[msg.type] && !isMuted && chimesRef?.current) {
-      const audio = msg.type === 'tell' || msg.type === 'sz'
-        ? chimesRef.current.chime2
-        : chimesRef.current.chime1;
+      const audio =
+        msg.type === 'tell' || msg.type === 'sz'
+          ? chimesRef.current.chime2
+          : chimesRef.current.chime1;
       audio.currentTime = 0;
       audio.play().catch(() => {});
     }
@@ -100,11 +159,7 @@ export function useChatMessages(
     // Desktop notification when window is unfocused
     const n = notificationsRef?.current;
     if (n && !msg.isOwn && n[msg.type] && !isMuted && !document.hasFocus()) {
-      alertUser(
-        `${msg.sender} (${msg.type})`,
-        msg.message,
-        `dartforge-chat-${msg.type}`,
-      );
+      alertUser(`${msg.sender} (${msg.type})`, msg.message, `dartforge-chat-${msg.type}`);
     }
 
     setMessages((prev) => {

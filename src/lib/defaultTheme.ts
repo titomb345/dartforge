@@ -45,7 +45,11 @@ export const DEFAULT_THEME: TerminalTheme = {
 };
 
 /** Metadata for color settings UI */
-export const THEME_COLOR_META: { key: ThemeColorKey; label: string; group: 'base' | 'normal' | 'bright' }[] = [
+export const THEME_COLOR_META: {
+  key: ThemeColorKey;
+  label: string;
+  group: 'base' | 'normal' | 'bright';
+}[] = [
   { key: 'background', label: 'Background', group: 'base' },
   { key: 'foreground', label: 'Foreground', group: 'base' },
   { key: 'black', label: 'Black', group: 'normal' },

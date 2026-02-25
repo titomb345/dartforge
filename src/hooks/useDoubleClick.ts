@@ -8,23 +8,26 @@ import { useCallback, useRef } from 'react';
 export function useDoubleClick(
   onClick?: () => void,
   onDoubleClick?: () => void,
-  delay = 250,
+  delay = 250
 ): (e: React.MouseEvent) => void {
   const timerRef = useRef<number | null>(null);
 
-  return useCallback((e: React.MouseEvent) => {
-    e.preventDefault();
-    if (timerRef.current !== null) {
-      // Second click within window — double click
-      clearTimeout(timerRef.current);
-      timerRef.current = null;
-      onDoubleClick?.();
-    } else {
-      // First click — wait for possible second
-      timerRef.current = window.setTimeout(() => {
+  return useCallback(
+    (e: React.MouseEvent) => {
+      e.preventDefault();
+      if (timerRef.current !== null) {
+        // Second click within window — double click
+        clearTimeout(timerRef.current);
         timerRef.current = null;
-        onClick?.();
-      }, delay);
-    }
-  }, [onClick, onDoubleClick, delay]);
+        onDoubleClick?.();
+      } else {
+        // First click — wait for possible second
+        timerRef.current = window.setTimeout(() => {
+          timerRef.current = null;
+          onClick?.();
+        }, delay);
+      }
+    },
+    [onClick, onDoubleClick, delay]
+  );
 }

@@ -31,8 +31,7 @@ type Size = keyof typeof SIZE_CLASSES;
 
 /* ── MudInput ───────────────────────────────────────────────── */
 
-interface MudInputProps
-  extends Omit<React.InputHTMLAttributes<HTMLInputElement>, 'size'> {
+interface MudInputProps extends Omit<React.InputHTMLAttributes<HTMLInputElement>, 'size'> {
   accent?: Accent;
   size?: Size;
 }
@@ -47,14 +46,13 @@ export const MudInput = forwardRef<HTMLInputElement, MudInputProps>(
       className={`font-mono bg-bg-input border border-border-dim rounded text-text-primary placeholder:text-text-dim focus:outline-none transition-colors duration-150 ${SIZE_CLASSES[size]} ${FOCUS_COLORS[accent]} ${className ?? ''}`}
       {...props}
     />
-  ),
+  )
 );
 MudInput.displayName = 'MudInput';
 
 /* ── MudTextarea ────────────────────────────────────────────── */
 
-interface MudTextareaProps
-  extends React.TextareaHTMLAttributes<HTMLTextAreaElement> {
+interface MudTextareaProps extends React.TextareaHTMLAttributes<HTMLTextAreaElement> {
   accent?: Accent;
   size?: Size;
 }
@@ -68,14 +66,13 @@ export const MudTextarea = forwardRef<HTMLTextAreaElement, MudTextareaProps>(
       className={`font-mono bg-bg-input border border-border-dim rounded text-text-primary placeholder:text-text-dim focus:outline-none transition-colors duration-150 resize-y ${SIZE_CLASSES[size]} ${FOCUS_COLORS[accent]} ${className ?? ''}`}
       {...props}
     />
-  ),
+  )
 );
 MudTextarea.displayName = 'MudTextarea';
 
 /* ── MudButton ──────────────────────────────────────────────── */
 
-interface MudButtonProps
-  extends React.ButtonHTMLAttributes<HTMLButtonElement> {
+interface MudButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
   accent?: Accent;
   variant?: 'accent' | 'ghost';
   size?: Size;
@@ -98,7 +95,7 @@ export const MudButton = forwardRef<HTMLButtonElement, MudButtonProps>(
         {...props}
       />
     );
-  },
+  }
 );
 MudButton.displayName = 'MudButton';
 
@@ -124,7 +121,22 @@ interface MudNumberInputProps {
  * retype. The clamped numeric value is committed on blur.
  */
 export const MudNumberInput = forwardRef<HTMLInputElement, MudNumberInputProps>(
-  ({ accent = 'cyan', size = 'md', value, onChange, min, max, step, parse, className, disabled, onKeyDown }, ref) => {
+  (
+    {
+      accent = 'cyan',
+      size = 'md',
+      value,
+      onChange,
+      min,
+      max,
+      step,
+      parse,
+      className,
+      disabled,
+      onKeyDown,
+    },
+    ref
+  ) => {
     const parseFn = parse ?? parseInt;
     const [text, setText] = useState(String(value));
 
@@ -170,6 +182,6 @@ export const MudNumberInput = forwardRef<HTMLInputElement, MudNumberInputProps>(
         className={`font-mono bg-bg-input border border-border-dim rounded text-text-primary placeholder:text-text-dim focus:outline-none transition-colors duration-150 ${SIZE_CLASSES[size]} ${FOCUS_COLORS[accent]} ${className ?? ''}`}
       />
     );
-  },
+  }
 );
 MudNumberInput.displayName = 'MudNumberInput';

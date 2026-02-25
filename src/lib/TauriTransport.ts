@@ -6,13 +6,11 @@ import type { MudOutputPayload, ConnectionStatusPayload } from '../types';
 
 export class TauriTransport implements MudTransport {
   async connect(callbacks: TransportCallbacks): Promise<() => void> {
-    const unlistenOutput = await listen<MudOutputPayload>(
-      MUD_OUTPUT_EVENT,
-      (event) => callbacks.onOutput(event.payload),
+    const unlistenOutput = await listen<MudOutputPayload>(MUD_OUTPUT_EVENT, (event) =>
+      callbacks.onOutput(event.payload)
     );
-    const unlistenStatus = await listen<ConnectionStatusPayload>(
-      CONNECTION_STATUS_EVENT,
-      (event) => callbacks.onStatus(event.payload),
+    const unlistenStatus = await listen<ConnectionStatusPayload>(CONNECTION_STATUS_EVENT, (event) =>
+      callbacks.onStatus(event.payload)
     );
     return () => {
       unlistenOutput();

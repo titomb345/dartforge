@@ -1,54 +1,22 @@
 import type { SkillCategory } from '../types/skills';
+import { SPELL_DATA } from './spellData';
+import { SKILL_DATA } from './skillData';
 
-const COMBAT_SKILLS = new Set([
-  'aim blows', 'archery', 'attack speed', 'bashing', 'brawling',
-  'control', 'daring', 'dodge', 'fighting', 'hafted',
-  'multiple attacks', 'offensive', 'parry', 'shield use', 'split defense',
-  'sword', 'thrown', 'two-handed hafted', 'two-handed sword',
-]);
+// Derive category sets from SKILL_DATA — single source of truth
+function skillsForCategory(cat: SkillCategory): Set<string> {
+  const set = new Set<string>();
+  for (const [name, info] of Object.entries(SKILL_DATA)) {
+    if (info.category === cat) set.add(name);
+  }
+  return set;
+}
 
-const MAGIC_SKILLS = new Set([
-  'channelling', 'inscription', 'language#magic', 'magic theory', 'spell casting',
-]);
-
-const SPELL_SKILLS = new Set([
-  'blur', 'buzz_animal_invisibility', 'chill',
-  "dannika's_calm", "delior's_pocket_dimension", 'detect_soul', 'dog_fart',
-  'flameblade', "flynn's_flimflam", 'frostaxe',
-  'green_armor', 'green_focus',
-  'heal_other', 'heal_self', 'influenza_cure',
-  "jonathan's_ears", "jonathan's_fareyes", "jonathan's_neareyes",
-  "jonathan's_nighteyes", "jonathan's_nose",
-  'lesser_heal_other', 'lesser_heal_self',
-  "lirrin's_candle", "lirrin's_glow",
-  'mark',
-  'minor_heal_other', 'minor_heal_self', 'mystic_arrow',
-  'orange_fire_bolt', 'orange_focus',
-  "pol's_gloom", 'preserve_corpse', "quest's_vigor",
-  'recall', 'red_armor', 'red_fire_bolt', 'red_focus',
-  'refresh_other', 'reincarnation', 'reveal_aura',
-  'sense_aura',
-  'shillelagh', "skyrdin's_zephyr",
-  'thunderhammer', "troy's_helping_hand", 'warm',
-  'yellow_armor', 'yellow_fire_bolt',
-]);
-
-const CRAFTING_SKILLS = new Set([
-  'alchemy', 'appraisal', 'brewing', 'butchering', 'ceramics', 'chandlery',
-  'construction', 'cooking', 'farming', 'fishing', 'herbalism',
-  'herding', 'hunting',
-  'leather working', 'lumbering', 'metallurgy', 'milling', 'mining',
-  'sewing', 'smithing', 'stone working', 'tanning', 'wood working',
-]);
-
-const MOVEMENT_SKILLS = new Set([
-  'acrobatics', 'climbing', 'hiking', 'navigation', 'riding', 'sailing',
-  'spelunking', 'swimming', 'travel',
-]);
-
-const THIEF_SKILLS = new Set([
-  'ambush', 'hiding', 'lock picking', 'lockpicking', 'pilfer', 'sneaking',
-]);
+const COMBAT_SKILLS = skillsForCategory('combat');
+const MAGIC_SKILLS = skillsForCategory('magic');
+const SPELL_SKILLS = new Set(Object.keys(SPELL_DATA));
+const CRAFTING_SKILLS = skillsForCategory('crafting');
+const MOVEMENT_SKILLS = skillsForCategory('movement');
+const THIEF_SKILLS = skillsForCategory('thief');
 
 /** Returns all categories for a skill name. Most skills belong to one; language#magic belongs to both magic and language. */
 export function getSkillCategory(skillName: string): SkillCategory[] {
@@ -71,19 +39,23 @@ export function getSkillCategory(skillName: string): SkillCategory[] {
 // --- Sub-categories ---
 
 const COMBAT_WEAPONS = new Set([
-  'sword', 'hafted', 'brawling', 'two-handed sword', 'two-handed hafted', 'shield use',
+  'sword',
+  'hafted',
+  'brawling',
+  'two-handed sword',
+  'two-handed hafted',
+  'shield use',
 ]);
 
-const COMBAT_SODA = new Set([
-  'aim blows', 'offensive', 'daring', 'attack speed',
-]);
+const COMBAT_SODA = new Set(['aim blows', 'offensive', 'daring', 'attack speed']);
 
-const COMBAT_DEFENSE = new Set([
-  'parry', 'control', 'split defense',
-]);
+const COMBAT_DEFENSE = new Set(['parry', 'control', 'split defense']);
 
 /** Returns the sub-category for a skill, or undefined if no sub-grouping applies. */
-export function getSkillSubcategory(skillName: string, category: SkillCategory): string | undefined {
+export function getSkillSubcategory(
+  skillName: string,
+  category: SkillCategory
+): string | undefined {
   const lower = skillName.toLowerCase();
 
   if (category === 'combat') {
@@ -116,5 +88,13 @@ export const CATEGORY_LABELS: Record<SkillCategory, string> = {
 
 /** Display order for categories */
 export const CATEGORY_ORDER: SkillCategory[] = [
-  'combat', 'magic', 'spells', 'crafting', 'movement', 'thief', 'language', 'pets', 'other',
+  'combat',
+  'magic',
+  'spells',
+  'crafting',
+  'movement',
+  'thief',
+  'language',
+  'pets',
+  'other',
 ];

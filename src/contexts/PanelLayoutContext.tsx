@@ -26,12 +26,12 @@ export function PanelProvider({
 }) {
   const isPinned = useCallback(
     (panel: PinnablePanel) => layout.left.includes(panel) || layout.right.includes(panel),
-    [layout],
+    [layout]
   );
 
   const value = useMemo(
     () => ({ layout, activePanel, togglePanel, pinPanel, isPinned }),
-    [layout, activePanel, togglePanel, pinPanel, isPinned],
+    [layout, activePanel, togglePanel, pinPanel, isPinned]
   );
 
   return <PanelContext.Provider value={value}>{children}</PanelContext.Provider>;

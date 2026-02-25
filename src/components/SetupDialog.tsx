@@ -14,7 +14,11 @@ export function SetupDialog() {
 
   async function browse() {
     try {
-      const selected = await open({ directory: true, multiple: false, title: 'Select Data Directory' });
+      const selected = await open({
+        directory: true,
+        multiple: false,
+        title: 'Select Data Directory',
+      });
       if (!selected) return;
 
       const path = selected as string;
@@ -68,13 +72,15 @@ export function SetupDialog() {
       <div
         className="absolute inset-0 opacity-30"
         style={{
-          background: 'radial-gradient(ellipse at 50% 30%, rgba(139,233,253,0.08) 0%, transparent 60%)',
+          background:
+            'radial-gradient(ellipse at 50% 30%, rgba(139,233,253,0.08) 0%, transparent 60%)',
         }}
       />
       <div
         className="absolute inset-0 opacity-20"
         style={{
-          background: 'radial-gradient(ellipse at 80% 80%, rgba(167,139,250,0.06) 0%, transparent 50%)',
+          background:
+            'radial-gradient(ellipse at 80% 80%, rgba(167,139,250,0.06) 0%, transparent 50%)',
         }}
       />
 
@@ -84,7 +90,8 @@ export function SetupDialog() {
         <div
           className="absolute -inset-px rounded-lg opacity-40"
           style={{
-            background: 'linear-gradient(135deg, rgba(139,233,253,0.3), rgba(167,139,250,0.15), transparent 60%)',
+            background:
+              'linear-gradient(135deg, rgba(139,233,253,0.3), rgba(167,139,250,0.15), transparent 60%)',
           }}
         />
 
@@ -92,10 +99,7 @@ export function SetupDialog() {
           {/* Header */}
           <div className="px-6 pt-6 pb-4">
             <div className="flex items-center gap-2 mb-1">
-              <div
-                className="text-[22px] font-bold tracking-tight"
-                style={{ color: '#e0e0e0' }}
-              >
+              <div className="text-[22px] font-bold tracking-tight" style={{ color: '#e0e0e0' }}>
                 DartForge
               </div>
               <div className="text-[10px] font-mono text-cyan/50 uppercase tracking-widest mt-1">
@@ -103,8 +107,8 @@ export function SetupDialog() {
               </div>
             </div>
             <p className="text-[12px] text-[#777] leading-relaxed mt-3">
-              Choose where DartForge stores your settings and skill data.
-              Use a synced folder (like Dropbox) to share data across machines.
+              Choose where DartForge stores your settings and skill data. Use a synced folder (like
+              Dropbox) to share data across machines.
             </p>
           </div>
 
@@ -126,10 +130,14 @@ export function SetupDialog() {
                 loading && 'opacity-50 pointer-events-none'
               )}
             >
-              <div className={cn(
-                'flex items-center justify-center w-8 h-8 rounded-md transition-colors',
-                selectedPath ? 'bg-cyan/10 text-cyan' : 'bg-[#1e1e1e] text-[#555] group-hover:text-[#888]'
-              )}>
+              <div
+                className={cn(
+                  'flex items-center justify-center w-8 h-8 rounded-md transition-colors',
+                  selectedPath
+                    ? 'bg-cyan/10 text-cyan'
+                    : 'bg-[#1e1e1e] text-[#555] group-hover:text-[#888]'
+                )}
+              >
                 <FolderIcon size={16} />
               </div>
               <div className="flex-1 text-left min-w-0">
@@ -137,7 +145,10 @@ export function SetupDialog() {
                   {selectedPath ? 'Selected Directory' : 'Choose a Directory'}
                 </div>
                 {selectedPath ? (
-                  <div className="text-[11px] font-mono text-[#666] truncate mt-0.5" title={selectedPath}>
+                  <div
+                    className="text-[11px] font-mono text-[#666] truncate mt-0.5"
+                    title={selectedPath}
+                  >
                     {selectedPath}
                   </div>
                 ) : (
@@ -172,7 +183,16 @@ export function SetupDialog() {
               )}
             >
               <div className="flex items-center justify-center w-8 h-8 rounded-md bg-[#1e1e1e] text-[#555] group-hover:text-[#888] transition-colors">
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <svg
+                  width="16"
+                  height="16"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                >
                   <path d="M20 17.58A5 5 0 0 0 18 8h-1.26A8 8 0 1 0 4 16.25" />
                   <path d="m8 16 4-4 4 4" />
                   <path d="M12 12v9" />
@@ -210,7 +230,11 @@ export function SetupDialog() {
                     loading && 'opacity-50 pointer-events-none'
                   )}
                 >
-                  {loading ? 'Initializing...' : hasExistingData ? 'Load Existing Data' : 'Start Fresh Here'}
+                  {loading
+                    ? 'Initializing...'
+                    : hasExistingData
+                      ? 'Load Existing Data'
+                      : 'Start Fresh Here'}
                 </button>
                 {hasExistingData && (
                   <div className="text-[10px] text-[#555] text-center mt-2">

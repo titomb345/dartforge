@@ -37,12 +37,17 @@ export function resetChatIdCounter(): void {
   nextId = 1;
 }
 
+/** Set the ID counter to a specific value (used when restoring persisted messages) */
+export function setChatIdCounter(value: number): void {
+  nextId = value;
+}
+
 function make(
   type: ChatType,
   sender: string,
   message: string,
   raw: string,
-  opts?: { language?: string; directed?: boolean; isOwn?: boolean },
+  opts?: { language?: string; directed?: boolean; isOwn?: boolean }
 ): ChatMessage {
   return {
     id: nextId++,
@@ -61,10 +66,7 @@ function make(
  * Match a single ANSI-stripped, trimmed line against all chat patterns.
  * Returns a ChatMessage if matched, null otherwise.
  */
-export function matchChatLine(
-  line: string,
-  activeCharacter: string | null,
-): ChatMessage | null {
+export function matchChatLine(line: string, activeCharacter: string | null): ChatMessage | null {
   // Strip leading "> " prompts (MUD sometimes prepends these)
   const cleaned = line.replace(/^(?:> )+/, '').trim();
   if (!cleaned) return null;

@@ -42,7 +42,9 @@ function BreakdownRow({ breakdown }: { breakdown: CoinBreakdown }) {
 export function CurrencyPanel({ mode = 'slideout' }: PinnablePanelProps) {
   const isPinned = mode === 'pinned';
   const [input, setInput] = useState('1 Su');
-  const [result, setResult] = useState<{ totalBase: number; breakdowns: CoinBreakdown[] } | null>(null);
+  const [result, setResult] = useState<{ totalBase: number; breakdowns: CoinBreakdown[] } | null>(
+    null
+  );
   const [error, setError] = useState<string | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
@@ -83,7 +85,9 @@ export function CurrencyPanel({ mode = 'slideout' }: PinnablePanelProps) {
     <div className={panelRootClass(isPinned)}>
       {/* Header */}
       <div className="flex items-center justify-between px-3 py-2.5 border-b border-border-subtle shrink-0">
-        <span className="text-[13px] font-semibold text-text-heading flex items-center gap-1.5"><CoinIcon size={12} /> Currency Converter</span>
+        <span className="text-[13px] font-semibold text-text-heading flex items-center gap-1.5">
+          <CoinIcon size={12} /> Currency Converter
+        </span>
         <div className="flex items-center gap-1.5 shrink-0">
           {isPinned ? <PinnedControls /> : <PinMenuButton panel="currency" />}
         </div>
@@ -94,7 +98,10 @@ export function CurrencyPanel({ mode = 'slideout' }: PinnablePanelProps) {
         {/* Freeform input */}
         <div className="px-3 py-2.5">
           <label className="block text-[9px] text-text-dim uppercase tracking-wide mb-1">
-            Coins <span className="normal-case opacity-60">— abbr or full names, e.g. 3Ri, 3 rials, 1,000 gold suns</span>
+            Coins{' '}
+            <span className="normal-case opacity-60">
+              — abbr or full names, e.g. 3Ri, 3 rials, 1,000 gold suns
+            </span>
           </label>
           <input
             ref={inputRef}
@@ -107,9 +114,7 @@ export function CurrencyPanel({ mode = 'slideout' }: PinnablePanelProps) {
         </div>
 
         {/* Error */}
-        {error && (
-          <div className="px-3 pb-1 text-[10px] text-red">{error}</div>
-        )}
+        {error && <div className="px-3 pb-1 text-[10px] text-red">{error}</div>}
 
         {/* Results */}
         {result && (
@@ -147,7 +152,9 @@ export function CurrencyPanel({ mode = 'slideout' }: PinnablePanelProps) {
                   {denoms.map((d, i) => (
                     <span key={d.abbr}>
                       {i > 0 && <span className="text-text-dim opacity-40"> · </span>}
-                      <span title={d.name} style={{ color: METAL_COLORS[d.metal] }}>{d.abbr}</span>
+                      <span title={d.name} style={{ color: METAL_COLORS[d.metal] }}>
+                        {d.abbr}
+                      </span>
                     </span>
                   ))}
                 </span>

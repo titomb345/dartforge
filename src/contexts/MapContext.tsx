@@ -5,7 +5,13 @@ type MapContextValue = MapTrackerState & MapTrackerActions;
 
 const MapContext = createContext<MapContextValue | null>(null);
 
-export function MapProvider({ value, children }: { value: MapContextValue; children: React.ReactNode }) {
+export function MapProvider({
+  value,
+  children,
+}: {
+  value: MapContextValue;
+  children: React.ReactNode;
+}) {
   return <MapContext.Provider value={value}>{children}</MapContext.Provider>;
 }
 

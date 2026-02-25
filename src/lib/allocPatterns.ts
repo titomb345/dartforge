@@ -1,5 +1,12 @@
 import type { LimbAllocation, AllocSlot, MagicAllocation, MagicSlot } from '../types/alloc';
-import { ALLOC_SLOTS, POINTS_PER_LIMB, SLOT_SHORT, MAGIC_SLOTS, MAGIC_POINTS, MAGIC_SLOT_SHORT } from '../types/alloc';
+import {
+  ALLOC_SLOTS,
+  POINTS_PER_LIMB,
+  SLOT_SHORT,
+  MAGIC_SLOTS,
+  MAGIC_POINTS,
+  MAGIC_SLOT_SHORT,
+} from '../types/alloc';
 
 /** Regex for a limb name header line, e.g. "upper left hand:" or "tail:" */
 const LIMB_HEADER_RE = /^(\w[\w\s]*?)\s*:\s*$/;
@@ -163,7 +170,6 @@ export function buildAllocCommand(limb: string, alloc: LimbAllocation): string {
   return `set combat allocation = ${limb},${parts.join(',')},n,${POINTS_PER_LIMB}`;
 }
 
-
 /**
  * A parsed slot update — either absolute (p,140) or relative (p,+1 / c,-5).
  */
@@ -184,7 +190,14 @@ export interface ParsedAllocCommand {
  * Handles both bare commands and "say <target> set combat allocation = ..." format.
  */
 const SET_ALLOC_PREFIX_RE = /set combat allocation\s*=\s*(.+)/i;
-const SHORT_TO_SLOT: Record<string, AllocSlot> = { b: 'bonus', d: 'daring', s: 'speed', a: 'aiming', p: 'parry', c: 'control' };
+const SHORT_TO_SLOT: Record<string, AllocSlot> = {
+  b: 'bonus',
+  d: 'daring',
+  s: 'speed',
+  a: 'aiming',
+  p: 'parry',
+  c: 'control',
+};
 
 export function parseAllocCommand(cmd: string): ParsedAllocCommand | null {
   const m = SET_ALLOC_PREFIX_RE.exec(cmd);
@@ -193,7 +206,11 @@ export function parseAllocCommand(cmd: string): ParsedAllocCommand | null {
   // First part(s) are the limb name — ends where the first slot abbreviation appears
   const limbParts: string[] = [];
   let i = 0;
-  while (i < parts.length && !SHORT_TO_SLOT[parts[i].toLowerCase()] && parts[i].toLowerCase() !== 'n') {
+  while (
+    i < parts.length &&
+    !SHORT_TO_SLOT[parts[i].toLowerCase()] &&
+    parts[i].toLowerCase() !== 'n'
+  ) {
     limbParts.push(parts[i]);
     i++;
   }
@@ -260,7 +277,7 @@ export function clampSlotValue(value: number): number {
 export function updateSlot(
   alloc: LimbAllocation,
   slot: AllocSlot,
-  newValue: number,
+  newValue: number
 ): LimbAllocation {
   const clamped = clampSlotValue(newValue);
   const updated = { ...alloc, [slot]: clamped };
@@ -364,10 +381,14 @@ export interface ParsedMagicAllocCommand {
 
 const SET_MAGIC_PREFIX_RE = /set magic allocation\s*=\s*(.+)/i;
 const SHORT_TO_MAGIC_SLOT: Record<string, MagicSlot> = {
-  a: 'air', air: 'air',
-  f: 'fire', fire: 'fire',
-  w: 'water', water: 'water',
-  e: 'earth', earth: 'earth',
+  a: 'air',
+  air: 'air',
+  f: 'fire',
+  fire: 'fire',
+  w: 'water',
+  water: 'water',
+  e: 'earth',
+  earth: 'earth',
 };
 
 /**
@@ -392,7 +413,7 @@ export function parseMagicAllocCommand(cmd: string): ParsedMagicAllocCommand | n
     const slot = SHORT_TO_MAGIC_SLOT[key];
     if (slot) {
       // Check if next part is a numeric value
-      if (i + 1 < parts.length && /^[+\-]?\d+$/.test(parts[i + 1])) {
+      if (i + 1 < parts.length && /^[+-]?\d+$/.test(parts[i + 1])) {
         const rawVal = parts[i + 1];
         const relative = rawVal.startsWith('+') || rawVal.startsWith('-');
         const value = parseInt(rawVal, 10);
@@ -421,7 +442,7 @@ export function parseMagicAllocCommand(cmd: string): ParsedMagicAllocCommand | n
 export function applyMagicAllocUpdates(
   base: MagicAllocation,
   updates: MagicSlotUpdate[],
-  reset: boolean,
+  reset: boolean
 ): MagicAllocation {
   const result = reset ? { air: 0, fire: 0, water: 0, earth: 0 } : { ...base };
   for (const u of updates) {
@@ -459,7 +480,7 @@ export function clampMagicSlotValue(value: number): number {
 export function updateMagicSlot(
   alloc: MagicAllocation,
   slot: MagicSlot,
-  newValue: number,
+  newValue: number
 ): MagicAllocation {
   const clamped = clampMagicSlotValue(newValue);
   const updated = { ...alloc, [slot]: clamped };

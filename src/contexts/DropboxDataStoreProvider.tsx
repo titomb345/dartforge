@@ -4,8 +4,12 @@ import { useDropbox } from './DropboxContext';
 import { WebSetupScreen } from '../components/WebSetupScreen';
 import { DropboxFolderPicker } from '../components/DropboxFolderPicker';
 import {
-  listFiles, downloadFile, uploadFile,
-  loadStorageMode, saveStorageMode, clearStorageMode,
+  listFiles,
+  downloadFile,
+  uploadFile,
+  loadStorageMode,
+  saveStorageMode,
+  clearStorageMode,
   type StorageMode,
 } from '../lib/dropbox';
 
@@ -145,12 +149,18 @@ export function DropboxDataStoreProvider({ children }: { children: ReactNode }) 
   // Merge skill data: take max count per skill (counts only increase)
   function mergeSkillData(
     local: Record<string, unknown>,
-    remote: Record<string, unknown>,
+    remote: Record<string, unknown>
   ): Record<string, unknown> {
     const merged = { ...local };
 
-    const localSkills = (local.skills ?? {}) as Record<string, { count: number; [k: string]: unknown }>;
-    const remoteSkills = (remote.skills ?? {}) as Record<string, { count: number; [k: string]: unknown }>;
+    const localSkills = (local.skills ?? {}) as Record<
+      string,
+      { count: number; [k: string]: unknown }
+    >;
+    const remoteSkills = (remote.skills ?? {}) as Record<
+      string,
+      { count: number; [k: string]: unknown }
+    >;
     const mergedSkills: Record<string, unknown> = { ...localSkills };
     for (const [name, remoteRecord] of Object.entries(remoteSkills)) {
       const localRecord = localSkills[name];
@@ -160,8 +170,14 @@ export function DropboxDataStoreProvider({ children }: { children: ReactNode }) 
     }
     merged.skills = mergedSkills;
 
-    const localPets = (local.pets ?? {}) as Record<string, Record<string, { count: number; [k: string]: unknown }>>;
-    const remotePets = (remote.pets ?? {}) as Record<string, Record<string, { count: number; [k: string]: unknown }>>;
+    const localPets = (local.pets ?? {}) as Record<
+      string,
+      Record<string, { count: number; [k: string]: unknown }>
+    >;
+    const remotePets = (remote.pets ?? {}) as Record<
+      string,
+      Record<string, { count: number; [k: string]: unknown }>
+    >;
     const mergedPets: Record<string, Record<string, unknown>> = { ...localPets };
     for (const [petName, remotePetSkills] of Object.entries(remotePets)) {
       const localPetSkills = localPets[petName] ?? {};
@@ -276,8 +292,10 @@ export function DropboxDataStoreProvider({ children }: { children: ReactNode }) 
     }
 
     initialSync();
-    return () => { cancelled = true; };
-  }, [storageMode, dropboxStatus, accessToken, folderPath]); // eslint-disable-line react-hooks/exhaustive-deps
+    return () => {
+      cancelled = true;
+    };
+  }, [storageMode, dropboxStatus, accessToken, folderPath]);
 
   // Record pending uploads on page unload
   useEffect(() => {
@@ -341,28 +359,40 @@ export function DropboxDataStoreProvider({ children }: { children: ReactNode }) 
     return value !== undefined ? (value as T) : null;
   }, []);
 
-  const set = useCallback(async (filename: string, key: string, value: unknown): Promise<void> => {
-    const cache = loadFromStorage(filename);
-    cache[key] = value;
-    cacheRef.current.set(filename, cache);
-    scheduleDebouncedWrite(filename);
-    scheduleDropboxUpload(filename);
-  }, [scheduleDebouncedWrite, scheduleDropboxUpload]);
+  const set = useCallback(
+    async (filename: string, key: string, value: unknown): Promise<void> => {
+      const cache = loadFromStorage(filename);
+      cache[key] = value;
+      cacheRef.current.set(filename, cache);
+      scheduleDebouncedWrite(filename);
+      scheduleDropboxUpload(filename);
+    },
+    [scheduleDebouncedWrite, scheduleDropboxUpload]
+  );
 
-  const save = useCallback(async (filename: string): Promise<void> => {
-    const existing = dirtyRef.current.get(filename);
-    if (existing) { clearTimeout(existing); dirtyRef.current.delete(filename); }
-    writeToStorage(filename);
-    scheduleDropboxUpload(filename);
-  }, [scheduleDropboxUpload]);
+  const save = useCallback(
+    async (filename: string): Promise<void> => {
+      const existing = dirtyRef.current.get(filename);
+      if (existing) {
+        clearTimeout(existing);
+        dirtyRef.current.delete(filename);
+      }
+      writeToStorage(filename);
+      scheduleDropboxUpload(filename);
+    },
+    [scheduleDropboxUpload]
+  );
 
-  const del = useCallback(async (filename: string, key: string): Promise<void> => {
-    const cache = loadFromStorage(filename);
-    delete cache[key];
-    cacheRef.current.set(filename, cache);
-    scheduleDebouncedWrite(filename);
-    scheduleDropboxUpload(filename);
-  }, [scheduleDebouncedWrite, scheduleDropboxUpload]);
+  const del = useCallback(
+    async (filename: string, key: string): Promise<void> => {
+      const cache = loadFromStorage(filename);
+      delete cache[key];
+      cacheRef.current.set(filename, cache);
+      scheduleDebouncedWrite(filename);
+      scheduleDropboxUpload(filename);
+    },
+    [scheduleDebouncedWrite, scheduleDropboxUpload]
+  );
 
   const keys = useCallback(async (filename: string): Promise<string[]> => {
     return Object.keys(loadFromStorage(filename));
@@ -423,30 +453,56 @@ export function DropboxDataStoreProvider({ children }: { children: ReactNode }) 
   const completeSetup = useCallback(async (): Promise<void> => {}, []);
   const reloadFromDir = useCallback(async (): Promise<string> => 'localStorage', []);
 
-  const activeDataDir = storageMode === 'dropbox' && accessToken && folderPath ? 'dropbox' : 'localStorage';
+  const activeDataDir =
+    storageMode === 'dropbox' && accessToken && folderPath ? 'dropbox' : 'localStorage';
 
-  const store: DataStore = useMemo(() => ({
-    get, set, save, delete: del, keys, readText, writeText, deleteText, flushAll,
-    activeDataDir,
-    ready,
-    needsSetup: false,
-    completeSetup, reloadFromDir,
-  }), [get, set, save, del, keys, readText, writeText, flushAll, activeDataDir, ready, completeSetup, reloadFromDir]);
+  const store: DataStore = useMemo(
+    () => ({
+      get,
+      set,
+      save,
+      delete: del,
+      keys,
+      readText,
+      writeText,
+      deleteText,
+      flushAll,
+      activeDataDir,
+      ready,
+      needsSetup: false,
+      completeSetup,
+      reloadFromDir,
+    }),
+    [
+      get,
+      set,
+      save,
+      del,
+      keys,
+      readText,
+      writeText,
+      flushAll,
+      activeDataDir,
+      ready,
+      completeSetup,
+      reloadFromDir,
+    ]
+  );
 
   return (
     <DataStoreContext.Provider value={store}>
       {phase === 'SETUP' && (
-        <WebSetupScreen
-          onChooseDropbox={handleChooseDropbox}
-          onChooseLocal={handleChooseLocal}
-        />
+        <WebSetupScreen onChooseDropbox={handleChooseDropbox} onChooseLocal={handleChooseLocal} />
       )}
 
       {phase === 'CONNECTING' && (
         <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-[#0a0a0a]">
           <div
             className="absolute inset-0 opacity-30"
-            style={{ background: 'radial-gradient(ellipse at 50% 30%, rgba(139,233,253,0.08) 0%, transparent 60%)' }}
+            style={{
+              background:
+                'radial-gradient(ellipse at 50% 30%, rgba(139,233,253,0.08) 0%, transparent 60%)',
+            }}
           />
           <div className="relative text-center">
             <div className="text-[14px] text-[#e0e0e0] font-semibold mb-2">DartForge</div>
@@ -461,15 +517,16 @@ export function DropboxDataStoreProvider({ children }: { children: ReactNode }) 
         </div>
       )}
 
-      {phase === 'PICK_FOLDER' && (
-        <DropboxFolderPicker blocking onClose={handleCancel} />
-      )}
+      {phase === 'PICK_FOLDER' && <DropboxFolderPicker blocking onClose={handleCancel} />}
 
       {phase === 'SYNCING' && (
         <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-[#0a0a0a]">
           <div
             className="absolute inset-0 opacity-30"
-            style={{ background: 'radial-gradient(ellipse at 50% 30%, rgba(139,233,253,0.08) 0%, transparent 60%)' }}
+            style={{
+              background:
+                'radial-gradient(ellipse at 50% 30%, rgba(139,233,253,0.08) 0%, transparent 60%)',
+            }}
           />
           <div className="relative text-center">
             <div className="text-[14px] text-[#e0e0e0] font-semibold mb-2">DartForge</div>
@@ -482,15 +539,23 @@ export function DropboxDataStoreProvider({ children }: { children: ReactNode }) 
         <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-[#0a0a0a]">
           <div
             className="absolute inset-0 opacity-30"
-            style={{ background: 'radial-gradient(ellipse at 50% 30%, rgba(139,233,253,0.08) 0%, transparent 60%)' }}
+            style={{
+              background:
+                'radial-gradient(ellipse at 50% 30%, rgba(139,233,253,0.08) 0%, transparent 60%)',
+            }}
           />
           <div className="relative w-[400px] max-w-[90vw]">
             <div
               className="absolute -inset-px rounded-lg opacity-40"
-              style={{ background: 'linear-gradient(135deg, rgba(239,68,68,0.3), rgba(167,139,250,0.15), transparent 60%)' }}
+              style={{
+                background:
+                  'linear-gradient(135deg, rgba(239,68,68,0.3), rgba(167,139,250,0.15), transparent 60%)',
+              }}
             />
             <div className="relative bg-[#111111] rounded-lg border border-[#1e1e1e] overflow-hidden p-6">
-              <div className="text-[14px] text-[#e0e0e0] font-semibold mb-2">Dropbox Not Connected</div>
+              <div className="text-[14px] text-[#e0e0e0] font-semibold mb-2">
+                Dropbox Not Connected
+              </div>
               <p className="text-[12px] text-[#777] leading-relaxed mb-5">
                 Authorization was not completed. You can try again or continue with local storage.
               </p>

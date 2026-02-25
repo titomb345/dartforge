@@ -9,6 +9,7 @@ import type { CommandRunner } from '../lib/commandUtils';
 import { expandInput } from '../lib/aliasEngine';
 import { executeCommands } from '../lib/commandUtils';
 import { smartWrite } from '../lib/terminalUtils';
+import { DEFAULT_BABEL_PHRASES } from '../lib/babelPhrases';
 
 export interface ActiveTimerBadge {
   id: string;
@@ -24,6 +25,12 @@ interface TimerEnginesDeps {
   antiIdleMinutes: number;
   alignmentTrackingEnabled: boolean;
   alignmentTrackingMinutes: number;
+  whoAutoRefreshEnabled: boolean;
+  whoRefreshMinutes: number;
+  babelEnabled: boolean;
+  babelLanguage: string;
+  babelIntervalSeconds: number;
+  babelPhrases: string[];
   mergedTimers: Timer[];
   timerState: TimerState;
   sendCommandRef: React.RefObject<((cmd: string) => Promise<void>) | null>;
@@ -43,6 +50,12 @@ export function useTimerEngines({
   antiIdleMinutes,
   alignmentTrackingEnabled,
   alignmentTrackingMinutes,
+  whoAutoRefreshEnabled,
+  whoRefreshMinutes,
+  babelEnabled,
+  babelLanguage,
+  babelIntervalSeconds,
+  babelPhrases,
   mergedTimers,
   timerState,
   sendCommandRef,
@@ -75,7 +88,10 @@ export function useTimerEngines({
       }
       setAntiIdleNextAt(Date.now() + ms);
     }, ms);
-    return () => { clearInterval(id); setAntiIdleNextAt(null); };
+    return () => {
+      clearInterval(id);
+      setAntiIdleNextAt(null);
+    };
   }, [connected, loggedIn, antiIdleEnabled, antiIdleMinutes]);
 
   // Alignment tracking timer — polls "show alignment" at interval when enabled
@@ -98,8 +114,71 @@ export function useTimerEngines({
       }
       setAlignmentNextAt(Date.now() + ms);
     }, ms);
-    return () => { clearInterval(id); setAlignmentNextAt(null); };
+    return () => {
+      clearInterval(id);
+      setAlignmentNextAt(null);
+    };
   }, [connected, loggedIn, alignmentTrackingEnabled, alignmentTrackingMinutes]);
+
+  // Who list auto-refresh — sends `who` at interval, gagged via OutputFilter
+  const [whoNextAt, setWhoNextAt] = useState<number | null>(null);
+
+  useEffect(() => {
+    if (!connected || !loggedIn || !whoAutoRefreshEnabled) {
+      setWhoNextAt(null);
+      return;
+    }
+    const ms = whoRefreshMinutes * 60_000;
+    setWhoNextAt(Date.now() + ms);
+    const id = setInterval(() => {
+      if (sendCommandRef.current && outputFilterRef.current) {
+        outputFilterRef.current.startWhoSync();
+        sendCommandRef.current('who');
+      }
+      setWhoNextAt(Date.now() + ms);
+    }, ms);
+    return () => {
+      clearInterval(id);
+      setWhoNextAt(null);
+    };
+  }, [connected, loggedIn, whoAutoRefreshEnabled, whoRefreshMinutes]);
+
+  // Babel language trainer — sends a random phrase in a target language at interval
+  const babelEnabledRef = useLatestRef(babelEnabled);
+  const babelLanguageRef = useLatestRef(babelLanguage);
+  const babelPhrasesRef = useLatestRef(babelPhrases);
+  const [babelNextAt, setBabelNextAt] = useState<number | null>(null);
+
+  useEffect(() => {
+    if (!connected || !loggedIn || !babelEnabled || !babelLanguage) {
+      setBabelNextAt(null);
+      return;
+    }
+    const fire = () => {
+      const custom = babelPhrasesRef.current;
+      const phrases = custom.length > 0 ? custom : DEFAULT_BABEL_PHRASES;
+      const lang = babelLanguageRef.current;
+      if (sendCommandRef.current && babelEnabledRef.current && lang) {
+        const phrase = phrases[Math.floor(Math.random() * phrases.length)];
+        if (terminalRef.current) {
+          smartWrite(terminalRef.current, `\x1b[90m[babel: ${lang}] ${phrase}\x1b[0m\r\n`);
+        }
+        sendCommandRef.current(`say (lang=${lang}) ${phrase}`);
+      }
+    };
+    // Fire immediately on start
+    fire();
+    const ms = babelIntervalSeconds * 1000;
+    setBabelNextAt(Date.now() + ms);
+    const id = setInterval(() => {
+      fire();
+      setBabelNextAt(Date.now() + ms);
+    }, ms);
+    return () => {
+      clearInterval(id);
+      setBabelNextAt(null);
+    };
+  }, [connected, loggedIn, babelEnabled, babelIntervalSeconds, babelPhrases]);
 
   // Custom timer engine — manages per-timer setIntervals, only fires when connected + logged in
   const timerIntervalsRef = useRef<Map<string, ReturnType<typeof setInterval>>>(new Map());
@@ -153,19 +232,39 @@ export function useTimerEngines({
   }, [connected, loggedIn, mergedTimers]);
 
   // Active timer badges for CommandInput (sorted by soonest-to-fire first)
-  const activeTimerBadges = useMemo(() =>
-    mergedTimers
-      .filter((t) => t.enabled && timerNextFires[t.id])
-      .map((t) => ({ id: t.id, name: t.name, nextAt: timerNextFires[t.id] }))
-      .sort((a, b) => a.nextAt - b.nextAt),
-    [mergedTimers, timerNextFires],
+  const activeTimerBadges = useMemo(
+    () =>
+      mergedTimers
+        .filter((t) => t.enabled && timerNextFires[t.id])
+        .map((t) => ({ id: t.id, name: t.name, nextAt: timerNextFires[t.id] }))
+        .sort((a, b) => a.nextAt - b.nextAt),
+    [mergedTimers, timerNextFires]
   );
 
   // Toggle a timer on/off from the command input badge (double-click or stop button)
-  const handleToggleTimer = useCallback((id: string) => {
-    const scope = id in timerState.characterTimers ? 'character' : 'global';
-    timerState.toggleTimer(id, scope);
-  }, [timerState]);
+  const handleToggleTimer = useCallback(
+    (id: string) => {
+      const scope = id in timerState.characterTimers ? 'character' : 'global';
+      timerState.toggleTimer(id, scope);
+    },
+    [timerState]
+  );
 
-  return { antiIdleNextAt, alignmentNextAt, activeTimerBadges, handleToggleTimer };
+  // Manual who refresh — trigger from the panel's refresh button
+  const refreshWho = useCallback(() => {
+    if (sendCommandRef.current && outputFilterRef.current) {
+      outputFilterRef.current.startWhoSync();
+      sendCommandRef.current('who');
+    }
+  }, []);
+
+  return {
+    antiIdleNextAt,
+    alignmentNextAt,
+    whoNextAt,
+    babelNextAt,
+    activeTimerBadges,
+    handleToggleTimer,
+    refreshWho,
+  };
 }

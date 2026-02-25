@@ -100,34 +100,77 @@ function AliasRow({
 const ALIAS_ACCENT = '#a78bfa';
 
 const ALIAS_HELP_ROWS: HelpRow[] = [
-  { token: '$1 $2 .. $9', desc: 'Positional arguments (space-separated)', example: 'aa goblin  \u2192  $1 = goblin' },
+  {
+    token: '$1 $2 .. $9',
+    desc: 'Positional arguments (space-separated)',
+    example: 'aa goblin  \u2192  $1 = goblin',
+  },
   { token: '$*', desc: 'All arguments after the trigger' },
   { token: '$-', desc: 'All arguments except the last' },
   { token: '$!', desc: 'The last argument only' },
-  { token: '$opposite1..9', desc: 'Opposite direction of $N arg', example: 'door n  \u2192  $opposite1 = s' },
+  {
+    token: '$opposite1..9',
+    desc: 'Opposite direction of $N arg',
+    example: 'door n  \u2192  $opposite1 = s',
+  },
   { token: '$me', desc: 'Your active character name (lowercase)' },
   { token: '$Me', desc: 'Your active character name (Capitalized)' },
-  { token: '$varName', desc: 'User-defined variable (set via /var)', example: '/var target goblin  \u2192  $target = goblin' },
-  { token: ';', desc: 'Command separator \u2014 sends multiple commands', example: 'kill $1;loot corpse' },
+  {
+    token: '$varName',
+    desc: 'User-defined variable (set via /var)',
+    example: '/var target goblin  \u2192  $target = goblin',
+  },
+  {
+    token: ';',
+    desc: 'Command separator \u2014 sends multiple commands',
+    example: 'kill $1;loot corpse',
+  },
   { token: '\\;', desc: 'Literal semicolon (not a separator)' },
-  { token: '/delay <ms>', desc: 'Pause between commands (milliseconds)', example: 'cast shield;/delay 1500;cast armor' },
-  { token: '/echo <text>', desc: 'Print text locally (not sent to MUD)', example: '/echo --- Starting combo ---' },
-  { token: '/spam <N> <cmd>', desc: 'Repeat a command N times (max 1000)', example: '/spam 5 cast heal' },
+  {
+    token: '/delay <ms>',
+    desc: 'Pause between commands (milliseconds)',
+    example: 'cast shield;/delay 1500;cast armor',
+  },
+  {
+    token: '/echo <text>',
+    desc: 'Print text locally (not sent to MUD)',
+    example: '/echo --- Starting combo ---',
+  },
+  {
+    token: '/spam <N> <cmd>',
+    desc: 'Repeat a command N times (max 1000)',
+    example: '/spam 5 cast heal',
+  },
   { token: '/var <name> <val>', desc: 'Set a variable', example: '/var foe $1  →  $foe = goblin' },
-  { token: '/convert <amt>', desc: 'Convert currency and display locally', example: '/convert 3ri 5dn' },
+  {
+    token: '/convert <amt>',
+    desc: 'Convert currency and display locally',
+    example: '/convert 3ri 5dn',
+  },
 ];
 
 const ALIAS_HELP_FOOTER = (
   <>
     <span className="text-text-label">Match modes:</span>{' '}
-    <span className="font-mono" style={{ color: ALIAS_ACCENT }}>Exact</span> = trigger only, no arguments.{' '}
-    <span className="font-mono" style={{ color: ALIAS_ACCENT }}>Prefix</span> = trigger + arguments ($1, $2, etc.).{' '}
-    <span className="font-mono" style={{ color: ALIAS_ACCENT }}>Regex</span> = pattern match, capture groups become $1, $2.
+    <span className="font-mono" style={{ color: ALIAS_ACCENT }}>
+      Exact
+    </span>{' '}
+    = trigger only, no arguments.{' '}
+    <span className="font-mono" style={{ color: ALIAS_ACCENT }}>
+      Prefix
+    </span>{' '}
+    = trigger + arguments ($1, $2, etc.).{' '}
+    <span className="font-mono" style={{ color: ALIAS_ACCENT }}>
+      Regex
+    </span>{' '}
+    = pattern match, capture groups become $1, $2.
   </>
 );
 
 function BodySyntaxHelp() {
-  return <SyntaxHelpTable rows={ALIAS_HELP_ROWS} accentColor={ALIAS_ACCENT} footer={ALIAS_HELP_FOOTER} />;
+  return (
+    <SyntaxHelpTable rows={ALIAS_HELP_ROWS} accentColor={ALIAS_ACCENT} footer={ALIAS_HELP_FOOTER} />
+  );
 }
 
 // --- Alias Editor ---
@@ -145,7 +188,7 @@ function AliasEditor({
   onSave: (
     data: { pattern: string; matchMode: AliasMatchMode; body: string; group: string },
     scope: AliasScope,
-    existingId?: AliasId,
+    existingId?: AliasId
   ) => void;
   onCancel: () => void;
 }) {
@@ -191,7 +234,11 @@ function AliasEditor({
   const handleFieldKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter' && canSave) {
       e.preventDefault();
-      onSave({ pattern: pattern.trim(), matchMode, body, group: group.trim() || 'General' }, scope, alias?.id);
+      onSave(
+        { pattern: pattern.trim(), matchMode, body, group: group.trim() || 'General' },
+        scope,
+        alias?.id
+      );
     }
   };
 
@@ -210,7 +257,12 @@ function AliasEditor({
             accent="purple"
             size="sm"
             onClick={() => {
-              if (canSave) onSave({ pattern: pattern.trim(), matchMode, body, group: group.trim() || 'General' }, scope, alias?.id);
+              if (canSave)
+                onSave(
+                  { pattern: pattern.trim(), matchMode, body, group: group.trim() || 'General' },
+                  scope,
+                  alias?.id
+                );
             }}
             disabled={!canSave}
           >
@@ -316,13 +368,18 @@ function AliasEditor({
 
         {/* Live preview */}
         <div className="border-t border-[#444] pt-2">
-
           <label className="text-[10px] text-text-dim mb-0.5 block">Test expansion</label>
           <MudInput
             accent="purple"
             value={testInput}
             onChange={(e) => setTestInput(e.target.value)}
-            placeholder={pattern ? (matchMode === 'exact' ? pattern : `${pattern} goblin`) : 'type a test command...'}
+            placeholder={
+              pattern
+                ? matchMode === 'exact'
+                  ? pattern
+                  : `${pattern} goblin`
+                : 'type a test command...'
+            }
             className="w-full"
           />
           {preview && (
@@ -359,16 +416,15 @@ export function AliasPanel({ onClose }: AliasPanelProps) {
   const aliases = scope === 'character' ? characterAliases : globalAliases;
   const aliasList = useMemo(() => Object.values(aliases), [aliases]);
 
-  const { groups, grouped: groupedAliases } =
-    useFilteredGroups(aliasList, groupFilter, searchText);
+  const { groups, grouped: groupedAliases } = useFilteredGroups(aliasList, groupFilter, searchText);
 
-  const editingAlias = editingId ? aliases[editingId] ?? null : null;
+  const editingAlias = editingId ? (aliases[editingId] ?? null) : null;
 
   const handleSave = useCallback(
     (
       data: { pattern: string; matchMode: AliasMatchMode; body: string; group: string },
       saveScope: AliasScope,
-      existingId?: AliasId,
+      existingId?: AliasId
     ) => {
       if (existingId) {
         // If scope changed, delete from old scope and create in new scope
@@ -384,7 +440,7 @@ export function AliasPanel({ onClose }: AliasPanelProps) {
       setEditingId(null);
       setCreating(false);
     },
-    [scope, createAlias, updateAlias, deleteAlias],
+    [scope, createAlias, updateAlias, deleteAlias]
   );
 
   const titleText = `Aliases${activeCharacter && scope === 'character' ? ` (${charDisplayName(activeCharacter)})` : scope === 'global' ? ' (Global)' : ''}`;
@@ -393,7 +449,9 @@ export function AliasPanel({ onClose }: AliasPanelProps) {
     <div className="w-[400px] h-full bg-bg-primary border-l border-border-subtle flex flex-col overflow-hidden">
       {/* Header */}
       <div className="flex items-center justify-between px-3 py-2.5 border-b border-border-subtle shrink-0">
-        <span className="text-[13px] font-semibold text-text-heading flex items-center gap-1.5"><AliasIcon size={12} /> {titleText}</span>
+        <span className="text-[13px] font-semibold text-text-heading flex items-center gap-1.5">
+          <AliasIcon size={12} /> {titleText}
+        </span>
         <div className="flex items-center gap-1.5">
           <button
             onClick={() => {
@@ -421,13 +479,19 @@ export function AliasPanel({ onClose }: AliasPanelProps) {
           label="Global"
           active={scope === 'global'}
           accent="purple"
-          onClick={() => { setScope('global'); setGroupFilter(null); }}
+          onClick={() => {
+            setScope('global');
+            setGroupFilter(null);
+          }}
         />
         <FilterPill
           label="Character"
           active={scope === 'character'}
           accent="purple"
-          onClick={() => { setScope('character'); setGroupFilter(null); }}
+          onClick={() => {
+            setScope('character');
+            setGroupFilter(null);
+          }}
         />
         <div className="flex-1" />
         <button
@@ -511,7 +575,7 @@ export function AliasPanel({ onClose }: AliasPanelProps) {
 
         {groupedAliases.map(([groupName, groupAliases]) => (
           <div key={groupName} className="mb-3">
-            {(groupFilter === null && groups.length > 1) && (
+            {groupFilter === null && groups.length > 1 && (
               <div className="text-[10px] font-semibold uppercase tracking-[0.08em] text-[#555] mb-1 px-2">
                 {groupName}
               </div>

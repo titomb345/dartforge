@@ -1,6 +1,7 @@
 import { createContext, useContext } from 'react';
 import type { ChatFilters } from '../types/chat';
-import type { TimestampFormat } from '../hooks/useAppSettings';
+import type { TimestampFormat, CharacterProfile } from '../hooks/useAppSettings';
+import type { GagGroupSettings } from '../lib/gagPatterns';
 
 export interface AppSettingsState {
   // Anti-idle
@@ -62,11 +63,45 @@ export interface AppSettingsState {
   // Help guide
   hasSeenGuide: boolean;
   updateHasSeenGuide: (v: boolean) => void;
+  // Action blocking
+  actionBlockingEnabled: boolean;
+  updateActionBlockingEnabled: (v: boolean) => void;
+  // Gag groups
+  gagGroups: GagGroupSettings;
+  updateGagGroups: (v: GagGroupSettings) => void;
+  // Babel language trainer
+  babelEnabled: boolean;
+  babelLanguage: string;
+  babelIntervalSeconds: number;
+  babelPhrases: string[];
+  updateBabelEnabled: (v: boolean) => void;
+  updateBabelLanguage: (v: string) => void;
+  updateBabelIntervalSeconds: (v: number) => void;
+  updateBabelPhrases: (v: string[]) => void;
   // Post-sync commands
   postSyncEnabled: boolean;
   postSyncCommands: string;
   updatePostSyncEnabled: (v: boolean) => void;
   updatePostSyncCommands: (v: string) => void;
+  // Who list
+  whoAutoRefreshEnabled: boolean;
+  whoRefreshMinutes: number;
+  updateWhoAutoRefreshEnabled: (v: boolean) => void;
+  updateWhoRefreshMinutes: (v: number) => void;
+  // Auto-login
+  autoLoginEnabled: boolean;
+  autoLoginActiveSlot: 0 | 1;
+  autoLoginCharacters: [CharacterProfile | null, CharacterProfile | null];
+  lastLoginTimestamp: number | null;
+  lastLoginSlot: 0 | 1 | null;
+  updateAutoLoginEnabled: (v: boolean) => void;
+  updateAutoLoginActiveSlot: (v: 0 | 1) => void;
+  updateAutoLoginCharacters: (v: [CharacterProfile | null, CharacterProfile | null]) => void;
+  updateLastLoginTimestamp: (v: number | null) => void;
+  updateLastLoginSlot: (v: 0 | 1 | null) => void;
+  // Character switching (provided by App.tsx)
+  onSwitchCharacter?: () => void;
+  connected?: boolean;
 }
 
 const AppSettingsContext = createContext<AppSettingsState | null>(null);

@@ -15,7 +15,13 @@ export interface PinnedControlsValue {
 
 const PinnedControlsContext = createContext<PinnedControlsValue | null>(null);
 
-export function PinnedControlsProvider({ value, children }: { value: PinnedControlsValue; children: React.ReactNode }) {
+export function PinnedControlsProvider({
+  value,
+  children,
+}: {
+  value: PinnedControlsValue;
+  children: React.ReactNode;
+}) {
   return <PinnedControlsContext.Provider value={value}>{children}</PinnedControlsContext.Provider>;
 }
 

@@ -171,25 +171,26 @@ export function useImproveCounters() {
     return counter.id;
   }, []);
 
-  const deleteCounter = useCallback((id: string) => {
-    setCounters((prev) => {
-      const next = prev.filter((c) => c.id !== id);
-      return next;
-    });
-    setActiveCounterId((prevActive) => {
-      if (prevActive === id) {
-        // Switch to another counter
-        const remaining = counters.filter((c) => c.id !== id);
-        return remaining[0]?.id ?? null;
-      }
-      return prevActive;
-    });
-  }, [counters]);
+  const deleteCounter = useCallback(
+    (id: string) => {
+      setCounters((prev) => {
+        const next = prev.filter((c) => c.id !== id);
+        return next;
+      });
+      setActiveCounterId((prevActive) => {
+        if (prevActive === id) {
+          // Switch to another counter
+          const remaining = counters.filter((c) => c.id !== id);
+          return remaining[0]?.id ?? null;
+        }
+        return prevActive;
+      });
+    },
+    [counters]
+  );
 
   const renameCounter = useCallback((id: string, name: string) => {
-    setCounters((prev) =>
-      prev.map((c) => (c.id === id ? { ...c, name } : c)),
-    );
+    setCounters((prev) => prev.map((c) => (c.id === id ? { ...c, name } : c)));
   }, []);
 
   // --- Controls ---
@@ -205,7 +206,7 @@ export function useImproveCounters() {
           lastResumedAt: now,
           periodStartAt: c.periodStartAt ?? now,
         };
-      }),
+      })
     );
   }, []);
 
@@ -221,7 +222,7 @@ export function useImproveCounters() {
           accumulatedMs: c.accumulatedMs + elapsed,
           lastResumedAt: null,
         };
-      }),
+      })
     );
   }, []);
 
@@ -231,7 +232,7 @@ export function useImproveCounters() {
       prev.map((c) => {
         if (c.id !== id || c.status !== 'paused') return c;
         return { ...c, status: 'running' as CounterStatus, lastResumedAt: now };
-      }),
+      })
     );
   }, []);
 
@@ -241,16 +242,14 @@ export function useImproveCounters() {
       prev.map((c) => {
         if (c.id !== id) return c;
         if (c.status === 'stopped') return c;
-        const elapsed = c.status === 'running' && c.lastResumedAt
-          ? now - c.lastResumedAt
-          : 0;
+        const elapsed = c.status === 'running' && c.lastResumedAt ? now - c.lastResumedAt : 0;
         return {
           ...c,
           status: 'stopped' as CounterStatus,
           accumulatedMs: c.accumulatedMs + elapsed,
           lastResumedAt: null,
         };
-      }),
+      })
     );
   }, []);
 
@@ -269,100 +268,115 @@ export function useImproveCounters() {
           periodStartAt: null,
           impsInCurrentPeriod: 0,
         };
-      }),
+      })
     );
   }, []);
 
   // --- Match handler (called from App.tsx onOutputChunk) ---
-  const handleCounterMatch = useCallback((match: SkillMatchResult) => {
-    if (match.type === 'shown-skill') return;
+  const handleCounterMatch = useCallback(
+    (match: SkillMatchResult) => {
+      if (match.type === 'shown-skill') return;
 
-    if (match.type === 'self-improve' || match.type === 'pet-improve') {
-      const skill = match.skill;
-      lastImproveRef.current = { skill };
+      if (match.type === 'self-improve' || match.type === 'pet-improve') {
+        const skill = match.skill;
+        lastImproveRef.current = { skill };
 
-      setCounters((prev) => {
-        const now = Date.now();
-        return prev.map((c) => {
-          if (c.status !== 'running') return c;
+        setCounters((prev) => {
+          const now = Date.now();
+          return prev.map((c) => {
+            if (c.status !== 'running') return c;
 
-          // Check period rollover
-          let periodStart = c.periodStartAt;
-          let periodImps = c.impsInCurrentPeriod;
-          if (periodStart) {
-            const periodElapsed = now - periodStart;
-            if (periodElapsed > periodLengthMinutes * 60_000) {
+            // Check period rollover
+            let periodStart = c.periodStartAt;
+            let periodImps = c.impsInCurrentPeriod;
+            if (periodStart) {
+              const periodElapsed = now - periodStart;
+              if (periodElapsed > periodLengthMinutes * 60_000) {
+                periodStart = now;
+                periodImps = 0;
+              }
+            } else {
               periodStart = now;
               periodImps = 0;
             }
-          } else {
-            periodStart = now;
-            periodImps = 0;
-          }
 
-          return {
-            ...c,
-            skills: { ...c.skills, [skill]: (c.skills[skill] ?? 0) + 1 },
-            totalImps: c.totalImps + 1,
-            periodStartAt: periodStart,
-            impsInCurrentPeriod: periodImps + 1,
-          };
+            return {
+              ...c,
+              skills: { ...c.skills, [skill]: (c.skills[skill] ?? 0) + 1 },
+              totalImps: c.totalImps + 1,
+              periodStartAt: periodStart,
+              impsInCurrentPeriod: periodImps + 1,
+            };
+          });
         });
-      });
-    } else if (match.type === 'mistake') {
-      const last = lastImproveRef.current;
-      if (!last) return;
-      lastImproveRef.current = null;
+      } else if (match.type === 'mistake') {
+        const last = lastImproveRef.current;
+        if (!last) return;
+        lastImproveRef.current = null;
 
-      setCounters((prev) =>
-        prev.map((c) => {
-          if (c.status !== 'running') return c;
-          const skillCount = c.skills[last.skill];
-          if (!skillCount) return c;
-          const newSkills = { ...c.skills };
-          const newCount = Math.max(0, skillCount - 1);
-          if (newCount === 0) {
-            delete newSkills[last.skill];
-          } else {
-            newSkills[last.skill] = newCount;
-          }
-          return {
-            ...c,
-            skills: newSkills,
-            totalImps: Math.max(0, c.totalImps - 1),
-            impsInCurrentPeriod: Math.max(0, c.impsInCurrentPeriod - 1),
-          };
-        }),
-      );
-    }
-  }, [periodLengthMinutes]);
+        setCounters((prev) =>
+          prev.map((c) => {
+            if (c.status !== 'running') return c;
+            const skillCount = c.skills[last.skill];
+            if (!skillCount) return c;
+            const newSkills = { ...c.skills };
+            const newCount = Math.max(0, skillCount - 1);
+            if (newCount === 0) {
+              delete newSkills[last.skill];
+            } else {
+              newSkills[last.skill] = newCount;
+            }
+            return {
+              ...c,
+              skills: newSkills,
+              totalImps: Math.max(0, c.totalImps - 1),
+              impsInCurrentPeriod: Math.max(0, c.impsInCurrentPeriod - 1),
+            };
+          })
+        );
+      }
+    },
+    [periodLengthMinutes]
+  );
 
   // --- Computed helpers ---
-  const getElapsedMs = useCallback((counter: ImproveCounter): number => {
-    void tick;
-    if (counter.status === 'running' && counter.lastResumedAt) {
-      return counter.accumulatedMs + (Date.now() - counter.lastResumedAt);
-    }
-    return counter.accumulatedMs;
-  }, [tick]);
+  const getElapsedMs = useCallback(
+    (counter: ImproveCounter): number => {
+      void tick;
+      if (counter.status === 'running' && counter.lastResumedAt) {
+        return counter.accumulatedMs + (Date.now() - counter.lastResumedAt);
+      }
+      return counter.accumulatedMs;
+    },
+    [tick]
+  );
 
-  const getPerMinuteRate = useCallback((counter: ImproveCounter): number => {
-    const elapsed = getElapsedMs(counter);
-    if (elapsed <= 0) return 0;
-    return counter.totalImps / (elapsed / 60_000);
-  }, [getElapsedMs]);
+  const getPerMinuteRate = useCallback(
+    (counter: ImproveCounter): number => {
+      const elapsed = getElapsedMs(counter);
+      if (elapsed <= 0) return 0;
+      return counter.totalImps / (elapsed / 60_000);
+    },
+    [getElapsedMs]
+  );
 
-  const getPerPeriodRate = useCallback((counter: ImproveCounter): number => {
-    const elapsed = getElapsedMs(counter);
-    if (elapsed <= 0) return 0;
-    return counter.totalImps / (elapsed / (periodLengthMinutes * 60_000));
-  }, [getElapsedMs, periodLengthMinutes]);
+  const getPerPeriodRate = useCallback(
+    (counter: ImproveCounter): number => {
+      const elapsed = getElapsedMs(counter);
+      if (elapsed <= 0) return 0;
+      return counter.totalImps / (elapsed / (periodLengthMinutes * 60_000));
+    },
+    [getElapsedMs, periodLengthMinutes]
+  );
 
-  const getPerHourRate = useCallback((counter: ImproveCounter): number => {
-    const elapsed = getElapsedMs(counter);
-    if (elapsed <= 0) return 0;
-    return counter.totalImps / (elapsed / 3_600_000);
-  }, [getElapsedMs]);
+  const getPerHourRate = useCallback(
+    (counter: ImproveCounter): number => {
+      const elapsed = getElapsedMs(counter);
+      if (elapsed <= 0) return 0;
+      return counter.totalImps / (elapsed / 3_600_000);
+    },
+    [getElapsedMs]
+  );
 
   const getSkillsSorted = useCallback((counter: ImproveCounter): SkillTally[] => {
     return Object.entries(counter.skills)
@@ -370,12 +384,15 @@ export function useImproveCounters() {
       .sort((a, b) => b.count - a.count);
   }, []);
 
-  const getSkillPeriodRate = useCallback((counter: ImproveCounter, skill: string): number => {
-    const elapsed = getElapsedMs(counter);
-    if (elapsed <= 0) return 0;
-    const count = counter.skills[skill] ?? 0;
-    return count / (elapsed / (periodLengthMinutes * 60_000));
-  }, [getElapsedMs, periodLengthMinutes]);
+  const getSkillPeriodRate = useCallback(
+    (counter: ImproveCounter, skill: string): number => {
+      const elapsed = getElapsedMs(counter);
+      if (elapsed <= 0) return 0;
+      const count = counter.skills[skill] ?? 0;
+      return count / (elapsed / (periodLengthMinutes * 60_000));
+    },
+    [getElapsedMs, periodLengthMinutes]
+  );
 
   const setPeriodLength = useCallback(async (minutes: number) => {
     const clamped = Math.max(1, Math.min(60, minutes));

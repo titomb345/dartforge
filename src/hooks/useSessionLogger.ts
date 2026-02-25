@@ -5,7 +5,11 @@ import type { TimestampFormat } from './useAppSettings';
 
 let invoke: ((cmd: string, args?: Record<string, unknown>) => Promise<unknown>) | null = null;
 if (getPlatform() === 'tauri') {
-  import('@tauri-apps/api/core').then((m) => { invoke = m.invoke; }).catch(() => {});
+  import('@tauri-apps/api/core')
+    .then((m) => {
+      invoke = m.invoke;
+    })
+    .catch(() => {});
 }
 
 function formatTimestamp(format: TimestampFormat): string {
@@ -31,7 +35,11 @@ function generateLogFilename(): string {
   return `session_${ts}.log`;
 }
 
-export function useSessionLogger(enabled: boolean, passwordMode: boolean, timestampFormat: TimestampFormat) {
+export function useSessionLogger(
+  enabled: boolean,
+  passwordMode: boolean,
+  timestampFormat: TimestampFormat
+) {
   const filenameRef = useRef<string | null>(null);
   const bufferRef = useRef<string[]>([]);
   const flushTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -80,36 +88,42 @@ export function useSessionLogger(enabled: boolean, passwordMode: boolean, timest
     };
   }, [flush]);
 
-  const logOutput = useCallback((rawData: string) => {
-    if (!enabled || !filenameRef.current) return;
-    // Prepend any leftover partial ANSI sequence from the previous chunk
-    const data = partialAnsiRef.current + rawData;
-    partialAnsiRef.current = '';
-    // Check if this chunk ends with an incomplete ANSI escape sequence
-    // (e.g. \x1b or \x1b[ or \x1b[1;35 — waiting for the final letter)
-    const trailingMatch = data.match(/\x1b(\[[\d;]*)?$/);
-    let toStrip: string;
-    if (trailingMatch) {
-      partialAnsiRef.current = trailingMatch[0];
-      toStrip = data.slice(0, -trailingMatch[0].length);
-    } else {
-      toStrip = data;
-    }
-    const stripped = stripAnsi(toStrip);
-    const lines = stripped.split(/\r?\n/);
-    for (const line of lines) {
-      if (line.trim()) {
-        bufferRef.current.push(`[${formatTimestamp(formatRef.current)}] ${line}\n`);
+  const logOutput = useCallback(
+    (rawData: string) => {
+      if (!enabled || !filenameRef.current) return;
+      // Prepend any leftover partial ANSI sequence from the previous chunk
+      const data = partialAnsiRef.current + rawData;
+      partialAnsiRef.current = '';
+      // Check if this chunk ends with an incomplete ANSI escape sequence
+      // (e.g. \x1b or \x1b[ or \x1b[1;35 — waiting for the final letter)
+      const trailingMatch = data.match(/\x1b(\[[\d;]*)?$/);
+      let toStrip: string;
+      if (trailingMatch) {
+        partialAnsiRef.current = trailingMatch[0];
+        toStrip = data.slice(0, -trailingMatch[0].length);
+      } else {
+        toStrip = data;
       }
-    }
-    scheduleFlush();
-  }, [enabled, scheduleFlush]);
+      const stripped = stripAnsi(toStrip);
+      const lines = stripped.split(/\r?\n/);
+      for (const line of lines) {
+        if (line.trim()) {
+          bufferRef.current.push(`[${formatTimestamp(formatRef.current)}] ${line}\n`);
+        }
+      }
+      scheduleFlush();
+    },
+    [enabled, scheduleFlush]
+  );
 
-  const logCommand = useCallback((command: string) => {
-    if (!enabled || !filenameRef.current || passwordModeRef.current) return;
-    bufferRef.current.push(`[${formatTimestamp(formatRef.current)}] > ${command}\n`);
-    scheduleFlush();
-  }, [enabled, scheduleFlush]);
+  const logCommand = useCallback(
+    (command: string) => {
+      if (!enabled || !filenameRef.current || passwordModeRef.current) return;
+      bufferRef.current.push(`[${formatTimestamp(formatRef.current)}] > ${command}\n`);
+      scheduleFlush();
+    },
+    [enabled, scheduleFlush]
+  );
 
   return { logOutput, logCommand };
 }

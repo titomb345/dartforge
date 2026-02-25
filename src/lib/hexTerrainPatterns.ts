@@ -27,11 +27,11 @@ export const TERRAIN_CHAR_MAP: Record<string, HexTerrainType> = {
   '^': 'mountains',
   '~': 'water',
   '"': 'farmland',
-  'w': 'woods',
-  'h': 'hills',
-  's': 'swamp',
+  w: 'woods',
+  h: 'hills',
+  s: 'swamp',
   '-': 'desert',
-  'x': 'wasteland',
+  x: 'wasteland',
 };
 
 /** Terrain detection patterns — order matters, first match wins */

@@ -2,7 +2,14 @@
  * Map graph — hex-only rooms, edges, coordinate assignment, and pathfinding.
  */
 
-import { type HexCoord, type Direction, applyDirection, coordKey, oppositeDirection, COMPASS_DIRECTIONS } from './hexUtils';
+import {
+  type HexCoord,
+  type Direction,
+  applyDirection,
+  coordKey,
+  oppositeDirection,
+  COMPASS_DIRECTIONS,
+} from './hexUtils';
 import type { HexTerrainType } from './hexTerrainPatterns';
 
 // ---------------------------------------------------------------------------
@@ -56,7 +63,7 @@ export function upsertRoom(
   coords: HexCoord,
   terrain: HexTerrainType,
   description: string,
-  landmarks: string[],
+  landmarks: string[]
 ): MapRoom {
   const existing = graph.rooms[id];
   if (existing) {
@@ -103,7 +110,7 @@ export function linkRooms(
   graph: MapGraph,
   fromId: string,
   toId: string,
-  direction: Direction,
+  direction: Direction
 ): void {
   const from = graph.rooms[fromId];
   const to = graph.rooms[toId];
@@ -124,7 +131,7 @@ export function linkRooms(
 export function assignCoords(
   graph: MapGraph,
   fromRoom: MapRoom,
-  direction: Direction,
+  direction: Direction
 ): { coords: HexCoord; collision?: string } {
   const newCoords = applyDirection(fromRoom.coords, direction);
   const key = coordKey(newCoords);

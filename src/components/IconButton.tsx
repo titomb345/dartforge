@@ -40,7 +40,7 @@ export function IconButton({
         isPinned && 'icon-btn-pinned cursor-default',
         !isPinned && disabled && 'cursor-default text-text-disabled border-border-dim',
         !isPinned && !disabled && !on && 'cursor-pointer text-text-dim border-border-faint',
-        !isPinned && !disabled && on && 'icon-btn-on cursor-pointer',
+        !isPinned && !disabled && on && 'icon-btn-on cursor-pointer'
       )}
       style={{ '--btn-accent': accent } as React.CSSProperties}
     >

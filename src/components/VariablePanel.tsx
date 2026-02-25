@@ -98,7 +98,7 @@ function VariableEditor({
   onSave: (
     data: { name: string; value: string },
     scope: VariableScope,
-    existingId?: VariableId,
+    existingId?: VariableId
   ) => void;
   onCancel: () => void;
 }) {
@@ -143,7 +143,12 @@ function VariableEditor({
           <div className="flex-1">
             <label className="text-[10px] text-text-dim mb-0.5 block">Name</label>
             <div className="relative">
-              <span className="absolute left-1.5 top-1/2 -translate-y-1/2 text-[11px] font-mono" style={{ color: VAR_ACCENT, opacity: 0.6 }}>$</span>
+              <span
+                className="absolute left-1.5 top-1/2 -translate-y-1/2 text-[11px] font-mono"
+                style={{ color: VAR_ACCENT, opacity: 0.6 }}
+              >
+                $
+              </span>
               <MudInput
                 ref={nameRef}
                 accent="green"
@@ -195,8 +200,14 @@ function VariableEditor({
 
         {/* Usage hint */}
         <div className="text-[9px] text-text-dim border-t border-[#444] pt-2">
-          Use <span className="font-mono" style={{ color: VAR_ACCENT }}>${name || 'name'}</span> in commands, aliases, or triggers.
-          Set via terminal: <span className="font-mono" style={{ color: VAR_ACCENT }}>/var {name || 'name'} {value || 'value'}</span>
+          Use{' '}
+          <span className="font-mono" style={{ color: VAR_ACCENT }}>
+            ${name || 'name'}
+          </span>{' '}
+          in commands, aliases, or triggers. Set via terminal:{' '}
+          <span className="font-mono" style={{ color: VAR_ACCENT }}>
+            /var {name || 'name'} {value || 'value'}
+          </span>
         </div>
       </div>
     </div>
@@ -206,13 +217,8 @@ function VariableEditor({
 // --- Main Panel ---
 
 export function VariablePanel({ onClose }: VariablePanelProps) {
-  const {
-    characterVariables,
-    globalVariables,
-    createVariable,
-    updateVariable,
-    deleteVariable,
-  } = useVariableContext();
+  const { characterVariables, globalVariables, createVariable, updateVariable, deleteVariable } =
+    useVariableContext();
   const { activeCharacter } = useSkillTrackerContext();
 
   const [scope, setScope] = useState<VariableScope>('character');
@@ -230,17 +236,13 @@ export function VariablePanel({ onClose }: VariablePanelProps) {
           return v.name.toLowerCase().includes(q) || v.value.toLowerCase().includes(q);
         })
         .sort((a, b) => a.name.localeCompare(b.name)),
-    [variables, searchText],
+    [variables, searchText]
   );
 
-  const editingVariable = editingId ? variables[editingId] ?? null : null;
+  const editingVariable = editingId ? (variables[editingId] ?? null) : null;
 
   const handleSave = useCallback(
-    (
-      data: { name: string; value: string },
-      saveScope: VariableScope,
-      existingId?: VariableId,
-    ) => {
+    (data: { name: string; value: string }, saveScope: VariableScope, existingId?: VariableId) => {
       if (existingId) {
         if (saveScope !== scope) {
           deleteVariable(existingId, scope);
@@ -254,7 +256,7 @@ export function VariablePanel({ onClose }: VariablePanelProps) {
       setEditingId(null);
       setCreating(false);
     },
-    [scope, createVariable, updateVariable, deleteVariable],
+    [scope, createVariable, updateVariable, deleteVariable]
   );
 
   const titleText = `Variables${activeCharacter && scope === 'character' ? ` (${charDisplayName(activeCharacter)})` : scope === 'global' ? ' (Global)' : ''}`;
@@ -263,7 +265,9 @@ export function VariablePanel({ onClose }: VariablePanelProps) {
     <div className="w-[400px] h-full bg-bg-primary border-l border-border-subtle flex flex-col overflow-hidden">
       {/* Header */}
       <div className="flex items-center justify-between px-3 py-2.5 border-b border-border-subtle shrink-0">
-        <span className="text-[13px] font-semibold text-text-heading flex items-center gap-1.5"><VariableIcon size={12} /> {titleText}</span>
+        <span className="text-[13px] font-semibold text-text-heading flex items-center gap-1.5">
+          <VariableIcon size={12} /> {titleText}
+        </span>
         <div className="flex items-center gap-1.5">
           <button
             onClick={() => {

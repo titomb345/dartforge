@@ -2,11 +2,27 @@ import { useState, useRef, useEffect } from 'react';
 import { useAllocContext } from '../contexts/AllocContext';
 import type { PinnablePanelProps } from '../types';
 import type { AllocView, AllocTab, LimbAllocation, MagicAllocation } from '../types/alloc';
-import { ALLOC_SLOTS, POINTS_PER_LIMB, SLOT_SHORT, MAGIC_SLOTS, MAGIC_POINTS, MAGIC_SLOT_SHORT } from '../types/alloc';
+import {
+  ALLOC_SLOTS,
+  POINTS_PER_LIMB,
+  SLOT_SHORT,
+  MAGIC_SLOTS,
+  MAGIC_POINTS,
+  MAGIC_SLOT_SHORT,
+} from '../types/alloc';
 import { calcNull, calcArcane } from '../lib/allocPatterns';
 import { PinMenuButton } from './PinMenuButton';
 import { PinnedControls } from './PinnedControls';
-import { ChevronLeftIcon, ChevronRightSmallIcon, PlusIcon, TrashIcon, CopyIcon, CheckIcon, AllocIcon, ChevronDownSmallIcon } from './icons';
+import {
+  ChevronLeftIcon,
+  ChevronRightSmallIcon,
+  PlusIcon,
+  TrashIcon,
+  CopyIcon,
+  CheckIcon,
+  AllocIcon,
+  ChevronDownSmallIcon,
+} from './icons';
 import { cn } from '../lib/cn';
 
 /** Dropdown menu for "Save to Profile" action. */
@@ -45,7 +61,10 @@ function SaveProfileMenu({
       {open && (
         <div className="absolute bottom-full left-0 mb-1 min-w-[140px] max-h-[200px] overflow-auto bg-bg-primary border border-border rounded shadow-lg z-50">
           <button
-            onClick={() => { onNew(); setOpen(false); }}
+            onClick={() => {
+              onNew();
+              setOpen(false);
+            }}
             className="flex items-center gap-1 w-full px-2 py-1 text-[10px] text-left text-text-label hover:bg-bg-secondary/60 cursor-pointer transition-colors"
           >
             <PlusIcon size={8} /> New Profile
@@ -54,7 +73,10 @@ function SaveProfileMenu({
           {profiles.map((p) => (
             <button
               key={p.id}
-              onClick={() => { onUpdate(p.id); setOpen(false); }}
+              onClick={() => {
+                onUpdate(p.id);
+                setOpen(false);
+              }}
               className="flex items-center gap-1 w-full px-2 py-1 text-[10px] text-left text-text-label hover:bg-bg-secondary/60 cursor-pointer transition-colors truncate"
               title={`Overwrite "${p.name}" with live values`}
               style={accent ? { color: undefined } : undefined}
@@ -105,11 +127,16 @@ function InlineField({
   if (!editing) {
     return (
       <button
-        onClick={() => { setDraft(value); setEditing(true); }}
+        onClick={() => {
+          setDraft(value);
+          setEditing(true);
+        }}
         className={cn(
           'text-[11px] truncate cursor-pointer transition-colors duration-100',
-          value ? 'text-text-heading hover:text-text-primary' : 'text-text-dim hover:text-text-label italic',
-          className,
+          value
+            ? 'text-text-heading hover:text-text-primary'
+            : 'text-text-dim hover:text-text-label italic',
+          className
         )}
         title="Click to edit"
       >
@@ -130,12 +157,17 @@ function InlineField({
         setEditing(false);
       }}
       onKeyDown={(e) => {
-        if (e.key === 'Enter') { e.currentTarget.blur(); }
-        if (e.key === 'Escape') { setDraft(value); setEditing(false); }
+        if (e.key === 'Enter') {
+          e.currentTarget.blur();
+        }
+        if (e.key === 'Escape') {
+          setDraft(value);
+          setEditing(false);
+        }
       }}
       className={cn(
         'bg-bg-canvas border border-border rounded px-1 py-0 text-[11px] text-text-primary outline-none',
-        className,
+        className
       )}
       style={accent ? { borderColor: `${accent}60` } : undefined}
       placeholder={placeholder}
@@ -195,7 +227,10 @@ function AllocCell({
         }}
         onKeyDown={(e) => {
           if (e.key === 'Enter') e.currentTarget.blur();
-          if (e.key === 'Escape') { setDraft(String(value)); setEditing(false); }
+          if (e.key === 'Escape') {
+            setDraft(String(value));
+            setEditing(false);
+          }
         }}
         className="w-[36px] bg-bg-canvas border border-border rounded text-center text-[11px] text-text-primary outline-none px-0 py-0 font-mono"
       />
@@ -208,7 +243,7 @@ function AllocCell({
         'group/cell relative flex items-center justify-center w-[36px] h-[20px] rounded text-[11px] font-mono select-none',
         readOnly
           ? 'text-text-dim bg-transparent'
-          : 'text-text-primary bg-bg-canvas/50 cursor-pointer hover:bg-bg-secondary transition-colors duration-100',
+          : 'text-text-primary bg-bg-canvas/50 cursor-pointer hover:bg-bg-secondary transition-colors duration-100'
       )}
       onClick={handleClick}
     >
@@ -259,7 +294,7 @@ function PointBar({ alloc }: { alloc: LimbAllocation }) {
               backgroundColor: color,
             }}
           />
-        ) : null,
+        ) : null
       )}
     </div>
   );
@@ -287,7 +322,7 @@ function MagicPointBar({ alloc }: { alloc: MagicAllocation }) {
               backgroundColor: color,
             }}
           />
-        ) : null,
+        ) : null
       )}
     </div>
   );
@@ -344,7 +379,15 @@ function MagicGridHeaders() {
 }
 
 /** View toggle pills (Live / Profiles). */
-function ViewToggle({ view, onSetView, accent }: { view: AllocView; onSetView: (v: AllocView) => void; accent?: string }) {
+function ViewToggle({
+  view,
+  onSetView,
+  accent,
+}: {
+  view: AllocView;
+  onSetView: (v: AllocView) => void;
+  accent?: string;
+}) {
   const color = accent ?? ACCENT;
   return (
     <div className="flex rounded overflow-hidden border border-border-dim">
@@ -352,9 +395,7 @@ function ViewToggle({ view, onSetView, accent }: { view: AllocView; onSetView: (
         onClick={() => onSetView('live')}
         className={cn(
           'px-2 py-[1px] text-[10px] font-semibold cursor-pointer transition-colors duration-100',
-          view === 'live'
-            ? ''
-            : 'text-text-dim hover:text-text-label',
+          view === 'live' ? '' : 'text-text-dim hover:text-text-label'
         )}
         style={view === 'live' ? { background: `${color}15`, color } : undefined}
       >
@@ -364,9 +405,7 @@ function ViewToggle({ view, onSetView, accent }: { view: AllocView; onSetView: (
         onClick={() => onSetView('profiles')}
         className={cn(
           'px-2 py-[1px] text-[10px] font-semibold cursor-pointer transition-colors duration-100 border-l border-border-dim',
-          view === 'profiles'
-            ? ''
-            : 'text-text-dim hover:text-text-label',
+          view === 'profiles' ? '' : 'text-text-dim hover:text-text-label'
         )}
         style={view === 'profiles' ? { background: `${color}15`, color } : undefined}
       >
@@ -384,9 +423,7 @@ function TabToggle({ tab, onSetTab }: { tab: AllocTab; onSetTab: (t: AllocTab) =
         onClick={() => onSetTab('combat')}
         className={cn(
           'px-2 py-[1px] text-[10px] font-semibold cursor-pointer transition-colors duration-100',
-          tab === 'combat'
-            ? ''
-            : 'text-text-dim hover:text-text-label',
+          tab === 'combat' ? '' : 'text-text-dim hover:text-text-label'
         )}
         style={tab === 'combat' ? { background: `${ACCENT}15`, color: ACCENT } : undefined}
       >
@@ -396,11 +433,11 @@ function TabToggle({ tab, onSetTab }: { tab: AllocTab; onSetTab: (t: AllocTab) =
         onClick={() => onSetTab('magic')}
         className={cn(
           'px-2 py-[1px] text-[10px] font-semibold cursor-pointer transition-colors duration-100 border-l border-border-dim',
-          tab === 'magic'
-            ? ''
-            : 'text-text-dim hover:text-text-label',
+          tab === 'magic' ? '' : 'text-text-dim hover:text-text-label'
         )}
-        style={tab === 'magic' ? { background: `${MAGIC_ACCENT}15`, color: MAGIC_ACCENT } : undefined}
+        style={
+          tab === 'magic' ? { background: `${MAGIC_ACCENT}15`, color: MAGIC_ACCENT } : undefined
+        }
       >
         Magic
       </button>
@@ -439,12 +476,22 @@ function LiveView() {
       <div className="flex flex-col gap-0.5">
         <GridHeaders />
         {limbNames.map((limb) => {
-          const alloc = live[limb] ?? { bonus: 0, daring: 0, speed: 0, aiming: 0, parry: 0, control: 0 };
+          const alloc = live[limb] ?? {
+            bonus: 0,
+            daring: 0,
+            speed: 0,
+            aiming: 0,
+            parry: 0,
+            control: 0,
+          };
           const nullVal = calcNull(alloc);
           return (
             <div key={limb} className="flex flex-col gap-0">
               <div className="flex items-center gap-0">
-                <div className="flex-1 min-w-0 text-[10px] text-text-label truncate pr-1" title={limb}>
+                <div
+                  className="flex-1 min-w-0 text-[10px] text-text-label truncate pr-1"
+                  title={limb}
+                >
                   {limb}
                 </div>
                 {ALLOC_SLOTS.map((slot) => (
@@ -517,9 +564,12 @@ function ProfileView() {
   const profileNum = data.profiles.length > 0 ? data.currentProfileIndex + 1 : 0;
   const profileTotal = data.profiles.length;
   // Use detectedLimbs for canonical ordering; fall back to profile keys for limbs not yet detected
-  const limbNames = data.detectedLimbs.length > 0
-    ? data.detectedLimbs
-    : currentProfile ? Object.keys(currentProfile.limbs) : [];
+  const limbNames =
+    data.detectedLimbs.length > 0
+      ? data.detectedLimbs
+      : currentProfile
+        ? Object.keys(currentProfile.limbs)
+        : [];
 
   return (
     <>
@@ -534,7 +584,9 @@ function ProfileView() {
           <ChevronLeftIcon size={10} />
         </button>
         <span className="text-[11px] font-mono text-text-label w-[40px] text-center tabular-nums">
-          {profileTotal > 0 ? `${String(profileNum).padStart(2, '0')}/${String(profileTotal).padStart(2, '0')}` : '--/--'}
+          {profileTotal > 0
+            ? `${String(profileNum).padStart(2, '0')}/${String(profileTotal).padStart(2, '0')}`
+            : '--/--'}
         </span>
         <button
           onClick={() => navigateProfile('next')}
@@ -596,7 +648,10 @@ function ProfileView() {
             </button>
             {confirmDelete ? (
               <button
-                onClick={() => { deleteProfile(currentProfile.id); setConfirmDelete(false); }}
+                onClick={() => {
+                  deleteProfile(currentProfile.id);
+                  setConfirmDelete(false);
+                }}
                 onBlur={() => setConfirmDelete(false)}
                 className="text-[8px] font-mono text-red border border-red/40 rounded px-1 py-px cursor-pointer hover:bg-red/10 transition-colors duration-150"
               >
@@ -637,7 +692,10 @@ function ProfileView() {
               return (
                 <div key={limb} className="flex flex-col gap-0">
                   <div className="flex items-center gap-0">
-                    <div className="flex-1 min-w-0 text-[10px] text-text-label truncate pr-1" title={limb}>
+                    <div
+                      className="flex-1 min-w-0 text-[10px] text-text-label truncate pr-1"
+                      title={limb}
+                    >
                       {limb}
                     </div>
                     {ALLOC_SLOTS.map((slot) => (
@@ -657,7 +715,10 @@ function ProfileView() {
                       <CheckIcon size={10} />
                     </button>
                   </div>
-                  <div className="ml-auto" style={{ width: `${(ALLOC_SLOTS.length + 1) * 36 + 20}px` }}>
+                  <div
+                    className="ml-auto"
+                    style={{ width: `${(ALLOC_SLOTS.length + 1) * 36 + 20}px` }}
+                  >
                     <PointBar alloc={alloc} />
                   </div>
                 </div>
@@ -711,7 +772,10 @@ function MagicLiveView() {
         <MagicGridHeaders />
         <div className="flex flex-col gap-0">
           <div className="flex items-center gap-0">
-            <div className="flex-1 min-w-0 text-[10px] text-text-label truncate pr-1" title="elemental">
+            <div
+              className="flex-1 min-w-0 text-[10px] text-text-label truncate pr-1"
+              title="elemental"
+            >
               elemental
             </div>
             {MAGIC_SLOTS.map((slot) => (
@@ -742,7 +806,11 @@ function MagicLiveView() {
         <button
           onClick={() => applyMagicLive()}
           className="flex items-center gap-0.5 px-1.5 py-[2px] rounded text-[10px] font-semibold cursor-pointer transition-all duration-200 border"
-          style={{ color: MAGIC_ACCENT, borderColor: `${MAGIC_ACCENT}40`, background: `${MAGIC_ACCENT}10` }}
+          style={{
+            color: MAGIC_ACCENT,
+            borderColor: `${MAGIC_ACCENT}40`,
+            background: `${MAGIC_ACCENT}10`,
+          }}
           title="Apply magic allocation to MUD"
         >
           Apply
@@ -795,7 +863,9 @@ function MagicProfileView() {
           <ChevronLeftIcon size={10} />
         </button>
         <span className="text-[11px] font-mono text-text-label w-[40px] text-center tabular-nums">
-          {profileTotal > 0 ? `${String(profileNum).padStart(2, '0')}/${String(profileTotal).padStart(2, '0')}` : '--/--'}
+          {profileTotal > 0
+            ? `${String(profileNum).padStart(2, '0')}/${String(profileTotal).padStart(2, '0')}`
+            : '--/--'}
         </span>
         <button
           onClick={() => navigateMagicProfile('next')}
@@ -826,7 +896,11 @@ function MagicProfileView() {
           <button
             onClick={() => applyMagic(currentMagicProfile.id)}
             className="flex items-center gap-0.5 px-1.5 py-[1px] rounded text-[10px] font-semibold cursor-pointer transition-all duration-200 border"
-            style={{ color: MAGIC_ACCENT, borderColor: `${MAGIC_ACCENT}40`, background: `${MAGIC_ACCENT}10` }}
+            style={{
+              color: MAGIC_ACCENT,
+              borderColor: `${MAGIC_ACCENT}40`,
+              background: `${MAGIC_ACCENT}10`,
+            }}
             title="Apply magic allocation"
           >
             Apply
@@ -858,7 +932,10 @@ function MagicProfileView() {
             </button>
             {confirmDelete ? (
               <button
-                onClick={() => { deleteMagicProfile(currentMagicProfile.id); setConfirmDelete(false); }}
+                onClick={() => {
+                  deleteMagicProfile(currentMagicProfile.id);
+                  setConfirmDelete(false);
+                }}
                 onBlur={() => setConfirmDelete(false)}
                 className="flex items-center gap-0.5 px-1 py-[1px] rounded text-[9px] font-semibold cursor-pointer transition-all duration-200 border border-red/40 bg-red/10 text-red"
                 autoFocus
@@ -895,7 +972,10 @@ function MagicProfileView() {
             <MagicGridHeaders />
             <div className="flex flex-col gap-0">
               <div className="flex items-center gap-0">
-                <div className="flex-1 min-w-0 text-[10px] text-text-label truncate pr-1" title="elemental">
+                <div
+                  className="flex-1 min-w-0 text-[10px] text-text-label truncate pr-1"
+                  title="elemental"
+                >
                   elemental
                 </div>
                 {MAGIC_SLOTS.map((slot) => (
@@ -944,13 +1024,18 @@ export function AllocPanel({ mode = 'slideout' }: AllocPanelProps) {
   const { view, setView, allocTab, setAllocTab, magicView, setMagicView } = useAllocContext();
 
   return (
-    <div className={isPinned
-        ? 'h-full flex flex-col overflow-hidden'
-        : 'w-[420px] h-full bg-bg-primary border-l border-border-subtle flex flex-col overflow-hidden'
-      }>
+    <div
+      className={
+        isPinned
+          ? 'h-full flex flex-col overflow-hidden'
+          : 'w-[420px] h-full bg-bg-primary border-l border-border-subtle flex flex-col overflow-hidden'
+      }
+    >
       {/* Header */}
       <div className="flex items-center justify-between px-3 py-2.5 border-b border-border-subtle shrink-0">
-        <span className="text-[13px] font-semibold text-text-heading flex items-center gap-1.5"><AllocIcon size={12} /> Allocations</span>
+        <span className="text-[13px] font-semibold text-text-heading flex items-center gap-1.5">
+          <AllocIcon size={12} /> Allocations
+        </span>
         <div className="flex items-center gap-1.5">
           {isPinned ? <PinnedControls /> : <PinMenuButton panel="alloc" />}
         </div>
@@ -966,9 +1051,15 @@ export function AllocPanel({ mode = 'slideout' }: AllocPanelProps) {
       </div>
 
       {allocTab === 'combat' ? (
-        view === 'live' ? <LiveView /> : <ProfileView />
+        view === 'live' ? (
+          <LiveView />
+        ) : (
+          <ProfileView />
+        )
+      ) : magicView === 'live' ? (
+        <MagicLiveView />
       ) : (
-        magicView === 'live' ? <MagicLiveView /> : <MagicProfileView />
+        <MagicProfileView />
       )}
     </div>
   );

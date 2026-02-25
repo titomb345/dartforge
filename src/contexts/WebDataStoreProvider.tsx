@@ -49,25 +49,34 @@ export function WebDataStoreProvider({ children }: { children: ReactNode }) {
     return value !== undefined ? (value as T) : null;
   }, []);
 
-  const set = useCallback(async (filename: string, key: string, value: unknown): Promise<void> => {
-    const cache = loadFromStorage(filename);
-    cache[key] = value;
-    cacheRef.current.set(filename, cache);
-    scheduleDebouncedWrite(filename);
-  }, [scheduleDebouncedWrite]);
+  const set = useCallback(
+    async (filename: string, key: string, value: unknown): Promise<void> => {
+      const cache = loadFromStorage(filename);
+      cache[key] = value;
+      cacheRef.current.set(filename, cache);
+      scheduleDebouncedWrite(filename);
+    },
+    [scheduleDebouncedWrite]
+  );
 
   const save = useCallback(async (filename: string): Promise<void> => {
     const existing = dirtyRef.current.get(filename);
-    if (existing) { clearTimeout(existing); dirtyRef.current.delete(filename); }
+    if (existing) {
+      clearTimeout(existing);
+      dirtyRef.current.delete(filename);
+    }
     writeToStorage(filename);
   }, []);
 
-  const del = useCallback(async (filename: string, key: string): Promise<void> => {
-    const cache = loadFromStorage(filename);
-    delete cache[key];
-    cacheRef.current.set(filename, cache);
-    scheduleDebouncedWrite(filename);
-  }, [scheduleDebouncedWrite]);
+  const del = useCallback(
+    async (filename: string, key: string): Promise<void> => {
+      const cache = loadFromStorage(filename);
+      delete cache[key];
+      cacheRef.current.set(filename, cache);
+      scheduleDebouncedWrite(filename);
+    },
+    [scheduleDebouncedWrite]
+  );
 
   const keys = useCallback(async (filename: string): Promise<string[]> => {
     return Object.keys(loadFromStorage(filename));
@@ -95,14 +104,21 @@ export function WebDataStoreProvider({ children }: { children: ReactNode }) {
   const reloadFromDir = useCallback(async (): Promise<string> => 'localStorage', []);
 
   const store: DataStore = {
-    get, set, save, delete: del, keys, readText, writeText, deleteText, flushAll,
-    activeDataDir, ready, needsSetup,
-    completeSetup, reloadFromDir,
+    get,
+    set,
+    save,
+    delete: del,
+    keys,
+    readText,
+    writeText,
+    deleteText,
+    flushAll,
+    activeDataDir,
+    ready,
+    needsSetup,
+    completeSetup,
+    reloadFromDir,
   };
 
-  return (
-    <DataStoreContext.Provider value={store}>
-      {children}
-    </DataStoreContext.Provider>
-  );
+  return <DataStoreContext.Provider value={store}>{children}</DataStoreContext.Provider>;
 }
