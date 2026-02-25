@@ -3,7 +3,8 @@ import { useVariableContext } from '../contexts/VariableContext';
 import { useSkillTrackerContext } from '../contexts/SkillTrackerContext';
 import { charDisplayName } from '../lib/panelUtils';
 import type { Variable, VariableId, VariableScope } from '../types/variable';
-import { TrashIcon, PlusIcon, VariableIcon } from './icons';
+import { PlusIcon, VariableIcon } from './icons';
+import { ConfirmDeleteButton } from './ConfirmDeleteButton';
 import { FilterPill } from './FilterPill';
 import { MudInput, MudButton } from './shared';
 
@@ -25,37 +26,13 @@ function VariableRow({
   onEdit: (id: VariableId) => void;
 }) {
   const { toggleVariable, deleteVariable } = useVariableContext();
-  const [confirmingDelete, setConfirmingDelete] = useState(false);
 
   return (
     <div
       className="group flex items-center gap-1.5 px-2 py-1.5 hover:bg-bg-secondary rounded transition-[background] duration-150 cursor-pointer"
       onClick={() => onEdit(variable.id)}
     >
-      {confirmingDelete ? (
-        <button
-          onClick={(e) => {
-            e.stopPropagation();
-            deleteVariable(variable.id, scope);
-            setConfirmingDelete(false);
-          }}
-          onBlur={() => setConfirmingDelete(false)}
-          className="text-[8px] font-mono text-red border border-red/40 rounded px-1 py-px cursor-pointer hover:bg-red/10 shrink-0 transition-colors duration-150"
-        >
-          Del?
-        </button>
-      ) : (
-        <button
-          onClick={(e) => {
-            e.stopPropagation();
-            setConfirmingDelete(true);
-          }}
-          title="Delete variable"
-          className="w-0 overflow-hidden opacity-0 group-hover:w-4 group-hover:opacity-100 shrink-0 flex items-center justify-center text-text-dim hover:text-red cursor-pointer transition-all duration-150"
-        >
-          <TrashIcon size={9} />
-        </button>
-      )}
+      <ConfirmDeleteButton onDelete={() => deleteVariable(variable.id, scope)} />
       <span
         className="text-[11px] font-mono shrink-0 truncate"
         style={{ color: VAR_ACCENT }}

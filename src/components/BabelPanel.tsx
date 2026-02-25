@@ -10,9 +10,9 @@ import {
   RotateCcwIcon,
   FolderIcon,
   PlusIcon,
-  TrashIcon,
   ChevronRightIcon,
 } from './icons';
+import { ConfirmDeleteButton } from './ConfirmDeleteButton';
 import { useAppSettingsContext } from '../contexts/AppSettingsContext';
 import { useSkillTrackerContext } from '../contexts/SkillTrackerContext';
 import { DEFAULT_BABEL_PHRASES } from '../lib/babelPhrases';
@@ -36,7 +36,6 @@ function PhraseRow({
 }) {
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(phrase);
-  const [confirmingDelete, setConfirmingDelete] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -61,38 +60,14 @@ function PhraseRow({
         !editing && !disabled && 'hover:bg-bg-secondary cursor-pointer'
       )}
       onClick={() => {
-        if (!editing && !disabled && !confirmingDelete) {
+        if (!editing && !disabled) {
           setDraft(phrase);
           setEditing(true);
         }
       }}
     >
       {/* Delete button — hover-revealed */}
-      {!disabled &&
-        (confirmingDelete ? (
-          <button
-            onClick={(e) => {
-              e.stopPropagation();
-              onDelete(index);
-              setConfirmingDelete(false);
-            }}
-            onBlur={() => setConfirmingDelete(false)}
-            className="text-[8px] font-mono text-red border border-red/40 rounded px-1 py-px cursor-pointer hover:bg-red/10 shrink-0 transition-colors duration-150"
-          >
-            Del?
-          </button>
-        ) : (
-          <button
-            onClick={(e) => {
-              e.stopPropagation();
-              setConfirmingDelete(true);
-            }}
-            title="Delete phrase"
-            className="w-0 overflow-hidden opacity-0 group-hover:w-3.5 group-hover:opacity-100 shrink-0 flex items-center justify-center text-text-dim hover:text-red cursor-pointer transition-all duration-150"
-          >
-            <TrashIcon size={8} />
-          </button>
-        ))}
+      {!disabled && <ConfirmDeleteButton onDelete={() => onDelete(index)} />}
 
       {/* Index */}
       <span className="text-[9px] text-text-dim font-mono w-[18px] shrink-0 text-right tabular-nums select-none">

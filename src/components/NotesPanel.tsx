@@ -3,7 +3,8 @@ import type { PinnablePanelProps } from '../types';
 import { panelRootClass } from '../lib/panelUtils';
 import { PinMenuButton } from './PinMenuButton';
 import { PinnedControls } from './PinnedControls';
-import { NotesIcon, ChevronLeftIcon, ChevronRightSmallIcon, PlusIcon, TrashIcon } from './icons';
+import { NotesIcon, ChevronLeftIcon, ChevronRightSmallIcon, PlusIcon } from './icons';
+import { ConfirmDeleteButton } from './ConfirmDeleteButton';
 import { useDataStore } from '../contexts/DataStoreContext';
 import { useSkillTrackerContext } from '../contexts/SkillTrackerContext';
 import { useNotesContext } from '../contexts/NotesContext';
@@ -139,7 +140,6 @@ export function NotesPanel({ mode = 'slideout' }: NotesPanelProps) {
   const [activeTab, setActiveTab] = useState<string | null>(null);
   const [content, setContent] = useState('');
   const [loaded, setLoaded] = useState(false);
-  const [confirmDelete, setConfirmDelete] = useState(false);
 
   const saveTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const characterRef = useRef<string | null>(null);
@@ -202,7 +202,6 @@ export function NotesPanel({ mode = 'slideout' }: NotesPanelProps) {
     const character = activeCharacter;
     characterRef.current = character;
     setLoaded(false);
-    setConfirmDelete(false);
 
     (async () => {
       const meta = metaFileName(character);
@@ -297,7 +296,6 @@ export function NotesPanel({ mode = 'slideout' }: NotesPanelProps) {
       }
 
       setActiveTab(tabName);
-      setConfirmDelete(false);
       await dataStore.set(metaFileName(char), 'activeTab', tabName);
 
       const tabContent = await dataStore.readText(contentFileName(char, slugify(tabName)));
@@ -343,7 +341,6 @@ export function NotesPanel({ mode = 'slideout' }: NotesPanelProps) {
     setTabs(newTabs);
     setActiveTab(name);
     setContent('');
-    setConfirmDelete(false);
 
     await dataStore.writeText(contentFileName(char, slugify(name)), '');
     await persistMeta(char, newTabs, name);
@@ -395,7 +392,6 @@ export function NotesPanel({ mode = 'slideout' }: NotesPanelProps) {
       const adjacent = newTabs[Math.min(index, newTabs.length - 1)];
 
       setTabs(newTabs);
-      setConfirmDelete(false);
 
       // Delete the .txt file
       await dataStore.deleteText(contentFileName(char, slugify(tabName)));
@@ -480,27 +476,12 @@ export function NotesPanel({ mode = 'slideout' }: NotesPanelProps) {
             <PlusIcon size={10} />
           </button>
           {activeTab && total > 1 && (
-            <>
-              {confirmDelete ? (
-                <button
-                  onClick={() => {
-                    deleteTab(activeTab);
-                  }}
-                  onBlur={() => setConfirmDelete(false)}
-                  className="text-[8px] font-mono text-red border border-red/40 rounded px-1 py-px cursor-pointer hover:bg-red/10 transition-colors duration-150"
-                >
-                  Del?
-                </button>
-              ) : (
-                <button
-                  onClick={() => setConfirmDelete(true)}
-                  className="flex items-center justify-center w-[18px] h-[18px] rounded text-text-dim hover:text-red cursor-pointer transition-colors"
-                  title="Delete note"
-                >
-                  <TrashIcon size={10} />
-                </button>
-              )}
-            </>
+            <ConfirmDeleteButton
+              key={activeTab}
+              onDelete={() => deleteTab(activeTab)}
+              size={10}
+              variant="fixed"
+            />
           )}
         </div>
       )}

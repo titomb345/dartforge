@@ -12,6 +12,8 @@ import { ChatMessageRow } from './ChatMessageRow';
 import { MutedSection } from './MutedPopover';
 import { SignaturesSection } from './SignaturesPopover';
 import { IdentifyForm } from './IdentifyForm';
+import { FontSizeControl } from './FontSizeControl';
+import { useAppSettingsContext } from '../contexts/AppSettingsContext';
 
 const CHAT_TYPE_LABELS: Record<ChatType, string> = {
   say: 'Say',
@@ -69,6 +71,7 @@ export function ChatPanel({ mode = 'slideout' }: PinnablePanelProps) {
     updateSender,
   } = useChatContext();
   const { sortedMappings, createMapping } = useSignatureContext();
+  const { chatFontSize, updateChatFontSize } = useAppSettingsContext();
   const scrollRef = useRef<HTMLDivElement | null>(null);
   const isNearEdgeRef = useRef(true);
   const [exclusiveFilter, setExclusiveFilter] = useState<ChatType | null>(null);
@@ -199,6 +202,7 @@ export function ChatPanel({ mode = 'slideout' }: PinnablePanelProps) {
           </button>
         </div>
         <div className="flex items-center gap-1.5">
+          <FontSizeControl value={chatFontSize} onChange={updateChatFontSize} />
           {isPinned ? <PinnedControls /> : <PinMenuButton panel="chat" />}
         </div>
       </div>
@@ -290,7 +294,7 @@ export function ChatPanel({ mode = 'slideout' }: PinnablePanelProps) {
               lastDayKey = dayKey;
             }
             elements.push(
-              <ChatMessageRow key={msg.id} msg={msg} now={now} onMute={muteSender} onIdentify={handleIdentify} />,
+              <ChatMessageRow key={msg.id} msg={msg} now={now} fontSize={chatFontSize} onMute={muteSender} onIdentify={handleIdentify} />,
             );
           }
           return elements;

@@ -114,6 +114,7 @@ export function useAppSettings() {
   const [whoAutoRefreshEnabled, setWhoAutoRefreshEnabled] = useState(true);
   const [whoRefreshMinutes, setWhoRefreshMinutes] = useState(5);
   const [whoFontSize, setWhoFontSize] = useState(11);
+  const [chatFontSize, setChatFontSize] = useState(11);
 
   // Babel language trainer
   const [babelEnabled, setBabelEnabled] = useState(false);
@@ -247,6 +248,9 @@ export function useAppSettings() {
       const savedWhoFontSize = await dataStore.get<number>(SETTINGS_FILE, 'whoFontSize');
       if (savedWhoFontSize != null && savedWhoFontSize >= 8 && savedWhoFontSize <= 18)
         setWhoFontSize(savedWhoFontSize);
+      const savedChatFontSize = await dataStore.get<number>(SETTINGS_FILE, 'chatFontSize');
+      if (savedChatFontSize != null && savedChatFontSize >= 8 && savedChatFontSize <= 18)
+        setChatFontSize(savedChatFontSize);
 
       const savedGagGroups = await dataStore.get<GagGroupSettings>(SETTINGS_FILE, 'gagGroups');
       if (savedGagGroups) setGagGroups(savedGagGroups);
@@ -408,6 +412,15 @@ export function useAppSettings() {
     [persist]
   );
 
+  const updateChatFontSize = useCallback(
+    (v: number) => {
+      const clamped = Math.max(8, Math.min(18, v));
+      setChatFontSize(clamped);
+      persist('chatFontSize', clamped);
+    },
+    [persist]
+  );
+
   const updateAutoLoginCharacters = useCallback(
     (v: [CharacterProfile | null, CharacterProfile | null]) => {
       setAutoLoginCharacters(v);
@@ -492,6 +505,8 @@ export function useAppSettings() {
     whoRefreshMinutes,
     whoFontSize,
     updateWhoFontSize,
+    chatFontSize,
+    updateChatFontSize,
     // Gag groups
     gagGroups,
     // Babel language trainer

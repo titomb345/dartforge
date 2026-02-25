@@ -6,7 +6,9 @@ import type { WhoTitleMapping } from '../types/whoTitleMap';
 import { panelRootClass } from '../lib/panelUtils';
 import { PinMenuButton } from './PinMenuButton';
 import { PinnedControls } from './PinnedControls';
-import { WhoIcon, RotateCcwIcon, TrashIcon } from './icons';
+import { WhoIcon, RotateCcwIcon } from './icons';
+import { ConfirmDeleteButton } from './ConfirmDeleteButton';
+import { FontSizeControl } from './FontSizeControl';
 import { MudInput } from './shared';
 import { useWhoContext } from '../contexts/WhoContext';
 import { useWhoTitleContext } from '../contexts/WhoTitleContext';
@@ -131,13 +133,7 @@ function TitleMappingForm({
   return (
     <div className="flex items-center gap-1.5 px-3 py-1 bg-[#8be9fd]/5 border-y border-[#8be9fd]/10">
       {onDelete && (
-        <button
-          onClick={onDelete}
-          className="text-text-dim hover:text-red cursor-pointer shrink-0 transition-colors"
-          title="Delete mapping"
-        >
-          <TrashIcon size={10} />
-        </button>
+        <ConfirmDeleteButton onDelete={onDelete} size={10} variant="fixed" />
       )}
       <MudInput
         ref={inputRef}
@@ -352,27 +348,7 @@ export function WhoPanel({ mode = 'slideout' }: PinnablePanelProps) {
           )}
         </div>
         <div className="flex items-center gap-1.5">
-          <div className="flex items-center gap-0">
-            <button
-              onClick={() => updateWhoFontSize(whoFontSize - 1)}
-              disabled={whoFontSize <= 8}
-              className="w-[18px] h-[18px] flex items-center justify-center rounded text-[10px] font-mono text-text-label hover:bg-bg-secondary/60 cursor-pointer disabled:text-text-dim/30 disabled:cursor-default transition-colors"
-              title="Decrease font size"
-            >
-              -
-            </button>
-            <span className="text-[9px] font-mono text-text-label w-[16px] text-center tabular-nums">
-              {whoFontSize}
-            </span>
-            <button
-              onClick={() => updateWhoFontSize(whoFontSize + 1)}
-              disabled={whoFontSize >= 18}
-              className="w-[18px] h-[18px] flex items-center justify-center rounded text-[10px] font-mono text-text-label hover:bg-bg-secondary/60 cursor-pointer disabled:text-text-dim/30 disabled:cursor-default transition-colors"
-              title="Increase font size"
-            >
-              +
-            </button>
-          </div>
+          <FontSizeControl value={whoFontSize} onChange={updateWhoFontSize} />
           <button
             onClick={refresh}
             title="Refresh who list"

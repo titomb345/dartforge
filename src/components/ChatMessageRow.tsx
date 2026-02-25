@@ -9,35 +9,37 @@ const LANG_COLORS: Record<string, string> = {
   elvish: '#50fa7b',
   dwarvish: '#f59e0b',
   undercommon: '#6272a4',
-  orcish: '#ff6e6e',
+  orcish: '#e8734a',
   goblin: '#8be9fd',
-  fuzzy: '#f59e0b',
-  spyder: '#888',
-  mohnkeetongue: '#f59e0b',
-  southern: '#888',
-  western: '#888',
-  ogre: '#ff6e6e',
-  troll: '#ff6e6e',
-  catfolk: '#f59e0b',
-  gnomish: '#8be9fd',
-  northern: '#888',
-  eastern: '#888',
-  braman: '#a78bfa',
-  kreen: '#888',
-  sasquatch: '#888',
-  crabfolk: '#8be9fd',
-  rowan: '#888',
+  fuzzy: '#f0c866',
+  spyder: '#b0b0b0',
+  mohnkeetongue: '#ff9f43',
+  southern: '#e6c07b',
+  western: '#d4a476',
+  ogre: '#b5a95e',
+  troll: '#8ab87a',
+  catfolk: '#f9a8d4',
+  gnomish: '#36d7b7',
+  northern: '#94c4e8',
+  eastern: '#d4a5e5',
+  braman: '#e06cb8',
+  kreen: '#b8d84a',
+  sasquatch: '#d4b48a',
+  crabfolk: '#f08b7a',
+  rowan: '#98c379',
 };
 
 const DEFAULT_LANG_COLOR = '#888';
 
-const DAY_NAMES = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
-
+/**
+ * Time-only timestamp — day separators in ChatPanel handle date context,
+ * so we never need "Yest", day names, or month/date prefixes here.
+ */
 function formatTime(date: Date, hour12: boolean, now: number): string {
   const diffMs = now - date.getTime();
 
-  // < 1 min → "now"
-  if (diffMs >= 0 && diffMs < 60_000) return 'now';
+  // Future or < 1 min → "now" (covers clock skew on self-sent messages)
+  if (diffMs < 60_000) return 'now';
 
   // < 60 min → "{n}m"
   const mins = Math.floor(diffMs / 60_000);
@@ -47,35 +49,12 @@ function formatTime(date: Date, hour12: boolean, now: number): string {
   const hours = Math.floor(mins / 60);
   if (hours < 6) return `${hours}h`;
 
-  // Build absolute time portion (respects 12h/24h)
-  const timePart = date.toLocaleTimeString([], {
+  // >= 6h → time only
+  return date.toLocaleTimeString([], {
     hour: '2-digit',
     minute: '2-digit',
     hour12,
   });
-
-  const nowDate = new Date(now);
-  const todayStart = new Date(
-    nowDate.getFullYear(),
-    nowDate.getMonth(),
-    nowDate.getDate(),
-  ).getTime();
-  const yesterdayStart = todayStart - 86_400_000;
-  const weekAgoStart = todayStart - 6 * 86_400_000;
-  const msgTime = date.getTime();
-
-  // Today (older than 6h) → time only
-  if (msgTime >= todayStart) return timePart;
-
-  // Yesterday → "Yest {time}"
-  if (msgTime >= yesterdayStart) return `Yest ${timePart}`;
-
-  // This week (2-6 days ago) → "{day} {time}"
-  if (msgTime >= weekAgoStart) return `${DAY_NAMES[date.getDay()]} ${timePart}`;
-
-  // Older → "{date} {time}"
-  const monthDay = date.toLocaleDateString([], { month: 'short', day: 'numeric' });
-  return `${monthDay} ${timePart}`;
 }
 
 function formatFullTimestamp(date: Date, hour12: boolean): string {
@@ -91,13 +70,17 @@ function formatFullTimestamp(date: Date, hour12: boolean): string {
   });
 }
 
-function LanguageBadge({ language }: { language: string }) {
+function LanguageBadge({ language, fontSize }: { language: string; fontSize?: number }) {
   if (!language || language === 'common') return null;
   const color = LANG_COLORS[language] ?? DEFAULT_LANG_COLOR;
   return (
     <span
-      className="text-[9px] font-mono px-1 py-px rounded ml-1 shrink-0"
-      style={{ color, border: `1px solid color-mix(in srgb, ${color} 30%, transparent)` }}
+      className="font-mono px-1 py-px rounded ml-1 align-middle inline-block leading-tight"
+      style={{
+        fontSize: `${(fontSize ?? 11) - 4}px`,
+        color,
+        border: `1px solid color-mix(in srgb, ${color} 30%, transparent)`,
+      }}
     >
       {language}
     </span>
@@ -114,11 +97,13 @@ const TYPE_BADGES: Record<string, { label: string; color: string }> = {
 export function ChatMessageRow({
   msg,
   now,
+  fontSize,
   onMute,
   onIdentify,
 }: {
   msg: ChatMessage;
   now: number;
+  fontSize?: number;
   onMute?: (sender: string) => void;
   onIdentify?: (msgId: number) => void;
 }) {
@@ -127,8 +112,8 @@ export function ChatMessageRow({
   const knownSender = msg.sender !== 'Unknown';
 
   return (
-    <div className="group flex items-start gap-1.5 px-2 py-0.5 hover:bg-bg-secondary/50 transition-colors duration-100 min-w-0">
-      {/* Timestamp */}
+    <div className="group relative flex items-start gap-1.5 px-2 py-0.5 hover:bg-bg-secondary/50 transition-colors duration-100 min-w-0">
+      {/* Timestamp — time only; day separators handle date context */}
       <span
         className="text-[10px] text-text-dim font-mono shrink-0 pt-px select-none"
         title={formatFullTimestamp(msg.timestamp, timestampFormat === '12h')}
@@ -136,58 +121,70 @@ export function ChatMessageRow({
         {formatTime(msg.timestamp, timestampFormat === '12h', now)}
       </span>
 
-      <div className="flex-1 min-w-0">
-        <div className="flex items-center gap-0.5 min-w-0">
-          {/* Sender — skip for anonymous tells/szs */}
-          {knownSender && (
-            <span
-              className={`text-[11px] font-semibold shrink-0 ${msg.isOwn ? 'text-green' : 'text-text-label'}`}
-              onContextMenu={(e) => {
-                if (!msg.isOwn && onMute) {
-                  e.preventDefault();
-                  onMute(msg.sender);
-                }
-              }}
-            >
-              {msg.isOwn ? 'You' : msg.sender}
-            </span>
-          )}
-          {(msg.type === 'say' || msg.type === 'shout') && (
-            <LanguageBadge language={msg.language ?? ''} />
-          )}
-          {badge && (
-            <span
-              className={`text-[9px] font-mono ${badge.color} ${knownSender ? 'ml-1' : ''} shrink-0`}
-            >
-              {badge.label}
-            </span>
-          )}
-          {msg.directed && (
-            <span className="text-[9px] font-mono text-purple ml-1 shrink-0">to you</span>
-          )}
-          {/* Identify button — only for anonymous tells/szs */}
-          {!knownSender && !msg.isOwn && onIdentify && (
+      {/* Sender + badges + message — all inline for compact single-line flow */}
+      <div
+        className="flex-1 min-w-0 text-text-primary break-words"
+        style={{ fontSize: `${fontSize ?? 11}px` }}
+      >
+        {knownSender ? (
+          <span
+            className={`font-semibold ${msg.isOwn ? 'text-green' : 'text-text-label'}`}
+            onContextMenu={(e) => {
+              if (!msg.isOwn && onMute) {
+                e.preventDefault();
+                onMute(msg.sender);
+              }
+            }}
+          >
+            {msg.isOwn ? 'You' : msg.sender}
+          </span>
+        ) : (
+          !msg.isOwn &&
+          onIdentify && (
             <button
               onClick={() => onIdentify(msg.id)}
-              className="ml-1 opacity-0 group-hover:opacity-60 hover:!opacity-100 transition-opacity duration-150 shrink-0 cursor-pointer text-[9px] font-mono text-amber border border-amber/40 rounded px-1 py-px leading-none"
+              className="text-[9px] font-mono text-amber/70 hover:text-amber border border-amber/30 hover:border-amber/50 rounded px-1 py-px leading-tight align-middle inline-block cursor-pointer transition-colors duration-150"
               title="Identify sender"
             >
-              ?
+              who?
             </button>
-          )}
-          {/* Mute button on hover — only for known senders */}
-          {!msg.isOwn && knownSender && onMute && (
-            <button
-              onClick={() => onMute(msg.sender)}
-              className="ml-1 opacity-0 group-hover:opacity-60 hover:!opacity-100 transition-opacity duration-150 shrink-0 cursor-pointer"
-              title={`Mute ${msg.sender}`}
-            >
-              <VolumeOffIcon size={9} />
-            </button>
-          )}
-        </div>
-        <div className="text-[11px] text-text-primary break-words">{msg.message}</div>
+          )
+        )}
+        {(msg.type === 'say' || msg.type === 'shout') && (
+          <LanguageBadge language={msg.language ?? ''} fontSize={fontSize} />
+        )}
+        {badge && (
+          <span
+            className={`font-mono ${badge.color} ml-1 align-middle`}
+            style={{ fontSize: `${(fontSize ?? 11) - 2}px` }}
+          >
+            {badge.label}
+          </span>
+        )}
+        {msg.directed && (
+          <span
+            className="font-mono text-purple ml-1 align-middle"
+            style={{ fontSize: `${(fontSize ?? 11) - 2}px` }}
+          >
+            to you
+          </span>
+        )}
+        {' '}
+        {msg.message}
       </div>
+
+      {/* Mute button — hover overlay for known senders */}
+      {!msg.isOwn && knownSender && onMute && (
+        <div className="absolute right-1 top-0.5 hidden group-hover:flex items-center">
+          <button
+            onClick={() => onMute(msg.sender)}
+            className="cursor-pointer opacity-60 hover:opacity-100"
+            title={`Mute ${msg.sender}`}
+          >
+            <VolumeOffIcon size={9} />
+          </button>
+        </div>
+      )}
     </div>
   );
 }

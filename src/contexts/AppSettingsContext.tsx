@@ -90,6 +90,9 @@ export interface AppSettingsState {
   updateWhoAutoRefreshEnabled: (v: boolean) => void;
   updateWhoRefreshMinutes: (v: number) => void;
   updateWhoFontSize: (v: number) => void;
+  // Chat font size
+  chatFontSize: number;
+  updateChatFontSize: (v: number) => void;
   // Auto-login
   autoLoginEnabled: boolean;
   autoLoginActiveSlot: 0 | 1;

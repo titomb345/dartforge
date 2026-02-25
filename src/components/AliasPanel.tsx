@@ -6,7 +6,8 @@ import { formatCommandPreview } from '../lib/commandUtils';
 import { useFilteredGroups } from '../lib/useFilteredGroups';
 import { charDisplayName } from '../lib/panelUtils';
 import type { Alias, AliasId, AliasMatchMode, AliasScope } from '../types/alias';
-import { TrashIcon, PlusIcon, ChevronDownIcon, ChevronUpIcon, AliasIcon } from './icons';
+import { PlusIcon, ChevronDownIcon, ChevronUpIcon, AliasIcon } from './icons';
+import { ConfirmDeleteButton } from './ConfirmDeleteButton';
 import { FilterPill } from './FilterPill';
 import { MudInput, MudTextarea, MudButton } from './shared';
 import { SyntaxHelpTable } from './SyntaxHelpTable';
@@ -34,37 +35,13 @@ function AliasRow({
   onEdit: (id: AliasId) => void;
 }) {
   const { toggleAlias, deleteAlias } = useAliasContext();
-  const [confirmingDelete, setConfirmingDelete] = useState(false);
 
   return (
     <div
       className="group flex items-center gap-1.5 px-2 py-1.5 hover:bg-bg-secondary rounded transition-[background] duration-150 cursor-pointer"
       onClick={() => onEdit(alias.id)}
     >
-      {confirmingDelete ? (
-        <button
-          onClick={(e) => {
-            e.stopPropagation();
-            deleteAlias(alias.id, scope);
-            setConfirmingDelete(false);
-          }}
-          onBlur={() => setConfirmingDelete(false)}
-          className="text-[8px] font-mono text-red border border-red/40 rounded px-1 py-px cursor-pointer hover:bg-red/10 shrink-0 transition-colors duration-150"
-        >
-          Del?
-        </button>
-      ) : (
-        <button
-          onClick={(e) => {
-            e.stopPropagation();
-            setConfirmingDelete(true);
-          }}
-          title="Delete alias"
-          className="w-0 overflow-hidden opacity-0 group-hover:w-4 group-hover:opacity-100 shrink-0 flex items-center justify-center text-text-dim hover:text-red cursor-pointer transition-all duration-150"
-        >
-          <TrashIcon size={9} />
-        </button>
-      )}
+      <ConfirmDeleteButton onDelete={() => deleteAlias(alias.id, scope)} />
       <span
         className={`text-[11px] font-mono flex-1 truncate ${
           alias.matchMode === 'exact'

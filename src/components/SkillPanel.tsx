@@ -12,7 +12,8 @@ import {
   CATEGORY_ORDER,
   SUBCATEGORY_ORDER,
 } from '../lib/skillCategories';
-import { TrashIcon, TrendingUpIcon } from './icons';
+import { TrendingUpIcon } from './icons';
+import { ConfirmDeleteButton } from './ConfirmDeleteButton';
 import { FilterPill } from './FilterPill';
 import { MudInput, MudButton } from './shared';
 import { PinMenuButton } from './PinMenuButton';
@@ -58,7 +59,6 @@ function SkillRow({
 
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState('');
-  const [confirmingDelete, setConfirmingDelete] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
 
   const startEdit = useCallback(() => {
@@ -83,26 +83,7 @@ function SkillRow({
 
   return (
     <div className="group flex items-center gap-1 px-2 py-1 hover:bg-bg-secondary rounded transition-[background] duration-150">
-      {confirmingDelete ? (
-        <button
-          onClick={() => {
-            deleteSkill(record.skill, petName);
-            setConfirmingDelete(false);
-          }}
-          onBlur={() => setConfirmingDelete(false)}
-          className="text-[8px] font-mono text-red border border-red/40 rounded px-1 py-px cursor-pointer hover:bg-red/10 shrink-0 transition-colors duration-150"
-        >
-          Del?
-        </button>
-      ) : (
-        <button
-          onClick={() => setConfirmingDelete(true)}
-          title="Delete skill"
-          className="w-0 overflow-hidden opacity-0 group-hover:w-4 group-hover:opacity-100 shrink-0 flex items-center justify-center text-text-dim hover:text-red cursor-pointer transition-all duration-150"
-        >
-          <TrashIcon size={9} />
-        </button>
-      )}
+      <ConfirmDeleteButton onDelete={() => deleteSkill(record.skill, petName)} />
       <span className="text-xs text-text-label flex-1 truncate" title={record.skill}>
         {displayName ?? record.skill}
       </span>

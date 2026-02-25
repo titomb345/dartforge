@@ -14,19 +14,28 @@ The `[Unreleased]` header controls automatic version bumping on merge:
 ### Added
 - Manual panel collapse — hover the resize handle between a pinned panel and the terminal to reveal a collapse chevron; click to shrink the panel to its icon strip without unpinning; click the expand chevron at the top of the icon strip to restore; state persists across sessions
 - Who panel font size controls — +/- buttons in the header to adjust player name size (8–18px, persisted)
+- Chat panel font size controls — +/- buttons in the header to adjust message text size (8–18px, persisted); language badges and type badges scale proportionally
+- Shared `FontSizeControl` component used by both Who and Chat panels
 - Skill panel filter bar now appears on all category tabs, not just "All" — search within any skill group
+- Added `--color-pink` to theme for consistent theming of TELL badges
 
 ### Fixed
 - "Bashing" skill is now correctly categorized as Other instead of Combat
+- Chat timestamps no longer show "-1m" for self-sent messages (clock skew fix)
+- TELL badge was rendering white (unresolved `text-pink` class) — now correctly renders in pink
 
 ### Changed
 - Performance: DRY refactor across App.tsx, useAppSettings, useMudConnection, useTimerEngines, and outputFilter — extracted shared helpers, eliminated redundant computations, and memoized callbacks (~400 lines removed)
 - Skill panel filter bar is more compact (smaller padding and input size)
-- Chat panel timestamps now use smart tiered display — recent messages show relative time (`now`, `12m`, `3h`), older messages include day context (`Yest 2:30 PM`, `Mon 2:30 PM`, `Jan 15 2:30 PM`)
+- Chat panel redesigned — compact single-line layout with sender, badges, and message inline instead of two-row format; timestamps simplified to time-only (day separators handle date context); significantly more messages visible in the same space
 - Chat panel now shows day separator bars (Today, Yesterday, full date) between message groups from different days
 - Chat timestamps show full absolute datetime on hover
+- Chat panel language badges now have unique colors per language (previously 7 languages shared gray, several others duplicated)
+- Chat panel anonymous messages now show an always-visible inline "who?" button instead of a hidden hover-only "?" button
 - Reduced Who panel default player name font size from 12px to 11px
 - Who panel title mapping: moved clear icon to trash can icon inside the edit form
+- Standardized delete confirmation across all panels — extracted shared `ConfirmDeleteButton` component replacing 10 inline implementations (Alias, Variable, Timer, Trigger, Babel, Skill, Notes, Alloc combat/magic profiles, Counter); Who panel title mapping delete now requires two-click confirmation instead of firing immediately
+- Standardized counter panel clear button — now uses the same two-click confirm pattern and visual style as delete, replacing the old timeout-based pill button
 
 ## [1.2.0] - 2026-02-25
 
