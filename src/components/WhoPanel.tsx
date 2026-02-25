@@ -267,7 +267,7 @@ function PlayerRow({
           {player.isTitle && !mapping && (
             <button
               onClick={() => onStartEdit(player.name)}
-              className="text-[10px] font-mono text-[#f59e0b] ml-1.5 px-1 rounded border border-[#f59e0b]/30 bg-[#f59e0b]/10 hover:bg-[#f59e0b]/20 cursor-pointer opacity-0 group-hover/row:opacity-100 transition-all duration-150 shrink-0"
+              className="text-[10px] font-mono text-[#ccc]/70 hover:text-[#ccc] ml-1.5 px-1 rounded border border-[#ccc]/20 bg-[#ccc]/5 hover:bg-[#ccc]/10 cursor-pointer opacity-0 group-hover/row:opacity-100 transition-all duration-150 shrink-0"
               title="Add player name mapping for this who title"
             >
               ?
