@@ -86,6 +86,7 @@ import { useAllocations } from './hooks/useAllocations';
 import { AllocProvider } from './contexts/AllocContext';
 import { AllocPanel } from './components/AllocPanel';
 import { CurrencyPanel } from './components/CurrencyPanel';
+import { BabelPanel } from './components/BabelPanel';
 import { WhoPanel } from './components/WhoPanel';
 import { WhoProvider } from './contexts/WhoContext';
 import { WhoTitleProvider } from './contexts/WhoTitleContext';
@@ -1254,11 +1255,12 @@ function AppMain() {
   const postSyncEnabledRef = useLatestRef(postSyncEnabled);
   const postSyncCommandsRef = useLatestRef(postSyncCommands);
 
-  // Timer engines (anti-idle, alignment tracking, who refresh, custom timers)
+  // Timer engines (anti-idle, alignment tracking, who refresh, babel, custom timers)
   const {
     antiIdleNextAt,
     alignmentNextAt,
     whoNextAt,
+    babelNextAt,
     activeTimerBadges,
     handleToggleTimer,
     refreshWho,
@@ -1272,6 +1274,10 @@ function AppMain() {
     alignmentTrackingMinutes,
     whoAutoRefreshEnabled: appSettings.whoAutoRefreshEnabled,
     whoRefreshMinutes: appSettings.whoRefreshMinutes,
+    babelEnabled: appSettings.babelEnabled,
+    babelLanguage: appSettings.babelLanguage,
+    babelIntervalSeconds: appSettings.babelIntervalSeconds,
+    babelPhrases: appSettings.babelPhrases,
     mergedTimers,
     timerState,
     sendCommandRef,
@@ -1468,6 +1474,10 @@ function AppMain() {
       actionQueueLength: blockerState.queueLength,
       movementMode,
       onToggleMovementMode: cycleMovementMode,
+      babelEnabled: appSettings.babelEnabled,
+      babelLanguage: appSettings.babelLanguage,
+      babelNextAt,
+      onToggleBabel: () => appSettings.updateBabelEnabled(false),
     }),
     [
       connected,
@@ -1495,6 +1505,10 @@ function AppMain() {
       blockerState,
       movementMode,
       cycleMovementMode,
+      appSettings.babelEnabled,
+      appSettings.babelLanguage,
+      babelNextAt,
+      appSettings.updateBabelEnabled,
     ]
   );
 
@@ -1744,6 +1758,9 @@ function AppMain() {
                                         </SlideOut>
                                         <SlideOut panel="currency" pinnable="currency">
                                           <CurrencyPanel mode="slideout" />
+                                        </SlideOut>
+                                        <SlideOut panel="babel" pinnable="babel">
+                                          <BabelPanel mode="slideout" />
                                         </SlideOut>
                                         <SlideOut panel="who" pinnable="who">
                                           <WhoPanel mode="slideout" />

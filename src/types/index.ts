@@ -15,6 +15,7 @@ export type Panel =
   | 'alloc'
   | 'currency'
   | 'who'
+  | 'babel'
   | 'help';
 
 export type PinnablePanel =
@@ -25,7 +26,8 @@ export type PinnablePanel =
   | 'map'
   | 'alloc'
   | 'currency'
-  | 'who';
+  | 'who'
+  | 'babel';
 export type DockSide = 'left' | 'right';
 
 export interface PanelLayout {

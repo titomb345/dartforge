@@ -35,6 +35,11 @@ export interface CommandInputState {
   // Movement mode
   movementMode: MovementMode;
   onToggleMovementMode: () => void;
+  // Babel
+  babelEnabled: boolean;
+  babelLanguage: string;
+  babelNextAt: number | null;
+  onToggleBabel: () => void;
   // Custom timers
   activeTimers: ActiveTimerBadge[];
   onToggleTimer: (id: string) => void;

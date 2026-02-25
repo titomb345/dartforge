@@ -111,6 +111,12 @@ export function useAppSettings() {
   const [whoAutoRefreshEnabled, setWhoAutoRefreshEnabled] = useState(true);
   const [whoRefreshMinutes, setWhoRefreshMinutes] = useState(5);
 
+  // Babel language trainer
+  const [babelEnabled, setBabelEnabled] = useState(false);
+  const [babelLanguage, setBabelLanguage] = useState('');
+  const [babelIntervalSeconds, setBabelIntervalSeconds] = useState(30);
+  const [babelPhrases, setBabelPhrases] = useState<string[]>([]);
+
   // Gag groups
   const [gagGroups, setGagGroups] = useState<GagGroupSettings>({ ...DEFAULT_GAG_GROUPS });
 
@@ -237,6 +243,18 @@ export function useAppSettings() {
 
       const savedGagGroups = await dataStore.get<GagGroupSettings>(SETTINGS_FILE, 'gagGroups');
       if (savedGagGroups) setGagGroups(savedGagGroups);
+
+      // Babel
+      const savedBabelEnabled = await dataStore.get<boolean>(SETTINGS_FILE, 'babelEnabled');
+      if (savedBabelEnabled != null) setBabelEnabled(savedBabelEnabled);
+      const savedBabelLanguage = await dataStore.get<string>(SETTINGS_FILE, 'babelLanguage');
+      if (savedBabelLanguage != null) setBabelLanguage(savedBabelLanguage);
+      const savedBabelInterval = await dataStore.get<number>(SETTINGS_FILE, 'babelIntervalSeconds');
+      if (savedBabelInterval != null && savedBabelInterval >= 10)
+        setBabelIntervalSeconds(savedBabelInterval);
+      const savedBabelPhrases = await dataStore.get<string[]>(SETTINGS_FILE, 'babelPhrases');
+      if (Array.isArray(savedBabelPhrases) && savedBabelPhrases.length > 0)
+        setBabelPhrases(savedBabelPhrases);
 
       const savedPostSyncEnabled = await dataStore.get<boolean>(SETTINGS_FILE, 'postSyncEnabled');
       if (savedPostSyncEnabled != null) setPostSyncEnabled(savedPostSyncEnabled);
@@ -517,6 +535,39 @@ export function useAppSettings() {
     [persist]
   );
 
+  // Babel
+  const updateBabelEnabled = useCallback(
+    (v: boolean) => {
+      setBabelEnabled(v);
+      persist('babelEnabled', v);
+    },
+    [persist]
+  );
+
+  const updateBabelLanguage = useCallback(
+    (v: string) => {
+      setBabelLanguage(v);
+      persist('babelLanguage', v);
+    },
+    [persist]
+  );
+
+  const updateBabelIntervalSeconds = useCallback(
+    (v: number) => {
+      setBabelIntervalSeconds(v);
+      persist('babelIntervalSeconds', v);
+    },
+    [persist]
+  );
+
+  const updateBabelPhrases = useCallback(
+    (v: string[]) => {
+      setBabelPhrases(v);
+      persist('babelPhrases', v);
+    },
+    [persist]
+  );
+
   const updatePostSyncEnabled = useCallback(
     (v: boolean) => {
       setPostSyncEnabled(v);
@@ -674,6 +725,15 @@ export function useAppSettings() {
     // Gag groups
     gagGroups,
     updateGagGroups,
+    // Babel language trainer
+    babelEnabled,
+    babelLanguage,
+    babelIntervalSeconds,
+    babelPhrases,
+    updateBabelEnabled,
+    updateBabelLanguage,
+    updateBabelIntervalSeconds,
+    updateBabelPhrases,
     // Post-sync commands
     postSyncEnabled,
     postSyncCommands,

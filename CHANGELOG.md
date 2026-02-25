@@ -28,6 +28,9 @@ The `[Unreleased]` header controls automatic version bumping on merge:
 - Web build: character form uses `autocomplete="username"` / `autocomplete="current-password"` so browser password managers (1Password, LastPass, etc.) can detect, save, and autofill credentials
 - Wrong-credential safety: auto-login only attempts once per connection — if login fails, the user types manually
 
+- Babel language trainer — automatically speaks phrases in a target language at configurable intervals to train language skills; language dropdown populated from learned `language#*` skills; default phrase bank of 30 fantasy-themed phrases with support for custom phrases (inline edit, add, delete, import from `.txt` file); fires immediately on start; language switchable while running
+- Babel toolbar button and pinnable panel with collapsible phrase list, interval control, and start/stop toggle
+- Babel countdown badge next to command input (purple-pink pulsing indicator); click to stop; language shown in tooltip
 - Chat history persistence — chat messages are saved to disk and restored across sessions, so you don't lose conversation history on disconnect or restart
 - Relative timestamps in the Chat panel — messages less than 2 hours old show "now", "5m ago", "1 hr ago" instead of a fixed clock time; updates every 30 seconds
 - Gag Groups — built-in pattern sets (ported from dartmudlet) that suppress noisy MUD output; 7 toggleable groups: Pets, Creatures, Citizens, Trainers, Sparring, Channels, Quests; accessible via a collapsible section in the Triggers panel

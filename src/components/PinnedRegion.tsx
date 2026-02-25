@@ -10,6 +10,7 @@ import { NotesPanel } from './NotesPanel';
 import { MapPanel } from './MapPanel';
 import { AllocPanel } from './AllocPanel';
 import { CurrencyPanel } from './CurrencyPanel';
+import { BabelPanel } from './BabelPanel';
 import { WhoPanel } from './WhoPanel';
 import {
   ChatIcon,
@@ -19,6 +20,7 @@ import {
   MapIcon,
   AllocIcon,
   CoinIcon,
+  BabelIcon,
   WhoIcon,
 } from './icons';
 import { useVerticalResize } from '../hooks/useVerticalResize';
@@ -74,6 +76,12 @@ export const PANEL_META: Record<
     icon: (s) => <CoinIcon size={s} />,
     accent: '#cd7f32',
     label: 'Currency',
+  },
+  babel: {
+    render: () => <BabelPanel mode="pinned" />,
+    icon: (s) => <BabelIcon size={s} />,
+    accent: '#e879f9',
+    label: 'Babel',
   },
   who: {
     render: () => <WhoPanel mode="pinned" />,

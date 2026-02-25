@@ -69,6 +69,15 @@ export interface AppSettingsState {
   // Gag groups
   gagGroups: GagGroupSettings;
   updateGagGroups: (v: GagGroupSettings) => void;
+  // Babel language trainer
+  babelEnabled: boolean;
+  babelLanguage: string;
+  babelIntervalSeconds: number;
+  babelPhrases: string[];
+  updateBabelEnabled: (v: boolean) => void;
+  updateBabelLanguage: (v: string) => void;
+  updateBabelIntervalSeconds: (v: number) => void;
+  updateBabelPhrases: (v: string[]) => void;
   // Post-sync commands
   postSyncEnabled: boolean;
   postSyncCommands: string;

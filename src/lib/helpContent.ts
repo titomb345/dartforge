@@ -69,7 +69,7 @@ export const HELP_CATEGORIES: HelpCategory[] = [
       {
         title: 'Pinning Panels',
         description:
-          'Seven panels (Who, Chat, Counters, Skills, Notes, Allocations, Currency) can be pinned to the left or right side. Click the pin icon in the panel header, then choose "Pin Left" or "Pin Right". Up to 3 panels per side.',
+          'Eight panels (Who, Chat, Counters, Skills, Notes, Allocations, Currency, Babel) can be pinned to the left or right side. Click the pin icon in the panel header, then choose "Pin Left" or "Pin Right". Up to 3 panels per side.',
       },
       {
         title: 'Reorder & Swap',
@@ -127,6 +127,12 @@ export const HELP_CATEGORIES: HelpCategory[] = [
         description:
           'Convert between and list all DartMUD currency systems. Supports freeform input like "3ri 5dn" or "1 gold sun 2g".',
         helpId: 'toolbar-currency',
+      },
+      {
+        title: 'Babel Language Trainer',
+        description:
+          'Automatically speaks phrases in a target language at regular intervals to train language skills. Select from your learned languages, customize the phrase list or load a .txt file, and start training. A badge appears next to the command input while active.',
+        helpId: 'toolbar-babel',
       },
       {
         title: 'Timers Panel',

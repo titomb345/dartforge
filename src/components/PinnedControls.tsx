@@ -16,6 +16,7 @@ import {
   MapIcon,
   AllocIcon,
   CoinIcon,
+  BabelIcon,
   WhoIcon,
 } from './icons';
 
@@ -27,6 +28,7 @@ const PANEL_INFO: Record<PinnablePanel, { label: string; icon: ReactNode }> = {
   map: { label: 'Map', icon: <MapIcon size={10} /> },
   alloc: { label: 'Allocations', icon: <AllocIcon size={10} /> },
   currency: { label: 'Currency', icon: <CoinIcon size={10} /> },
+  babel: { label: 'Babel', icon: <BabelIcon size={10} /> },
   who: { label: 'Who', icon: <WhoIcon size={10} /> },
 };
 

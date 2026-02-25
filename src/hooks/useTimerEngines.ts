@@ -9,6 +9,7 @@ import type { CommandRunner } from '../lib/commandUtils';
 import { expandInput } from '../lib/aliasEngine';
 import { executeCommands } from '../lib/commandUtils';
 import { smartWrite } from '../lib/terminalUtils';
+import { DEFAULT_BABEL_PHRASES } from '../lib/babelPhrases';
 
 export interface ActiveTimerBadge {
   id: string;
@@ -26,6 +27,10 @@ interface TimerEnginesDeps {
   alignmentTrackingMinutes: number;
   whoAutoRefreshEnabled: boolean;
   whoRefreshMinutes: number;
+  babelEnabled: boolean;
+  babelLanguage: string;
+  babelIntervalSeconds: number;
+  babelPhrases: string[];
   mergedTimers: Timer[];
   timerState: TimerState;
   sendCommandRef: React.RefObject<((cmd: string) => Promise<void>) | null>;
@@ -47,6 +52,10 @@ export function useTimerEngines({
   alignmentTrackingMinutes,
   whoAutoRefreshEnabled,
   whoRefreshMinutes,
+  babelEnabled,
+  babelLanguage,
+  babelIntervalSeconds,
+  babelPhrases,
   mergedTimers,
   timerState,
   sendCommandRef,
@@ -134,6 +143,43 @@ export function useTimerEngines({
     };
   }, [connected, loggedIn, whoAutoRefreshEnabled, whoRefreshMinutes]);
 
+  // Babel language trainer — sends a random phrase in a target language at interval
+  const babelEnabledRef = useLatestRef(babelEnabled);
+  const babelLanguageRef = useLatestRef(babelLanguage);
+  const babelPhrasesRef = useLatestRef(babelPhrases);
+  const [babelNextAt, setBabelNextAt] = useState<number | null>(null);
+
+  useEffect(() => {
+    if (!connected || !loggedIn || !babelEnabled || !babelLanguage) {
+      setBabelNextAt(null);
+      return;
+    }
+    const fire = () => {
+      const custom = babelPhrasesRef.current;
+      const phrases = custom.length > 0 ? custom : DEFAULT_BABEL_PHRASES;
+      const lang = babelLanguageRef.current;
+      if (sendCommandRef.current && babelEnabledRef.current && lang) {
+        const phrase = phrases[Math.floor(Math.random() * phrases.length)];
+        if (terminalRef.current) {
+          smartWrite(terminalRef.current, `\x1b[90m[babel: ${lang}] ${phrase}\x1b[0m\r\n`);
+        }
+        sendCommandRef.current(`say (lang=${lang}) ${phrase}`);
+      }
+    };
+    // Fire immediately on start
+    fire();
+    const ms = babelIntervalSeconds * 1000;
+    setBabelNextAt(Date.now() + ms);
+    const id = setInterval(() => {
+      fire();
+      setBabelNextAt(Date.now() + ms);
+    }, ms);
+    return () => {
+      clearInterval(id);
+      setBabelNextAt(null);
+    };
+  }, [connected, loggedIn, babelEnabled, babelIntervalSeconds, babelPhrases]);
+
   // Custom timer engine — manages per-timer setIntervals, only fires when connected + logged in
   const timerIntervalsRef = useRef<Map<string, ReturnType<typeof setInterval>>>(new Map());
   const mergedTimersRef = useLatestRef(mergedTimers);
@@ -216,6 +262,7 @@ export function useTimerEngines({
     antiIdleNextAt,
     alignmentNextAt,
     whoNextAt,
+    babelNextAt,
     activeTimerBadges,
     handleToggleTimer,
     refreshWho,

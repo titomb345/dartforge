@@ -1074,6 +1074,27 @@ export function WhoIcon({ size = 16 }: IconProps) {
   );
 }
 
+export function BabelIcon({ size = 16 }: IconProps) {
+  return (
+    <svg
+      width={size}
+      height={size}
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
+      {/* Speech bubble */}
+      <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
+      {/* "A" letter — language symbol */}
+      <path d="M9.5 13L12 7l2.5 6" />
+      <line x1="10.2" y1="11.5" x2="13.8" y2="11.5" />
+    </svg>
+  );
+}
+
 export function AlignmentIcon({ size = 11 }: IconProps) {
   return (
     <svg

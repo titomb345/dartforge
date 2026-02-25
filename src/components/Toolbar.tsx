@@ -15,6 +15,7 @@ import {
   CoinIcon,
   WhoIcon,
   /* MapIcon, */ AllocIcon,
+  BabelIcon,
   HelpIcon,
 } from './icons';
 import { getPlatform } from '../lib/platform';
@@ -137,6 +138,16 @@ export function Toolbar({ connected, onReconnect, onDisconnect }: ToolbarProps) 
           toggled={activePanel === 'currency'}
           pinned={isPinned('currency')}
           onClick={() => togglePanel('currency')}
+        />
+        <IconButton
+          icon={<BabelIcon />}
+          title="Babel"
+          accent="#e879f9"
+          helpId="toolbar-babel"
+          panelId="babel"
+          toggled={activePanel === 'babel'}
+          pinned={isPinned('babel')}
+          onClick={() => togglePanel('babel')}
         />
         <div className="w-px h-[18px] bg-border-dim mx-1.5" />
         <IconButton

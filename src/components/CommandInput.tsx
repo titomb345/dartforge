@@ -106,6 +106,10 @@ export const CommandInput = forwardRef<HTMLTextAreaElement, CommandInputProps>(
       actionQueueLength,
       movementMode,
       onToggleMovementMode,
+      babelEnabled,
+      babelLanguage,
+      babelNextAt,
+      onToggleBabel,
     } = useCommandInputContext();
     const { commandHistorySize, numpadMappings, showTimerBadges } = useAppSettingsContext();
     const { active: spotlightActive } = useSpotlight();
@@ -405,6 +409,21 @@ export const CommandInput = forwardRef<HTMLTextAreaElement, CommandInputProps>(
             style={{ filter: 'drop-shadow(0 0 3px rgba(45, 212, 191, 0.25))' }}
           >
             <span>{movementMode.charAt(0).toUpperCase() + movementMode.slice(1)}</span>
+          </span>
+        )}
+
+        {/* Babel language trainer badge */}
+        {babelEnabled && babelLanguage && (
+          <span
+            title={`Babel: training ${babelLanguage} — click to stop`}
+            onClick={onToggleBabel}
+            className="flex items-center gap-1 px-1.5 py-1 rounded border text-[9px] font-mono self-center shrink-0 ml-1 text-[#e879f9] border-[#e879f9]/30 bg-[#e879f9]/8 cursor-pointer select-none animate-pulse-slow"
+            style={{ filter: 'drop-shadow(0 0 3px rgba(232, 121, 249, 0.25))' }}
+          >
+            <span>Babel</span>
+            {babelNextAt && (
+              <span className="opacity-70">{formatCountdown(babelNextAt - Date.now())}</span>
+            )}
           </span>
         )}
 
