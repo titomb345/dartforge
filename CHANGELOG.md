@@ -9,7 +9,7 @@ The `[Unreleased]` header controls automatic version bumping on merge:
 - `[Unreleased-minor]` → 0.1.0 → 0.2.0
 - `[Unreleased-major]` → 0.1.0 → 1.0.0
 
-## [Unreleased-minor]
+## [1.2.0] - 2026-02-25
 
 ### Added
 - Who List panel — shows online players with guild tags, ANSI name colors, and idle status; auto-refreshes in the background (configurable interval), pinnable to left/right side; manual `who` command also updates the panel without suppressing terminal output
