@@ -27,7 +27,12 @@ The `[Unreleased]` header controls automatic version bumping on merge:
 - Web build: character form uses `autocomplete="username"` / `autocomplete="current-password"` so browser password managers (1Password, LastPass, etc.) can detect, save, and autofill credentials
 - Wrong-credential safety: auto-login only attempts once per connection — if login fails, the user types manually
 
+- Chat history persistence — chat messages are saved to disk and restored across sessions, so you don't lose conversation history on disconnect or restart
+- Relative timestamps in the Chat panel — messages less than 2 hours old show "now", "5m ago", "1 hr ago" instead of a fixed clock time; updates every 30 seconds
+- Gag Groups — built-in pattern sets (ported from dartmudlet) that suppress noisy MUD output; 7 toggleable groups: Pets, Creatures, Citizens, Trainers, Sparring, Channels, Quests; accessible via a collapsible section in the Triggers panel
+
 ### Changed
+- Bumped Who panel player name font size from 11px to 12px
 - Added ESLint 9 + Prettier project configuration with `lint`, `lint:fix`, `format`, and `format:check` npm scripts
 - Character settings: removed active slot selector buttons (caused cooldown bypass); active character now indicated with a read-only badge, switchable only via the "Switch to" button
 - Character 2 inputs disabled until Character 1 is configured

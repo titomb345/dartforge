@@ -31,7 +31,16 @@ const LANG_COLORS: Record<string, string> = {
 
 const DEFAULT_LANG_COLOR = '#888';
 
-function formatTime(date: Date, hour12: boolean): string {
+const TWO_HOURS_MS = 2 * 60 * 60 * 1000;
+
+function formatTime(date: Date, hour12: boolean, now: number): string {
+  const diffMs = now - date.getTime();
+  if (diffMs >= 0 && diffMs < TWO_HOURS_MS) {
+    const mins = Math.floor(diffMs / 60_000);
+    if (mins < 1) return 'now';
+    if (mins < 60) return `${mins}m ago`;
+    return `1 hr ago`;
+  }
   return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12 });
 }
 
@@ -57,10 +66,12 @@ const TYPE_BADGES: Record<string, { label: string; color: string }> = {
 
 export function ChatMessageRow({
   msg,
+  now,
   onMute,
   onIdentify,
 }: {
   msg: ChatMessage;
+  now: number;
   onMute?: (sender: string) => void;
   onIdentify?: (msgId: number) => void;
 }) {
@@ -72,7 +83,7 @@ export function ChatMessageRow({
     <div className="group flex items-start gap-1.5 px-2 py-0.5 hover:bg-bg-secondary/50 transition-colors duration-100 min-w-0">
       {/* Timestamp */}
       <span className="text-[10px] text-text-dim font-mono shrink-0 pt-px select-none">
-        {formatTime(msg.timestamp, timestampFormat === '12h')}
+        {formatTime(msg.timestamp, timestampFormat === '12h', now)}
       </span>
 
       <div className="flex-1 min-w-0">

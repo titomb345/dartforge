@@ -73,6 +73,7 @@ import { useSignatureMappings } from './hooks/useSignatureMappings';
 import { matchTriggers, expandTriggerBody, resetTriggerCooldowns } from './lib/triggerEngine';
 import { smartWrite } from './lib/terminalUtils';
 import { ActionBlocker, type ActionBlockerState } from './lib/actionBlocker';
+import { shouldGagLine } from './lib/gagPatterns';
 import { stripAnsi } from './lib/ansiUtils';
 import { SignatureProvider } from './contexts/SignatureContext';
 import { parseConvertCommand, formatMultiConversion } from './lib/currency';
@@ -541,6 +542,11 @@ function AppMain() {
           handleMagicParseRef.current(magicResult);
         }
 
+        // Gag groups — suppress line before trigger evaluation
+        if (shouldGagLine(stripped, gagGroupsRef.current)) {
+          return { gag: true, highlight: null };
+        }
+
         if (triggerFiringRef.current) return;
         const matches = matchTriggers(stripped, raw, mergedTriggersRef.current);
         if (matches.length === 0) return;
@@ -678,6 +684,7 @@ function AppMain() {
     };
   }, []);
   const actionBlockingEnabledRef = useLatestRef(appSettings.actionBlockingEnabled);
+  const gagGroupsRef = useLatestRef(appSettings.gagGroups);
 
   // Skill tracker — needs sendCommand ref (set after useMudConnection)
   const sendCommandRef = useRef<((cmd: string) => Promise<void>) | null>(null);

@@ -2,6 +2,7 @@ import { useState, useCallback, useEffect, useRef } from 'react';
 import { useDataStore } from '../contexts/DataStoreContext';
 import { getPlatform } from '../lib/platform';
 import type { ChatFilters } from '../types/chat';
+import { DEFAULT_GAG_GROUPS, type GagGroupSettings } from '../lib/gagPatterns';
 
 let invoke: ((cmd: string, args?: Record<string, unknown>) => Promise<unknown>) | null = null;
 if (getPlatform() === 'tauri') {
@@ -109,6 +110,9 @@ export function useAppSettings() {
   // Who list auto-refresh
   const [whoAutoRefreshEnabled, setWhoAutoRefreshEnabled] = useState(true);
   const [whoRefreshMinutes, setWhoRefreshMinutes] = useState(5);
+
+  // Gag groups
+  const [gagGroups, setGagGroups] = useState<GagGroupSettings>({ ...DEFAULT_GAG_GROUPS });
 
   // Post-sync commands
   const [postSyncEnabled, setPostSyncEnabled] = useState(false);
@@ -230,6 +234,9 @@ export function useAppSettings() {
       if (savedWhoAutoRefresh != null) setWhoAutoRefreshEnabled(savedWhoAutoRefresh);
       const savedWhoMinutes = await dataStore.get<number>(SETTINGS_FILE, 'whoRefreshMinutes');
       if (savedWhoMinutes != null && savedWhoMinutes >= 1) setWhoRefreshMinutes(savedWhoMinutes);
+
+      const savedGagGroups = await dataStore.get<GagGroupSettings>(SETTINGS_FILE, 'gagGroups');
+      if (savedGagGroups) setGagGroups(savedGagGroups);
 
       const savedPostSyncEnabled = await dataStore.get<boolean>(SETTINGS_FILE, 'postSyncEnabled');
       if (savedPostSyncEnabled != null) setPostSyncEnabled(savedPostSyncEnabled);
@@ -502,6 +509,14 @@ export function useAppSettings() {
     [persist]
   );
 
+  const updateGagGroups = useCallback(
+    (v: GagGroupSettings) => {
+      setGagGroups(v);
+      persist('gagGroups', v);
+    },
+    [persist]
+  );
+
   const updatePostSyncEnabled = useCallback(
     (v: boolean) => {
       setPostSyncEnabled(v);
@@ -656,6 +671,9 @@ export function useAppSettings() {
     whoRefreshMinutes,
     updateWhoAutoRefreshEnabled,
     updateWhoRefreshMinutes,
+    // Gag groups
+    gagGroups,
+    updateGagGroups,
     // Post-sync commands
     postSyncEnabled,
     postSyncCommands,

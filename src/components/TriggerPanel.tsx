@@ -17,6 +17,8 @@ import { FilterPill } from './FilterPill';
 import { MudInput, MudTextarea, MudButton, MudNumberInput } from './shared';
 import { SyntaxHelpTable } from './SyntaxHelpTable';
 import type { HelpRow } from './SyntaxHelpTable';
+import { useAppSettingsContext } from '../contexts/AppSettingsContext';
+import { GAG_GROUPS } from '../lib/gagPatterns';
 
 interface TriggerPanelProps {
   onClose: () => void;
@@ -714,8 +716,10 @@ export function TriggerPanel({ onClose }: TriggerPanelProps) {
     setTriggerPrefill,
   } = useTriggerContext();
   const { activeCharacter } = useSkillTrackerContext();
+  const { gagGroups, updateGagGroups } = useAppSettingsContext();
 
   const [scope, setScope] = useState<TriggerScope>('global');
+  const [gagsExpanded, setGagsExpanded] = useState(false);
   const [groupFilter, setGroupFilter] = useState<string | null>(null);
   const [searchText, setSearchText] = useState('');
   const [editingId, setEditingId] = useState<TriggerId | null>(null);
@@ -822,6 +826,49 @@ export function TriggerPanel({ onClose }: TriggerPanelProps) {
             setGroupFilter(null);
           }}
         />
+      </div>
+
+      {/* Gag Groups — collapsible section */}
+      <div className="border-b border-border-subtle shrink-0">
+        <button
+          onClick={() => setGagsExpanded((v) => !v)}
+          className="flex items-center justify-between w-full px-3 py-1.5 cursor-pointer hover:bg-bg-hover/50 transition-colors duration-100"
+        >
+          <span className="text-[10px] font-semibold uppercase tracking-[0.08em] text-text-dim">
+            Gag Groups
+          </span>
+          <span className="text-text-dim text-[9px]">
+            {gagsExpanded ? <ChevronUpIcon size={9} /> : <ChevronDownIcon size={9} />}
+          </span>
+        </button>
+        {gagsExpanded && (
+          <div className="px-3 pb-2 space-y-1">
+            {GAG_GROUPS.map((group) => {
+              const enabled = gagGroups[group.id];
+              return (
+                <label
+                  key={group.id}
+                  className="flex items-center gap-2 cursor-pointer group/gag"
+                >
+                  <input
+                    type="checkbox"
+                    checked={enabled}
+                    onChange={() =>
+                      updateGagGroups({ ...gagGroups, [group.id]: !enabled })
+                    }
+                    className="accent-[#ff79c6] w-3 h-3 cursor-pointer"
+                  />
+                  <span className="text-[11px] text-text-label font-medium w-[60px] shrink-0">
+                    {group.label}
+                  </span>
+                  <span className="text-[10px] text-text-dim truncate">
+                    {group.description}
+                  </span>
+                </label>
+              );
+            })}
+          </div>
+        )}
       </div>
 
       {/* Group filter pills */}

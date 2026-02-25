@@ -39,8 +39,8 @@ export interface WhoSnapshot {
 
 const WHO_HEADER_RE = /^\s*Name\s+(?:Idle(?: Time)?|State)\s*$/;
 
-/** Real DartMUD names follow "Capitalized the race" — anything else is a who title */
-const REAL_NAME_RE = /^[A-Z][a-z]+ the \w+$/;
+/** Real DartMUD names follow "Name the race", optionally with a title prefix like "Master" */
+const REAL_NAME_RE = /^(?:[A-Z][a-z]+ )*[A-Z][a-z]+ the \w+$/;
 const WHO_PLAYER_RE = /^\s*(?:\[(\w+)\]\s+)?(.+?)\s{2,}(Online|Away|Busy|Walkup|Idle(?:\s+\S+)*)\s*$/;
 
 // Variation 1: "We extrapolate that there are N players/people on. Only N returned..."

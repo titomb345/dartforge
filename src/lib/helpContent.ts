@@ -351,6 +351,11 @@ export const HELP_CATEGORIES: HelpCategory[] = [
         helpId: 'toolbar-triggers',
       },
       {
+        title: 'Gag Groups',
+        description:
+          'Built-in pattern sets that suppress noisy MUD output. Toggle groups on/off in the Triggers panel: Pets, Creatures, Citizens, Trainers, Sparring, Channels, and Quests.',
+      },
+      {
         title: 'Command Chaining',
         description:
           'Use semicolons to chain commands: "kill rat;loot corpse". Escape with \\; for a literal semicolon.',

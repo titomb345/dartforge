@@ -1,6 +1,7 @@
 import { createContext, useContext } from 'react';
 import type { ChatFilters } from '../types/chat';
 import type { TimestampFormat, CharacterProfile } from '../hooks/useAppSettings';
+import type { GagGroupSettings } from '../lib/gagPatterns';
 
 export interface AppSettingsState {
   // Anti-idle
@@ -65,6 +66,9 @@ export interface AppSettingsState {
   // Action blocking
   actionBlockingEnabled: boolean;
   updateActionBlockingEnabled: (v: boolean) => void;
+  // Gag groups
+  gagGroups: GagGroupSettings;
+  updateGagGroups: (v: GagGroupSettings) => void;
   // Post-sync commands
   postSyncEnabled: boolean;
   postSyncCommands: string;

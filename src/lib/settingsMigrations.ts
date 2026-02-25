@@ -7,7 +7,7 @@ import type { DataStore } from '../contexts/DataStoreContext';
  * baseline. Existing beta users (version > 1) are normalized to 1 so
  * future migrations apply correctly to everyone.
  */
-export const CURRENT_VERSION = 7;
+export const CURRENT_VERSION = 8;
 
 /** Raw store contents — all keys are optional since older stores may lack them. */
 export type StoreData = Record<string, unknown>;
@@ -180,6 +180,21 @@ const MIGRATIONS: MigrationFn[] = [
   (data) => {
     if (!('whoAutoRefreshEnabled' in data)) data.whoAutoRefreshEnabled = true;
     if (!('whoRefreshMinutes' in data)) data.whoRefreshMinutes = 5;
+    return data;
+  },
+  // v7 → v8: Gag groups
+  (data) => {
+    if (!('gagGroups' in data)) {
+      data.gagGroups = {
+        pets: false,
+        creatures: false,
+        citizens: false,
+        trainers: false,
+        sparring: false,
+        channels: false,
+        quests: false,
+      };
+    }
     return data;
   },
 ];

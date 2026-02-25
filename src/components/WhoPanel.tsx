@@ -19,13 +19,13 @@ interface GuildStyle {
 }
 
 const GUILD_STYLES: Record<string, GuildStyle> = {
-  BH: { color: 'brightYellow', bg: 'black', bracketColor: 'magenta' },
-  DG: { color: 'brightYellow', bg: 'black', bracketColor: 'brightBlue' },
+  BH: { color: 'brightYellow', bracketColor: 'magenta' },
+  DG: { color: 'brightYellow', bracketColor: 'brightBlue' },
   DK: { color: 'white', bg: 'blue', bracketColor: 'white' },
   HG: { color: 'black', bg: 'white', bracketColor: 'black' },
-  MG: { color: 'brightCyan', bg: 'black', bracketColor: 'white' },
+  MG: { color: 'brightCyan', bracketColor: 'white' },
   RoE: { color: 'white', bg: 'red', bracketColor: 'white' },
-  SR: { color: 'brightGreen', bg: 'black', bracketColor: 'white' },
+  SR: { color: 'brightGreen', bracketColor: 'white' },
 };
 
 function GuildTag({ guild }: { guild: string }) {
@@ -142,7 +142,7 @@ function TitleMappingForm({
         className={`text-[9px] font-mono px-1.5 py-0.5 rounded border cursor-pointer transition-colors ${
           confirmed
             ? 'text-[#50fa7b] border-[#50fa7b]/30 bg-[#50fa7b]/10'
-            : 'text-[#f59e0b] border-[#f59e0b]/30 bg-[#f59e0b]/10'
+            : 'text-[#ccc] border-[#ccc]/30 bg-[#ccc]/10'
         }`}
         title={confirmed ? 'Confirmed — click to mark suspected' : 'Suspected — click to confirm'}
       >
@@ -190,10 +190,10 @@ function TitleAnnotation({
           e.preventDefault();
           onToggle();
         }}
-        className={`text-[9px] font-mono cursor-pointer transition-colors ${
+        className={`text-[11px] font-mono cursor-pointer transition-colors ${
           mapping.confirmed
             ? 'text-[#50fa7b]/70 hover:text-[#50fa7b]'
-            : 'text-[#f59e0b]/70 hover:text-[#f59e0b]'
+            : 'text-[#ccc]/70 hover:text-[#ccc]'
         }`}
         title={`${mapping.confirmed ? 'Confirmed' : 'Suspected'}: ${mapping.playerName} — click to edit, right-click to toggle`}
       >
@@ -249,7 +249,7 @@ function PlayerRow({
 
         {/* Name — colored with ANSI color from MUD output if available */}
         <span
-          className="text-[11px] font-mono truncate flex-1 inline-flex items-center"
+          className="text-[12px] font-mono truncate flex-1 inline-flex items-center"
           style={{
             color: player.nameColor ? theme[player.nameColor] : undefined,
           }}
@@ -267,7 +267,7 @@ function PlayerRow({
           {player.isTitle && !mapping && (
             <button
               onClick={() => onStartEdit(player.name)}
-              className="text-[9px] font-mono text-text-dim/40 hover:text-[#f59e0b] ml-1 cursor-pointer opacity-0 group-hover/row:opacity-100 transition-all duration-150"
+              className="text-[10px] font-mono text-[#f59e0b] ml-1.5 px-1 rounded border border-[#f59e0b]/30 bg-[#f59e0b]/10 hover:bg-[#f59e0b]/20 cursor-pointer opacity-0 group-hover/row:opacity-100 transition-all duration-150 shrink-0"
               title="Add player name mapping for this who title"
             >
               ?

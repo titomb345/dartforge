@@ -46,6 +46,13 @@ export function ChatPanel({ mode = 'slideout' }: PinnablePanelProps) {
 
   const isPinned = mode === 'pinned';
 
+  // Tick every 30s so relative timestamps stay fresh
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    const id = setInterval(() => setNow(Date.now()), 30_000);
+    return () => clearInterval(id);
+  }, []);
+
   // Filter and sort messages
   const visibleMessages = useMemo(() => {
     const filtered = messages.filter((msg) => {
@@ -240,7 +247,7 @@ export function ChatPanel({ mode = 'slideout' }: PinnablePanelProps) {
           </div>
         )}
         {visibleMessages.map((msg) => (
-          <ChatMessageRow key={msg.id} msg={msg} onMute={muteSender} onIdentify={handleIdentify} />
+          <ChatMessageRow key={msg.id} msg={msg} now={now} onMute={muteSender} onIdentify={handleIdentify} />
         ))}
       </div>
     </div>

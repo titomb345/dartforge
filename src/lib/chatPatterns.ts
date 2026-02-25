@@ -37,6 +37,11 @@ export function resetChatIdCounter(): void {
   nextId = 1;
 }
 
+/** Set the ID counter to a specific value (used when restoring persisted messages) */
+export function setChatIdCounter(value: number): void {
+  nextId = value;
+}
+
 function make(
   type: ChatType,
   sender: string,
