@@ -3,7 +3,7 @@
  * and map graph together for hex-only wilderness mapping.
  */
 
-import { useRef, useState, useCallback, useEffect } from 'react';
+import { useRef, useState, useCallback, useEffect, useMemo } from 'react';
 import { RoomParser, type ParsedHexRoom } from '../lib/roomParser';
 import { MovementTracker } from '../lib/movementTracker';
 import {
@@ -226,15 +226,28 @@ export function useMapTracker(
     setCenterVersion((v) => v + 1);
   }, []);
 
-  return {
-    ...state,
-    feedLine,
-    trackCommand,
-    findPathTo,
-    getRoom,
-    setRoomNotes,
-    clearMap,
-    centerOnPlayer,
-    centerVersion,
-  };
+  return useMemo(
+    () => ({
+      ...state,
+      feedLine,
+      trackCommand,
+      findPathTo,
+      getRoom,
+      setRoomNotes,
+      clearMap,
+      centerOnPlayer,
+      centerVersion,
+    }),
+    [
+      state,
+      feedLine,
+      trackCommand,
+      findPathTo,
+      getRoom,
+      setRoomNotes,
+      clearMap,
+      centerOnPlayer,
+      centerVersion,
+    ]
+  );
 }

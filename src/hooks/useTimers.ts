@@ -183,14 +183,26 @@ export function useTimers(dataStore: DataStore, activeCharacter: string | null) 
     return [...charList, ...globalList];
   }, [characterTimers, globalTimers]);
 
-  return {
-    characterTimers,
-    globalTimers,
-    mergedTimers,
-    createTimer,
-    updateTimer,
-    deleteTimer,
-    toggleTimer,
-    duplicateTimer,
-  };
+  return useMemo(
+    () => ({
+      characterTimers,
+      globalTimers,
+      mergedTimers,
+      createTimer,
+      updateTimer,
+      deleteTimer,
+      toggleTimer,
+      duplicateTimer,
+    }),
+    [
+      characterTimers,
+      globalTimers,
+      mergedTimers,
+      createTimer,
+      updateTimer,
+      deleteTimer,
+      toggleTimer,
+      duplicateTimer,
+    ]
+  );
 }

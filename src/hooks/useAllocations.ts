@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect, useRef } from 'react';
+import { useState, useCallback, useEffect, useRef, useMemo } from 'react';
 import type {
   AllocData,
   AllocProfile,
@@ -696,56 +696,60 @@ export function useAllocations(
     setMagicView('live');
   }, []);
 
-  return {
-    // Combat
-    data,
-    view,
-    setView,
-    currentProfile,
-    setCurrentProfileIndex,
-    createProfile,
-    createProfileFromLive,
-    updateProfileFromLive,
-    deleteProfile,
-    duplicateProfile,
-    renameProfile,
-    updateLimbSlot,
-    setLimbSlotDelta,
-    updateLiveLimbSlot,
-    setLiveLimbSlotDelta,
-    setProfileActive,
-    handleAllocParse,
-    navigateProfile,
-    applyLimb,
-    applyAll,
-    applyLiveLimb,
-    applyLiveAll,
-    loadProfileToLive,
+  return useMemo(
+    () => ({
+      // Combat
+      data,
+      view,
+      setView,
+      currentProfile,
+      setCurrentProfileIndex,
+      createProfile,
+      createProfileFromLive,
+      updateProfileFromLive,
+      deleteProfile,
+      duplicateProfile,
+      renameProfile,
+      updateLimbSlot,
+      setLimbSlotDelta,
+      updateLiveLimbSlot,
+      setLiveLimbSlotDelta,
+      setProfileActive,
+      handleAllocParse,
+      navigateProfile,
+      applyLimb,
+      applyAll,
+      applyLiveLimb,
+      applyLiveAll,
+      loadProfileToLive,
 
-    // Tab
-    allocTab,
-    setAllocTab,
+      // Tab
+      allocTab,
+      setAllocTab,
 
-    // Magic
-    magicData,
-    magicView,
-    setMagicView,
-    currentMagicProfile,
-    navigateMagicProfile,
-    createMagicProfile,
-    createMagicProfileFromLive,
-    updateMagicProfileFromLive,
-    deleteMagicProfile,
-    duplicateMagicProfile,
-    renameMagicProfile,
-    updateMagicProfileSlot,
-    setMagicProfileSlotDelta,
-    updateMagicLiveSlot,
-    setMagicLiveSlotDelta,
-    setMagicProfileActive,
-    handleMagicParse,
-    applyMagic,
-    applyMagicLive,
-    loadMagicProfileToLive,
-  };
+      // Magic
+      magicData,
+      magicView,
+      setMagicView,
+      currentMagicProfile,
+      navigateMagicProfile,
+      createMagicProfile,
+      createMagicProfileFromLive,
+      updateMagicProfileFromLive,
+      deleteMagicProfile,
+      duplicateMagicProfile,
+      renameMagicProfile,
+      updateMagicProfileSlot,
+      setMagicProfileSlotDelta,
+      updateMagicLiveSlot,
+      setMagicLiveSlotDelta,
+      setMagicProfileActive,
+      handleMagicParse,
+      applyMagic,
+      applyMagicLive,
+      loadMagicProfileToLive,
+    }),
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- callbacks are stable (useCallback); only state/derived values trigger recomputation
+    [data, view, allocTab, currentProfile, magicData, magicView, currentMagicProfile]
+  );
 }
