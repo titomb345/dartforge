@@ -13,6 +13,8 @@ interface CollapsedPanelStripProps {
   onSwapSide: (panel: PinnablePanel) => void;
   onSwapWith: (panel: PinnablePanel, target: PinnablePanel) => void;
   onMovePanel: (panel: PinnablePanel, direction: 'up' | 'down') => void;
+  /** Expand back to full panel (only shown for manual collapse, not viewport-forced) */
+  onExpand?: () => void;
 }
 
 export function CollapsedPanelStrip({
@@ -24,6 +26,7 @@ export function CollapsedPanelStrip({
   onSwapSide,
   onSwapWith,
   onMovePanel,
+  onExpand,
 }: CollapsedPanelStripProps) {
   const [openPanel, setOpenPanel] = useState<PinnablePanel | null>(null);
   // Keep the last panel rendered during close animation so content doesn't vanish mid-slide
@@ -78,6 +81,23 @@ export function CollapsedPanelStrip({
         ref={stripRef}
         className="w-[36px] flex flex-col gap-1 items-center py-1.5 bg-bg-primary rounded-lg self-stretch h-full"
       >
+        {onExpand && (
+          <button
+            onClick={onExpand}
+            title="Expand panel"
+            className="w-[28px] h-[28px] flex items-center justify-center rounded-[5px] cursor-pointer hover:bg-white/5 text-text-secondary hover:text-text-primary transition-colors duration-150 mb-0.5"
+          >
+            <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
+              <path
+                d={side === 'left' ? 'M4 1L9 6L4 11' : 'M8 1L3 6L8 11'}
+                stroke="currentColor"
+                strokeWidth="1.5"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              />
+            </svg>
+          </button>
+        )}
         {panels.map((panelId) => {
           const meta = PANEL_META[panelId];
           const isActive = openPanel === panelId;

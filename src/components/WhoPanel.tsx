@@ -6,11 +6,12 @@ import type { WhoTitleMapping } from '../types/whoTitleMap';
 import { panelRootClass } from '../lib/panelUtils';
 import { PinMenuButton } from './PinMenuButton';
 import { PinnedControls } from './PinnedControls';
-import { WhoIcon, RotateCcwIcon } from './icons';
+import { WhoIcon, RotateCcwIcon, TrashIcon } from './icons';
 import { MudInput } from './shared';
 import { useWhoContext } from '../contexts/WhoContext';
 import { useWhoTitleContext } from '../contexts/WhoTitleContext';
 import { useTerminalTheme } from '../contexts/TerminalThemeContext';
+import { useAppSettingsContext } from '../contexts/AppSettingsContext';
 
 interface GuildStyle {
   color: ThemeColorKey;
@@ -103,10 +104,12 @@ function TitleMappingForm({
   initial,
   onSave,
   onCancel,
+  onDelete,
 }: {
   initial?: { playerName: string; confirmed: boolean };
   onSave: (playerName: string, confirmed: boolean) => void;
   onCancel: () => void;
+  onDelete?: () => void;
 }) {
   const [name, setName] = useState(initial?.playerName ?? '');
   const [confirmed, setConfirmed] = useState(initial?.confirmed ?? false);
@@ -127,6 +130,15 @@ function TitleMappingForm({
 
   return (
     <div className="flex items-center gap-1.5 px-3 py-1 bg-[#8be9fd]/5 border-y border-[#8be9fd]/10">
+      {onDelete && (
+        <button
+          onClick={onDelete}
+          className="text-text-dim hover:text-red cursor-pointer shrink-0 transition-colors"
+          title="Delete mapping"
+        >
+          <TrashIcon size={10} />
+        </button>
+      )}
       <MudInput
         ref={inputRef}
         accent="cyan"
@@ -175,15 +187,13 @@ function TitleAnnotation({
   mapping,
   onEdit,
   onToggle,
-  onDelete,
 }: {
   mapping: WhoTitleMapping;
   onEdit: () => void;
   onToggle: () => void;
-  onDelete: () => void;
 }) {
   return (
-    <span className="group/title inline-flex items-center gap-0.5 ml-1">
+    <span className="inline-flex items-center ml-1">
       <button
         onClick={onEdit}
         onContextMenu={(e) => {
@@ -199,16 +209,6 @@ function TitleAnnotation({
       >
         ({mapping.playerName} {mapping.confirmed ? '\u2713' : '?'})
       </button>
-      <button
-        onClick={(e) => {
-          e.stopPropagation();
-          onDelete();
-        }}
-        className="text-[10px] font-mono text-text-dim hover:text-red cursor-pointer opacity-0 group-hover/title:opacity-100 transition-all duration-150"
-        title="Remove mapping"
-      >
-        &times;
-      </button>
     </span>
   );
 }
@@ -221,6 +221,7 @@ function PlayerRow({
   player,
   mapping,
   editingTitle,
+  fontSize,
   onStartEdit,
   onSave,
   onCancel,
@@ -230,6 +231,7 @@ function PlayerRow({
   player: WhoPlayer;
   mapping: WhoTitleMapping | null;
   editingTitle: string | null;
+  fontSize: number;
   onStartEdit: (whoTitle: string) => void;
   onSave: (whoTitle: string, playerName: string, confirmed: boolean) => void;
   onCancel: () => void;
@@ -249,8 +251,9 @@ function PlayerRow({
 
         {/* Name — colored with ANSI color from MUD output if available */}
         <span
-          className="text-[12px] font-mono truncate flex-1 inline-flex items-center"
+          className="font-mono truncate flex-1 inline-flex items-center"
           style={{
+            fontSize: `${fontSize}px`,
             color: player.nameColor ? theme[player.nameColor] : undefined,
           }}
         >
@@ -261,7 +264,6 @@ function PlayerRow({
               mapping={mapping}
               onEdit={() => onStartEdit(player.name)}
               onToggle={() => onToggle(mapping.id)}
-              onDelete={() => onDelete(mapping.id)}
             />
           )}
           {player.isTitle && !mapping && (
@@ -296,6 +298,7 @@ function PlayerRow({
           }
           onSave={(playerName, confirmed) => onSave(player.name, playerName, confirmed)}
           onCancel={onCancel}
+          onDelete={mapping ? () => onDelete(mapping.id) : undefined}
         />
       )}
     </>
@@ -311,6 +314,7 @@ export function WhoPanel({ mode = 'slideout' }: PinnablePanelProps) {
   const { snapshot, refresh } = useWhoContext();
   const { mappings, resolveTitle, createMapping, updateMapping, deleteMapping } =
     useWhoTitleContext();
+  const { whoFontSize, updateWhoFontSize } = useAppSettingsContext();
   const [, setTick] = useState(0);
   const [editingTitle, setEditingTitle] = useState<string | null>(null);
 
@@ -348,6 +352,27 @@ export function WhoPanel({ mode = 'slideout' }: PinnablePanelProps) {
           )}
         </div>
         <div className="flex items-center gap-1.5">
+          <div className="flex items-center gap-0">
+            <button
+              onClick={() => updateWhoFontSize(whoFontSize - 1)}
+              disabled={whoFontSize <= 8}
+              className="w-[18px] h-[18px] flex items-center justify-center rounded text-[10px] font-mono text-text-label hover:bg-bg-secondary/60 cursor-pointer disabled:text-text-dim/30 disabled:cursor-default transition-colors"
+              title="Decrease font size"
+            >
+              -
+            </button>
+            <span className="text-[9px] font-mono text-text-label w-[16px] text-center tabular-nums">
+              {whoFontSize}
+            </span>
+            <button
+              onClick={() => updateWhoFontSize(whoFontSize + 1)}
+              disabled={whoFontSize >= 18}
+              className="w-[18px] h-[18px] flex items-center justify-center rounded text-[10px] font-mono text-text-label hover:bg-bg-secondary/60 cursor-pointer disabled:text-text-dim/30 disabled:cursor-default transition-colors"
+              title="Increase font size"
+            >
+              +
+            </button>
+          </div>
           <button
             onClick={refresh}
             title="Refresh who list"
@@ -375,6 +400,7 @@ export function WhoPanel({ mode = 'slideout' }: PinnablePanelProps) {
                   player={player}
                   mapping={player.isTitle ? resolveTitle(player.name) : null}
                   editingTitle={editingTitle}
+                  fontSize={whoFontSize}
                   onStartEdit={setEditingTitle}
                   onSave={handleSave}
                   onCancel={() => setEditingTitle(null)}

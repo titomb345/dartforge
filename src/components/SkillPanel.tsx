@@ -463,7 +463,7 @@ export function SkillPanel({ mode = 'slideout' }: SkillPanelProps) {
       {/* Category filter */}
       {hasAnySkills && (
         <div className="flex items-center gap-1 px-2 py-2 border-b border-border-subtle flex-wrap shrink-0">
-          <FilterPill label="All" active={filter === 'all'} onClick={() => setFilter('all')} />
+          <FilterPill label="All" active={filter === 'all'} onClick={() => { setFilter('all'); setSearchText(''); }} />
           {CATEGORY_ORDER.map((cat) =>
             categorizedSkills[cat].length > 0 ? (
               <FilterPill
@@ -476,6 +476,7 @@ export function SkillPanel({ mode = 'slideout' }: SkillPanelProps) {
                     setShowSubs((v) => !v);
                   } else {
                     setFilter(cat);
+                    setSearchText('');
                   }
                 }}
               />
@@ -484,14 +485,15 @@ export function SkillPanel({ mode = 'slideout' }: SkillPanelProps) {
         </div>
       )}
 
-      {/* Text filter — only on "all" tab */}
-      {filter === 'all' && hasAnySkills && (
-        <div className="px-2 py-1.5 border-b border-border-subtle shrink-0">
+      {/* Text filter */}
+      {hasAnySkills && (
+        <div className="px-2 py-1 border-b border-border-subtle shrink-0">
           <div className="relative">
             <MudInput
               value={searchText}
               onChange={(e) => setSearchText(e.target.value)}
               placeholder="Filter skills..."
+              size="sm"
               className="w-full"
             />
             {searchText && (
@@ -561,16 +563,31 @@ export function SkillPanel({ mode = 'slideout' }: SkillPanelProps) {
         ) : (
           /* Single category view — with subcategories for combat */
           visibleCategories.map((cat) => {
-            const subGroups =
-              cat === 'combat' && showSubs
-                ? buildSubGroups(categorizedSkills[cat], cat, sort)
-                : cat === 'pets'
-                  ? petSubGroups
-                  : undefined;
+            const lower = searchText.toLowerCase();
+            const catSkills = searchText
+              ? categorizedSkills[cat].filter((r) => r.skill.toLowerCase().includes(lower))
+              : categorizedSkills[cat];
+
+            let subGroups: SubGroup[] | undefined;
+            if (cat === 'combat' && showSubs) {
+              subGroups = buildSubGroups(catSkills, cat, sort);
+            } else if (cat === 'pets') {
+              if (searchText) {
+                subGroups = petSubGroups
+                  .map((g) => ({
+                    ...g,
+                    skills: g.skills.filter((r) => r.skill.toLowerCase().includes(lower)),
+                  }))
+                  .filter((g) => g.skills.length > 0);
+              } else {
+                subGroups = petSubGroups;
+              }
+            }
+
             return (
               <SkillSection
                 key={cat}
-                skills={categorizedSkills[cat]}
+                skills={catSkills}
                 subGroups={subGroups}
                 displayContext={cat}
                 subGroupColor={cat === 'pets' ? PET_DIVIDER_COLOR : undefined}

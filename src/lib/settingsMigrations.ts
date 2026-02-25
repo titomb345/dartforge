@@ -7,7 +7,7 @@ import type { DataStore } from '../contexts/DataStoreContext';
  * baseline. Existing beta users (version > 1) are normalized to 1 so
  * future migrations apply correctly to everyone.
  */
-export const CURRENT_VERSION = 8;
+export const CURRENT_VERSION = 9;
 
 /** Raw store contents — all keys are optional since older stores may lack them. */
 export type StoreData = Record<string, unknown>;
@@ -195,6 +195,11 @@ const MIGRATIONS: MigrationFn[] = [
         quests: false,
       };
     }
+    return data;
+  },
+  // v8 → v9: Who list font size
+  (data) => {
+    if (!('whoFontSize' in data)) data.whoFontSize = 11;
     return data;
   },
 ];

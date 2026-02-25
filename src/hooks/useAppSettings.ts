@@ -107,9 +107,10 @@ export function useAppSettings() {
   // Action blocking
   const [actionBlockingEnabled, setActionBlockingEnabled] = useState(true);
 
-  // Who list auto-refresh
+  // Who list
   const [whoAutoRefreshEnabled, setWhoAutoRefreshEnabled] = useState(true);
   const [whoRefreshMinutes, setWhoRefreshMinutes] = useState(5);
+  const [whoFontSize, setWhoFontSize] = useState(11);
 
   // Babel language trainer
   const [babelEnabled, setBabelEnabled] = useState(false);
@@ -240,6 +241,9 @@ export function useAppSettings() {
       if (savedWhoAutoRefresh != null) setWhoAutoRefreshEnabled(savedWhoAutoRefresh);
       const savedWhoMinutes = await dataStore.get<number>(SETTINGS_FILE, 'whoRefreshMinutes');
       if (savedWhoMinutes != null && savedWhoMinutes >= 1) setWhoRefreshMinutes(savedWhoMinutes);
+      const savedWhoFontSize = await dataStore.get<number>(SETTINGS_FILE, 'whoFontSize');
+      if (savedWhoFontSize != null && savedWhoFontSize >= 8 && savedWhoFontSize <= 18)
+        setWhoFontSize(savedWhoFontSize);
 
       const savedGagGroups = await dataStore.get<GagGroupSettings>(SETTINGS_FILE, 'gagGroups');
       if (savedGagGroups) setGagGroups(savedGagGroups);
@@ -527,6 +531,15 @@ export function useAppSettings() {
     [persist]
   );
 
+  const updateWhoFontSize = useCallback(
+    (v: number) => {
+      const clamped = Math.max(8, Math.min(18, v));
+      setWhoFontSize(clamped);
+      persist('whoFontSize', clamped);
+    },
+    [persist]
+  );
+
   const updateGagGroups = useCallback(
     (v: GagGroupSettings) => {
       setGagGroups(v);
@@ -720,8 +733,10 @@ export function useAppSettings() {
     // Who list
     whoAutoRefreshEnabled,
     whoRefreshMinutes,
+    whoFontSize,
     updateWhoAutoRefreshEnabled,
     updateWhoRefreshMinutes,
+    updateWhoFontSize,
     // Gag groups
     gagGroups,
     updateGagGroups,

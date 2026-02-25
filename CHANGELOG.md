@@ -9,6 +9,24 @@ The `[Unreleased]` header controls automatic version bumping on merge:
 - `[Unreleased-minor]` → 0.1.0 → 0.2.0
 - `[Unreleased-major]` → 0.1.0 → 1.0.0
 
+## [Unreleased-minor]
+
+### Added
+- Manual panel collapse — hover the resize handle between a pinned panel and the terminal to reveal a collapse chevron; click to shrink the panel to its icon strip without unpinning; click the expand chevron at the top of the icon strip to restore; state persists across sessions
+- Who panel font size controls — +/- buttons in the header to adjust player name size (8–18px, persisted)
+- Skill panel filter bar now appears on all category tabs, not just "All" — search within any skill group
+
+### Fixed
+- "Bashing" skill is now correctly categorized as Other instead of Combat
+
+### Changed
+- Skill panel filter bar is more compact (smaller padding and input size)
+- Chat panel timestamps now use smart tiered display — recent messages show relative time (`now`, `12m`, `3h`), older messages include day context (`Yest 2:30 PM`, `Mon 2:30 PM`, `Jan 15 2:30 PM`)
+- Chat panel now shows day separator bars (Today, Yesterday, full date) between message groups from different days
+- Chat timestamps show full absolute datetime on hover
+- Reduced Who panel default player name font size from 12px to 11px
+- Who panel title mapping: moved clear icon to trash can icon inside the edit form
+
 ## [1.2.0] - 2026-02-25
 
 ### Added

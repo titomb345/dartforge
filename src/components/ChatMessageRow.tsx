@@ -31,17 +31,64 @@ const LANG_COLORS: Record<string, string> = {
 
 const DEFAULT_LANG_COLOR = '#888';
 
-const TWO_HOURS_MS = 2 * 60 * 60 * 1000;
+const DAY_NAMES = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 
 function formatTime(date: Date, hour12: boolean, now: number): string {
   const diffMs = now - date.getTime();
-  if (diffMs >= 0 && diffMs < TWO_HOURS_MS) {
-    const mins = Math.floor(diffMs / 60_000);
-    if (mins < 1) return 'now';
-    if (mins < 60) return `${mins}m ago`;
-    return `1 hr ago`;
-  }
-  return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12 });
+
+  // < 1 min → "now"
+  if (diffMs >= 0 && diffMs < 60_000) return 'now';
+
+  // < 60 min → "{n}m"
+  const mins = Math.floor(diffMs / 60_000);
+  if (mins < 60) return `${mins}m`;
+
+  // < 6 hours → "{n}h"
+  const hours = Math.floor(mins / 60);
+  if (hours < 6) return `${hours}h`;
+
+  // Build absolute time portion (respects 12h/24h)
+  const timePart = date.toLocaleTimeString([], {
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12,
+  });
+
+  const nowDate = new Date(now);
+  const todayStart = new Date(
+    nowDate.getFullYear(),
+    nowDate.getMonth(),
+    nowDate.getDate(),
+  ).getTime();
+  const yesterdayStart = todayStart - 86_400_000;
+  const weekAgoStart = todayStart - 6 * 86_400_000;
+  const msgTime = date.getTime();
+
+  // Today (older than 6h) → time only
+  if (msgTime >= todayStart) return timePart;
+
+  // Yesterday → "Yest {time}"
+  if (msgTime >= yesterdayStart) return `Yest ${timePart}`;
+
+  // This week (2-6 days ago) → "{day} {time}"
+  if (msgTime >= weekAgoStart) return `${DAY_NAMES[date.getDay()]} ${timePart}`;
+
+  // Older → "{date} {time}"
+  const monthDay = date.toLocaleDateString([], { month: 'short', day: 'numeric' });
+  return `${monthDay} ${timePart}`;
+}
+
+function formatFullTimestamp(date: Date, hour12: boolean): string {
+  return date.toLocaleString([], {
+    weekday: 'long',
+    year: 'numeric',
+    month: 'long',
+    day: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+    hour12,
+  });
 }
 
 function LanguageBadge({ language }: { language: string }) {
@@ -82,7 +129,10 @@ export function ChatMessageRow({
   return (
     <div className="group flex items-start gap-1.5 px-2 py-0.5 hover:bg-bg-secondary/50 transition-colors duration-100 min-w-0">
       {/* Timestamp */}
-      <span className="text-[10px] text-text-dim font-mono shrink-0 pt-px select-none">
+      <span
+        className="text-[10px] text-text-dim font-mono shrink-0 pt-px select-none"
+        title={formatFullTimestamp(msg.timestamp, timestampFormat === '12h')}
+      >
         {formatTime(msg.timestamp, timestampFormat === '12h', now)}
       </span>
 

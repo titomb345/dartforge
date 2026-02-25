@@ -4,8 +4,8 @@ import type { SkillCategory } from '../types/skills';
 export interface SkillInfo {
   /** Short abbreviation, or null if none */
   abbr: string | null;
-  /** Which category this skill belongs to */
-  category: SkillCategory;
+  /** Which category this skill belongs to (null = uncategorized → "other") */
+  category: SkillCategory | null;
 }
 
 /**
@@ -17,7 +17,7 @@ export const SKILL_DATA: Record<string, SkillInfo> = {
   'aim blows': { abbr: 'a', category: 'combat' },
   archery: { abbr: null, category: 'combat' },
   'attack speed': { abbr: 's', category: 'combat' },
-  bashing: { abbr: null, category: 'combat' },
+  bashing: { abbr: null, category: null },
   brawling: { abbr: null, category: 'combat' },
   control: { abbr: null, category: 'combat' },
   daring: { abbr: 'd', category: 'combat' },

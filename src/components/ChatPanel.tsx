@@ -21,6 +21,38 @@ const CHAT_TYPE_LABELS: Record<ChatType, string> = {
   sz: 'SZ',
 };
 
+function getDayKey(date: Date): string {
+  return `${date.getFullYear()}-${date.getMonth()}-${date.getDate()}`;
+}
+
+function formatDaySeparator(date: Date, now: number): string {
+  const nowDate = new Date(now);
+  const todayKey = getDayKey(nowDate);
+  const yesterdayKey = getDayKey(new Date(now - 86_400_000));
+  const msgKey = getDayKey(date);
+
+  if (msgKey === todayKey) return 'Today';
+  if (msgKey === yesterdayKey) return 'Yesterday';
+
+  return date.toLocaleDateString([], {
+    weekday: 'long',
+    month: 'long',
+    day: 'numeric',
+  });
+}
+
+function DaySeparator({ label }: { label: string }) {
+  return (
+    <div className="flex items-center gap-1.5 px-2 py-1">
+      <div className="h-px flex-1 bg-border-subtle" />
+      <span className="text-[9px] font-mono text-text-dim select-none whitespace-nowrap">
+        {label}
+      </span>
+      <div className="h-px flex-1 bg-border-subtle" />
+    </div>
+  );
+}
+
 export function ChatPanel({ mode = 'slideout' }: PinnablePanelProps) {
   const {
     messages,
@@ -246,9 +278,23 @@ export function ChatPanel({ mode = 'slideout' }: PinnablePanelProps) {
               : 'No messages yet. Chat will appear here as it happens.'}
           </div>
         )}
-        {visibleMessages.map((msg) => (
-          <ChatMessageRow key={msg.id} msg={msg} now={now} onMute={muteSender} onIdentify={handleIdentify} />
-        ))}
+        {(() => {
+          const elements: React.ReactNode[] = [];
+          let lastDayKey: string | null = null;
+          for (const msg of visibleMessages) {
+            const dayKey = getDayKey(msg.timestamp);
+            if (dayKey !== lastDayKey) {
+              elements.push(
+                <DaySeparator key={`sep-${dayKey}`} label={formatDaySeparator(msg.timestamp, now)} />,
+              );
+              lastDayKey = dayKey;
+            }
+            elements.push(
+              <ChatMessageRow key={msg.id} msg={msg} now={now} onMute={muteSender} onIdentify={handleIdentify} />,
+            );
+          }
+          return elements;
+        })()}
       </div>
     </div>
   );

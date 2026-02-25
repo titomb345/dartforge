@@ -179,6 +179,10 @@ function AppMain() {
     left: [],
     right: [],
   });
+  const [collapsedSides, setCollapsedSides] = useState<{ left: boolean; right: boolean }>({
+    left: false,
+    right: false,
+  });
   const panelLayoutLoadedRef = useRef(false);
   const [compactReadouts, setCompactReadouts] = useState<Record<string, boolean>>({});
   const [filterFlags, setFilterFlags] = useState<FilterFlags>({ ...DEFAULT_FILTER_FLAGS });
@@ -276,6 +280,17 @@ function AppMain() {
         Array.isArray(savedHeights.right)
       ) {
         setPanelHeights(savedHeights);
+      }
+      const savedCollapsed = await dataStore.get<{ left: boolean; right: boolean }>(
+        'settings.json',
+        'collapsedSides'
+      );
+      if (
+        savedCollapsed != null &&
+        typeof savedCollapsed.left === 'boolean' &&
+        typeof savedCollapsed.right === 'boolean'
+      ) {
+        setCollapsedSides(savedCollapsed);
       }
       const savedStatusOrder = await dataStore.get<StatusReadoutKey[]>(
         'settings.json',
@@ -386,6 +401,22 @@ function AppMain() {
     dataStore.set('settings.json', 'panelHeights', panelHeights).catch(console.error);
   }, [panelHeights]);
 
+  // Persist collapsed sides
+  useEffect(() => {
+    if (!panelLayoutLoadedRef.current) return;
+    dataStore.set('settings.json', 'collapsedSides', collapsedSides).catch(console.error);
+  }, [collapsedSides]);
+
+  // Clear collapsed flag when a side has no pinned panels
+  useEffect(() => {
+    if (panelLayout.left.length === 0 && collapsedSides.left) {
+      setCollapsedSides((p) => ({ ...p, left: false }));
+    }
+    if (panelLayout.right.length === 0 && collapsedSides.right) {
+      setCollapsedSides((p) => ({ ...p, right: false }));
+    }
+  }, [panelLayout, collapsedSides]);
+
   // Callbacks for vertical resize ratio changes
   const onLeftHeightRatiosChange = useCallback((ratios: number[]) => {
     setPanelHeights((p) => ({ ...p, left: ratios }));
@@ -396,6 +427,17 @@ function AppMain() {
 
   // Viewport-aware panel width budget
   const budget = useViewportBudget(pinnedWidths, panelLayout);
+
+  // Merge manual collapse with viewport-auto-collapse
+  const leftIsCollapsed = budget.leftCollapsed || collapsedSides.left;
+  const rightIsCollapsed = budget.rightCollapsed || collapsedSides.right;
+  const effectiveLeftWidth = collapsedSides.left ? 0 : budget.effectiveLeftWidth;
+  const effectiveRightWidth = collapsedSides.right ? 0 : budget.effectiveRightWidth;
+
+  const collapseLeft = useCallback(() => setCollapsedSides((p) => ({ ...p, left: true })), []);
+  const expandLeft = useCallback(() => setCollapsedSides((p) => ({ ...p, left: false })), []);
+  const collapseRight = useCallback(() => setCollapsedSides((p) => ({ ...p, right: true })), []);
+  const expandRight = useCallback(() => setCollapsedSides((p) => ({ ...p, right: false })), []);
 
   // Resize hooks for pinned regions (dynamic max from budget)
   const leftResize = useResize({
@@ -1566,12 +1608,12 @@ function AppMain() {
                                       />
                                       <div className="flex-1 overflow-hidden flex flex-row gap-1 relative">
                                         {/* Left pinned region — full, collapsed strip, or hidden */}
-                                        {budget.effectiveLeftWidth > 0 ? (
+                                        {effectiveLeftWidth > 0 ? (
                                           <>
                                             <PinnedRegion
                                               side="left"
                                               panels={panelLayout.left}
-                                              width={budget.effectiveLeftWidth}
+                                              width={effectiveLeftWidth}
                                               otherSidePanels={panelLayout.right}
                                               onUnpin={unpinPanel}
                                               onSwapSide={swapPanelSide}
@@ -1586,12 +1628,13 @@ function AppMain() {
                                                 onMouseDown={leftResize.handleMouseDown}
                                                 isDragging={leftResize.isDragging}
                                                 constrained={
-                                                  budget.effectiveLeftWidth < pinnedWidths.left
+                                                  effectiveLeftWidth < pinnedWidths.left
                                                 }
+                                                onCollapse={collapseLeft}
                                               />
                                             )}
                                           </>
-                                        ) : budget.leftCollapsed && panelLayout.left.length > 0 ? (
+                                        ) : leftIsCollapsed && panelLayout.left.length > 0 ? (
                                           <CollapsedPanelStrip
                                             side="left"
                                             panels={panelLayout.left}
@@ -1601,6 +1644,11 @@ function AppMain() {
                                             onSwapSide={swapPanelSide}
                                             onSwapWith={swapPanelsWith}
                                             onMovePanel={movePanel}
+                                            onExpand={
+                                              collapsedSides.left && !budget.leftCollapsed
+                                                ? expandLeft
+                                                : undefined
+                                            }
                                           />
                                         ) : null}
 
@@ -1663,7 +1711,7 @@ function AppMain() {
                                         </div>
 
                                         {/* Right pinned region — full, collapsed strip, or hidden */}
-                                        {budget.effectiveRightWidth > 0 ? (
+                                        {effectiveRightWidth > 0 ? (
                                           <>
                                             {panelLayout.right.length > 0 && (
                                               <ResizeHandle
@@ -1671,14 +1719,15 @@ function AppMain() {
                                                 onMouseDown={rightResize.handleMouseDown}
                                                 isDragging={rightResize.isDragging}
                                                 constrained={
-                                                  budget.effectiveRightWidth < pinnedWidths.right
+                                                  effectiveRightWidth < pinnedWidths.right
                                                 }
+                                                onCollapse={collapseRight}
                                               />
                                             )}
                                             <PinnedRegion
                                               side="right"
                                               panels={panelLayout.right}
-                                              width={budget.effectiveRightWidth}
+                                              width={effectiveRightWidth}
                                               otherSidePanels={panelLayout.left}
                                               onUnpin={unpinPanel}
                                               onSwapSide={swapPanelSide}
@@ -1688,7 +1737,7 @@ function AppMain() {
                                               onHeightRatiosChange={onRightHeightRatiosChange}
                                             />
                                           </>
-                                        ) : budget.rightCollapsed &&
+                                        ) : rightIsCollapsed &&
                                           panelLayout.right.length > 0 ? (
                                           <CollapsedPanelStrip
                                             side="right"
@@ -1699,6 +1748,11 @@ function AppMain() {
                                             onSwapSide={swapPanelSide}
                                             onSwapWith={swapPanelsWith}
                                             onMovePanel={movePanel}
+                                            onExpand={
+                                              collapsedSides.right && !budget.rightCollapsed
+                                                ? expandRight
+                                                : undefined
+                                            }
                                           />
                                         ) : null}
 

@@ -86,8 +86,10 @@ export interface AppSettingsState {
   // Who list
   whoAutoRefreshEnabled: boolean;
   whoRefreshMinutes: number;
+  whoFontSize: number;
   updateWhoAutoRefreshEnabled: (v: boolean) => void;
   updateWhoRefreshMinutes: (v: number) => void;
+  updateWhoFontSize: (v: number) => void;
   // Auto-login
   autoLoginEnabled: boolean;
   autoLoginActiveSlot: 0 | 1;
