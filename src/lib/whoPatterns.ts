@@ -37,7 +37,7 @@ export interface WhoSnapshot {
 // Line matchers
 // ---------------------------------------------------------------------------
 
-const WHO_HEADER_RE = /^\s*Name\s+(?:Idle(?: Time)?|State)\s*$/;
+const WHO_HEADER_RE = /^\s*Name\s+(?:Idle(?: Time)?|State)(?:\s+Name\s+(?:Idle(?: Time)?|State))?\s*$/;
 
 /** Real DartMUD names follow "Name the race", optionally with a title prefix like "Master" */
 const REAL_NAME_RE = /^(?:[A-Z][a-z]+ )*[A-Z][a-z]+ the \w+$/;
@@ -143,7 +143,7 @@ function extractNameColor(rawLine: string, name: string): ThemeColorKey | null {
   return lastAnsi ? ansiParamsToThemeKey(lastAnsi) : null;
 }
 
-/** Parse a player row. Returns null if the line doesn't match. */
+/** Parse a single-player segment. Returns null if the segment doesn't match. */
 export function parseWhoPlayerLine(stripped: string): WhoPlayer | null {
   const m = WHO_PLAYER_RE.exec(stripped);
   if (!m) return null;
@@ -159,6 +159,35 @@ export function parseWhoPlayerLine(stripped: string): WhoPlayer | null {
     nameColor: null,
     isTitle: !REAL_NAME_RE.test(name),
   };
+}
+
+/**
+ * Regex to find state boundaries in a who line. Used to split two-column
+ * lines into individual player segments. Idle durations use `\d+\w+` tokens
+ * (e.g. "6m", "54s") so the match stops before the next player entry.
+ */
+const WHO_STATE_SPLIT_RE = /(Online|Away|Busy|Walkup|Idle(?:\s+\d+\w+)*)/g;
+
+/**
+ * Parse all players from a who line (handles both single- and two-column format).
+ * Splits the line at state-word boundaries, then parses each segment individually.
+ */
+export function parseWhoPlayersFromLine(stripped: string): WhoPlayer[] {
+  WHO_STATE_SPLIT_RE.lastIndex = 0;
+  const segments: string[] = [];
+  let cursor = 0;
+  let match: RegExpExecArray | null;
+
+  while ((match = WHO_STATE_SPLIT_RE.exec(stripped)) !== null) {
+    segments.push(stripped.substring(cursor, match.index + match[0].length));
+    cursor = match.index + match[0].length;
+  }
+
+  if (segments.length === 0) return [];
+
+  return segments
+    .map((seg) => parseWhoPlayerLine(seg.trimEnd()))
+    .filter((p): p is WhoPlayer => p !== null);
 }
 
 /** Check if a line is part of the who footer block */
@@ -190,12 +219,14 @@ export function buildWhoSnapshot(lines: string[], rawLines?: string[]): WhoSnaps
 
   for (let idx = 0; idx < lines.length; idx++) {
     const line = lines[idx];
-    const player = parseWhoPlayerLine(line);
-    if (player) {
-      if (rawLines?.[idx]) {
-        player.nameColor = extractNameColor(rawLines[idx], player.name);
+    const linePlayers = parseWhoPlayersFromLine(line);
+    if (linePlayers.length > 0) {
+      for (const player of linePlayers) {
+        if (rawLines?.[idx]) {
+          player.nameColor = extractNameColor(rawLines[idx], player.name);
+        }
+        players.push(player);
       }
-      players.push(player);
       continue;
     }
 

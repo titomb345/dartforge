@@ -1,4 +1,5 @@
 import type { SkillCategory } from '../types/skills';
+import { fuzzyMatchKey } from './nameUtils';
 
 /** Metadata for a non-spell DartMUD skill */
 export interface SkillInfo {
@@ -92,4 +93,9 @@ export function getSkillByAbbr(abbr: string): string | null {
     if (info.abbr === lower) return name;
   }
   return null;
+}
+
+/** Fuzzy-match a skill by name with punctuation stripped (e.g. "two handed sword" → "two-handed sword") */
+export function findSkillFuzzy(input: string): string | null {
+  return fuzzyMatchKey(input, SKILL_DATA);
 }

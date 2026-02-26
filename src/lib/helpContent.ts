@@ -333,6 +333,16 @@ export const HELP_CATEGORIES: HelpCategory[] = [
         description:
           'Cycle movement mode: Normal → Leading → Rowing. When active, direction commands are automatically prefixed (e.g. "e" becomes "lead e"). Also toggleable via Numpad /.',
       },
+      {
+        title: '/apt',
+        description:
+          'Look up aptitude for a spell or skill. Accepts abbreviations — "/apt lg" expands to "show aptitude:lirrin\'s_glow". Echoes the resolved name so you know what was looked up.',
+      },
+      {
+        title: '/skill',
+        description:
+          'Show skill details. Accepts abbreviations — "/skill mt" expands to "show skills magic theory". Pass a full name if no abbreviation is set.',
+      },
     ],
   },
   {
@@ -371,6 +381,11 @@ export const HELP_CATEGORIES: HelpCategory[] = [
         title: 'Gag Groups',
         description:
           'Built-in pattern sets that suppress noisy MUD output. Toggle groups on/off in the Triggers panel: Pets, Creatures, Citizens, Trainers, Sparring, Channels, and Quests.',
+      },
+      {
+        title: 'Anti-Spam',
+        description:
+          'Collapses consecutive identical lines into a single line with a dim repeat count (e.g. "x5"). Enable in Settings > Output.',
       },
       {
         title: 'Command Chaining',

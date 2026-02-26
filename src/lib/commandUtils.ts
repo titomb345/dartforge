@@ -179,6 +179,7 @@ export async function executeCommands(
           runner.echo('[Nested /spam not allowed]');
           break;
         }
+        runner.echo(`[Spam: ${cmd.command} (x${cmd.count})]`);
         const expanded = runner.expand(ev(cmd.command));
         for (let i = 0; i < cmd.count; i++) {
           await executeCommands(expanded, runner, spamDepth + 1, overrides);

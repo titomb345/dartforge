@@ -111,7 +111,7 @@ When adding a new feature, panel, keyboard shortcut, or non-obvious interaction,
 ## Git Workflow
 - **NEVER commit directly to `main`.** Always create a new feature branch.
 - When asked to commit, check the current branch first. If on `main`, create a contextual branch (e.g., `feature/skill-tracker`, `fix/connection-bug`) before committing.
-- PRs go to `staging` (the main branch for PRs).
+- PRs go to `main` (the only long-lived branch — there is no `staging` branch).
 
 ## GitHub
 - Repo: `titomb345/dartforge`

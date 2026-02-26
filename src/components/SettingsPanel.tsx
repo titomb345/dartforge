@@ -17,7 +17,7 @@ import {
 } from './icons';
 import { PanelHeader } from './PanelHeader';
 import { DEFAULT_NUMPAD_MAPPINGS } from '../hooks/useAppSettings';
-import { MudInput, MudTextarea, MudNumberInput } from './shared';
+import { MudInput, MudTextarea, MudNumberInput, ToggleSwitch } from './shared';
 import { cn } from '../lib/cn';
 import { useDataStore } from '../contexts/DataStoreContext';
 import { useAppSettingsContext } from '../contexts/AppSettingsContext';
@@ -105,45 +105,6 @@ function SettingsSection({
   );
 }
 
-/* ── Toggle Switch ────────────────────────────────────────── */
-
-function ToggleSwitch({
-  checked,
-  onChange,
-  disabled,
-  accent = '#bd93f9',
-}: {
-  checked: boolean;
-  onChange: (v: boolean) => void;
-  disabled?: boolean;
-  accent?: string;
-}) {
-  return (
-    <button
-      role="switch"
-      aria-checked={checked}
-      onClick={() => !disabled && onChange(!checked)}
-      className={cn(
-        'relative w-[32px] h-[16px] rounded-full border transition-colors duration-200 cursor-pointer shrink-0',
-        disabled && 'opacity-30 cursor-default'
-      )}
-      style={{
-        background: checked ? `${accent}25` : '#1a1a1a',
-        borderColor: checked ? `${accent}60` : '#444',
-      }}
-    >
-      <span
-        className="absolute top-[2px] w-[10px] h-[10px] rounded-full transition-all duration-200"
-        style={{
-          left: checked ? '18px' : '3px',
-          background: checked ? accent : '#666',
-          boxShadow: checked ? `0 0 6px ${accent}40` : 'none',
-        }}
-      />
-    </button>
-  );
-}
-
 /* ── Field Row ────────────────────────────────────────────── */
 
 function FieldRow({
@@ -202,6 +163,8 @@ export function SettingsPanel({ onClose }: { onClose: () => void }) {
     updateBoardDatesEnabled: onBoardDatesEnabledChange,
     stripPromptsEnabled,
     updateStripPromptsEnabled: onStripPromptsEnabledChange,
+    antiSpamEnabled,
+    updateAntiSpamEnabled,
     commandEchoEnabled,
     updateCommandEchoEnabled,
     showTimerBadges,
@@ -622,6 +585,16 @@ export function SettingsPanel({ onClose }: { onClose: () => void }) {
           </FieldRow>
           <div className="text-[9px] text-text-dim font-mono leading-relaxed mt-1">
             Show your sent commands as dimmed lines in the terminal.
+          </div>
+          <FieldRow label="Anti-spam">
+            <ToggleSwitch
+              checked={antiSpamEnabled}
+              onChange={updateAntiSpamEnabled}
+              accent="#50fa7b"
+            />
+          </FieldRow>
+          <div className="text-[9px] text-text-dim font-mono leading-relaxed mt-1">
+            Collapse consecutive identical lines with a repeat count.
           </div>
         </SettingsSection>
 

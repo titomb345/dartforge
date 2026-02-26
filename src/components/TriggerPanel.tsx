@@ -16,11 +16,12 @@ import { PlusIcon, ChevronDownIcon, ChevronUpIcon, TriggerIcon } from './icons';
 import { PanelHeader } from './PanelHeader';
 import { ConfirmDeleteButton } from './ConfirmDeleteButton';
 import { FilterPill } from './FilterPill';
-import { MudInput, MudTextarea, MudButton, MudNumberInput } from './shared';
+import { MudInput, MudTextarea, MudButton, MudNumberInput, ToggleSwitch } from './shared';
 import { SyntaxHelpTable } from './SyntaxHelpTable';
 import type { HelpRow } from './SyntaxHelpTable';
 import { useAppSettingsContext } from '../contexts/AppSettingsContext';
 import { GAG_GROUPS } from '../lib/gagPatterns';
+import type { GagGroupId } from '../lib/gagPatterns';
 
 interface TriggerPanelProps {
   onClose: () => void;
@@ -698,6 +699,7 @@ export function TriggerPanel({ onClose }: TriggerPanelProps) {
 
   const [scope, setScope] = useState<TriggerScope>('global');
   const [gagsExpanded, setGagsExpanded] = useState(false);
+  const [expandedGagGroup, setExpandedGagGroup] = useState<GagGroupId | null>(null);
   const [groupFilter, setGroupFilter] = useState<string | null>(null);
   const [searchText, setSearchText] = useState('');
   const [editingId, setEditingId] = useState<TriggerId | null>(null);
@@ -811,26 +813,59 @@ export function TriggerPanel({ onClose }: TriggerPanelProps) {
           <div className="px-3 pb-2 space-y-1">
             {GAG_GROUPS.map((group) => {
               const enabled = gagGroups[group.id];
+              const isExpanded = expandedGagGroup === group.id;
               return (
-                <label
-                  key={group.id}
-                  className="flex items-center gap-2 cursor-pointer group/gag"
-                >
-                  <input
-                    type="checkbox"
-                    checked={enabled}
-                    onChange={() =>
-                      updateGagGroups({ ...gagGroups, [group.id]: !enabled })
-                    }
-                    className="accent-[#ff79c6] w-3 h-3 cursor-pointer"
-                  />
-                  <span className="text-[11px] text-text-label font-medium w-[60px] shrink-0">
-                    {group.label}
-                  </span>
-                  <span className="text-[10px] text-text-dim truncate">
-                    {group.description}
-                  </span>
-                </label>
+                <div key={group.id}>
+                  <div className="flex items-center gap-2">
+                    <ToggleSwitch
+                      checked={enabled}
+                      onChange={() =>
+                        updateGagGroups({ ...gagGroups, [group.id]: !enabled })
+                      }
+                      accent="#ff79c6"
+                    />
+                    <button
+                      onClick={() =>
+                        updateGagGroups({ ...gagGroups, [group.id]: !enabled })
+                      }
+                      className="text-[11px] text-text-label font-medium w-[60px] shrink-0 text-left cursor-pointer hover:text-[#ff79c6] transition-colors duration-150"
+                    >
+                      {group.label}
+                    </button>
+                    <button
+                      onClick={() =>
+                        setExpandedGagGroup(isExpanded ? null : group.id)
+                      }
+                      className="text-[10px] text-text-dim truncate flex-1 text-left cursor-pointer hover:text-text-label transition-colors duration-150 flex items-center gap-1"
+                    >
+                      <span className="truncate">{group.description}</span>
+                      <span className="text-[9px] font-mono text-text-dim shrink-0">
+                        ({group.patterns.length})
+                      </span>
+                      <span className="shrink-0 transition-transform duration-200" style={{ transform: isExpanded ? 'rotate(180deg)' : 'rotate(0deg)' }}>
+                        <ChevronDownIcon size={7} />
+                      </span>
+                    </button>
+                  </div>
+                  <div
+                    className="grid transition-[grid-template-rows] duration-200 ease-in-out"
+                    style={{ gridTemplateRows: isExpanded ? '1fr' : '0fr' }}
+                  >
+                    <div className="overflow-hidden">
+                      <div className="mt-1 mb-1.5 max-h-[160px] overflow-y-auto rounded border border-border-dim bg-bg-input px-2 py-1.5">
+                        {group.patterns.map((re, i) => (
+                          <div
+                            key={i}
+                            className="text-[10px] font-mono text-text-dim leading-relaxed truncate"
+                            title={re.source}
+                          >
+                            {re.source}
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                </div>
               );
             })}
           </div>

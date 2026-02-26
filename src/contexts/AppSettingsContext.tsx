@@ -19,8 +19,10 @@ export interface AppSettingsState {
   // Output transforms
   boardDatesEnabled: boolean;
   stripPromptsEnabled: boolean;
+  antiSpamEnabled: boolean;
   updateBoardDatesEnabled: (v: boolean) => void;
   updateStripPromptsEnabled: (v: boolean) => void;
+  updateAntiSpamEnabled: (v: boolean) => void;
   // Buffer sizes
   terminalScrollback: number;
   commandHistorySize: number;

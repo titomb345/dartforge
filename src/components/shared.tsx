@@ -1,4 +1,5 @@
 import { forwardRef, useState, useEffect, useCallback } from 'react';
+import { cn } from '../lib/cn';
 
 /* ── Accent color mappings ──────────────────────────────────── */
 
@@ -185,3 +186,42 @@ export const MudNumberInput = forwardRef<HTMLInputElement, MudNumberInputProps>(
   }
 );
 MudNumberInput.displayName = 'MudNumberInput';
+
+/* ── ToggleSwitch ──────────────────────────────────────────── */
+
+export function ToggleSwitch({
+  checked,
+  onChange,
+  disabled,
+  accent = '#bd93f9',
+}: {
+  checked: boolean;
+  onChange: (v: boolean) => void;
+  disabled?: boolean;
+  accent?: string;
+}) {
+  return (
+    <button
+      role="switch"
+      aria-checked={checked}
+      onClick={() => !disabled && onChange(!checked)}
+      className={cn(
+        'relative w-[32px] h-[16px] rounded-full border transition-colors duration-200 cursor-pointer shrink-0',
+        disabled && 'opacity-30 cursor-default'
+      )}
+      style={{
+        background: checked ? `${accent}25` : '#1a1a1a',
+        borderColor: checked ? `${accent}60` : '#444',
+      }}
+    >
+      <span
+        className="absolute top-[2px] w-[10px] h-[10px] rounded-full transition-all duration-200"
+        style={{
+          left: checked ? '18px' : '3px',
+          background: checked ? accent : '#666',
+          boxShadow: checked ? `0 0 6px ${accent}40` : 'none',
+        }}
+      />
+    </button>
+  );
+}

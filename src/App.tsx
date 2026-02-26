@@ -51,6 +51,7 @@ import { expandInput } from './lib/aliasEngine';
 import { executeCommands, type CommandRunner } from './lib/commandUtils';
 import { OutputFilter, DEFAULT_FILTER_FLAGS, type FilterFlags } from './lib/outputFilter';
 import { matchSkillLine } from './lib/skillPatterns';
+import { getTierForCount, getImprovesToNextTier } from './lib/skillTiers';
 import type { Panel, PanelLayout, PinnablePanel, DockSide } from './types';
 import { PinnedRegion } from './components/PinnedRegion';
 import { CollapsedPanelStrip } from './components/CollapsedPanelStrip';
@@ -115,6 +116,8 @@ import { AppSettingsProvider } from './contexts/AppSettingsContext';
 import { SpotlightProvider } from './contexts/SpotlightContext';
 import { SpotlightOverlay } from './components/SpotlightOverlay';
 import { HelpPanel } from './components/HelpPanel';
+import { getSpellByAbbr, findSpellFuzzy } from './lib/spellData';
+import { getSkillByAbbr, findSkillFuzzy } from './lib/skillData';
 
 /** Commands to send automatically after login */
 const LOGIN_COMMANDS = [
@@ -209,6 +212,7 @@ function AppMain() {
     alignmentTrackingMinutes,
     boardDatesEnabled,
     stripPromptsEnabled,
+    antiSpamEnabled,
     postSyncEnabled,
     postSyncCommands,
     autoLoginEnabled,
@@ -623,6 +627,20 @@ function AppMain() {
       outputFilterRef.current.stripPrompts = stripPromptsEnabled;
     }
   }, [stripPromptsEnabled]);
+
+  // Keep anti-spam in sync with OutputFilter
+  useEffect(() => {
+    if (outputFilterRef.current) {
+      outputFilterRef.current.antiSpamEnabled = antiSpamEnabled;
+    }
+  }, [antiSpamEnabled]);
+
+  // Wire anti-spam flush callback so the timer can write to the terminal
+  useEffect(() => {
+    if (outputFilterRef.current) {
+      outputFilterRef.current.onAntiSpamFlush = writeToTerm;
+    }
+  }, [writeToTerm]);
 
   // Persist per-readout compact state
   useEffect(() => {
@@ -1121,6 +1139,53 @@ function AppMain() {
         return;
       }
 
+      // Built-in /apt — show aptitude for a spell or skill (abbreviation or full name)
+      if (/^\/apt\b/i.test(trimmed)) {
+        const arg = trimmed.slice(4).trim();
+        if (!arg) {
+          writeToTerm('\x1b[31mUsage: /apt <abbreviation or name>\x1b[0m\r\n');
+          return;
+        }
+        // Try abbreviation first, then fuzzy name match, fall back to raw input
+        const spell = getSpellByAbbr(arg) ?? findSpellFuzzy(arg);
+        const skill = !spell ? (getSkillByAbbr(arg) ?? findSkillFuzzy(arg)) : null;
+        const resolved = spell ? spell.name : skill ?? arg;
+        writeToTerm(`\x1b[36m[Aptitude: ${resolved}]\x1b[0m\r\n`);
+        await sendCommand(`show aptitude:${resolved}`);
+        return;
+      }
+
+      // Built-in /skill — show skills for a spell or skill (abbreviation or full name)
+      if (/^\/skill\b/i.test(trimmed)) {
+        const arg = trimmed.slice(6).trim();
+        if (!arg) {
+          writeToTerm('\x1b[31mUsage: /skill <abbreviation or name>\x1b[0m\r\n');
+          return;
+        }
+        // Try abbreviation first, then fuzzy name match, fall back to raw input
+        const skill = getSkillByAbbr(arg) ?? findSkillFuzzy(arg);
+        const spell = !skill ? (getSpellByAbbr(arg) ?? findSpellFuzzy(arg)) : null;
+        const resolved = skill ?? (spell ? spell.name : arg);
+        const known = !!(skill || spell);
+        if (known) {
+          const rec = skillDataRef.current.skills[resolved];
+          if (rec) {
+            const tier = getTierForCount(rec.count);
+            const toNext = getImprovesToNextTier(rec.count);
+            const nextStr = toNext > 0 ? ` | next: ${toNext}` : '';
+            writeToTerm(
+              `\x1b[36m[Skill: ${resolved} | count: ${rec.count} | level: ${tier.name}${nextStr}]\x1b[0m\r\n`
+            );
+          } else {
+            writeToTerm(`\x1b[36m[Skill: ${resolved} | no data tracked]\x1b[0m\r\n`);
+          }
+        } else {
+          writeToTerm(`\x1b[36m[Skill: unknown]\x1b[0m\r\n`);
+        }
+        await sendCommand(`show skills ${resolved}`);
+        return;
+      }
+
       // Movement mode — prepend direction prefix if active
       const effectiveInput =
         movementModeRef.current !== 'normal'
@@ -1271,7 +1336,7 @@ function AppMain() {
         icon: <FoodIcon size={11} />,
         tooltip: (d) => `You are ${d.descriptor}.`,
         filterKey: 'hunger',
-        dangerThreshold: 6,
+        dangerThreshold: 7,
       },
       {
         id: 'thirst',
@@ -1279,7 +1344,7 @@ function AppMain() {
         icon: <DropletIcon size={11} />,
         tooltip: (d) => `You are ${d.descriptor}.`,
         filterKey: 'thirst',
-        dangerThreshold: 6,
+        dangerThreshold: 7,
       },
       {
         id: 'encumbrance',

@@ -5,7 +5,7 @@ import { matchAuraLine, type AuraMatch } from './auraPatterns';
 import { matchEncumbranceLine, type EncumbranceMatch } from './encumbrancePatterns';
 import { matchMovementLine, type MovementMatch } from './movementPatterns';
 import { matchAlignmentLine, type AlignmentMatch } from './alignmentPatterns';
-import { matchChatLine } from './chatPatterns';
+import { matchChatLine, isIncompleteChatLine } from './chatPatterns';
 import { transformBoardDateLine } from './boardDatePatterns';
 import { isWhoHeaderLine, isWhoFinalLine, buildWhoSnapshot, type WhoSnapshot } from './whoPatterns';
 import type { ChatMessage } from '../types/chat';
@@ -109,6 +109,10 @@ export class OutputFilter {
   boardDatesEnabled = true;
   /** When true, strip server prompt prefix ("> ") from terminal output. */
   stripPrompts = true;
+  /** When true, collapse consecutive identical lines with a repeat count. */
+  antiSpamEnabled = false;
+  /** Callback to write anti-spam flush output to the terminal asynchronously. */
+  onAntiSpamFlush: ((text: string) => void) | null = null;
   /** Callback invoked when sync gagging completes (all login responses consumed). */
   onSyncEnd: (() => void) | null = null;
 
@@ -132,13 +136,49 @@ export class OutputFilter {
   /** Safety timer to auto-end sync. */
   private syncTimer: ReturnType<typeof setTimeout> | null = null;
 
+  /* ---- Multi-line chat buffering ---- */
+  private chatLineBuffer: string[] | null = null;
+  /** Max continuation lines before discarding an incomplete chat buffer. */
+  private static readonly CHAT_BUFFER_MAX = 5;
+
   /* ---- Passive who tracking (captures manual `who` output without gagging) ---- */
   private passiveWhoActive = false;
   private passiveWhoLines: string[] = [];
   private passiveWhoRawLines: string[] = [];
 
+  /* ---- Anti-spam state ---- */
+  private prevStrippedLine: string | null = null;
+  private repeatCount = 0;
+  private antiSpamTimer: ReturnType<typeof setTimeout> | null = null;
+
   constructor(callbacks: OutputFilterCallbacks = {}) {
     this.callbacks = callbacks;
+  }
+
+  /** Format the anti-spam count line. */
+  private static antiSpamLine(count: number): string {
+    return `\x1b[90m  [x${count} repeated]\x1b[0m\r\n`;
+  }
+
+  /** Cancel the pending anti-spam flush timer. */
+  private clearAntiSpamTimer(): void {
+    if (this.antiSpamTimer) {
+      clearTimeout(this.antiSpamTimer);
+      this.antiSpamTimer = null;
+    }
+  }
+
+  /** Start (or restart) the anti-spam flush timer. */
+  private startAntiSpamTimer(): void {
+    this.clearAntiSpamTimer();
+    this.antiSpamTimer = setTimeout(() => {
+      this.antiSpamTimer = null;
+      if (this.repeatCount > 0) {
+        const text = OutputFilter.antiSpamLine(this.repeatCount + 1);
+        this.repeatCount = 0;
+        this.onAntiSpamFlush?.(text);
+      }
+    }, 1000);
   }
 
   /** Reset all who-related tracking state (sync + passive). */
@@ -473,16 +513,26 @@ export class OutputFilter {
       }
 
       // --- Chat detection (observational — never strips) ---
-      const chatMatch = matchChatLine(stripped, this.activeCharacter);
-      if (chatMatch) {
-        if (chatMatch.sender === 'Unknown' && this.signatureResolver) {
-          const resolved = this.signatureResolver(chatMatch.message);
-          if (resolved) {
-            chatMatch.sender = resolved.playerName;
-            chatMatch.message = resolved.message;
+      // Supports multi-line messages: when a say/ask/exclaim wraps across lines,
+      // we buffer until the closing quote is found, then match the combined text.
+      if (this.chatLineBuffer !== null) {
+        this.chatLineBuffer.push(stripped);
+        if (stripped.endsWith("'") || this.chatLineBuffer.length > OutputFilter.CHAT_BUFFER_MAX) {
+          const combined = this.chatLineBuffer.join(' ');
+          const chatMatch = matchChatLine(combined, this.activeCharacter);
+          if (chatMatch) {
+            chatMatch.raw = combined;
+            this.fireChatCallback(chatMatch);
           }
+          this.chatLineBuffer = null;
         }
-        this.callbacks.onChat?.(chatMatch);
+      } else {
+        const chatMatch = matchChatLine(stripped, this.activeCharacter);
+        if (chatMatch) {
+          this.fireChatCallback(chatMatch);
+        } else if (isIncompleteChatLine(stripped)) {
+          this.chatLineBuffer = [stripped];
+        }
       }
 
       // --- Sync gagging (pattern-based, only login command responses) ---
@@ -525,12 +575,39 @@ export class OutputFilter {
         continue; // suppress this line from terminal output
       }
       if (lineResult?.highlight) {
+        // Flush any pending anti-spam count before the highlighted line
+        if (this.repeatCount > 0) {
+          this.clearAntiSpamTimer();
+          output += OutputFilter.antiSpamLine(this.repeatCount + 1);
+          this.repeatCount = 0;
+        }
+        this.prevStrippedLine = stripped;
         output += `\x1b[${lineResult.highlight}m${displaySegment}\x1b[0m`;
         continue;
       }
 
+      // --- Anti-spam: collapse consecutive identical lines ---
+      if (this.antiSpamEnabled && stripped !== '') {
+        if (stripped === this.prevStrippedLine) {
+          this.repeatCount++;
+          this.startAntiSpamTimer();
+          continue; // suppress duplicate
+        }
+        // Different line — flush pending count
+        if (this.repeatCount > 0) {
+          this.clearAntiSpamTimer();
+          output += OutputFilter.antiSpamLine(this.repeatCount + 1);
+          this.repeatCount = 0;
+        }
+        this.prevStrippedLine = stripped;
+      }
+
       output += displaySegment;
     }
+
+    // Note: anti-spam count is NOT flushed at chunk boundaries.
+    // The count accumulates across filter() calls and flushes when
+    // a different line arrives, ensuring a single accurate total.
 
     // Flush remaining buffer if it looks like a prompt or is empty.
     if (this.buffer) {
@@ -552,12 +629,28 @@ export class OutputFilter {
     return output;
   }
 
+  /** Resolve anonymous sender and fire onChat callback. */
+  private fireChatCallback(chatMatch: ChatMessage): void {
+    if (chatMatch.sender === 'Unknown' && this.signatureResolver) {
+      const resolved = this.signatureResolver(chatMatch.message);
+      if (resolved) {
+        chatMatch.sender = resolved.playerName;
+        chatMatch.message = resolved.message;
+      }
+    }
+    this.callbacks.onChat?.(chatMatch);
+  }
+
   /** Reset buffer state (call on disconnect/reconnect) */
   reset(): void {
     this.buffer = '';
+    this.chatLineBuffer = null;
     this.passiveWhoActive = false;
     this.passiveWhoLines = [];
     this.passiveWhoRawLines = [];
+    this.prevStrippedLine = null;
+    this.repeatCount = 0;
+    this.clearAntiSpamTimer();
     this.endSync();
   }
 }

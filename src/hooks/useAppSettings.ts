@@ -63,6 +63,7 @@ export function useAppSettings() {
   // Output transforms
   const [boardDatesEnabled, setBoardDatesEnabled] = useState(false);
   const [stripPromptsEnabled, setStripPromptsEnabled] = useState(false);
+  const [antiSpamEnabled, setAntiSpamEnabled] = useState(false);
 
   /* ── New settings ──────────────────────────────────────── */
 
@@ -182,6 +183,8 @@ export function useAppSettings() {
       if (savedBoardDates != null) setBoardDatesEnabled(savedBoardDates);
       const savedStripPrompts = await dataStore.get<boolean>(SETTINGS_FILE, 'stripPromptsEnabled');
       if (savedStripPrompts != null) setStripPromptsEnabled(savedStripPrompts);
+      const savedAntiSpam = await dataStore.get<boolean>(SETTINGS_FILE, 'antiSpamEnabled');
+      if (savedAntiSpam != null) setAntiSpamEnabled(savedAntiSpam);
 
       // New settings
       const savedScrollback = await dataStore.get<number>(SETTINGS_FILE, 'terminalScrollback');
@@ -345,6 +348,7 @@ export function useAppSettings() {
       // Output transforms
       updateBoardDatesEnabled: make(setBoardDatesEnabled, 'boardDatesEnabled'),
       updateStripPromptsEnabled: make(setStripPromptsEnabled, 'stripPromptsEnabled'),
+      updateAntiSpamEnabled: make(setAntiSpamEnabled, 'antiSpamEnabled'),
       // Buffer sizes
       updateTerminalScrollback: make(setTerminalScrollback, 'terminalScrollback'),
       updateCommandHistorySize: make(setCommandHistorySize, 'commandHistorySize'),
@@ -471,6 +475,7 @@ export function useAppSettings() {
     // Output transforms
     boardDatesEnabled,
     stripPromptsEnabled,
+    antiSpamEnabled,
     // Buffer sizes
     terminalScrollback,
     commandHistorySize,

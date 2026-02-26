@@ -19,11 +19,21 @@ The `[Unreleased]` header controls automatic version bumping on merge:
 - Skill panel filter bar now appears on all category tabs, not just "All" — search within any skill group
 - Added `--color-pink` to theme for consistent theming of TELL badges
 - Shared `PanelHeader` component for consistent panel headers with optional toolbar row
+- Anti-spam — collapses consecutive identical MUD output lines into a single line with a dim repeat count (e.g. `[x5 repeated]`); flushes after 1 second of inactivity or when the next different line arrives; toggle in Settings > Output
+- `/apt` command — show aptitude info for a spell or skill by abbreviation or name (e.g. `/apt sc`, `/apt fireball`); displays current improve count, tier, and improves to next tier
+- `/spam` echo — `/spam` now prints `[Spam: command (xN)]` in the terminal before executing
+- Fuzzy name matching for spells and skills — `findSpellFuzzy` and `findSkillFuzzy` with punctuation-insensitive lookup (`nameUtils.ts`)
+- "Quite Hungry" and "Quite Thirsty" need levels added to hunger/thirst tracking
 
 ### Fixed
 - "Bashing" skill is now correctly categorized as Other instead of Combat
 - Chat timestamps no longer show "-1m" for self-sent messages (clock skew fix)
 - TELL badge was rendering white (unresolved `text-pink` class) — now correctly renders in pink
+- Chat pattern: "asks you" detection now works (DartMUD omits "to" for ask, e.g. "Alice asks you in common")
+- Chat pattern: OOC messages containing "+" (skill improve announcements) are no longer captured as chat
+- Chat pattern: multi-line say/ask/exclaim messages are now buffered and matched correctly
+- Who pattern parsing improvements for edge cases
+- Hunger/thirst danger thresholds adjusted from severity 6 to 7 to account for new intermediate levels
 
 ### Changed
 - Standardized all panel headers — extracted shared `PanelHeader` component replacing 16 hand-rolled headers across every panel (Skills, Chat, Who, Counter, Notes, Alloc, Currency, Babel, Map, Aliases, Triggers, Timers, Variables, Appearance, Settings, Guide); consistent two-row layout with title row + optional toolbar row; all slideout panels now have a × close button
@@ -42,6 +52,7 @@ The `[Unreleased]` header controls automatic version bumping on merge:
 - Who panel title mapping: moved clear icon to trash can icon inside the edit form
 - Standardized delete confirmation across all panels — extracted shared `ConfirmDeleteButton` component replacing 10 inline implementations (Alias, Variable, Timer, Trigger, Babel, Skill, Notes, Alloc combat/magic profiles, Counter); Who panel title mapping delete now requires two-click confirmation instead of firing immediately
 - Standardized counter panel clear button — now uses the same two-click confirm pattern and visual style as delete, replacing the old timeout-based pill button
+- Extracted `ToggleSwitch` from SettingsPanel into shared.tsx for reuse across panels (Triggers gag group toggles now use it too)
 
 ## [1.2.0] - 2026-02-25
 
