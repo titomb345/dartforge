@@ -110,9 +110,9 @@ export class AutoInscriber {
 
   /** Adjust power mid-loop. */
   setPower(power: number, echo: (msg: string) => void): void {
-    this._power = power;
+    this._power = Math.max(power, 100);
     this._onChange();
-    echo(`[Autoinscribe: power adjusted to ${power}]`);
+    echo(`[Autoinscribe: power adjusted to ${this._power}]`);
   }
 
   /**
