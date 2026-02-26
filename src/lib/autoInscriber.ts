@@ -5,6 +5,9 @@
  * Message-driven state machine: detects MUD output patterns and sends
  * the next command in the loop.
  *
+ * Activates the ActionBlocker during interruptible phases (inscribing,
+ * invoking) to prevent accidental user input from breaking concentration.
+ *
  * Instantiate once via useRef (same pattern as ActionBlocker). Not a React hook.
  */
 
@@ -27,8 +30,9 @@ export interface AutoInscriberState {
 }
 
 const INSCRIPTION_COMPLETE = 'You have written a';
-const INVOCATION_COMPLETE = 'As you finish reading, the last words disappear.';
+const INVOCATION_COMPLETE = 'the spell fades from your scroll';
 const UNCONSCIOUS = 'You fall unconscious!';
+const CONCENTRATION_BROKEN = 'Your concentration is broken';
 
 /** Delay before sending invoke after inscription completes (ms). */
 const INVOKE_DELAY = 700;
@@ -46,6 +50,7 @@ export class AutoInscriber {
   private _timers = new Set<ReturnType<typeof setTimeout>>();
   private _sendFn: ((cmd: string) => Promise<void>) | null = null;
   private _echoFn: ((msg: string) => void) | null = null;
+  private _blockFn: ((key: string, label: string) => void) | null = null;
 
   /** Callback invoked whenever state changes — wire to React setState. */
   onChange: (() => void) | null = null;
@@ -81,7 +86,8 @@ export class AutoInscriber {
     spell: string,
     power: number,
     send: (cmd: string) => Promise<void>,
-    echo: (msg: string) => void
+    echo: (msg: string) => void,
+    block: (key: string, label: string) => void
   ): void {
     // Stop any existing loop first
     if (this._active) this._cleanup();
@@ -92,10 +98,11 @@ export class AutoInscriber {
     this._cycleCount = 0;
     this._sendFn = send;
     this._echoFn = echo;
+    this._blockFn = block;
     this._phase = 'checking-conc';
     this._onChange();
 
-    echo(`[Autoinscribe: ${spell} @ power ${power} — starting]`);
+    echo(`[Autoinscribe: ${spell} @${power} — starting]`);
     send('conc');
   }
 
@@ -112,7 +119,7 @@ export class AutoInscriber {
   setPower(power: number, echo: (msg: string) => void): void {
     this._power = Math.max(power, 100);
     this._onChange();
-    echo(`[Autoinscribe: power adjusted to ${this._power}]`);
+    echo(`[Autoinscribe: power adjusted to @${this._power}]`);
   }
 
   /**
@@ -131,6 +138,18 @@ export class AutoInscriber {
       return;
     }
 
+    // Concentration broken — stop loop during interruptible phases
+    if (
+      (this._phase === 'inscribing' || this._phase === 'invoking') &&
+      stripped.includes(CONCENTRATION_BROKEN)
+    ) {
+      const fn = this._echoFn;
+      this._cleanup();
+      this._onChange();
+      fn?.('[Autoinscribe: stopped — concentration broken]');
+      return;
+    }
+
     switch (this._phase) {
       case 'checking-conc':
       case 'waiting-bebt': {
@@ -141,7 +160,10 @@ export class AutoInscriber {
           // Concentration is ready — inscribe
           this._phase = 'inscribing';
           this._onChange();
-          this._sendFn?.(`inscribe ${this._spell} ${this._power}`);
+          this._blockFn?.('inscribe', 'Autoinscribing');
+          const cmd = `inscribe ${this._spell} ${this._power}`;
+          this._echoFn?.(`[Autoinscribe: ${cmd}]`);
+          this._sendFn?.(cmd);
         } else if (this._phase === 'checking-conc') {
           // Not BEBT — wait and retry
           this._phase = 'waiting-bebt';
@@ -155,7 +177,14 @@ export class AutoInscriber {
         if (stripped.startsWith(INSCRIPTION_COMPLETE)) {
           this._phase = 'invoking';
           this._onChange();
-          this._delayedSend(`invoke ${this._spell} !`, INVOKE_DELAY);
+          // Block for the invoke — the blocker auto-unblocked on
+          // inscription complete, so re-activate for the invoke phase.
+          this._delayedBlockAndSend(
+            `invoke ${this._spell} !`,
+            INVOKE_DELAY,
+            'invoke',
+            'Autoinscribing'
+          );
         }
         break;
       }
@@ -186,6 +215,23 @@ export class AutoInscriber {
     this._timers.add(timer);
   }
 
+  /** Activate blocking then send a command after a delay. */
+  private _delayedBlockAndSend(
+    cmd: string,
+    delayMs: number,
+    blockKey: string,
+    blockLabel: string
+  ): void {
+    const timer = setTimeout(() => {
+      this._timers.delete(timer);
+      if (this._active) {
+        this._blockFn?.(blockKey, blockLabel);
+        this._sendFn?.(cmd);
+      }
+    }, delayMs);
+    this._timers.add(timer);
+  }
+
   private _delayedConc(delayMs: number): void {
     const timer = setTimeout(() => {
       this._timers.delete(timer);
@@ -201,6 +247,8 @@ export class AutoInscriber {
   private _cleanup(): void {
     for (const timer of this._timers) clearTimeout(timer);
     this._timers.clear();
+    // NOTE: we intentionally do NOT force-unblock here. The blocker's
+    // auto-unblock in onLine handles it when the MUD action resolves.
     this._active = false;
     this._spell = null;
     this._power = null;
@@ -208,6 +256,7 @@ export class AutoInscriber {
     this._cycleCount = 0;
     this._sendFn = null;
     this._echoFn = null;
+    this._blockFn = null;
   }
 
   private _onChange(): void {

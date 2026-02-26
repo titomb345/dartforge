@@ -1,5 +1,7 @@
 export type ClassMode = 'mage' | 'fighter' | 'multi';
 
+export type AnnounceMode = 'off' | 'on' | 'brief' | 'verbose';
+
 export type Panel =
   | 'appearance'
   | 'skills'

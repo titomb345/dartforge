@@ -533,12 +533,15 @@ function AppMain() {
           blocker.processServerLine(stripped)
         ) {
           const { toSend, reblocked } = blocker.flush();
-          const remaining = reblocked ? blocker.queueLength : 0;
-          let msg = '[UNBLOCKED';
-          if (toSend.length > 0) msg += ` — sending ${toSend.length} queued`;
-          if (remaining > 0) msg += `, re-queuing ${remaining} behind ${blocker.blockLabel}`;
-          msg += ']';
-          writeToTerm(`\x1b[32m${msg}\x1b[0m\r\n`);
+          // Only show [UNBLOCKED] when there are queued commands to report
+          if (toSend.length > 0 || reblocked) {
+            const remaining = reblocked ? blocker.queueLength : 0;
+            let msg = '[UNBLOCKED';
+            if (toSend.length > 0) msg += ` — sending ${toSend.length} queued`;
+            if (remaining > 0) msg += `, re-queuing ${remaining} behind ${blocker.blockLabel}`;
+            msg += ']';
+            writeToTerm(`\x1b[32m${msg}\x1b[0m\r\n`);
+          }
           // Flush queued commands via raw sendCommand (bypasses blocker)
           (async () => {
             for (const cmd of toSend) {
@@ -751,6 +754,21 @@ function AppMain() {
     };
   }, []);
 
+  // Sync persisted weight config to auto-caster when settings load
+  useEffect(() => {
+    autoCasterRef.current.configureWeight(
+      appSettings.casterWeightItem || 'tallow',
+      appSettings.casterWeightContainer || null,
+      appSettings.casterWeightAdjustUp,
+      appSettings.casterWeightAdjustDown
+    );
+  }, [
+    appSettings.casterWeightItem,
+    appSettings.casterWeightContainer,
+    appSettings.casterWeightAdjustUp,
+    appSettings.casterWeightAdjustDown,
+  ]);
+
   // Movement mode — direction command prefixing (lead/row/sneak)
   const [movementMode, setMovementMode] = useState<MovementMode>('normal');
   const movementModeRef = useLatestRef(movementMode);
@@ -767,8 +785,14 @@ function AppMain() {
     addSkill,
     updateSkillCount,
     deleteSkill,
+    announceModeRef,
+    announcePetModeRef,
   } = useSkillTracker(sendCommandRef, processorRef, terminalRef, dataStore);
   const skillDataRef = useLatestRef(skillData);
+
+  // Keep announce mode refs in sync with settings
+  announceModeRef.current = appSettings.announceMode;
+  announcePetModeRef.current = appSettings.announcePetMode;
 
   const cycleMovementMode = useCallback(() => {
     const hasSneaking = !!skillDataRef.current.skills['sneaking'];
@@ -1100,9 +1124,9 @@ function AppMain() {
         return;
       }
 
-      // Built-in /inscribe — automated inscription practice loop
-      if (/^\/inscribe\b/i.test(trimmed)) {
-        const args = trimmed.slice(9).trim();
+      // Built-in /autoinscribe — automated inscription practice loop
+      if (/^\/autoinscribe\b/i.test(trimmed)) {
+        const args = trimmed.slice(14).trim();
         const argsLower = args.toLowerCase();
         const inscriber = autoInscriberRef.current;
 
@@ -1112,9 +1136,9 @@ function AppMain() {
         }
 
         if (argsLower.startsWith('power ')) {
-          const p = parseInt(argsLower.slice(6).trim(), 10);
+          const p = parseInt(argsLower.slice(6).trim().replace(/^@/, ''), 10);
           if (isNaN(p) || p < 1) {
-            writeToTerm('\x1b[31mUsage: /inscribe power <number>\x1b[0m\r\n');
+            writeToTerm('\x1b[31mUsage: /autoinscribe power @<number>\x1b[0m\r\n');
           } else {
             inscriber.setPower(p, (msg) => writeToTerm(`\x1b[36m${msg}\x1b[0m\r\n`));
           }
@@ -1123,29 +1147,37 @@ function AppMain() {
 
         if (argsLower === 'status') {
           const s = inscriber.getState();
+          const cyan = '\x1b[36m';
+          const reset = '\x1b[0m';
+          const line = (text: string) => writeToTerm(`${cyan}${text}${reset}\r\n`);
+
           if (!s.active) {
-            writeToTerm('\x1b[36m[Autoinscribe: OFF]\x1b[0m\r\n');
+            line('[Autoinscribe: OFF]');
           } else {
-            writeToTerm(
-              `\x1b[36m[Autoinscribe: ${s.spell} @ power ${s.power} | phase: ${s.phase} | cycles: ${s.cycleCount}]\x1b[0m\r\n`
-            );
+            line(`[Autoinscribe: ${s.spell} @${s.power}]`);
+            line(`  Phase: ${s.phase} | Cycles: ${s.cycleCount}`);
           }
           return;
         }
 
-        // /inscribe <spell> <power>
+        // /autoinscribe <spell> @<power>
         const parts = args.split(/\s+/);
         if (parts.length < 2) {
           writeToTerm(
-            '\x1b[31mUsage: /inscribe <spell> <power> | /inscribe off | /inscribe power <n> | /inscribe status\x1b[0m\r\n'
+            '\x1b[31mUsage:\r\n' +
+            '  /autoinscribe <spell> @<power>  Start inscribe loop\r\n' +
+            '  /autoinscribe off               Stop inscribing\r\n' +
+            '  /autoinscribe status             Show current state\r\n' +
+            '  /autoinscribe power @<n>         Adjust power mid-loop\x1b[0m\r\n'
           );
           return;
         }
 
         const spellArg = parts[0];
-        const powerArg = parseInt(parts[1], 10);
+        const powerRaw = parts[1].replace(/^@/, '');
+        const powerArg = parseInt(powerRaw, 10);
         if (isNaN(powerArg) || powerArg < 1) {
-          writeToTerm('\x1b[31mPower must be a positive number.\x1b[0m\r\n');
+          writeToTerm('\x1b[31mPower must be a positive number (e.g. @200).\x1b[0m\r\n');
           return;
         }
 
@@ -1157,14 +1189,19 @@ function AppMain() {
           spellArg,
           powerArg,
           async (cmd) => await sendCommand(cmd),
-          (msg) => writeToTerm(`\x1b[36m${msg.replace(spellArg, displaySpell)}\x1b[0m\r\n`)
+          (msg) => writeToTerm(`\x1b[36m${msg.replace(spellArg, displaySpell)}\x1b[0m\r\n`),
+          (key, label) => {
+            if (actionBlockingEnabledRef.current) {
+              actionBlockerRef.current.block({ key, label, pattern: /(?!)/ });
+            }
+          }
         );
         return;
       }
 
-      // Built-in /cast — automated spell practice loop
-      if (/^\/cast\b/i.test(trimmed)) {
-        const args = trimmed.slice(5).trim();
+      // Built-in /autocast — automated spell practice loop
+      if (/^\/autocast\b/i.test(trimmed)) {
+        const args = trimmed.slice(9).trim();
         const argsLower = args.toLowerCase();
         const caster = autoCasterRef.current;
 
@@ -1173,54 +1210,163 @@ function AppMain() {
           return;
         }
 
-        if (argsLower.startsWith('power ')) {
-          const p = parseInt(argsLower.slice(6).trim(), 10);
-          if (isNaN(p) || p < 1) {
-            writeToTerm('\x1b[31mUsage: /cast power <number>\x1b[0m\r\n');
-          } else {
-            caster.setPower(p, (msg) => writeToTerm(`\x1b[36m${msg}\x1b[0m\r\n`));
+        if (argsLower.startsWith('adjust ')) {
+          const adjustRest = argsLower.slice(7).trim();
+
+          if (adjustRest.startsWith('power ')) {
+            const adjustParts = adjustRest.slice(6).trim().replace(/^@/, '').split(/\s+/);
+            if (adjustParts.length === 1) {
+              // /autocast adjust power @<n> — set power directly
+              const p = parseInt(adjustParts[0], 10);
+              if (isNaN(p) || p < 1) {
+                writeToTerm('\x1b[31mUsage: /autocast adjust power @<n> | /autocast adjust power <up> <down>\x1b[0m\r\n');
+              } else {
+                caster.setPower(p, (msg) => writeToTerm(`\x1b[36m${msg}\x1b[0m\r\n`));
+              }
+            } else {
+              // /autocast adjust power <up> <down> — set adjustment amounts
+              const up = parseInt(adjustParts[0], 10);
+              const down = parseInt(adjustParts[1], 10);
+              if (isNaN(up) || isNaN(down) || up < 1 || down < 1) {
+                writeToTerm('\x1b[31mUsage: /autocast adjust power @<n> | /autocast adjust power <up> <down>\x1b[0m\r\n');
+              } else {
+                caster.setAdjust(up, down, (msg) => writeToTerm(`\x1b[36m${msg}\x1b[0m\r\n`));
+              }
+            }
+            return;
           }
+
+          if (adjustRest.startsWith('weight ')) {
+            const adjustParts = adjustRest.slice(7).trim().split(/\s+/);
+            if (adjustParts.length === 1) {
+              // /autocast adjust weight <n> — force-set carried weight
+              const w = parseInt(adjustParts[0], 10);
+              if (isNaN(w) || w < 0) {
+                writeToTerm('\x1b[31mUsage: /autocast adjust weight <n> | /autocast adjust weight <up> <down>\x1b[0m\r\n');
+              } else {
+                caster.setCarriedWeight(w, (msg) => writeToTerm(`\x1b[36m${msg}\x1b[0m\r\n`));
+              }
+            } else {
+              // /autocast adjust weight <up> <down> — set adjustment amounts
+              const up = parseInt(adjustParts[0], 10);
+              const down = parseInt(adjustParts[1], 10);
+              if (isNaN(up) || isNaN(down) || up < 1 || down < 1) {
+                writeToTerm('\x1b[31mUsage: /autocast adjust weight <n> | /autocast adjust weight <up> <down>\x1b[0m\r\n');
+              } else {
+                caster.setWeightAdjust(up, down, (msg) => writeToTerm(`\x1b[36m${msg}\x1b[0m\r\n`));
+                appSettings.updateCasterWeightAdjustUp(up);
+                appSettings.updateCasterWeightAdjustDown(down);
+              }
+            }
+            return;
+          }
+
+          writeToTerm(
+            '\x1b[31mUsage:\r\n  /autocast adjust power @<n>\r\n  /autocast adjust power <up> <down>\r\n  /autocast adjust weight <n>\r\n  /autocast adjust weight <up> <down>\x1b[0m\r\n'
+          );
           return;
         }
 
-        if (argsLower.startsWith('adjust ')) {
-          const adjustParts = argsLower.slice(7).trim().split(/\s+/);
-          const up = parseInt(adjustParts[0], 10);
-          const down = parseInt(adjustParts[1], 10);
-          if (isNaN(up) || isNaN(down) || up < 1 || down < 1) {
-            writeToTerm('\x1b[31mUsage: /cast adjust <up> <down>\x1b[0m\r\n');
-          } else {
-            caster.setAdjust(up, down, (msg) => writeToTerm(`\x1b[36m${msg}\x1b[0m\r\n`));
+        if (argsLower.startsWith('set ')) {
+          const setRest = args.slice(4).trim();
+          const setRestLower = setRest.toLowerCase();
+
+          if (setRestLower.startsWith('item ')) {
+            const itemName = setRest.slice(5).trim();
+            if (!itemName) {
+              writeToTerm('\x1b[31mUsage: /autocast set item <item>\x1b[0m\r\n');
+            } else {
+              caster.setWeightItem(itemName, (msg) => writeToTerm(`\x1b[36m${msg}\x1b[0m\r\n`));
+              appSettings.updateCasterWeightItem(itemName);
+            }
+            return;
           }
+
+          if (setRestLower.startsWith('container ')) {
+            const containerName = setRest.slice(10).trim();
+            if (!containerName) {
+              writeToTerm('\x1b[31mUsage: /autocast set container <name> | /autocast clear container\r\n  Use "none" or "clear" to remove the container.\x1b[0m\r\n');
+            } else {
+              const val = /^(none|null|clear)$/i.test(containerName) ? null : containerName;
+              caster.setWeightContainer(
+                val,
+                (msg) => writeToTerm(`\x1b[36m${msg}\x1b[0m\r\n`)
+              );
+              appSettings.updateCasterWeightContainer(val ?? '');
+            }
+            return;
+          }
+
+          writeToTerm(
+            '\x1b[31mUsage:\r\n  /autocast set item <item>\r\n  /autocast set container <name>\x1b[0m\r\n'
+          );
+          return;
+        }
+
+        // /autocast clear container
+        if (argsLower === 'clear container') {
+          caster.setWeightContainer(null, (msg) => writeToTerm(`\x1b[36m${msg}\x1b[0m\r\n`));
+          appSettings.updateCasterWeightContainer('');
           return;
         }
 
         if (argsLower === 'status') {
           const s = caster.getState();
+          const cyan = '\x1b[36m';
+          const reset = '\x1b[0m';
+          const line = (text: string) => writeToTerm(`${cyan}${text}${reset}\r\n`);
+
           if (!s.active) {
-            writeToTerm('\x1b[36m[Autocast: OFF]\x1b[0m\r\n');
+            line('[Autocast: OFF]');
+            line(`  Power adjust: +${s.adjustUp} on fail / -${s.adjustDown} on success`);
+            if (s.weightItem) {
+              const loc = s.weightContainer ? ` from ${s.weightContainer}` : '';
+              line(`  Weight item:  ${s.weightItem}${loc}`);
+              line(`  Weight adjust: take ${s.weightAdjustUp} on success, put ${s.weightAdjustDown} on fail`);
+            } else {
+              line('  Weight: not configured');
+            }
           } else {
             const argsStr = s.args ? ` ${s.args}` : '';
-            writeToTerm(
-              `\x1b[36m[Autocast: ${s.spell} @ power ${s.power}${argsStr} | phase: ${s.phase} | cycles: ${s.cycleCount} | adjust: +${s.adjustUp}/-${s.adjustUp + s.adjustDown} | success: ${s.successCount}, fail: ${s.failCount}]\x1b[0m\r\n`
-            );
+            line(`[Autocast: ${s.spell} @${s.power}${argsStr}]`);
+            line(`  Phase: ${s.phase} | Cycles: ${s.cycleCount} | Success: ${s.successCount} | Fail: ${s.failCount}`);
+            line(`  Power adjust: +${s.adjustUp} on fail / -${s.adjustDown} on success`);
+            if (s.weightMode) {
+              line(`  WEIGHT MODE: carrying ${s.carriedWeight} ${s.weightItem}`);
+            }
+            if (s.weightItem) {
+              const loc = s.weightContainer ? ` from ${s.weightContainer}` : '';
+              line(`  Weight item:  ${s.weightItem}${loc}`);
+              line(`  Weight adjust: take ${s.weightAdjustUp} on success, put ${s.weightAdjustDown} on fail`);
+            }
           }
           return;
         }
 
-        // /cast <spell> <power> [args]
+        // /autocast <spell> @<power> [args]
         const parts = args.split(/\s+/);
         if (parts.length < 2) {
           writeToTerm(
-            '\x1b[31mUsage: /cast <spell> <power> [args] | /cast off | /cast power <n> | /cast adjust <up> <down> | /cast status\x1b[0m\r\n'
+            '\x1b[31mUsage:\r\n' +
+            '  /autocast <spell> @<power> [args]   Start casting\r\n' +
+            '  /autocast off                       Stop casting\r\n' +
+            '  /autocast status                    Show current state\r\n' +
+            '  /autocast adjust power @<n>         Set power directly\r\n' +
+            '  /autocast adjust power <up> <down>  Set power adjust steps\r\n' +
+            '  /autocast adjust weight <n>         Set carried weight\r\n' +
+            '  /autocast adjust weight <up> <down> Set weight adjust steps\r\n' +
+            '  /autocast set item <item>        Set weight item\r\n' +
+            '  /autocast set container <name>      Set weight container\r\n' +
+            '  /autocast clear container            Clear container (ground)\x1b[0m\r\n'
           );
           return;
         }
 
         const spellArg = parts[0];
-        const powerArg = parseInt(parts[1], 10);
+        const powerRaw = parts[1].replace(/^@/, '');
+        const powerArg = parseInt(powerRaw, 10);
         if (isNaN(powerArg) || powerArg < 1) {
-          writeToTerm('\x1b[31mPower must be a positive number.\x1b[0m\r\n');
+          writeToTerm('\x1b[31mPower must be a positive number (e.g. @200).\x1b[0m\r\n');
           return;
         }
 
@@ -1235,7 +1381,50 @@ function AppMain() {
           powerArg,
           extraArgs,
           async (cmd) => await sendCommand(cmd),
-          (msg) => writeToTerm(`\x1b[36m${msg.replace(spellArg, displaySpell)}\x1b[0m\r\n`)
+          (msg) => writeToTerm(`\x1b[36m${msg.replace(spellArg, displaySpell)}\x1b[0m\r\n`),
+          (key, label) => {
+            if (actionBlockingEnabledRef.current) {
+              actionBlockerRef.current.block({ key, label, pattern: /(?!)/ });
+            }
+          },
+          async (cmd) => await sendCommandRef.current!(cmd)
+        );
+        return;
+      }
+
+      // Built-in /announce — toggle skill improvement OOC announcements
+      if (/^\/announce\b/i.test(trimmed)) {
+        const args = trimmed.slice(9).trim().toLowerCase();
+        const VALID_MODES = ['on', 'off', 'brief', 'verbose'] as const;
+        type Mode = (typeof VALID_MODES)[number];
+        const isValidMode = (s: string): s is Mode => (VALID_MODES as readonly string[]).includes(s);
+
+        if (!args || args === 'status') {
+          writeToTerm(
+            `\x1b[36m[Announce: ${appSettings.announceMode} | Pets: ${appSettings.announcePetMode}]\x1b[0m\r\n`
+          );
+          return;
+        }
+
+        if (args.startsWith('pet ')) {
+          const petArg = args.slice(4).trim();
+          if (isValidMode(petArg)) {
+            appSettings.updateAnnouncePetMode(petArg);
+            writeToTerm(`\x1b[36m[Announce pets: ${petArg}]\x1b[0m\r\n`);
+          } else {
+            writeToTerm('\x1b[31mUsage: /announce pet on|off|brief|verbose\x1b[0m\r\n');
+          }
+          return;
+        }
+
+        if (isValidMode(args)) {
+          appSettings.updateAnnounceMode(args);
+          writeToTerm(`\x1b[36m[Announce: ${args}]\x1b[0m\r\n`);
+          return;
+        }
+
+        writeToTerm(
+          '\x1b[31mUsage: /announce on|off|brief|verbose | /announce pet on|off|brief|verbose | /announce status\x1b[0m\r\n'
         );
         return;
       }
@@ -1670,8 +1859,16 @@ function AppMain() {
       casterSpell: casterState.spell,
       casterPower: casterState.power,
       casterCycleCount: casterState.cycleCount,
+      casterWeightMode: casterState.weightMode,
+      casterCarriedWeight: casterState.carriedWeight,
+      casterWeightItem: casterState.weightItem,
       onStopCaster: () =>
         autoCasterRef.current.stop((msg) => writeToTerm(`\x1b[36m${msg}\x1b[0m\r\n`)),
+      announceMode: appSettings.announceMode,
+      onStopAnnounce: () => {
+        appSettings.updateAnnounceMode('off');
+        appSettings.updateAnnouncePetMode('off');
+      },
     }),
     [
       connected,
@@ -1705,6 +1902,9 @@ function AppMain() {
       appSettings.updateBabelEnabled,
       inscriberState,
       casterState,
+      appSettings.announceMode,
+      appSettings.updateAnnounceMode,
+      appSettings.updateAnnouncePetMode,
       writeToTerm,
     ]
   );

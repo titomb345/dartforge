@@ -3,6 +3,7 @@ import { useDataStore } from '../contexts/DataStoreContext';
 import { getPlatform } from '../lib/platform';
 import type { ChatFilters } from '../types/chat';
 import { DEFAULT_GAG_GROUPS, type GagGroupSettings } from '../lib/gagPatterns';
+import type { AnnounceMode } from '../types';
 
 let invoke: ((cmd: string, args?: Record<string, unknown>) => Promise<unknown>) | null = null;
 if (getPlatform() === 'tauri') {
@@ -125,6 +126,16 @@ export function useAppSettings() {
 
   // Gag groups
   const [gagGroups, setGagGroups] = useState<GagGroupSettings>({ ...DEFAULT_GAG_GROUPS });
+
+  // Announce system
+  const [announceMode, setAnnounceMode] = useState<AnnounceMode>('off');
+  const [announcePetMode, setAnnouncePetMode] = useState<AnnounceMode>('off');
+
+  // Auto-caster weight mode
+  const [casterWeightItem, setCasterWeightItem] = useState('tallow');
+  const [casterWeightContainer, setCasterWeightContainer] = useState('bin');
+  const [casterWeightAdjustUp, setCasterWeightAdjustUp] = useState(10);
+  const [casterWeightAdjustDown, setCasterWeightAdjustDown] = useState(5);
 
   // Post-sync commands
   const [postSyncEnabled, setPostSyncEnabled] = useState(false);
@@ -258,6 +269,24 @@ export function useAppSettings() {
       const savedGagGroups = await dataStore.get<GagGroupSettings>(SETTINGS_FILE, 'gagGroups');
       if (savedGagGroups) setGagGroups(savedGagGroups);
 
+      // Announce
+      const savedAnnounceMode = await dataStore.get<AnnounceMode>(SETTINGS_FILE, 'announceMode');
+      if (savedAnnounceMode) setAnnounceMode(savedAnnounceMode);
+      const savedAnnouncePetMode = await dataStore.get<AnnounceMode>(SETTINGS_FILE, 'announcePetMode');
+      if (savedAnnouncePetMode) setAnnouncePetMode(savedAnnouncePetMode);
+
+      // Auto-caster weight mode
+      const savedCasterWeightItem = await dataStore.get<string | null>(SETTINGS_FILE, 'casterWeightItem');
+      if (savedCasterWeightItem) setCasterWeightItem(savedCasterWeightItem);
+      const savedCasterWeightContainer = await dataStore.get<string>(SETTINGS_FILE, 'casterWeightContainer');
+      if (savedCasterWeightContainer) setCasterWeightContainer(savedCasterWeightContainer);
+      const savedCasterWeightAdjustUp = await dataStore.get<number>(SETTINGS_FILE, 'casterWeightAdjustUp');
+      if (savedCasterWeightAdjustUp != null && savedCasterWeightAdjustUp >= 1)
+        setCasterWeightAdjustUp(savedCasterWeightAdjustUp);
+      const savedCasterWeightAdjustDown = await dataStore.get<number>(SETTINGS_FILE, 'casterWeightAdjustDown');
+      if (savedCasterWeightAdjustDown != null && savedCasterWeightAdjustDown >= 1)
+        setCasterWeightAdjustDown(savedCasterWeightAdjustDown);
+
       // Babel
       const savedBabelEnabled = await dataStore.get<boolean>(SETTINGS_FILE, 'babelEnabled');
       if (savedBabelEnabled != null) setBabelEnabled(savedBabelEnabled);
@@ -376,6 +405,9 @@ export function useAppSettings() {
       updateWhoRefreshMinutes: make(setWhoRefreshMinutes, 'whoRefreshMinutes'),
       // Gag groups
       updateGagGroups: make(setGagGroups, 'gagGroups'),
+      // Announce
+      updateAnnounceMode: make<AnnounceMode>(setAnnounceMode, 'announceMode'),
+      updateAnnouncePetMode: make<AnnounceMode>(setAnnouncePetMode, 'announcePetMode'),
       // Babel
       updateBabelEnabled: make(setBabelEnabled, 'babelEnabled'),
       updateBabelLanguage: make(setBabelLanguage, 'babelLanguage'),
@@ -389,6 +421,11 @@ export function useAppSettings() {
       updateAutoLoginActiveSlot: make<0 | 1>(setAutoLoginActiveSlot, 'autoLoginActiveSlot'),
       updateLastLoginTimestamp: make(setLastLoginTimestamp, 'lastLoginTimestamp'),
       updateLastLoginSlot: make<0 | 1 | null>(setLastLoginSlot, 'lastLoginSlot'),
+      // Auto-caster weight mode
+      updateCasterWeightItem: make<string>(setCasterWeightItem, 'casterWeightItem'),
+      updateCasterWeightContainer: make(setCasterWeightContainer, 'casterWeightContainer'),
+      updateCasterWeightAdjustUp: make(setCasterWeightAdjustUp, 'casterWeightAdjustUp'),
+      updateCasterWeightAdjustDown: make(setCasterWeightAdjustDown, 'casterWeightAdjustDown'),
     };
   }, [persist]);
 
@@ -514,6 +551,9 @@ export function useAppSettings() {
     updateChatFontSize,
     // Gag groups
     gagGroups,
+    // Announce
+    announceMode,
+    announcePetMode,
     // Babel language trainer
     babelEnabled,
     babelLanguage,
@@ -528,6 +568,11 @@ export function useAppSettings() {
     autoLoginCharacters,
     lastLoginTimestamp,
     lastLoginSlot,
+    // Auto-caster weight mode
+    casterWeightItem,
+    casterWeightContainer,
+    casterWeightAdjustUp,
+    casterWeightAdjustDown,
     // Special updaters (have extra logic beyond simple set+persist)
     updateAlignmentTrackingEnabled,
     updateAutoLoginCharacters,

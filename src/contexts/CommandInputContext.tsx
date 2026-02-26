@@ -1,6 +1,7 @@
 import { createContext, useContext } from 'react';
 import type { ActiveTimerBadge } from '../hooks/useTimerEngines';
 import type { MovementMode } from '../lib/movementMode';
+import type { AnnounceMode } from '../types';
 
 export interface CommandInputState {
   // Connection
@@ -50,7 +51,13 @@ export interface CommandInputState {
   casterSpell: string | null;
   casterPower: number | null;
   casterCycleCount: number;
+  casterWeightMode: boolean;
+  casterCarriedWeight: number;
+  casterWeightItem: string;
   onStopCaster: () => void;
+  // Announce
+  announceMode: AnnounceMode;
+  onStopAnnounce: () => void;
   // Custom timers
   activeTimers: ActiveTimerBadge[];
   onToggleTimer: (id: string) => void;

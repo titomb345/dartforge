@@ -7,7 +7,7 @@ import type { DataStore } from '../contexts/DataStoreContext';
  * baseline. Existing beta users (version > 1) are normalized to 1 so
  * future migrations apply correctly to everyone.
  */
-export const CURRENT_VERSION = 9;
+export const CURRENT_VERSION = 11;
 
 /** Raw store contents — all keys are optional since older stores may lack them. */
 export type StoreData = Record<string, unknown>;
@@ -200,6 +200,20 @@ const MIGRATIONS: MigrationFn[] = [
   // v8 → v9: Who list font size
   (data) => {
     if (!('whoFontSize' in data)) data.whoFontSize = 11;
+    return data;
+  },
+  // v9 → v10: Announce system
+  (data) => {
+    if (!('announceMode' in data)) data.announceMode = 'off';
+    if (!('announcePetMode' in data)) data.announcePetMode = 'off';
+    return data;
+  },
+  // v10 → v11: Auto-caster weight mode settings
+  (data) => {
+    if (!('casterWeightItem' in data)) data.casterWeightItem = 'tallow';
+    if (!('casterWeightContainer' in data)) data.casterWeightContainer = 'bin';
+    if (!('casterWeightAdjustUp' in data)) data.casterWeightAdjustUp = 10;
+    if (!('casterWeightAdjustDown' in data)) data.casterWeightAdjustDown = 5;
     return data;
   },
 ];

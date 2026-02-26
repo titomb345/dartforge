@@ -157,7 +157,7 @@ export class OutputFilter {
 
   /** Format the anti-spam count line. */
   private static antiSpamLine(count: number): string {
-    return `\x1b[90m  [x${count} repeated]\x1b[0m\r\n`;
+    return `\x1b[90m  [repeated x${count}]\x1b[0m\r\n`;
   }
 
   /** Cancel the pending anti-spam flush timer. */
@@ -547,6 +547,11 @@ export class OutputFilter {
       // --- Passive who tracking (manual `who` → updates panel without gagging) ---
       this.trackPassiveWho(stripped, seg);
 
+      // --- Trigger / onLine callback ---
+      // Fired BEFORE compact-mode gagging so auto-inscriber/auto-caster
+      // always see concentration lines even when they're filtered from display.
+      const lineResult = this.callbacks.onLine?.(stripped, seg);
+
       // --- Compact mode: strip status lines from terminal ---
 
       if (
@@ -568,9 +573,6 @@ export class OutputFilter {
         const transformed = transformBoardDateLine(stripped, seg);
         if (transformed !== null) displaySegment = transformed;
       }
-
-      // --- Trigger / onLine callback ---
-      const lineResult = this.callbacks.onLine?.(stripped, seg);
       if (lineResult?.gag) {
         continue; // suppress this line from terminal output
       }

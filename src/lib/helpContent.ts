@@ -344,14 +344,19 @@ export const HELP_CATEGORIES: HelpCategory[] = [
           'Show skill details. Accepts abbreviations — "/skill mt" expands to "show skills magic theory". Pass a full name if no abbreviation is set.',
       },
       {
-        title: '/inscribe',
+        title: '/autoinscribe',
         description:
-          'Automated inscription practice loop. "/inscribe <spell> <power>" starts the cycle — checks concentration, inscribes, invokes, and repeats. "/inscribe power <n>" adjusts power mid-loop. "/inscribe off" stops. "/inscribe status" shows current state. A blue badge appears while active.',
+          'Automated inscription practice loop. "/autoinscribe <spell> @<power>" starts the cycle — checks concentration, inscribes, invokes, and repeats. "/autoinscribe power @<n>" adjusts power mid-loop. "/autoinscribe off" stops. "/autoinscribe status" shows current state. A blue badge appears while active.',
       },
       {
-        title: '/cast',
+        title: '/autocast',
         description:
-          'Automated spell practice loop with power auto-adjustment. "/cast <spell> <power> [args]" starts the cycle — checks concentration, casts at the given power, and adjusts power dynamically based on success/near-success outcomes. "/cast power <n>" adjusts power mid-loop. "/cast adjust <up> <down>" sets adjustment amounts. "/cast off" stops. "/cast status" shows current state. A green badge appears while active.',
+          'Automated spell practice loop with power auto-adjustment and weight mode. "/autocast <spell> @<power> [args]" starts the cycle. Power adjusts dynamically: fail = power up (easier), success = power down (harder). When power hits the floor (50) and a weight item is configured, enters weight mode — takes weight from a container on success, puts it back on fail. "/autocast adjust power @<n>" sets power directly. "/autocast adjust power <up> <down>" sets power adjustment steps. "/autocast adjust weight <n>" force-sets carried weight. "/autocast adjust weight <up> <down>" sets weight take/put steps. "/autocast set item <item>" sets the weight item (default: tallow). "/autocast set container <name>" sets the container (default: bin). "/autocast clear container" removes the container (use ground). "/autocast off" stops (returns all weight). "/autocast status" shows current state. Green badge when active; amber badge in weight mode.',
+      },
+      {
+        title: '/announce',
+        description:
+          'Auto-broadcast skill improvements via OOC. "/announce on" sends "skillname+", "/announce brief" sends just "+", "/announce verbose" sends "skillname+ (count)". "/announce pet on|brief|verbose" controls pet announcements separately. "/announce off" disables. An orange badge shows when active.',
       },
     ],
   },

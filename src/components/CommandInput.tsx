@@ -118,7 +118,12 @@ export const CommandInput = forwardRef<HTMLTextAreaElement, CommandInputProps>(
       casterSpell,
       casterPower,
       casterCycleCount,
+      casterWeightMode,
+      casterCarriedWeight,
+      casterWeightItem,
       onStopCaster,
+      announceMode,
+      onStopAnnounce,
     } = useCommandInputContext();
     const { commandHistorySize, numpadMappings, showTimerBadges } = useAppSettingsContext();
     const { active: spotlightActive } = useSpotlight();
@@ -439,12 +444,12 @@ export const CommandInput = forwardRef<HTMLTextAreaElement, CommandInputProps>(
         {/* Auto-inscriber badge */}
         {inscriberActive && (
           <span
-            title={`Inscribing: ${inscriberSpell ?? '?'} — click to stop`}
+            title={`Autoinscribe: ${inscriberSpell ?? '?'} — click to stop`}
             onClick={onStopInscriber}
             className="flex items-center gap-1 px-1.5 py-1 rounded border text-[9px] font-mono self-center shrink-0 ml-1 text-[#60a5fa] border-[#60a5fa]/30 bg-[#60a5fa]/8 cursor-pointer select-none animate-pulse-slow"
             style={{ filter: 'drop-shadow(0 0 3px rgba(96, 165, 250, 0.25))' }}
           >
-            <span>Inscribe</span>
+            <span>Autoinscribe</span>
             {inscriberCycleCount > 0 && (
               <span className="opacity-70">x{inscriberCycleCount}</span>
             )}
@@ -454,18 +459,39 @@ export const CommandInput = forwardRef<HTMLTextAreaElement, CommandInputProps>(
         {/* Auto-caster badge */}
         {casterActive && (
           <span
-            title={`Casting: ${casterSpell ?? '?'} @${casterPower ?? '?'} — click to stop`}
+            title={
+              casterWeightMode
+                ? `Autocast: ${casterSpell ?? '?'} @${casterPower ?? '?'} — carrying ${casterCarriedWeight} ${casterWeightItem} — click to stop`
+                : `Autocast: ${casterSpell ?? '?'} @${casterPower ?? '?'} — click to stop`
+            }
             onClick={onStopCaster}
-            className="flex items-center gap-1 px-1.5 py-1 rounded border text-[9px] font-mono self-center shrink-0 ml-1 text-[#34d399] border-[#34d399]/30 bg-[#34d399]/8 cursor-pointer select-none animate-pulse-slow"
-            style={{ filter: 'drop-shadow(0 0 3px rgba(52, 211, 153, 0.25))' }}
+            className={`flex items-center gap-1 px-1.5 py-1 rounded border text-[9px] font-mono self-center shrink-0 ml-1 cursor-pointer select-none animate-pulse-slow ${
+              casterWeightMode
+                ? 'text-[#fbbf24] border-[#fbbf24]/30 bg-[#fbbf24]/8'
+                : 'text-[#34d399] border-[#34d399]/30 bg-[#34d399]/8'
+            }`}
+            style={{
+              filter: casterWeightMode
+                ? 'drop-shadow(0 0 3px rgba(251, 191, 36, 0.25))'
+                : 'drop-shadow(0 0 3px rgba(52, 211, 153, 0.25))',
+            }}
           >
-            <span>Cast</span>
+            <span>{casterWeightMode ? 'Autocast+Wt' : 'Autocast'}</span>
             {casterCycleCount > 0 && (
               <span className="opacity-70">x{casterCycleCount}</span>
             )}
-            {casterPower != null && (
-              <span className="opacity-70">@{casterPower}</span>
-            )}
+          </span>
+        )}
+
+        {/* Announce badge */}
+        {announceMode !== 'off' && (
+          <span
+            title={`Announce: ${announceMode} — click to stop`}
+            onClick={onStopAnnounce}
+            className="flex items-center gap-1 px-1.5 py-1 rounded border text-[9px] font-mono self-center shrink-0 ml-1 text-[#fb923c] border-[#fb923c]/30 bg-[#fb923c]/8 cursor-pointer select-none"
+            style={{ filter: 'drop-shadow(0 0 3px rgba(251, 146, 60, 0.25))' }}
+          >
+            <span>Announce: {announceMode}</span>
           </span>
         )}
 
