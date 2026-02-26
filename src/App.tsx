@@ -1682,10 +1682,11 @@ function AppMain() {
                                             onResetDisplay={resetDisplay}
                                             debugMode={debugMode}
                                             onToggleDebug={toggleDebug}
+                                            onClose={closePanel}
                                           />
                                         </SlideOut>
                                         <SlideOut panel="settings">
-                                          <SettingsPanel />
+                                          <SettingsPanel onClose={closePanel} />
                                         </SlideOut>
                                         <SlideOut panel="skills" pinnable="skills">
                                           <SkillPanel mode="slideout" />
@@ -1727,7 +1728,7 @@ function AppMain() {
                                           <WhoPanel mode="slideout" />
                                         </SlideOut>
                                         <SlideOut panel="help">
-                                          <HelpPanel />
+                                          <HelpPanel onClose={closePanel} />
                                         </SlideOut>
                                       </div>
                                     </div>

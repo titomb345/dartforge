@@ -1,8 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import type { PinnablePanelProps } from '../types';
 import { panelRootClass } from '../lib/panelUtils';
-import { PinMenuButton } from './PinMenuButton';
-import { PinnedControls } from './PinnedControls';
+import { PanelHeader } from './PanelHeader';
 import { NotesIcon, ChevronLeftIcon, ChevronRightSmallIcon, PlusIcon } from './icons';
 import { ConfirmDeleteButton } from './ConfirmDeleteButton';
 import { useDataStore } from '../contexts/DataStoreContext';
@@ -411,20 +410,11 @@ export function NotesPanel({ mode = 'slideout' }: NotesPanelProps) {
   const currentIndex = tabs.indexOf(activeTab ?? '');
   const total = tabs.length;
 
-  const pinControls = isPinned ? <PinnedControls /> : <PinMenuButton panel="notes" />;
+  const notesTitle = `Notes${activeCharacter ? ` — ${activeCharacter.charAt(0).toUpperCase() + activeCharacter.slice(1)}` : ''}`;
 
   return (
     <div className={panelRootClass(isPinned)}>
-      {/* Header */}
-      <div className="flex items-center justify-between px-3 py-2.5 border-b border-border-subtle shrink-0">
-        <span className="text-[13px] font-semibold text-text-heading flex items-center gap-1.5">
-          <NotesIcon size={12} /> Notes
-          {activeCharacter
-            ? ` — ${activeCharacter.charAt(0).toUpperCase() + activeCharacter.slice(1)}`
-            : ''}
-        </span>
-        <div className="flex items-center gap-1.5 shrink-0">{pinControls}</div>
-      </div>
+      <PanelHeader icon={<NotesIcon size={12} />} title={notesTitle} panel="notes" mode={mode} />
 
       {activeCharacter && loaded && (
         /* Note navigation bar */

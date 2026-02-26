@@ -9,6 +9,7 @@ import {
 import { FONT_OPTIONS, DEFAULT_DISPLAY, type DisplaySettings } from '../hooks/useThemeColors';
 import { cn } from '../lib/cn';
 import { PaletteIcon } from './icons';
+import { PanelHeader } from './PanelHeader';
 
 interface ColorSettingsProps {
   theme: TerminalTheme;
@@ -20,6 +21,7 @@ interface ColorSettingsProps {
   onResetDisplay: (key: keyof DisplaySettings) => void;
   debugMode: boolean;
   onToggleDebug: () => void;
+  onClose: () => void;
 }
 
 function ColorSwatch({
@@ -169,6 +171,7 @@ export function ColorSettings({
   onResetDisplay,
   debugMode,
   onToggleDebug,
+  onClose,
 }: ColorSettingsProps) {
   const base = THEME_COLOR_META.filter((m) => m.group === 'base');
   const normal = THEME_COLOR_META.filter((m) => m.group === 'normal');
@@ -182,25 +185,20 @@ export function ColorSettings({
 
   return (
     <div className="w-[360px] h-full bg-bg-primary border-l border-border-subtle flex flex-col overflow-hidden">
-      {/* Header */}
-      <div className="flex items-center justify-between px-3 py-2.5 border-b border-border-subtle">
-        <span className="text-[13px] font-semibold text-text-heading flex items-center gap-1.5">
-          <PaletteIcon size={12} /> Appearance
-        </span>
+      <PanelHeader icon={<PaletteIcon size={12} />} title="Appearance" onClose={onClose}>
         <button
           onClick={onToggleDebug}
           title="Show ANSI color names in terminal output"
           className={cn(
-            'flex items-center gap-[5px] rounded text-[11px] cursor-pointer px-2 py-[3px] transition-all duration-200 ease-in-out border',
+            'flex items-center justify-center w-5 h-5 rounded-[3px] cursor-pointer transition-colors duration-150 text-[11px] font-mono leading-none',
             debugMode
-              ? 'bg-[#f59e0b18] border-[#f59e0b44] text-amber'
-              : 'bg-transparent border-border-faint text-text-dim'
+              ? 'text-amber'
+              : 'text-text-dim hover:text-text-label'
           )}
         >
-          <span className="text-[13px] leading-none">{'</>'}</span>
-          Debug
+          {'</>'}
         </button>
-      </div>
+      </PanelHeader>
 
       {/* Settings list */}
       <div ref={scrollRef} className="flex-1 overflow-y-auto px-1 py-3">

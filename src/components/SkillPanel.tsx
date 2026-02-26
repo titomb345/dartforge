@@ -12,13 +12,11 @@ import {
   CATEGORY_ORDER,
   SUBCATEGORY_ORDER,
 } from '../lib/skillCategories';
-import { TrendingUpIcon } from './icons';
+import { TrendingUpIcon, PlusIcon } from './icons';
 import { ConfirmDeleteButton } from './ConfirmDeleteButton';
 import { FilterPill } from './FilterPill';
 import { MudInput, MudButton } from './shared';
-import { PinMenuButton } from './PinMenuButton';
-import { PinnedControls } from './PinnedControls';
-import { usePinnedControls } from '../contexts/PinnedControlsContext';
+import { PanelHeader } from './PanelHeader';
 
 const SETTINGS_FILE = 'settings.json';
 const SKILL_FILTER_KEY = 'skillPanelFilter';
@@ -258,8 +256,6 @@ function buildSubGroups(
 }
 
 export function SkillPanel({ mode = 'slideout' }: SkillPanelProps) {
-  const pinnedCtx = usePinnedControls();
-  const side = pinnedCtx?.side;
   const { activeCharacter, skillData, addSkill } = useSkillTrackerContext();
   const dataStore = useDataStore();
   const [filter, setFilter] = useState<FilterValue>('all');
@@ -387,7 +383,8 @@ export function SkillPanel({ mode = 'slideout' }: SkillPanelProps) {
           : 'bg-transparent border-border-dim text-text-dim hover:text-text-label'
       }`}
     >
-      +
+      <PlusIcon size={9} />
+      New Skill
     </button>
   ) : null;
 
@@ -409,37 +406,10 @@ export function SkillPanel({ mode = 'slideout' }: SkillPanelProps) {
 
   return (
     <div className={panelRootClass(isPinned)}>
-      {/* Header */}
-      <div className="flex items-center justify-between px-3 py-2.5 border-b border-border-subtle shrink-0">
-        <span className="text-[13px] font-semibold text-text-heading flex items-center gap-1.5">
-          <TrendingUpIcon size={12} /> {titleText}
-        </span>
-        <div className="flex items-center gap-1.5">
-          {isPinned ? (
-            <>
-              {side === 'left' && (
-                <>
-                  {addButton}
-                  {sortButton}
-                </>
-              )}
-              <PinnedControls />
-              {side === 'right' && (
-                <>
-                  {sortButton}
-                  {addButton}
-                </>
-              )}
-            </>
-          ) : (
-            <>
-              {!isPinned && <PinMenuButton panel="skills" />}
-              {sortButton}
-              {addButton}
-            </>
-          )}
-        </div>
-      </div>
+      <PanelHeader icon={<TrendingUpIcon size={12} />} title={titleText} panel="skills" mode={mode}>
+        {sortButton}
+        {addButton}
+      </PanelHeader>
 
       {/* Category filter */}
       {hasAnySkills && (

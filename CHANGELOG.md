@@ -18,6 +18,7 @@ The `[Unreleased]` header controls automatic version bumping on merge:
 - Shared `FontSizeControl` component used by both Who and Chat panels
 - Skill panel filter bar now appears on all category tabs, not just "All" — search within any skill group
 - Added `--color-pink` to theme for consistent theming of TELL badges
+- Shared `PanelHeader` component for consistent panel headers with optional toolbar row
 
 ### Fixed
 - "Bashing" skill is now correctly categorized as Other instead of Combat
@@ -25,6 +26,11 @@ The `[Unreleased]` header controls automatic version bumping on merge:
 - TELL badge was rendering white (unresolved `text-pink` class) — now correctly renders in pink
 
 ### Changed
+- Standardized all panel headers — extracted shared `PanelHeader` component replacing 16 hand-rolled headers across every panel (Skills, Chat, Who, Counter, Notes, Alloc, Currency, Babel, Map, Aliases, Triggers, Timers, Variables, Appearance, Settings, Guide); consistent two-row layout with title row + optional toolbar row; all slideout panels now have a × close button
+- Slideout "new" buttons — Alias, Timer, Trigger, Variable, and Skill panels now show labeled "New Alias", "New Timer", etc. buttons instead of bare `+` icons
+- Chat panel toolbar reordered — font size control first, sort button second (consistent with Who panel)
+- Removed SkillPanel's conditional left/right button ordering based on pin side — actions now live in the standard toolbar row
+- Removed custom gold-styled header from Guide panel in favor of standard PanelHeader
 - Performance: DRY refactor across App.tsx, useAppSettings, useMudConnection, useTimerEngines, and outputFilter — extracted shared helpers, eliminated redundant computations, and memoized callbacks (~400 lines removed)
 - Skill panel filter bar is more compact (smaller padding and input size)
 - Chat panel redesigned — compact single-line layout with sender, badges, and message inline instead of two-row format; timestamps simplified to time-only (day separators handle date context); significantly more messages visible in the same space

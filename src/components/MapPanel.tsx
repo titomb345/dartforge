@@ -5,8 +5,7 @@
 import { useRef, useState, useEffect } from 'react';
 import type { PinnablePanelProps } from '../types';
 import { panelRootClass } from '../lib/panelUtils';
-import { PinnedControls } from './PinnedControls';
-import { PinMenuButton } from './PinMenuButton';
+import { PanelHeader } from './PanelHeader';
 import { MapIcon } from './icons';
 import { MapCanvas } from './MapCanvas';
 import { useMapContext } from '../contexts/MapContext';
@@ -43,27 +42,17 @@ export function MapPanel({ mode = 'slideout', onWalkTo }: MapPanelProps) {
 
   const currentRoom = currentRoomId ? getRoom(currentRoomId) : null;
 
-  const pinControls = isPinned ? <PinnedControls /> : <PinMenuButton panel="map" />;
-
   const handleWalkTo = (_roomId: string, directions: Direction[]) => {
     if (onWalkTo) onWalkTo(directions);
   };
 
+  const mapTitle = currentRoom
+    ? `Map — ${TERRAIN_LABELS[currentRoom.terrain] ?? 'Hex'} (${currentRoom.coords.q}, ${currentRoom.coords.r})`
+    : 'Map';
+
   return (
     <div className={panelRootClass(isPinned)} style={!isPinned ? { width: 480 } : undefined}>
-      {/* Header */}
-      <div className="flex items-center justify-between px-3 py-2.5 border-b border-border-subtle shrink-0">
-        <span className="text-[13px] font-semibold text-text-heading truncate flex items-center gap-1.5">
-          <MapIcon size={12} /> Map
-          {currentRoom && (
-            <span className="text-text-dim font-normal ml-1.5">
-              — {TERRAIN_LABELS[currentRoom.terrain] ?? 'Hex'} ({currentRoom.coords.q},{' '}
-              {currentRoom.coords.r})
-            </span>
-          )}
-        </span>
-        <div className="flex items-center gap-1.5 shrink-0">{pinControls}</div>
-      </div>
+      <PanelHeader icon={<MapIcon size={12} />} title={mapTitle} panel="map" mode={mode} />
 
       {/* Toolbar row */}
       <div className="flex items-center gap-1 px-2 py-1 border-b border-border-subtle shrink-0 text-[10px]">

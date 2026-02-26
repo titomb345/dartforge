@@ -4,8 +4,7 @@ import type { ThemeColorKey } from '../lib/defaultTheme';
 import type { WhoPlayer } from '../lib/whoPatterns';
 import type { WhoTitleMapping } from '../types/whoTitleMap';
 import { panelRootClass } from '../lib/panelUtils';
-import { PinMenuButton } from './PinMenuButton';
-import { PinnedControls } from './PinnedControls';
+import { PanelHeader } from './PanelHeader';
 import { WhoIcon, RotateCcwIcon } from './icons';
 import { ConfirmDeleteButton } from './ConfirmDeleteButton';
 import { FontSizeControl } from './FontSizeControl';
@@ -335,30 +334,28 @@ export function WhoPanel({ mode = 'slideout' }: PinnablePanelProps) {
 
   return (
     <div className={panelRootClass(isPinned)}>
-      {/* Header */}
-      <div className="flex items-center justify-between px-3 py-2.5 border-b border-border-subtle shrink-0">
-        <div className="flex items-center gap-1.5">
-          <span className="text-[13px] font-semibold text-text-heading flex items-center gap-1.5">
-            <WhoIcon size={12} /> Who
-          </span>
-          {playerCount > 0 && (
+      <PanelHeader
+        icon={<WhoIcon size={12} />}
+        title="Who"
+        panel="who"
+        mode={mode}
+        badge={
+          playerCount > 0 ? (
             <span className="text-[9px] font-mono px-1.5 py-0.5 rounded bg-[#8be9fd]/10 text-[#8be9fd] border border-[#8be9fd]/20">
               {playerCount}
             </span>
-          )}
-        </div>
-        <div className="flex items-center gap-1.5">
-          <FontSizeControl value={whoFontSize} onChange={updateWhoFontSize} />
-          <button
-            onClick={refresh}
-            title="Refresh who list"
-            className="p-1 rounded text-text-dim hover:text-text-muted transition-colors cursor-pointer"
-          >
-            <RotateCcwIcon size={11} />
-          </button>
-          {isPinned ? <PinnedControls /> : <PinMenuButton panel="who" />}
-        </div>
-      </div>
+          ) : undefined
+        }
+      >
+        <FontSizeControl value={whoFontSize} onChange={updateWhoFontSize} />
+        <button
+          onClick={refresh}
+          title="Refresh who list"
+          className="p-1 rounded text-text-dim hover:text-text-muted transition-colors cursor-pointer"
+        >
+          <RotateCcwIcon size={11} />
+        </button>
+      </PanelHeader>
 
       {/* Content */}
       <div className="flex-1 overflow-y-auto">

@@ -6,8 +6,7 @@ import type { PinnablePanelProps } from '../types';
 import { panelRootClass } from '../lib/panelUtils';
 import { SortAscIcon, SortDescIcon, ChatIcon } from './icons';
 import { FilterPill } from './FilterPill';
-import { PinMenuButton } from './PinMenuButton';
-import { PinnedControls } from './PinnedControls';
+import { PanelHeader } from './PanelHeader';
 import { ChatMessageRow } from './ChatMessageRow';
 import { MutedSection } from './MutedPopover';
 import { SignaturesSection } from './SignaturesPopover';
@@ -183,29 +182,20 @@ export function ChatPanel({ mode = 'slideout' }: PinnablePanelProps) {
 
   return (
     <div className={panelRootClass(isPinned)}>
-      {/* Header */}
-      <div className="flex items-center justify-between px-3 py-2.5 border-b border-border-subtle shrink-0">
-        <div className="flex items-center gap-1.5">
-          <span className="text-[13px] font-semibold text-text-heading flex items-center gap-1.5">
-            <ChatIcon size={12} /> Chat
-          </span>
-          <button
-            onClick={toggleNewestFirst}
-            title={
-              newestFirst
-                ? 'Newest first (click for oldest first)'
-                : 'Oldest first (click for newest first)'
-            }
-            className="flex items-center justify-center w-5 h-5 rounded-[3px] cursor-pointer text-text-dim hover:text-text-label transition-colors duration-150"
-          >
-            {newestFirst ? <SortAscIcon size={10} /> : <SortDescIcon size={10} />}
-          </button>
-        </div>
-        <div className="flex items-center gap-1.5">
-          <FontSizeControl value={chatFontSize} onChange={updateChatFontSize} />
-          {isPinned ? <PinnedControls /> : <PinMenuButton panel="chat" />}
-        </div>
-      </div>
+      <PanelHeader icon={<ChatIcon size={12} />} title="Chat" panel="chat" mode={mode}>
+        <FontSizeControl value={chatFontSize} onChange={updateChatFontSize} />
+        <button
+          onClick={toggleNewestFirst}
+          title={
+            newestFirst
+              ? 'Newest first (click for oldest first)'
+              : 'Oldest first (click for newest first)'
+          }
+          className="flex items-center justify-center w-5 h-5 rounded-[3px] cursor-pointer text-text-dim hover:text-text-label transition-colors duration-150"
+        >
+          {newestFirst ? <SortAscIcon size={10} /> : <SortDescIcon size={10} />}
+        </button>
+      </PanelHeader>
 
       {/* Filter pills + management badges */}
       <div

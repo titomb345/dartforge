@@ -10,6 +10,7 @@ import {
   type InteractionType,
 } from '../lib/helpContent';
 import { PowerIcon, ChatIcon, TrendingUpIcon, AliasIcon, HelpIcon } from './icons';
+import { PanelHeader } from './PanelHeader';
 
 const GOLD = '#d9af50';
 const GOLD_DIM = 'rgba(217, 175, 80, 0.3)';
@@ -245,33 +246,14 @@ function WelcomeBanner() {
 
 /* ── Main Panel ──────────────────────────────────────────── */
 
-export function HelpPanel() {
+export function HelpPanel({ onClose }: { onClose: () => void }) {
   const { hasSeenGuide } = useAppSettingsContext();
   const defaultOpen = HELP_CATEGORIES.find((c) => c.defaultOpen)?.key ?? null;
   const [openSection, setOpenSection] = useState<string | null>(defaultOpen);
 
   return (
-    <div className="h-full w-[380px] flex flex-col bg-bg-primary border-l border-border-dim">
-      {/* Header */}
-      <div
-        className="flex items-center gap-2 px-3 py-2 shrink-0"
-        style={{
-          borderBottom: `1px solid ${GOLD_DIM}`,
-          background: 'linear-gradient(to right, rgba(217, 175, 80, 0.04), transparent)',
-        }}
-      >
-        <span style={{ color: GOLD }}>
-          <HelpIcon size={14} />
-        </span>
-        <span
-          className="text-[12px] font-semibold uppercase tracking-[0.1em]"
-          style={{ color: GOLD }}
-        >
-          Guide
-        </span>
-        <div className="flex-1" />
-        <span className="text-[9px] text-text-dim">? for help anytime</span>
-      </div>
+    <div className="w-[380px] h-full bg-bg-primary border-l border-border-subtle flex flex-col overflow-hidden">
+      <PanelHeader icon={<HelpIcon size={12} />} title="Guide" onClose={onClose} />
 
       {/* Scrollable body */}
       <div className="flex-1 overflow-y-auto p-3 space-y-2">

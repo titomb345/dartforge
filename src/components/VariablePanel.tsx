@@ -4,6 +4,7 @@ import { useSkillTrackerContext } from '../contexts/SkillTrackerContext';
 import { charDisplayName } from '../lib/panelUtils';
 import type { Variable, VariableId, VariableScope } from '../types/variable';
 import { PlusIcon, VariableIcon } from './icons';
+import { PanelHeader } from './PanelHeader';
 import { ConfirmDeleteButton } from './ConfirmDeleteButton';
 import { FilterPill } from './FilterPill';
 import { MudInput, MudButton } from './shared';
@@ -240,31 +241,19 @@ export function VariablePanel({ onClose }: VariablePanelProps) {
 
   return (
     <div className="w-[400px] h-full bg-bg-primary border-l border-border-subtle flex flex-col overflow-hidden">
-      {/* Header */}
-      <div className="flex items-center justify-between px-3 py-2.5 border-b border-border-subtle shrink-0">
-        <span className="text-[13px] font-semibold text-text-heading flex items-center gap-1.5">
-          <VariableIcon size={12} /> {titleText}
-        </span>
-        <div className="flex items-center gap-1.5">
-          <button
-            onClick={() => {
-              setCreating(true);
-              setEditingId(null);
-            }}
-            title="New variable"
-            className="flex items-center justify-center w-5 h-5 rounded-[3px] cursor-pointer text-text-dim hover:text-[#4ade80] transition-colors duration-150"
-          >
-            <PlusIcon size={11} />
-          </button>
-          <button
-            onClick={onClose}
-            title="Close"
-            className="flex items-center justify-center w-5 h-5 rounded-[3px] cursor-pointer text-text-dim hover:text-text-label transition-colors duration-150 text-[13px]"
-          >
-            ×
-          </button>
-        </div>
-      </div>
+      <PanelHeader icon={<VariableIcon size={12} />} title={titleText} onClose={onClose}>
+        <button
+          onClick={() => {
+            setCreating(true);
+            setEditingId(null);
+          }}
+          title="New variable"
+          className="flex items-center gap-1 rounded text-[10px] cursor-pointer px-1.5 py-[2px] border border-border-dim text-text-dim hover:text-[#4ade80] hover:border-[#4ade80]/40 transition-colors duration-150"
+        >
+          <PlusIcon size={9} />
+          New Variable
+        </button>
+      </PanelHeader>
 
       {/* Scope toggle */}
       <div className="flex items-center gap-1.5 px-2 py-2 border-b border-border-subtle shrink-0">

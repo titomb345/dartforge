@@ -11,8 +11,7 @@ import {
   MAGIC_SLOT_SHORT,
 } from '../types/alloc';
 import { calcNull, calcArcane } from '../lib/allocPatterns';
-import { PinMenuButton } from './PinMenuButton';
-import { PinnedControls } from './PinnedControls';
+import { PanelHeader } from './PanelHeader';
 import {
   ChevronLeftIcon,
   ChevronRightSmallIcon,
@@ -998,15 +997,7 @@ export function AllocPanel({ mode = 'slideout' }: AllocPanelProps) {
           : 'w-[420px] h-full bg-bg-primary border-l border-border-subtle flex flex-col overflow-hidden'
       }
     >
-      {/* Header */}
-      <div className="flex items-center justify-between px-3 py-2.5 border-b border-border-subtle shrink-0">
-        <span className="text-[13px] font-semibold text-text-heading flex items-center gap-1.5">
-          <AllocIcon size={12} /> Allocations
-        </span>
-        <div className="flex items-center gap-1.5">
-          {isPinned ? <PinnedControls /> : <PinMenuButton panel="alloc" />}
-        </div>
-      </div>
+      <PanelHeader icon={<AllocIcon size={12} />} title="Allocations" panel="alloc" mode={mode} />
       {/* Tabs & view toggle */}
       <div className="flex items-center gap-1.5 px-2 py-1.5 border-b border-border-subtle shrink-0">
         <TabToggle tab={allocTab} onSetTab={setAllocTab} />

@@ -1,8 +1,7 @@
 import { useState, useRef, useMemo, useCallback, useEffect } from 'react';
 import type { PinnablePanelProps } from '../types';
 import { panelRootClass } from '../lib/panelUtils';
-import { PinMenuButton } from './PinMenuButton';
-import { PinnedControls } from './PinnedControls';
+import { PanelHeader } from './PanelHeader';
 import {
   BabelIcon,
   PlayIcon,
@@ -265,15 +264,7 @@ export function BabelPanel({ mode = 'slideout' }: PinnablePanelProps) {
 
   return (
     <div className={panelRootClass(isPinned)}>
-      {/* Header */}
-      <div className="flex items-center justify-between px-3 py-2.5 border-b border-border-subtle shrink-0">
-        <span className="text-[13px] font-semibold text-text-heading flex items-center gap-1.5">
-          <BabelIcon size={12} /> Babel
-        </span>
-        <div className="flex items-center gap-1.5 shrink-0">
-          {isPinned ? <PinnedControls /> : <PinMenuButton panel="babel" />}
-        </div>
-      </div>
+      <PanelHeader icon={<BabelIcon size={12} />} title="Babel" panel="babel" mode={mode} />
 
       {/* Single scrollable region — no nested scrolls */}
       <div className="flex-1 overflow-y-auto">

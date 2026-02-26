@@ -15,6 +15,7 @@ import {
   CounterIcon,
   UserIcon,
 } from './icons';
+import { PanelHeader } from './PanelHeader';
 import { DEFAULT_NUMPAD_MAPPINGS } from '../hooks/useAppSettings';
 import { MudInput, MudTextarea, MudNumberInput } from './shared';
 import { cn } from '../lib/cn';
@@ -177,7 +178,7 @@ interface BackupEntry {
 
 /* ── Main Panel ───────────────────────────────────────────── */
 
-export function SettingsPanel() {
+export function SettingsPanel({ onClose }: { onClose: () => void }) {
   const [openSection, setOpenSection] = useState<string | null>(null);
   const toggle = (key: string) => setOpenSection((prev) => (prev === key ? null : key));
 
@@ -294,12 +295,7 @@ export function SettingsPanel() {
 
   return (
     <div className="w-[360px] h-full bg-bg-primary border-l border-border-subtle flex flex-col overflow-hidden">
-      {/* Header */}
-      <div className="flex items-center px-3 py-2.5 border-b border-border-subtle">
-        <span className="text-[13px] font-semibold text-text-heading flex items-center gap-1.5">
-          <GearIcon size={12} /> Settings
-        </span>
-      </div>
+      <PanelHeader icon={<GearIcon size={12} />} title="Settings" onClose={onClose} />
 
       {/* Scrollable sections */}
       <div className="flex-1 overflow-y-auto px-2 py-2 space-y-2">

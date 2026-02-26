@@ -13,8 +13,7 @@ import {
 } from './icons';
 import { ConfirmDeleteButton } from './ConfirmDeleteButton';
 import { useAppSettingsContext } from '../contexts/AppSettingsContext';
-import { PinMenuButton } from './PinMenuButton';
-import { PinnedControls } from './PinnedControls';
+import { PanelHeader } from './PanelHeader';
 
 type CounterPanelProps = PinnablePanelProps;
 
@@ -122,17 +121,9 @@ export function CounterPanel({ mode = 'slideout' }: CounterPanelProps) {
   };
 
   // Pin controls (shared between header layouts)
-  const pinControls = isPinned ? <PinnedControls /> : <PinMenuButton panel="counter" />;
-
   return (
     <div className={panelRootClass(isPinned)}>
-      {/* Header */}
-      <div className="flex items-center justify-between px-3 py-2.5 border-b border-border-subtle shrink-0">
-        <span className="text-[13px] font-semibold text-text-heading flex items-center gap-1.5">
-          <CounterIcon size={12} /> Counters
-        </span>
-        <div className="flex items-center gap-1.5">{pinControls}</div>
-      </div>
+      <PanelHeader icon={<CounterIcon size={12} />} title="Counters" panel="counter" mode={mode} />
       {/* Counter tabs */}
       <div className="flex items-center gap-1 px-2 py-1.5 border-b border-border-subtle shrink-0">
         <div className="flex items-center gap-1 flex-1 min-w-0 overflow-x-auto">

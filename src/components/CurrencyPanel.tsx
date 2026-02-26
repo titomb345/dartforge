@@ -1,8 +1,7 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
 import type { PinnablePanelProps } from '../types';
 import { panelRootClass } from '../lib/panelUtils';
-import { PinMenuButton } from './PinMenuButton';
-import { PinnedControls } from './PinnedControls';
+import { PanelHeader } from './PanelHeader';
 import { CoinIcon } from './icons';
 import {
   ALL_SYSTEMS,
@@ -83,15 +82,7 @@ export function CurrencyPanel({ mode = 'slideout' }: PinnablePanelProps) {
 
   return (
     <div className={panelRootClass(isPinned)}>
-      {/* Header */}
-      <div className="flex items-center justify-between px-3 py-2.5 border-b border-border-subtle shrink-0">
-        <span className="text-[13px] font-semibold text-text-heading flex items-center gap-1.5">
-          <CoinIcon size={12} /> Currency Converter
-        </span>
-        <div className="flex items-center gap-1.5 shrink-0">
-          {isPinned ? <PinnedControls /> : <PinMenuButton panel="currency" />}
-        </div>
-      </div>
+      <PanelHeader icon={<CoinIcon size={12} />} title="Currency Converter" panel="currency" mode={mode} />
 
       {/* Content */}
       <div className="flex-1 overflow-auto">
