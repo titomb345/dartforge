@@ -110,6 +110,10 @@ export const CommandInput = forwardRef<HTMLTextAreaElement, CommandInputProps>(
       babelLanguage,
       babelNextAt,
       onToggleBabel,
+      inscriberActive,
+      inscriberSpell,
+      inscriberCycleCount,
+      onStopInscriber,
     } = useCommandInputContext();
     const { commandHistorySize, numpadMappings, showTimerBadges } = useAppSettingsContext();
     const { active: spotlightActive } = useSpotlight();
@@ -423,6 +427,21 @@ export const CommandInput = forwardRef<HTMLTextAreaElement, CommandInputProps>(
             <span>Babel</span>
             {babelNextAt && (
               <span className="opacity-70">{formatCountdown(babelNextAt - Date.now())}</span>
+            )}
+          </span>
+        )}
+
+        {/* Auto-inscriber badge */}
+        {inscriberActive && (
+          <span
+            title={`Inscribing: ${inscriberSpell ?? '?'} — click to stop`}
+            onClick={onStopInscriber}
+            className="flex items-center gap-1 px-1.5 py-1 rounded border text-[9px] font-mono self-center shrink-0 ml-1 text-[#60a5fa] border-[#60a5fa]/30 bg-[#60a5fa]/8 cursor-pointer select-none animate-pulse-slow"
+            style={{ filter: 'drop-shadow(0 0 3px rgba(96, 165, 250, 0.25))' }}
+          >
+            <span>Inscribe</span>
+            {inscriberCycleCount > 0 && (
+              <span className="opacity-70">x{inscriberCycleCount}</span>
             )}
           </span>
         )}

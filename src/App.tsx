@@ -74,6 +74,7 @@ import { useSignatureMappings } from './hooks/useSignatureMappings';
 import { matchTriggers, expandTriggerBody, resetTriggerCooldowns } from './lib/triggerEngine';
 import { smartWrite } from './lib/terminalUtils';
 import { ActionBlocker, type ActionBlockerState } from './lib/actionBlocker';
+import { AutoInscriber, type AutoInscriberState } from './lib/autoInscriber';
 import { type MovementMode, getNextMode, applyMovementMode, movementModeLabel } from './lib/movementMode';
 import { shouldGagLine } from './lib/gagPatterns';
 import { stripAnsi } from './lib/ansiUtils';
@@ -545,6 +546,9 @@ function AppMain() {
           })();
         }
 
+        // Auto-inscriber — watch for loop patterns
+        autoInscriberRef.current.processServerLine(stripped);
+
         // TODO: Re-enable when automapper is ready
         // mapFeedLineRef.current(stripped);
 
@@ -717,6 +721,19 @@ function AppMain() {
   }, []);
   const actionBlockingEnabledRef = useLatestRef(appSettings.actionBlockingEnabled);
   const gagGroupsRef = useLatestRef(appSettings.gagGroups);
+
+  // Auto-inscriber — automated inscription practice loop
+  const autoInscriberRef = useRef(new AutoInscriber());
+  const [inscriberState, setInscriberState] = useState<AutoInscriberState>(() =>
+    autoInscriberRef.current.getState()
+  );
+  useEffect(() => {
+    autoInscriberRef.current.onChange = () =>
+      setInscriberState(autoInscriberRef.current.getState());
+    return () => {
+      autoInscriberRef.current.onChange = null;
+    };
+  }, []);
 
   // Movement mode — direction command prefixing (lead/row/sneak)
   const [movementMode, setMovementMode] = useState<MovementMode>('normal');
@@ -1067,6 +1084,68 @@ function AppMain() {
         return;
       }
 
+      // Built-in /inscribe — automated inscription practice loop
+      if (/^\/inscribe\b/i.test(trimmed)) {
+        const args = trimmed.slice(9).trim();
+        const argsLower = args.toLowerCase();
+        const inscriber = autoInscriberRef.current;
+
+        if (argsLower === 'off' || argsLower === 'stop') {
+          inscriber.stop((msg) => writeToTerm(`\x1b[36m${msg}\x1b[0m\r\n`));
+          return;
+        }
+
+        if (argsLower.startsWith('power ')) {
+          const p = parseInt(argsLower.slice(6).trim(), 10);
+          if (isNaN(p) || p < 1) {
+            writeToTerm('\x1b[31mUsage: /inscribe power <number>\x1b[0m\r\n');
+          } else {
+            inscriber.setPower(p, (msg) => writeToTerm(`\x1b[36m${msg}\x1b[0m\r\n`));
+          }
+          return;
+        }
+
+        if (argsLower === 'status') {
+          const s = inscriber.getState();
+          if (!s.active) {
+            writeToTerm('\x1b[36m[Autoinscribe: OFF]\x1b[0m\r\n');
+          } else {
+            writeToTerm(
+              `\x1b[36m[Autoinscribe: ${s.spell} @ power ${s.power} | phase: ${s.phase} | cycles: ${s.cycleCount}]\x1b[0m\r\n`
+            );
+          }
+          return;
+        }
+
+        // /inscribe <spell> <power>
+        const parts = args.split(/\s+/);
+        if (parts.length < 2) {
+          writeToTerm(
+            '\x1b[31mUsage: /inscribe <spell> <power> | /inscribe off | /inscribe power <n> | /inscribe status\x1b[0m\r\n'
+          );
+          return;
+        }
+
+        const spellArg = parts[0];
+        const powerArg = parseInt(parts[1], 10);
+        if (isNaN(powerArg) || powerArg < 1) {
+          writeToTerm('\x1b[31mPower must be a positive number.\x1b[0m\r\n');
+          return;
+        }
+
+        // Resolve abbreviation for display only — MUD gets the raw input
+        const spellLookup = getSpellByAbbr(spellArg) ?? findSpellFuzzy(spellArg);
+        const displaySpell = spellLookup ? spellLookup.name : spellArg;
+
+        inscriber.start(
+          spellArg,
+          powerArg,
+          async (cmd) => await sendCommand(cmd),
+          (msg) => writeToTerm(`\x1b[36m${msg.replace(spellArg, displaySpell)}\x1b[0m\r\n`)
+        );
+        return;
+      }
+
       // Built-in /convert command — intercept before alias expansion
       if (/^\/convert\b/i.test(trimmed)) {
         const parsed = parseConvertCommand(trimmed);
@@ -1237,6 +1316,7 @@ function AppMain() {
       setLoggedIn(false);
       resetTriggerCooldowns();
       actionBlockerRef.current.reset();
+      autoInscriberRef.current.reset();
       setMovementMode('normal');
     }
   }, [connected]);
@@ -1486,6 +1566,11 @@ function AppMain() {
       babelLanguage: appSettings.babelLanguage,
       babelNextAt,
       onToggleBabel: () => appSettings.updateBabelEnabled(false),
+      inscriberActive: inscriberState.active,
+      inscriberSpell: inscriberState.spell,
+      inscriberCycleCount: inscriberState.cycleCount,
+      onStopInscriber: () =>
+        autoInscriberRef.current.stop((msg) => writeToTerm(`\x1b[36m${msg}\x1b[0m\r\n`)),
     }),
     [
       connected,
@@ -1517,6 +1602,8 @@ function AppMain() {
       appSettings.babelLanguage,
       babelNextAt,
       appSettings.updateBabelEnabled,
+      inscriberState,
+      writeToTerm,
     ]
   );
 

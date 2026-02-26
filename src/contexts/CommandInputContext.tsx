@@ -40,6 +40,11 @@ export interface CommandInputState {
   babelLanguage: string;
   babelNextAt: number | null;
   onToggleBabel: () => void;
+  // Auto-inscriber
+  inscriberActive: boolean;
+  inscriberSpell: string | null;
+  inscriberCycleCount: number;
+  onStopInscriber: () => void;
   // Custom timers
   activeTimers: ActiveTimerBadge[];
   onToggleTimer: (id: string) => void;

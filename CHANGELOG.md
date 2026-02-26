@@ -25,6 +25,7 @@ The `[Unreleased]` header controls automatic version bumping on merge:
 - `/spam` echo — `/spam` now prints `[Spam: command (xN)]` in the terminal before executing
 - Fuzzy name matching for spells and skills — `findSpellFuzzy` and `findSkillFuzzy` with punctuation-insensitive lookup (`nameUtils.ts`)
 - "Quite Hungry" and "Quite Thirsty" need levels added to hunger/thirst tracking
+- `/inscribe` command — automated inscription practice loop; `/inscribe <spell> <power>` starts the cycle (checks concentration, inscribes, invokes, repeats); `/inscribe power <n>` adjusts mid-loop; `/inscribe off` stops; blue badge in command input shows status and click-to-stop
 
 ### Fixed
 - "Bashing" skill is now correctly categorized as Other instead of Combat

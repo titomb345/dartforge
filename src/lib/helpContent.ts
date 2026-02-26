@@ -343,6 +343,11 @@ export const HELP_CATEGORIES: HelpCategory[] = [
         description:
           'Show skill details. Accepts abbreviations — "/skill mt" expands to "show skills magic theory". Pass a full name if no abbreviation is set.',
       },
+      {
+        title: '/inscribe',
+        description:
+          'Automated inscription practice loop. "/inscribe <spell> <power>" starts the cycle — checks concentration, inscribes, invokes, and repeats. "/inscribe power <n>" adjusts power mid-loop. "/inscribe off" stops. "/inscribe status" shows current state. A blue badge appears while active.',
+      },
     ],
   },
   {
