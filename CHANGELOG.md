@@ -11,6 +11,9 @@ The `[Unreleased]` header controls automatic version bumping on merge:
 
 ## [Unreleased-minor]
 
+### Changed
+- Moved timestamp format toggle (12h/24h) from Settings into the Chat panel toolbar — one less settings section, and the control lives where it's actually used
+
 ### Added
 - `npm run version:next` command — bump version locally at the start of a feature branch so dev builds reflect the correct upcoming version; idempotent and CI-compatible
 - Manual panel collapse — hover the resize handle between a pinned panel and the terminal to reveal a collapse chevron; click to shrink the panel to its icon strip without unpinning; click the expand chevron at the top of the icon strip to restore; state persists across sessions
@@ -28,11 +31,14 @@ The `[Unreleased]` header controls automatic version bumping on merge:
 - `/autoinscribe` command — automated inscription practice loop; `/autoinscribe <spell> @<power>` starts the cycle (checks concentration, inscribes, invokes, repeats); echoes the MUD command each cycle; `/autoinscribe power @<n>` adjusts mid-loop; `/autoinscribe off` stops; blue badge in command input shows status and click-to-stop; activates action blocker during inscribing/invoking to prevent accidental interrupts; detects concentration-broken interrupts and stops gracefully
 - `/autocast` command — automated spell practice loop with power auto-adjustment and weight mode; `/autocast <spell> @<power> [args]` starts the cycle (checks concentration, casts at given power, adjusts dynamically on success/near-success); echoes the MUD command each cycle; when power hits the floor (50) and a weight item is configured, enters weight mode — takes weight from a container on success, puts it back on fail; `/autocast adjust power @<n>` sets power directly; `/autocast adjust power <up> <down>` and `/autocast adjust weight <up> <down>` set adjustment amounts; `/autocast set weight <item>` and `/autocast set container <name>` configure weight mode (persisted); `/autocast off` stops and returns all carried weight; green badge (normal) / amber badge (weight mode) in command input; activates action blocker during casting to prevent accidental interrupts; detects concentration-broken interrupts and stops gracefully
 - `/announce` command — auto-broadcast skill improvements via OOC; `/announce on` sends "skillname+", `/announce brief` sends "+", `/announce verbose` sends "skillname+ (count)"; `/announce pet on|brief|verbose` for pet announcements; orange badge in command input when active; click badge to stop
+- `/autoconc` command — auto-execute any command(s) on full concentration (BEBT); `/autoconc <action>` sets and starts the loop (checks concentration, executes the action on BEBT, waits, rechecks); actions support aliases, `/spam`, `/delay`, `/echo`, `/var`, and semicolons for multi-command chains; `/autoconc on` restarts with the previously saved action (persisted across sessions); `/autoconc off` stops; `/autoconc status` shows current state; purple badge in command input shows status and click-to-stop; auto-stops on unconscious
 
 ### Changed
 - Aura status bar color now extracted from the MUD's actual ANSI color codes instead of using hardcoded hex values — matches in-game colors exactly and follows terminal theme customization
+- Multi-colored aura descriptors (e.g. "very dim red", "reddish-orange") now render each word in its MUD ANSI color in the status bar pill instead of a single flat color
 
 ### Fixed
+- Aura pill color no longer sticks to the previous color when aura drops to "None" — correctly resets to grey
 - "Bashing" skill is now correctly categorized as Other instead of Combat
 - Chat timestamps no longer show "-1m" for self-sent messages (clock skew fix)
 - TELL badge was rendering white (unresolved `text-pink` class) — now correctly renders in pink

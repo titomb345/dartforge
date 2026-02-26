@@ -175,8 +175,6 @@ export function SettingsPanel({ onClose }: { onClose: () => void }) {
     updateCommandHistorySize,
     chatHistorySize,
     updateChatHistorySize,
-    timestampFormat,
-    updateTimestampFormat,
     sessionLoggingEnabled,
     updateSessionLoggingEnabled,
     actionBlockingEnabled,
@@ -701,33 +699,6 @@ export function SettingsPanel({ onClose }: { onClose: () => void }) {
           </FieldRow>
         </SettingsSection>
 
-        {/* Timestamps */}
-        <SettingsSection
-          icon={<ClockIcon size={13} />}
-          title="Timestamps"
-          accent="#ff79c6"
-          open={openSection === 'timestamps'}
-          onToggle={() => toggle('timestamps')}
-        >
-          <FieldRow label="Timestamp format">
-            <div className="flex gap-1">
-              {(['12h', '24h'] as const).map((fmt) => (
-                <button
-                  key={fmt}
-                  onClick={() => updateTimestampFormat(fmt)}
-                  className={cn(
-                    'text-[10px] font-mono px-2 py-0.5 rounded border cursor-pointer transition-colors',
-                    timestampFormat === fmt
-                      ? 'text-pink border-pink/40 bg-pink/10'
-                      : 'text-text-dim border-border-dim hover:border-pink/30'
-                  )}
-                >
-                  {fmt}
-                </button>
-              ))}
-            </div>
-          </FieldRow>
-        </SettingsSection>
 
         {/* Session Logging */}
         <SettingsSection

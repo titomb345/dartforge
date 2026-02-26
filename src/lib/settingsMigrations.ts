@@ -7,7 +7,7 @@ import type { DataStore } from '../contexts/DataStoreContext';
  * baseline. Existing beta users (version > 1) are normalized to 1 so
  * future migrations apply correctly to everyone.
  */
-export const CURRENT_VERSION = 11;
+export const CURRENT_VERSION = 12;
 
 /** Raw store contents — all keys are optional since older stores may lack them. */
 export type StoreData = Record<string, unknown>;
@@ -214,6 +214,11 @@ const MIGRATIONS: MigrationFn[] = [
     if (!('casterWeightContainer' in data)) data.casterWeightContainer = 'bin';
     if (!('casterWeightAdjustUp' in data)) data.casterWeightAdjustUp = 10;
     if (!('casterWeightAdjustDown' in data)) data.casterWeightAdjustDown = 5;
+    return data;
+  },
+  // v11 → v12: Auto-conc action
+  (data) => {
+    if (!('autoConcAction' in data)) data.autoConcAction = '';
     return data;
   },
 ];

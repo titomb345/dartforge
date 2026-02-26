@@ -55,6 +55,11 @@ export interface CommandInputState {
   casterCarriedWeight: number;
   casterWeightItem: string;
   onStopCaster: () => void;
+  // Auto-conc
+  concActive: boolean;
+  concAction: string | null;
+  concCycleCount: number;
+  onStopConc: () => void;
   // Announce
   announceMode: AnnounceMode;
   onStopAnnounce: () => void;

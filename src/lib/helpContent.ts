@@ -354,6 +354,11 @@ export const HELP_CATEGORIES: HelpCategory[] = [
           'Automated spell practice loop with power auto-adjustment and weight mode. "/autocast <spell> @<power> [args]" starts the cycle. Power adjusts dynamically: fail = power up (easier), success = power down (harder). When power hits the floor (50) and a weight item is configured, enters weight mode — takes weight from a container on success, puts it back on fail. "/autocast adjust power @<n>" sets power directly. "/autocast adjust power <up> <down>" sets power adjustment steps. "/autocast adjust weight <n>" force-sets carried weight. "/autocast adjust weight <up> <down>" sets weight take/put steps. "/autocast set item <item>" sets the weight item (default: tallow). "/autocast set container <name>" sets the container (default: bin). "/autocast clear container" removes the container (use ground). "/autocast off" stops (returns all weight). "/autocast status" shows current state. Green badge when active; amber badge in weight mode.',
       },
       {
+        title: '/autoconc',
+        description:
+          'Auto-execute any command(s) on full concentration (BEBT). "/autoconc <action>" sets the action and starts the loop — checks concentration, executes the action on BEBT, waits, then rechecks. The action supports aliases, /spam, /delay, /echo, /var, and semicolons for multi-command chains. "/autoconc on" restarts with the previously saved action. "/autoconc off" stops. "/autoconc status" shows current state. The action persists across sessions. A purple badge appears while active.',
+      },
+      {
         title: '/announce',
         description:
           'Auto-broadcast skill improvements via OOC. "/announce on" sends "skillname+", "/announce brief" sends just "+", "/announce verbose" sends "skillname+ (count)". "/announce pet on|brief|verbose" controls pet announcements separately. "/announce off" disables. An orange badge shows when active.',

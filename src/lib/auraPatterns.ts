@@ -1,5 +1,6 @@
 import type { ThemeColorKey } from './defaultTheme';
-import { extractAnsiColor } from './ansiColorExtract';
+import { extractAnsiColor, extractAnsiColorSegments } from './ansiColorExtract';
+import type { AnsiColorSegment } from './ansiColorExtract';
 
 /** A single aura state with display metadata */
 export interface AuraLevel {
@@ -243,6 +244,8 @@ export interface AuraMatch {
   raw: string;
   /** ANSI color extracted from the raw MUD line, if available */
   mudColor: ThemeColorKey | null;
+  /** Per-word color segments when the MUD colors parts differently (e.g. "very dim red") */
+  mudColors: AnsiColorSegment[] | null;
 }
 
 /** Lookup map for fast matching */
@@ -270,7 +273,7 @@ export function matchAuraLine(line: string, rawLine?: string): AuraMatch | null 
   // "You have no aura." / "You appear to have no aura."
   if (cleaned === 'You have no aura.' || cleaned === 'You appear to have no aura.') {
     const level = AURA_LOOKUP.get('none');
-    if (level) return { level, raw: cleaned, mudColor: null };
+    if (level) return { level, raw: cleaned, mudColor: null, mudColors: null };
   }
 
   // Strip optional "Aura : " prefix (score output keeps the full sentence after it)
@@ -286,7 +289,7 @@ export function matchAuraLine(line: string, rawLine?: string): AuraMatch | null 
       lower === 'you appear to have no aura'
     ) {
       const level = AURA_LOOKUP.get('none');
-      if (level) return { level, raw: cleaned, mudColor: null };
+      if (level) return { level, raw: cleaned, mudColor: null, mudColors: null };
     }
   }
 
@@ -296,8 +299,14 @@ export function matchAuraLine(line: string, rawLine?: string): AuraMatch | null 
     const descriptor = auraMatch[1].toLowerCase();
     const level = AURA_LOOKUP.get(descriptor);
     if (level) {
-      const mudColor = rawLine ? extractAnsiColor(rawLine, auraMatch[1]) : null;
-      return { level, raw: cleaned, mudColor };
+      const mudColors = rawLine ? extractAnsiColorSegments(rawLine, auraMatch[1]) : null;
+      // Use last segment color as primary (the base color, e.g. "red" in "very dim red")
+      const mudColor = mudColors
+        ? mudColors[mudColors.length - 1].color
+        : rawLine
+          ? extractAnsiColor(rawLine, auraMatch[1])
+          : null;
+      return { level, raw: cleaned, mudColor, mudColors };
     }
   }
 

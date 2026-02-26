@@ -137,6 +137,9 @@ export function useAppSettings() {
   const [casterWeightAdjustUp, setCasterWeightAdjustUp] = useState(10);
   const [casterWeightAdjustDown, setCasterWeightAdjustDown] = useState(5);
 
+  // Auto-conc
+  const [autoConcAction, setAutoConcAction] = useState('');
+
   // Post-sync commands
   const [postSyncEnabled, setPostSyncEnabled] = useState(false);
   const [postSyncCommands, setPostSyncCommands] = useState('');
@@ -287,6 +290,10 @@ export function useAppSettings() {
       if (savedCasterWeightAdjustDown != null && savedCasterWeightAdjustDown >= 1)
         setCasterWeightAdjustDown(savedCasterWeightAdjustDown);
 
+      // Auto-conc
+      const savedAutoConcAction = await dataStore.get<string>(SETTINGS_FILE, 'autoConcAction');
+      if (savedAutoConcAction != null) setAutoConcAction(savedAutoConcAction);
+
       // Babel
       const savedBabelEnabled = await dataStore.get<boolean>(SETTINGS_FILE, 'babelEnabled');
       if (savedBabelEnabled != null) setBabelEnabled(savedBabelEnabled);
@@ -426,6 +433,8 @@ export function useAppSettings() {
       updateCasterWeightContainer: make(setCasterWeightContainer, 'casterWeightContainer'),
       updateCasterWeightAdjustUp: make(setCasterWeightAdjustUp, 'casterWeightAdjustUp'),
       updateCasterWeightAdjustDown: make(setCasterWeightAdjustDown, 'casterWeightAdjustDown'),
+      // Auto-conc
+      updateAutoConcAction: make(setAutoConcAction, 'autoConcAction'),
     };
   }, [persist]);
 
@@ -573,6 +582,8 @@ export function useAppSettings() {
     casterWeightContainer,
     casterWeightAdjustUp,
     casterWeightAdjustDown,
+    // Auto-conc
+    autoConcAction,
     // Special updaters (have extra logic beyond simple set+persist)
     updateAlignmentTrackingEnabled,
     updateAutoLoginCharacters,

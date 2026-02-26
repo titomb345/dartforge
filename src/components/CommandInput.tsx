@@ -122,6 +122,10 @@ export const CommandInput = forwardRef<HTMLTextAreaElement, CommandInputProps>(
       casterCarriedWeight,
       casterWeightItem,
       onStopCaster,
+      concActive,
+      concAction,
+      concCycleCount,
+      onStopConc,
       announceMode,
       onStopAnnounce,
     } = useCommandInputContext();
@@ -479,6 +483,21 @@ export const CommandInput = forwardRef<HTMLTextAreaElement, CommandInputProps>(
             <span>{casterWeightMode ? 'Autocast+Wt' : 'Autocast'}</span>
             {casterCycleCount > 0 && (
               <span className="opacity-70">x{casterCycleCount}</span>
+            )}
+          </span>
+        )}
+
+        {/* Auto-conc badge */}
+        {concActive && (
+          <span
+            title={`Autoconc: ${concAction ?? '?'} — click to stop`}
+            onClick={onStopConc}
+            className="flex items-center gap-1 px-1.5 py-1 rounded border text-[9px] font-mono self-center shrink-0 ml-1 text-[#c084fc] border-[#c084fc]/30 bg-[#c084fc]/8 cursor-pointer select-none animate-pulse-slow"
+            style={{ filter: 'drop-shadow(0 0 3px rgba(192, 132, 252, 0.25))' }}
+          >
+            <span>Autoconc</span>
+            {concCycleCount > 0 && (
+              <span className="opacity-70">x{concCycleCount}</span>
             )}
           </span>
         )}

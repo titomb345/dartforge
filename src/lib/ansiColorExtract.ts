@@ -49,6 +49,11 @@ export function ansiParamsToThemeKey(params: string): ThemeColorKey | null {
   return bold ? ANSI_BRIGHT[fg] : ANSI_BASE[fg];
 }
 
+export interface AnsiColorSegment {
+  text: string;
+  color: ThemeColorKey;
+}
+
 const ANSI_RE = /\x1b\[([0-9;]*)m/g;
 
 /**
@@ -78,4 +83,78 @@ export function extractAnsiColor(rawLine: string, target: string): ThemeColorKey
   }
 
   return lastAnsi ? ansiParamsToThemeKey(lastAnsi) : null;
+}
+
+/**
+ * Extract per-character ANSI colors for `target` in the raw line,
+ * grouped into segments of consecutive characters sharing the same color.
+ * Returns null when there is only one color (the existing mudColor handles that).
+ * Tracks cumulative bold/fg state across multiple ANSI sequences.
+ */
+export function extractAnsiColorSegments(
+  rawLine: string,
+  target: string,
+): AnsiColorSegment[] | null {
+  const visible = rawLine.replace(ANSI_RE, '');
+  const targetIdx = visible.indexOf(target);
+  if (targetIdx < 0) return null;
+  const targetEnd = targetIdx + target.length;
+
+  let visPos = 0;
+  let bold = false;
+  let fg = -1;
+  let i = 0;
+
+  const charKeys: (ThemeColorKey | null)[] = [];
+
+  while (i < rawLine.length && visPos < targetEnd) {
+    const m = rawLine.slice(i).match(/^\x1b\[([0-9;]*)m/);
+    if (m) {
+      const parts = m[1].split(';').map(Number);
+      for (const p of parts) {
+        if (p === 0) {
+          bold = false;
+          fg = -1;
+        } else if (p === 1) {
+          bold = true;
+        } else if (p >= 30 && p <= 37) {
+          fg = p - 30;
+        } else if (p >= 90 && p <= 97) {
+          fg = p - 90;
+          bold = true;
+        }
+      }
+      i += m[0].length;
+      continue;
+    }
+
+    if (visPos >= targetIdx) {
+      charKeys.push(fg >= 0 ? (bold ? ANSI_BRIGHT[fg] : ANSI_BASE[fg]) : null);
+    }
+
+    visPos++;
+    i++;
+  }
+
+  if (charKeys.length === 0) return null;
+
+  // Group consecutive characters with the same color
+  const segments: AnsiColorSegment[] = [];
+  let curColor = charKeys[0];
+  let curText = target[0];
+
+  for (let j = 1; j < charKeys.length; j++) {
+    if (charKeys[j] === curColor) {
+      curText += target[j];
+    } else {
+      segments.push({ text: curText, color: curColor ?? 'white' });
+      curColor = charKeys[j];
+      curText = target[j];
+    }
+  }
+  segments.push({ text: curText, color: curColor ?? 'white' });
+
+  // Only useful when there are multiple distinct colors
+  if (segments.length <= 1) return null;
+  return segments;
 }

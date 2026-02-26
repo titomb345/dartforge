@@ -76,6 +76,7 @@ import { smartWrite } from './lib/terminalUtils';
 import { ActionBlocker, type ActionBlockerState } from './lib/actionBlocker';
 import { AutoInscriber, type AutoInscriberState } from './lib/autoInscriber';
 import { AutoCaster, type AutoCasterState } from './lib/autoCaster';
+import { AutoConc, type AutoConcState } from './lib/autoConc';
 import { type MovementMode, getNextMode, applyMovementMode, movementModeLabel } from './lib/movementMode';
 import { shouldGagLine } from './lib/gagPatterns';
 import { stripAnsi } from './lib/ansiUtils';
@@ -496,7 +497,7 @@ function AppMain() {
   const updateHungerRef = useLatestRef(updateHunger);
   const updateThirstRef = useLatestRef(updateThirst);
 
-  const { aura, auraMudColor, updateAura } = useAura();
+  const { aura, auraMudColor, auraMudColors, updateAura } = useAura();
   const updateAuraRef = useLatestRef(updateAura);
 
   const { encumbrance, updateEncumbrance } = useEncumbrance();
@@ -555,6 +556,9 @@ function AppMain() {
 
         // Auto-caster — watch for cast loop patterns
         autoCasterRef.current.processServerLine(stripped);
+
+        // Auto-conc — watch for BEBT to execute action
+        autoConcRef.current.processServerLine(stripped);
 
         // TODO: Re-enable when automapper is ready
         // mapFeedLineRef.current(stripped);
@@ -768,6 +772,23 @@ function AppMain() {
     appSettings.casterWeightAdjustUp,
     appSettings.casterWeightAdjustDown,
   ]);
+
+  // Auto-conc — auto-execute on full concentration
+  const autoConcRef = useRef(new AutoConc());
+  const [concState, setConcState] = useState<AutoConcState>(() =>
+    autoConcRef.current.getState()
+  );
+  useEffect(() => {
+    autoConcRef.current.onChange = () => setConcState(autoConcRef.current.getState());
+    return () => {
+      autoConcRef.current.onChange = null;
+    };
+  }, []);
+
+  // Sync persisted action to auto-conc when settings load
+  useEffect(() => {
+    autoConcRef.current.setAction(appSettings.autoConcAction);
+  }, [appSettings.autoConcAction]);
 
   // Movement mode — direction command prefixing (lead/row/sneak)
   const [movementMode, setMovementMode] = useState<MovementMode>('normal');
@@ -1392,6 +1413,77 @@ function AppMain() {
         return;
       }
 
+      // Built-in /autoconc — auto-execute on full concentration
+      if (/^\/autoconc\b/i.test(trimmed)) {
+        const args = trimmed.slice(9).trim();
+        const argsLower = args.toLowerCase();
+        const conc = autoConcRef.current;
+
+        if (argsLower === 'off' || argsLower === 'stop') {
+          conc.stop((msg) => writeToTerm(`\x1b[36m${msg}\x1b[0m\r\n`));
+          return;
+        }
+
+        if (argsLower === 'status') {
+          const s = conc.getState();
+          const cyan = '\x1b[36m';
+          const reset = '\x1b[0m';
+          const line = (text: string) => writeToTerm(`${cyan}${text}${reset}\r\n`);
+
+          if (!s.active) {
+            line(`[Autoconc: OFF${s.action ? ` | Action: ${s.action}` : ''}]`);
+          } else {
+            line(`[Autoconc: ${s.action}]`);
+            line(`  Phase: ${s.phase} | Cycles: ${s.cycleCount}`);
+          }
+          return;
+        }
+
+        // Start helpers
+        const startConc = (action: string) => {
+          conc.start(
+            action,
+            async (cmd) => await sendCommand(cmd),
+            async (action) => {
+              const result = expandInput(action, mergedAliasesRef.current, {
+                enableSpeedwalk: enableSpeedwalkRef.current,
+                activeCharacter: activeCharacterRef.current,
+              });
+              await executeCommands(result.commands, triggerRunnerRef.current);
+            },
+            (msg) => writeToTerm(`\x1b[36m${msg}\x1b[0m\r\n`)
+          );
+        };
+
+        if (argsLower === 'on' || argsLower === 'start') {
+          const saved = appSettings.autoConcAction;
+          if (!saved) {
+            writeToTerm(
+              '\x1b[31mNo action set. Use /autoconc <action> to set and start.\x1b[0m\r\n'
+            );
+          } else {
+            startConc(saved);
+          }
+          return;
+        }
+
+        if (!args) {
+          writeToTerm(
+            '\x1b[31mUsage:\r\n' +
+            '  /autoconc <action>    Set action and start loop\r\n' +
+            '  /autoconc on          Start with saved action\r\n' +
+            '  /autoconc off         Stop the loop\r\n' +
+            '  /autoconc status      Show current state\x1b[0m\r\n'
+          );
+          return;
+        }
+
+        // Anything else = set action + start
+        appSettings.updateAutoConcAction(args);
+        startConc(args);
+        return;
+      }
+
       // Built-in /announce — toggle skill improvement OOC announcements
       if (/^\/announce\b/i.test(trimmed)) {
         const args = trimmed.slice(9).trim().toLowerCase();
@@ -1601,6 +1693,7 @@ function AppMain() {
       actionBlockerRef.current.reset();
       autoInscriberRef.current.reset();
       autoCasterRef.current.reset();
+      autoConcRef.current.reset();
       setMovementMode('normal');
     }
   }, [connected]);
@@ -1687,7 +1780,7 @@ function AppMain() {
       },
       {
         id: 'aura',
-        data: aura ? { ...aura, mudColor: auraMudColor } : null,
+        data: aura ? { ...aura, mudColor: auraMudColor, mudColors: auraMudColors } : null,
         icon: <AuraIcon size={11} />,
         tooltip: (d) =>
           d.key === 'none' ? 'You have no aura.' : `Your aura appears to be ${d.descriptor}.`,
@@ -1736,7 +1829,7 @@ function AppMain() {
         dangerThreshold: 99,
       },
     ],
-    [health, concentration, aura, auraMudColor, hunger, thirst, encumbrance, movement, alignment]
+    [health, concentration, aura, auraMudColor, auraMudColors, hunger, thirst, encumbrance, movement, alignment]
   );
 
   const skillTrackerValue = useMemo(
@@ -1864,6 +1957,11 @@ function AppMain() {
       casterWeightItem: casterState.weightItem,
       onStopCaster: () =>
         autoCasterRef.current.stop((msg) => writeToTerm(`\x1b[36m${msg}\x1b[0m\r\n`)),
+      concActive: concState.active,
+      concAction: concState.action,
+      concCycleCount: concState.cycleCount,
+      onStopConc: () =>
+        autoConcRef.current.stop((msg) => writeToTerm(`\x1b[36m${msg}\x1b[0m\r\n`)),
       announceMode: appSettings.announceMode,
       onStopAnnounce: () => {
         appSettings.updateAnnounceMode('off');
@@ -1902,6 +2000,7 @@ function AppMain() {
       appSettings.updateBabelEnabled,
       inscriberState,
       casterState,
+      concState,
       appSettings.announceMode,
       appSettings.updateAnnounceMode,
       appSettings.updateAnnouncePetMode,

@@ -4,7 +4,7 @@ import { useSignatureContext } from '../contexts/SignatureContext';
 import type { ChatType } from '../types/chat';
 import type { PinnablePanelProps } from '../types';
 import { panelRootClass } from '../lib/panelUtils';
-import { SortAscIcon, SortDescIcon, ChatIcon } from './icons';
+import { SortAscIcon, SortDescIcon, ChatIcon, ClockIcon } from './icons';
 import { FilterPill } from './FilterPill';
 import { PanelHeader } from './PanelHeader';
 import { ChatMessageRow } from './ChatMessageRow';
@@ -70,7 +70,7 @@ export function ChatPanel({ mode = 'slideout' }: PinnablePanelProps) {
     updateSender,
   } = useChatContext();
   const { sortedMappings, createMapping } = useSignatureContext();
-  const { chatFontSize, updateChatFontSize } = useAppSettingsContext();
+  const { chatFontSize, updateChatFontSize, timestampFormat, updateTimestampFormat } = useAppSettingsContext();
   const scrollRef = useRef<HTMLDivElement | null>(null);
   const isNearEdgeRef = useRef(true);
   const [exclusiveFilter, setExclusiveFilter] = useState<ChatType | null>(null);
@@ -195,6 +195,25 @@ export function ChatPanel({ mode = 'slideout' }: PinnablePanelProps) {
         >
           {newestFirst ? <SortAscIcon size={10} /> : <SortDescIcon size={10} />}
         </button>
+
+        <div className="w-px h-3 bg-border-subtle mx-0.5" />
+
+        <div className="flex items-center gap-0.5" title="Timestamp format">
+          <span className="text-text-dim mr-0.5"><ClockIcon size={9} /></span>
+          {(['12h', '24h'] as const).map((fmt) => (
+            <button
+              key={fmt}
+              onClick={() => updateTimestampFormat(fmt)}
+              className={`text-[10px] font-mono px-1.5 py-0.5 rounded border cursor-pointer transition-colors ${
+                timestampFormat === fmt
+                  ? 'text-pink border-pink/40 bg-pink/10'
+                  : 'text-text-dim border-border-dim hover:border-pink/30'
+              }`}
+            >
+              {fmt}
+            </button>
+          ))}
+        </div>
       </PanelHeader>
 
       {/* Filter pills + management badges */}
