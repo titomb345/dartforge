@@ -1,4 +1,5 @@
 import type { ThemeColorKey } from './defaultTheme';
+import { extractAnsiColor } from './ansiColorExtract';
 
 /** A player entry from the `who` output */
 export interface WhoPlayer {
@@ -65,83 +66,8 @@ export function isWhoHeaderLine(stripped: string): boolean {
 }
 
 // ---------------------------------------------------------------------------
-// ANSI color extraction — maps ANSI SGR params to ThemeColorKey
+// ANSI color extraction — shared utility in ansiColorExtract.ts
 // ---------------------------------------------------------------------------
-
-const ANSI_BASE: ThemeColorKey[] = [
-  'black',
-  'red',
-  'green',
-  'yellow',
-  'blue',
-  'magenta',
-  'cyan',
-  'white',
-];
-const ANSI_BRIGHT: ThemeColorKey[] = [
-  'brightBlack',
-  'brightRed',
-  'brightGreen',
-  'brightYellow',
-  'brightBlue',
-  'brightMagenta',
-  'brightCyan',
-  'brightWhite',
-];
-
-function ansiParamsToThemeKey(params: string): ThemeColorKey | null {
-  const parts = params.split(';').map(Number);
-  let bold = false;
-  let fg = -1;
-
-  for (const p of parts) {
-    if (p === 0) {
-      bold = false;
-      fg = -1;
-    } else if (p === 1) {
-      bold = true;
-    } else if (p >= 30 && p <= 37) {
-      fg = p - 30;
-    } else if (p >= 90 && p <= 97) {
-      fg = p - 90;
-      bold = true;
-    }
-  }
-
-  if (fg < 0) return null;
-  return bold ? ANSI_BRIGHT[fg] : ANSI_BASE[fg];
-}
-
-const ANSI_RE = /\x1b\[([0-9;]*)m/g;
-
-/**
- * Extract the ANSI color active at the position of `name` in the raw line.
- * Walks the raw line tracking visible character position and last ANSI code.
- */
-function extractNameColor(rawLine: string, name: string): ThemeColorKey | null {
-  // Find the name position in visible text
-  const visible = rawLine.replace(ANSI_RE, '');
-  const nameIdx = visible.indexOf(name);
-  if (nameIdx < 0) return null;
-
-  let visPos = 0;
-  let lastAnsi: string | null = null;
-  let i = 0;
-
-  while (i < rawLine.length) {
-    const m = rawLine.slice(i).match(/^\x1b\[([0-9;]*)m/);
-    if (m) {
-      if (visPos <= nameIdx) lastAnsi = m[1];
-      i += m[0].length;
-      continue;
-    }
-    visPos++;
-    if (visPos > nameIdx) break;
-    i++;
-  }
-
-  return lastAnsi ? ansiParamsToThemeKey(lastAnsi) : null;
-}
 
 /** Parse a single-player segment. Returns null if the segment doesn't match. */
 export function parseWhoPlayerLine(stripped: string): WhoPlayer | null {
@@ -223,7 +149,7 @@ export function buildWhoSnapshot(lines: string[], rawLines?: string[]): WhoSnaps
     if (linePlayers.length > 0) {
       for (const player of linePlayers) {
         if (rawLines?.[idx]) {
-          player.nameColor = extractNameColor(rawLines[idx], player.name);
+          player.nameColor = extractAnsiColor(rawLines[idx], player.name);
         }
         players.push(player);
       }

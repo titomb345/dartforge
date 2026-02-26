@@ -496,7 +496,7 @@ function AppMain() {
   const updateHungerRef = useLatestRef(updateHunger);
   const updateThirstRef = useLatestRef(updateThirst);
 
-  const { aura, updateAura } = useAura();
+  const { aura, auraMudColor, updateAura } = useAura();
   const updateAuraRef = useLatestRef(updateAura);
 
   const { encumbrance, updateEncumbrance } = useEncumbrance();
@@ -1687,7 +1687,7 @@ function AppMain() {
       },
       {
         id: 'aura',
-        data: aura,
+        data: aura ? { ...aura, mudColor: auraMudColor } : null,
         icon: <AuraIcon size={11} />,
         tooltip: (d) =>
           d.key === 'none' ? 'You have no aura.' : `Your aura appears to be ${d.descriptor}.`,
@@ -1736,7 +1736,7 @@ function AppMain() {
         dangerThreshold: 99,
       },
     ],
-    [health, concentration, aura, hunger, thirst, encumbrance, movement, alignment]
+    [health, concentration, aura, auraMudColor, hunger, thirst, encumbrance, movement, alignment]
   );
 
   const skillTrackerValue = useMemo(

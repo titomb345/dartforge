@@ -1,4 +1,5 @@
 import type { ThemeColorKey } from './defaultTheme';
+import { extractAnsiColor } from './ansiColorExtract';
 
 /** A single aura state with display metadata */
 export interface AuraLevel {
@@ -240,6 +241,8 @@ export const AURA_LEVELS: AuraLevel[] = [
 export interface AuraMatch {
   level: AuraLevel;
   raw: string;
+  /** ANSI color extracted from the raw MUD line, if available */
+  mudColor: ThemeColorKey | null;
 }
 
 /** Lookup map for fast matching */
@@ -255,8 +258,11 @@ for (const level of AURA_LEVELS) {
  * - "Your aura appears to be <color>."
  * - "Aura          : <color>." (score output, variable spacing)
  * - "You have no aura." / "You appear to have no aura." / "Aura          : None."
+ *
+ * When `rawLine` (with ANSI codes intact) is provided, extracts the MUD's
+ * actual color for the aura descriptor text.
  */
-export function matchAuraLine(line: string): AuraMatch | null {
+export function matchAuraLine(line: string, rawLine?: string): AuraMatch | null {
   // Strip leading "> " prompts
   const cleaned = line.replace(/^(?:> )+/, '').trim();
   if (!cleaned) return null;
@@ -264,7 +270,7 @@ export function matchAuraLine(line: string): AuraMatch | null {
   // "You have no aura." / "You appear to have no aura."
   if (cleaned === 'You have no aura.' || cleaned === 'You appear to have no aura.') {
     const level = AURA_LOOKUP.get('none');
-    if (level) return { level, raw: cleaned };
+    if (level) return { level, raw: cleaned, mudColor: null };
   }
 
   // Strip optional "Aura : " prefix (score output keeps the full sentence after it)
@@ -280,7 +286,7 @@ export function matchAuraLine(line: string): AuraMatch | null {
       lower === 'you appear to have no aura'
     ) {
       const level = AURA_LOOKUP.get('none');
-      if (level) return { level, raw: cleaned };
+      if (level) return { level, raw: cleaned, mudColor: null };
     }
   }
 
@@ -289,7 +295,10 @@ export function matchAuraLine(line: string): AuraMatch | null {
   if (auraMatch) {
     const descriptor = auraMatch[1].toLowerCase();
     const level = AURA_LOOKUP.get(descriptor);
-    if (level) return { level, raw: cleaned };
+    if (level) {
+      const mudColor = rawLine ? extractAnsiColor(rawLine, auraMatch[1]) : null;
+      return { level, raw: cleaned, mudColor };
+    }
   }
 
   return null;

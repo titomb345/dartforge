@@ -50,6 +50,8 @@ export interface ReadoutData {
   key?: string;
   /** Optional direct CSS color — bypasses theme lookup when set */
   color?: string;
+  /** ANSI color extracted from MUD output — takes priority over color when set */
+  mudColor?: ThemeColorKey | null;
 }
 
 export interface ReadoutConfig {
@@ -167,7 +169,7 @@ function SortableReadout({
       <StatusReadout
         icon={config.icon}
         label={data.label}
-        color={data.color ?? theme[data.themeColor]}
+        color={data.mudColor ? theme[data.mudColor] : (data.color ?? theme[data.themeColor])}
         tooltip={config.tooltip(data)}
         glow={data.severity <= 1}
         danger={data.severity >= config.dangerThreshold}

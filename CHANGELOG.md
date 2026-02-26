@@ -29,6 +29,9 @@ The `[Unreleased]` header controls automatic version bumping on merge:
 - `/autocast` command — automated spell practice loop with power auto-adjustment and weight mode; `/autocast <spell> @<power> [args]` starts the cycle (checks concentration, casts at given power, adjusts dynamically on success/near-success); echoes the MUD command each cycle; when power hits the floor (50) and a weight item is configured, enters weight mode — takes weight from a container on success, puts it back on fail; `/autocast adjust power @<n>` sets power directly; `/autocast adjust power <up> <down>` and `/autocast adjust weight <up> <down>` set adjustment amounts; `/autocast set weight <item>` and `/autocast set container <name>` configure weight mode (persisted); `/autocast off` stops and returns all carried weight; green badge (normal) / amber badge (weight mode) in command input; activates action blocker during casting to prevent accidental interrupts; detects concentration-broken interrupts and stops gracefully
 - `/announce` command — auto-broadcast skill improvements via OOC; `/announce on` sends "skillname+", `/announce brief` sends "+", `/announce verbose` sends "skillname+ (count)"; `/announce pet on|brief|verbose` for pet announcements; orange badge in command input when active; click badge to stop
 
+### Changed
+- Aura status bar color now extracted from the MUD's actual ANSI color codes instead of using hardcoded hex values — matches in-game colors exactly and follows terminal theme customization
+
 ### Fixed
 - "Bashing" skill is now correctly categorized as Other instead of Combat
 - Chat timestamps no longer show "-1m" for self-sent messages (clock skew fix)

@@ -487,7 +487,7 @@ export class OutputFilter {
         if (needsMatch.thirst) this.callbacks.onThirst?.(needsMatch.thirst);
       }
 
-      const auraMatch = matchAuraLine(stripped);
+      const auraMatch = matchAuraLine(stripped, seg);
       if (auraMatch) {
         this.callbacks.onAura?.(auraMatch);
       }
