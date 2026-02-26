@@ -93,6 +93,8 @@ Versioning is automated via CHANGELOG.md bump hints and GitHub Actions.
 - `src-tauri/tauri.conf.json`
 - `src-tauri/Cargo.toml`
 
+**Always update the changelog:** When a task is complete — whether it's a new feature, bug fix, refactor, or any user-visible change — add an entry to the `[Unreleased-*]` section in `CHANGELOG.md` before committing. Use the appropriate sub-heading (Added/Changed/Fixed/Removed). This is not optional; every commit with functional changes must have a corresponding changelog entry.
+
 ## Guide (`src/lib/helpContent.ts`)
 When adding a new feature, panel, keyboard shortcut, or non-obvious interaction, update the in-app guide:
 - **New panel** → add entry to the "Panels & Layout" section (`key: 'panels'`)
