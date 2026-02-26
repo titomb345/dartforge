@@ -29,6 +29,7 @@ The `[Unreleased]` header controls automatic version bumping on merge:
 - `/cast` command — automated spell practice loop with power auto-adjustment; `/cast <spell> <power> [args]` starts the cycle (checks concentration, casts at given power, adjusts dynamically on success/near-success); `/cast power <n>` adjusts power mid-loop; `/cast adjust <up> <down>` sets adjustment amounts; `/cast off` stops; `/cast status` shows state; green badge in command input shows spell, cycle count, and current power with click-to-stop
 
 ### Fixed
+- `/cast` outcome labels corrected — "You finish practicing" is fail (power up = easier), "You think you would have succeeded" is success (power down = harder), matching DartMudlet's actual semantics
 - `/inscribe power` now enforces a minimum power floor of 100
 - "Bashing" skill is now correctly categorized as Other instead of Combat
 - Chat timestamps no longer show "-1m" for self-sent messages (clock skew fix)

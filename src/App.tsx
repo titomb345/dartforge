@@ -1202,7 +1202,7 @@ function AppMain() {
           } else {
             const argsStr = s.args ? ` ${s.args}` : '';
             writeToTerm(
-              `\x1b[36m[Autocast: ${s.spell} @ power ${s.power}${argsStr} | phase: ${s.phase} | cycles: ${s.cycleCount} | adjust: +${s.adjustUp}/-${s.adjustUp + s.adjustDown} | success: ${s.successCount}, near: ${s.nearSuccessCount}]\x1b[0m\r\n`
+              `\x1b[36m[Autocast: ${s.spell} @ power ${s.power}${argsStr} | phase: ${s.phase} | cycles: ${s.cycleCount} | adjust: +${s.adjustUp}/-${s.adjustUp + s.adjustDown} | success: ${s.successCount}, fail: ${s.failCount}]\x1b[0m\r\n`
             );
           }
           return;

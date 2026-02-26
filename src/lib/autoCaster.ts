@@ -3,7 +3,11 @@
  *
  * Automates the cast→conc cycle for spell practice in DartMUD.
  * Message-driven state machine: detects MUD output patterns and sends
- * the next command in the loop. Power auto-adjusts via binary search.
+ * the next command in the loop. Power auto-adjusts to find the sweet spot.
+ *
+ * Power semantics: higher power = easier. On fail, power goes up (easier).
+ * On success ("would have succeeded"), power goes down (harder).
+ * Ported from DartMudlet's scripts_casting.lua.
  *
  * Instantiate once via useRef (same pattern as AutoInscriber). Not a React hook.
  */
@@ -26,11 +30,11 @@ export interface AutoCasterState {
   adjustUp: number;
   adjustDown: number;
   successCount: number;
-  nearSuccessCount: number;
+  failCount: number;
 }
 
-const PRACTICE_SUCCESS = 'You finish practicing';
-const NEAR_SUCCESS = 'You think you would have succeeded';
+const PRACTICE_FAIL = 'You finish practicing';
+const PRACTICE_SUCCESS = 'You think you would have succeeded';
 const UNCONSCIOUS = 'You fall unconscious!';
 
 /** Minimum power floor. */
@@ -48,7 +52,7 @@ export class AutoCaster {
   private _adjustUp = 10;
   private _adjustDown = 10;
   private _successCount = 0;
-  private _nearSuccessCount = 0;
+  private _failCount = 0;
   private _isCasting = false;
   private _timers = new Set<ReturnType<typeof setTimeout>>();
   private _sendFn: ((cmd: string) => Promise<void>) | null = null;
@@ -84,7 +88,7 @@ export class AutoCaster {
       adjustUp: this._adjustUp,
       adjustDown: this._adjustDown,
       successCount: this._successCount,
-      nearSuccessCount: this._nearSuccessCount,
+      failCount: this._failCount,
     };
   }
 
@@ -105,7 +109,7 @@ export class AutoCaster {
     this._args = args;
     this._cycleCount = 0;
     this._successCount = 0;
-    this._nearSuccessCount = 0;
+    this._failCount = 0;
     this._isCasting = false;
     this._sendFn = send;
     this._echoFn = echo;
@@ -122,11 +126,11 @@ export class AutoCaster {
     const fn = echo ?? this._echoFn;
     const cycles = this._cycleCount;
     const successes = this._successCount;
-    const nearSuccesses = this._nearSuccessCount;
+    const fails = this._failCount;
     this._cleanup();
     this._onChange();
     fn?.(
-      `[Autocast: stopped after ${cycles} cycle${cycles !== 1 ? 's' : ''} — ${successes} success, ${nearSuccesses} near-success]`
+      `[Autocast: stopped after ${cycles} cycle${cycles !== 1 ? 's' : ''} — ${successes} success, ${fails} fail]`
     );
   }
 
@@ -163,29 +167,29 @@ export class AutoCaster {
 
     // Cast outcome detection — active in 'casting' phase when _isCasting is true
     if (this._phase === 'casting' && this._isCasting) {
-      if (stripped.includes(PRACTICE_SUCCESS)) {
-        // Success — increase power (harder next time)
+      if (stripped.includes(PRACTICE_FAIL)) {
+        // Fail — increase power (more power = easier)
         this._isCasting = false;
         this._cycleCount++;
-        this._successCount++;
+        this._failCount++;
         this._power = (this._power ?? MIN_POWER) + this._adjustUp;
-        this._echoFn?.(`[Autocast: success — power → ${this._power}]`);
+        this._echoFn?.(`[Autocast: fail — power → ${this._power}]`);
         this._phase = 'checking-conc';
         this._onChange();
         this._sendFn?.('conc');
         return;
       }
 
-      if (stripped.includes(NEAR_SUCCESS)) {
-        // Near-success — decrease power (back off)
+      if (stripped.includes(PRACTICE_SUCCESS)) {
+        // Success — decrease power (less power = harder)
         this._isCasting = false;
         this._cycleCount++;
-        this._nearSuccessCount++;
+        this._successCount++;
         this._power = Math.max(
           (this._power ?? MIN_POWER) - (this._adjustUp + this._adjustDown),
           MIN_POWER
         );
-        this._echoFn?.(`[Autocast: near-success — power → ${this._power}]`);
+        this._echoFn?.(`[Autocast: success — power → ${this._power}]`);
         this._phase = 'checking-conc';
         this._onChange();
         this._sendFn?.('conc');
@@ -238,7 +242,7 @@ export class AutoCaster {
     this._phase = 'idle';
     this._cycleCount = 0;
     this._successCount = 0;
-    this._nearSuccessCount = 0;
+    this._failCount = 0;
     this._isCasting = false;
     this._adjustUp = 10;
     this._adjustDown = 10;
