@@ -75,6 +75,7 @@ import { matchTriggers, expandTriggerBody, resetTriggerCooldowns } from './lib/t
 import { smartWrite } from './lib/terminalUtils';
 import { ActionBlocker, type ActionBlockerState } from './lib/actionBlocker';
 import { AutoInscriber, type AutoInscriberState } from './lib/autoInscriber';
+import { AutoCaster, type AutoCasterState } from './lib/autoCaster';
 import { type MovementMode, getNextMode, applyMovementMode, movementModeLabel } from './lib/movementMode';
 import { shouldGagLine } from './lib/gagPatterns';
 import { stripAnsi } from './lib/ansiUtils';
@@ -549,6 +550,9 @@ function AppMain() {
         // Auto-inscriber — watch for loop patterns
         autoInscriberRef.current.processServerLine(stripped);
 
+        // Auto-caster — watch for cast loop patterns
+        autoCasterRef.current.processServerLine(stripped);
+
         // TODO: Re-enable when automapper is ready
         // mapFeedLineRef.current(stripped);
 
@@ -732,6 +736,18 @@ function AppMain() {
       setInscriberState(autoInscriberRef.current.getState());
     return () => {
       autoInscriberRef.current.onChange = null;
+    };
+  }, []);
+
+  // Auto-caster — automated spell practice loop
+  const autoCasterRef = useRef(new AutoCaster());
+  const [casterState, setCasterState] = useState<AutoCasterState>(() =>
+    autoCasterRef.current.getState()
+  );
+  useEffect(() => {
+    autoCasterRef.current.onChange = () => setCasterState(autoCasterRef.current.getState());
+    return () => {
+      autoCasterRef.current.onChange = null;
     };
   }, []);
 
@@ -1146,6 +1162,84 @@ function AppMain() {
         return;
       }
 
+      // Built-in /cast — automated spell practice loop
+      if (/^\/cast\b/i.test(trimmed)) {
+        const args = trimmed.slice(5).trim();
+        const argsLower = args.toLowerCase();
+        const caster = autoCasterRef.current;
+
+        if (argsLower === 'off' || argsLower === 'stop') {
+          caster.stop((msg) => writeToTerm(`\x1b[36m${msg}\x1b[0m\r\n`));
+          return;
+        }
+
+        if (argsLower.startsWith('power ')) {
+          const p = parseInt(argsLower.slice(6).trim(), 10);
+          if (isNaN(p) || p < 1) {
+            writeToTerm('\x1b[31mUsage: /cast power <number>\x1b[0m\r\n');
+          } else {
+            caster.setPower(p, (msg) => writeToTerm(`\x1b[36m${msg}\x1b[0m\r\n`));
+          }
+          return;
+        }
+
+        if (argsLower.startsWith('adjust ')) {
+          const adjustParts = argsLower.slice(7).trim().split(/\s+/);
+          const up = parseInt(adjustParts[0], 10);
+          const down = parseInt(adjustParts[1], 10);
+          if (isNaN(up) || isNaN(down) || up < 1 || down < 1) {
+            writeToTerm('\x1b[31mUsage: /cast adjust <up> <down>\x1b[0m\r\n');
+          } else {
+            caster.setAdjust(up, down, (msg) => writeToTerm(`\x1b[36m${msg}\x1b[0m\r\n`));
+          }
+          return;
+        }
+
+        if (argsLower === 'status') {
+          const s = caster.getState();
+          if (!s.active) {
+            writeToTerm('\x1b[36m[Autocast: OFF]\x1b[0m\r\n');
+          } else {
+            const argsStr = s.args ? ` ${s.args}` : '';
+            writeToTerm(
+              `\x1b[36m[Autocast: ${s.spell} @ power ${s.power}${argsStr} | phase: ${s.phase} | cycles: ${s.cycleCount} | adjust: +${s.adjustUp}/-${s.adjustUp + s.adjustDown} | success: ${s.successCount}, near: ${s.nearSuccessCount}]\x1b[0m\r\n`
+            );
+          }
+          return;
+        }
+
+        // /cast <spell> <power> [args]
+        const parts = args.split(/\s+/);
+        if (parts.length < 2) {
+          writeToTerm(
+            '\x1b[31mUsage: /cast <spell> <power> [args] | /cast off | /cast power <n> | /cast adjust <up> <down> | /cast status\x1b[0m\r\n'
+          );
+          return;
+        }
+
+        const spellArg = parts[0];
+        const powerArg = parseInt(parts[1], 10);
+        if (isNaN(powerArg) || powerArg < 1) {
+          writeToTerm('\x1b[31mPower must be a positive number.\x1b[0m\r\n');
+          return;
+        }
+
+        const extraArgs = parts.slice(2).join(' ') || null;
+
+        // Resolve abbreviation for display only — MUD gets the raw input
+        const spellLookup = getSpellByAbbr(spellArg) ?? findSpellFuzzy(spellArg);
+        const displaySpell = spellLookup ? spellLookup.name : spellArg;
+
+        caster.start(
+          spellArg,
+          powerArg,
+          extraArgs,
+          async (cmd) => await sendCommand(cmd),
+          (msg) => writeToTerm(`\x1b[36m${msg.replace(spellArg, displaySpell)}\x1b[0m\r\n`)
+        );
+        return;
+      }
+
       // Built-in /convert command — intercept before alias expansion
       if (/^\/convert\b/i.test(trimmed)) {
         const parsed = parseConvertCommand(trimmed);
@@ -1317,6 +1411,7 @@ function AppMain() {
       resetTriggerCooldowns();
       actionBlockerRef.current.reset();
       autoInscriberRef.current.reset();
+      autoCasterRef.current.reset();
       setMovementMode('normal');
     }
   }, [connected]);
@@ -1571,6 +1666,12 @@ function AppMain() {
       inscriberCycleCount: inscriberState.cycleCount,
       onStopInscriber: () =>
         autoInscriberRef.current.stop((msg) => writeToTerm(`\x1b[36m${msg}\x1b[0m\r\n`)),
+      casterActive: casterState.active,
+      casterSpell: casterState.spell,
+      casterPower: casterState.power,
+      casterCycleCount: casterState.cycleCount,
+      onStopCaster: () =>
+        autoCasterRef.current.stop((msg) => writeToTerm(`\x1b[36m${msg}\x1b[0m\r\n`)),
     }),
     [
       connected,
@@ -1603,6 +1704,7 @@ function AppMain() {
       babelNextAt,
       appSettings.updateBabelEnabled,
       inscriberState,
+      casterState,
       writeToTerm,
     ]
   );

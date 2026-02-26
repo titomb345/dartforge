@@ -26,6 +26,7 @@ The `[Unreleased]` header controls automatic version bumping on merge:
 - Fuzzy name matching for spells and skills — `findSpellFuzzy` and `findSkillFuzzy` with punctuation-insensitive lookup (`nameUtils.ts`)
 - "Quite Hungry" and "Quite Thirsty" need levels added to hunger/thirst tracking
 - `/inscribe` command — automated inscription practice loop; `/inscribe <spell> <power>` starts the cycle (checks concentration, inscribes, invokes, repeats); `/inscribe power <n>` adjusts mid-loop; `/inscribe off` stops; blue badge in command input shows status and click-to-stop
+- `/cast` command — automated spell practice loop with power auto-adjustment; `/cast <spell> <power> [args]` starts the cycle (checks concentration, casts at given power, adjusts dynamically on success/near-success); `/cast power <n>` adjusts power mid-loop; `/cast adjust <up> <down>` sets adjustment amounts; `/cast off` stops; `/cast status` shows state; green badge in command input shows spell, cycle count, and current power with click-to-stop
 
 ### Fixed
 - "Bashing" skill is now correctly categorized as Other instead of Combat

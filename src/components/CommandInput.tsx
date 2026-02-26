@@ -114,6 +114,11 @@ export const CommandInput = forwardRef<HTMLTextAreaElement, CommandInputProps>(
       inscriberSpell,
       inscriberCycleCount,
       onStopInscriber,
+      casterActive,
+      casterSpell,
+      casterPower,
+      casterCycleCount,
+      onStopCaster,
     } = useCommandInputContext();
     const { commandHistorySize, numpadMappings, showTimerBadges } = useAppSettingsContext();
     const { active: spotlightActive } = useSpotlight();
@@ -442,6 +447,24 @@ export const CommandInput = forwardRef<HTMLTextAreaElement, CommandInputProps>(
             <span>Inscribe</span>
             {inscriberCycleCount > 0 && (
               <span className="opacity-70">x{inscriberCycleCount}</span>
+            )}
+          </span>
+        )}
+
+        {/* Auto-caster badge */}
+        {casterActive && (
+          <span
+            title={`Casting: ${casterSpell ?? '?'} @${casterPower ?? '?'} — click to stop`}
+            onClick={onStopCaster}
+            className="flex items-center gap-1 px-1.5 py-1 rounded border text-[9px] font-mono self-center shrink-0 ml-1 text-[#34d399] border-[#34d399]/30 bg-[#34d399]/8 cursor-pointer select-none animate-pulse-slow"
+            style={{ filter: 'drop-shadow(0 0 3px rgba(52, 211, 153, 0.25))' }}
+          >
+            <span>Cast</span>
+            {casterCycleCount > 0 && (
+              <span className="opacity-70">x{casterCycleCount}</span>
+            )}
+            {casterPower != null && (
+              <span className="opacity-70">@{casterPower}</span>
             )}
           </span>
         )}

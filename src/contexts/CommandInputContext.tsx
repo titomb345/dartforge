@@ -45,6 +45,12 @@ export interface CommandInputState {
   inscriberSpell: string | null;
   inscriberCycleCount: number;
   onStopInscriber: () => void;
+  // Auto-caster
+  casterActive: boolean;
+  casterSpell: string | null;
+  casterPower: number | null;
+  casterCycleCount: number;
+  onStopCaster: () => void;
   // Custom timers
   activeTimers: ActiveTimerBadge[];
   onToggleTimer: (id: string) => void;

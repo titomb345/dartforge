@@ -348,6 +348,11 @@ export const HELP_CATEGORIES: HelpCategory[] = [
         description:
           'Automated inscription practice loop. "/inscribe <spell> <power>" starts the cycle — checks concentration, inscribes, invokes, and repeats. "/inscribe power <n>" adjusts power mid-loop. "/inscribe off" stops. "/inscribe status" shows current state. A blue badge appears while active.',
       },
+      {
+        title: '/cast',
+        description:
+          'Automated spell practice loop with power auto-adjustment. "/cast <spell> <power> [args]" starts the cycle — checks concentration, casts at the given power, and adjusts power dynamically based on success/near-success outcomes. "/cast power <n>" adjusts power mid-loop. "/cast adjust <up> <down>" sets adjustment amounts. "/cast off" stops. "/cast status" shows current state. A green badge appears while active.',
+      },
     ],
   },
   {
