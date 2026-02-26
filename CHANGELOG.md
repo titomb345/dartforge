@@ -12,6 +12,7 @@ The `[Unreleased]` header controls automatic version bumping on merge:
 ## [Unreleased-minor]
 
 ### Added
+- `npm run version:next` command — bump version locally at the start of a feature branch so dev builds reflect the correct upcoming version; idempotent and CI-compatible
 - Manual panel collapse — hover the resize handle between a pinned panel and the terminal to reveal a collapse chevron; click to shrink the panel to its icon strip without unpinning; click the expand chevron at the top of the icon strip to restore; state persists across sessions
 - Who panel font size controls — +/- buttons in the header to adjust player name size (8–18px, persisted)
 - Chat panel font size controls — +/- buttons in the header to adjust message text size (8–18px, persisted); language badges and type badges scale proportionally
