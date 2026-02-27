@@ -176,6 +176,7 @@ export class OutputFilter {
       if (this.repeatCount > 0) {
         const text = OutputFilter.antiSpamLine(this.repeatCount + 1);
         this.repeatCount = 0;
+        this.prevStrippedLine = null;
         this.onAntiSpamFlush?.(text);
       }
     }, 1000);
