@@ -2,8 +2,9 @@
  * Auto-Inscriber — Automated inscription practice loop.
  *
  * Automates the inscribe→invoke cycle for spell practice in DartMUD.
- * Message-driven state machine: detects MUD output patterns and sends
- * the next command in the loop.
+ * Passively watches MUD output for concentration recovery, inscription
+ * completion, and invocation results. No polling — relies on natural
+ * MUD concentration messages.
  *
  * Activates the ActionBlocker during interruptible phases (inscribing,
  * invoking) to prevent accidental user input from breaking concentration.
@@ -15,11 +16,9 @@ import { matchConcentrationLine } from './concentrationPatterns';
 
 export type InscriberPhase =
   | 'idle'
-  | 'checking-conc'
   | 'waiting-bebt'
   | 'inscribing'
-  | 'invoking'
-  | 'cooldown';
+  | 'invoking';
 
 export interface AutoInscriberState {
   active: boolean;
@@ -36,10 +35,6 @@ const CONCENTRATION_BROKEN = 'Your concentration is broken';
 
 /** Delay before sending invoke after inscription completes (ms). */
 const INVOKE_DELAY = 700;
-/** Delay before re-checking conc after invocation completes (ms). */
-const CONC_DELAY = 300;
-/** Delay before re-checking conc when not at BEBT (ms). */
-const BEBT_RETRY_DELAY = 2000;
 
 export class AutoInscriber {
   private _active = false;
@@ -99,7 +94,7 @@ export class AutoInscriber {
     this._sendFn = send;
     this._echoFn = echo;
     this._blockFn = block;
-    this._phase = 'checking-conc';
+    this._phase = 'waiting-bebt';
     this._onChange();
 
     echo(`[Autoinscribe: ${spell} @${power} — starting]`);
@@ -151,7 +146,6 @@ export class AutoInscriber {
     }
 
     switch (this._phase) {
-      case 'checking-conc':
       case 'waiting-bebt': {
         const match = matchConcentrationLine(stripped);
         if (!match) return;
@@ -164,12 +158,8 @@ export class AutoInscriber {
           const cmd = `inscribe ${this._spell} ${this._power}`;
           this._echoFn?.(`[Autoinscribe: ${cmd}]`);
           this._sendFn?.(cmd);
-        } else if (this._phase === 'checking-conc') {
-          // Not BEBT — wait and retry
-          this._phase = 'waiting-bebt';
-          this._onChange();
-          this._delayedSend('conc', BEBT_RETRY_DELAY);
         }
+        // Not BEBT — wait passively for recovery
         break;
       }
 
@@ -192,9 +182,8 @@ export class AutoInscriber {
       case 'invoking': {
         if (stripped.includes(INVOCATION_COMPLETE)) {
           this._cycleCount++;
-          this._phase = 'cooldown';
+          this._phase = 'waiting-bebt';
           this._onChange();
-          this._delayedConc(CONC_DELAY);
         }
         break;
       }
@@ -205,14 +194,6 @@ export class AutoInscriber {
   reset(): void {
     this._cleanup();
     this._onChange();
-  }
-
-  private _delayedSend(cmd: string, delayMs: number): void {
-    const timer = setTimeout(() => {
-      this._timers.delete(timer);
-      if (this._active) this._sendFn?.(cmd);
-    }, delayMs);
-    this._timers.add(timer);
   }
 
   /** Activate blocking then send a command after a delay. */
@@ -227,18 +208,6 @@ export class AutoInscriber {
       if (this._active) {
         this._blockFn?.(blockKey, blockLabel);
         this._sendFn?.(cmd);
-      }
-    }, delayMs);
-    this._timers.add(timer);
-  }
-
-  private _delayedConc(delayMs: number): void {
-    const timer = setTimeout(() => {
-      this._timers.delete(timer);
-      if (this._active) {
-        this._phase = 'checking-conc';
-        this._onChange();
-        this._sendFn?.('conc');
       }
     }, delayMs);
     this._timers.add(timer);

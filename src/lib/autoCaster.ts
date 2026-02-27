@@ -1,9 +1,10 @@
 /**
  * Auto-Caster — Automated spell practice loop.
  *
- * Automates the cast→conc cycle for spell practice in DartMUD.
- * Message-driven state machine: detects MUD output patterns and sends
- * the next command in the loop. Power auto-adjusts to find the sweet spot.
+ * Automates the cast cycle for spell practice in DartMUD.
+ * Passively watches MUD output for concentration recovery and cast outcomes.
+ * Power auto-adjusts to find the sweet spot. No polling — relies on natural
+ * MUD concentration messages.
  *
  * Power semantics: higher power = easier. On fail, power goes up (easier).
  * On success ("would have succeeded"), power goes down (harder).
@@ -56,8 +57,6 @@ const CONCENTRATION_BROKEN = 'Your concentration is broken';
 
 /** Minimum power floor. */
 const MIN_POWER = 50;
-/** Delay before re-checking conc when not at BEBT (ms). */
-const BEBT_RETRY_DELAY = 2000;
 /**
  * How long to wait after "You finish practicing" for the potential
  * "You think you would have succeeded" line before declaring a fail (ms).
@@ -350,11 +349,10 @@ export class AutoCaster {
         const cmd = `cast ! ${this._spell} @${this._power}${argsStr}`;
         this._echoFn?.(`[Autocast: ${cmd}]`);
         this._sendFn?.(cmd);
-      } else if (this._phase === 'checking-conc') {
-        // Not BEBT — wait and retry
+      } else {
+        // Not BEBT — wait passively for recovery
         this._phase = 'waiting-bebt';
         this._onChange();
-        this._delayedSend('conc', BEBT_RETRY_DELAY);
       }
     }
   }
@@ -406,9 +404,8 @@ export class AutoCaster {
       }
     }
 
-    this._phase = 'checking-conc';
+    this._phase = 'waiting-bebt';
     this._onChange();
-    this._sendFn?.('conc');
   }
 
   private _handleFail(): void {
@@ -443,9 +440,8 @@ export class AutoCaster {
       this._echoFn?.(`[Autocast: fail — power → @${this._power}]`);
     }
 
-    this._phase = 'checking-conc';
+    this._phase = 'waiting-bebt';
     this._onChange();
-    this._sendFn?.('conc');
   }
 
   // ---------------------------------------------------------------------------
@@ -469,14 +465,6 @@ export class AutoCaster {
       this._timers.delete(this._outcomeTimer);
       this._outcomeTimer = null;
     }
-  }
-
-  private _delayedSend(cmd: string, delayMs: number): void {
-    const timer = setTimeout(() => {
-      this._timers.delete(timer);
-      if (this._active) this._sendFn?.(cmd);
-    }, delayMs);
-    this._timers.add(timer);
   }
 
   private _cleanup(): void {

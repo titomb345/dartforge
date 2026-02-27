@@ -356,7 +356,7 @@ export const HELP_CATEGORIES: HelpCategory[] = [
       {
         title: '/autoconc',
         description:
-          'Auto-execute any command(s) on full concentration (BEBT). "/autoconc <action>" sets the action and starts the loop — checks concentration, executes the action on BEBT, waits, then rechecks. The action supports aliases, /spam, /delay, /echo, /var, and semicolons for multi-command chains. "/autoconc on" restarts with the previously saved action. "/autoconc off" stops. "/autoconc status" shows current state. The action persists across sessions. A purple badge appears while active.',
+          'Auto-execute any command(s) on full concentration (BEBT). "/autoconc <action>" saves the action (does not start). "/autoconc on" starts with the saved action — fires once on BEBT, then waits for conc to drop and recover before firing again. The action supports aliases, /spam, /delay, /echo, /var, and semicolons for multi-command chains. "/autoconc off" stops. "/autoconc status" shows current state. The action persists across sessions. A purple badge appears while active.',
       },
       {
         title: '/announce',

@@ -1,12 +1,12 @@
 /**
  * Auto-Conc — Auto-execute commands on full concentration (BEBT).
  *
- * Watches for "bright-eyed and bushy-tailed" concentration status and
+ * Passively watches MUD output for concentration recovery messages and
  * executes a user-configured action string through the full command
  * pipeline (alias expansion, /spam, /delay, /echo, /var, semicolons).
  *
- * Simpler than AutoCaster/AutoInscriber — no power adjustment or
- * spell-specific logic. Just: check conc → if BEBT → execute action → repeat.
+ * Single-shot re-arm: fires once on BEBT, then waits for conc to drop
+ * below BEBT before re-arming. No polling — relies on natural MUD messages.
  *
  * Instantiate once via useRef (same pattern as AutoCaster). Not a React hook.
  */
@@ -15,7 +15,6 @@ import { matchConcentrationLine } from './concentrationPatterns';
 
 export type AutoConcPhase =
   | 'idle'
-  | 'checking-conc'
   | 'waiting-bebt'
   | 'executing';
 
@@ -27,19 +26,14 @@ export interface AutoConcState {
 }
 
 const UNCONSCIOUS = 'You fall unconscious!';
-/** Delay before re-checking conc when not at BEBT (ms). */
-const BEBT_RETRY_DELAY = 2000;
-/** Delay after action execution before re-checking conc (ms). */
-const POST_ACTION_DELAY = 2000;
 
 export class AutoConc {
   private _active = false;
   private _action: string | null = null;
   private _phase: AutoConcPhase = 'idle';
   private _cycleCount = 0;
-  private _timers = new Set<ReturnType<typeof setTimeout>>();
-  /** Direct send — bypasses blocker. Used for `conc`. */
-  private _sendFn: ((cmd: string) => Promise<void>) | null = null;
+  /** True when ready to fire on next BEBT. Set false after firing, re-armed on non-BEBT. */
+  private _armed = true;
   /** Full pipeline — alias expansion + executeCommands. Used for the action. */
   private _executeFn: ((action: string) => Promise<void>) | null = null;
   private _echoFn: ((msg: string) => void) | null = null;
@@ -71,7 +65,7 @@ export class AutoConc {
     this._action = action || null;
   }
 
-  /** Start the auto-conc loop. */
+  /** Start the auto-conc loop. Sends one `conc` to get initial state. */
   start(
     action: string,
     send: (cmd: string) => Promise<void>,
@@ -84,10 +78,10 @@ export class AutoConc {
     this._active = true;
     this._action = action;
     this._cycleCount = 0;
-    this._sendFn = send;
+    this._armed = true;
     this._executeFn = execute;
     this._echoFn = echo;
-    this._phase = 'checking-conc';
+    this._phase = 'waiting-bebt';
     this._onChange();
 
     echo(`[Autoconc: ${action} — starting]`);
@@ -105,7 +99,7 @@ export class AutoConc {
 
   /**
    * Process a server output line. Called from onLine in OutputFilter.
-   * Drives the state machine based on MUD responses.
+   * Passively watches for concentration messages — no polling.
    */
   processServerLine(stripped: string): void {
     if (!this._active) return;
@@ -119,30 +113,30 @@ export class AutoConc {
       return;
     }
 
-    // Concentration detection — active in checking-conc / waiting-bebt phases
-    if (this._phase === 'checking-conc' || this._phase === 'waiting-bebt') {
+    // Concentration detection — active in waiting-bebt phase
+    if (this._phase === 'waiting-bebt') {
       const match = matchConcentrationLine(stripped);
       if (!match) return;
 
-      if (match.level.key === 'bebt') {
-        // Concentration is ready — execute action
+      if (match.level.key === 'bebt' && this._armed) {
+        // BEBT and armed — fire the action, disarm until conc drops
+        this._armed = false;
         this._phase = 'executing';
         this._onChange();
         this._echoFn?.(`[Autoconc: ${this._action}]`);
 
-        // Execute through full pipeline, then re-check after delay
         this._executeFn?.(this._action!).then(() => {
           if (!this._active) return;
           this._cycleCount++;
+          this._phase = 'waiting-bebt';
           this._onChange();
-          this._delayedConc(POST_ACTION_DELAY);
         });
-      } else if (this._phase === 'checking-conc') {
-        // Not BEBT — wait and retry
-        this._phase = 'waiting-bebt';
+      } else if (match.level.key !== 'bebt') {
+        // Not BEBT — re-arm so we fire on next recovery
+        this._armed = true;
         this._onChange();
-        this._delayedSend('conc', BEBT_RETRY_DELAY);
       }
+      // BEBT but not armed — just ignore, wait for conc to drop naturally
     }
   }
 
@@ -152,33 +146,11 @@ export class AutoConc {
     this._onChange();
   }
 
-  private _delayedSend(cmd: string, delayMs: number): void {
-    const timer = setTimeout(() => {
-      this._timers.delete(timer);
-      if (this._active) this._sendFn?.(cmd);
-    }, delayMs);
-    this._timers.add(timer);
-  }
-
-  private _delayedConc(delayMs: number): void {
-    const timer = setTimeout(() => {
-      this._timers.delete(timer);
-      if (this._active) {
-        this._phase = 'checking-conc';
-        this._onChange();
-        this._sendFn?.('conc');
-      }
-    }, delayMs);
-    this._timers.add(timer);
-  }
-
   private _cleanup(): void {
-    for (const timer of this._timers) clearTimeout(timer);
-    this._timers.clear();
     this._active = false;
     this._phase = 'idle';
     this._cycleCount = 0;
-    this._sendFn = null;
+    this._armed = true;
     this._executeFn = null;
     this._echoFn = null;
   }

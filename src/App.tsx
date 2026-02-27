@@ -1459,7 +1459,7 @@ function AppMain() {
           const saved = appSettings.autoConcAction;
           if (!saved) {
             writeToTerm(
-              '\x1b[31mNo action set. Use /autoconc <action> to set and start.\x1b[0m\r\n'
+              '\x1b[31mNo action set. Use /autoconc <action> to set one first.\x1b[0m\r\n'
             );
           } else {
             startConc(saved);
@@ -1470,7 +1470,7 @@ function AppMain() {
         if (!args) {
           writeToTerm(
             '\x1b[31mUsage:\r\n' +
-            '  /autoconc <action>    Set action and start loop\r\n' +
+            '  /autoconc <action>    Set action (does not start)\r\n' +
             '  /autoconc on          Start with saved action\r\n' +
             '  /autoconc off         Stop the loop\r\n' +
             '  /autoconc status      Show current state\x1b[0m\r\n'
@@ -1478,9 +1478,9 @@ function AppMain() {
           return;
         }
 
-        // Anything else = set action + start
+        // Anything else = save action only (user must /autoconc on to start)
         appSettings.updateAutoConcAction(args);
-        startConc(args);
+        writeToTerm(`\x1b[36m[Autoconc: action set to "${args}" — use /autoconc on to start]\x1b[0m\r\n`);
         return;
       }
 
