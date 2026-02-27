@@ -1456,7 +1456,7 @@ function AppMain() {
         };
 
         if (argsLower === 'on' || argsLower === 'start') {
-          const saved = appSettings.autoConcAction;
+          const saved = conc.action || appSettings.autoConcAction;
           if (!saved) {
             writeToTerm(
               '\x1b[31mNo action set. Use /autoconc <action> to set one first.\x1b[0m\r\n'
@@ -1479,8 +1479,10 @@ function AppMain() {
         }
 
         // Anything else = save action only (user must /autoconc on to start)
+        conc.setAction(args);
         appSettings.updateAutoConcAction(args);
-        writeToTerm(`\x1b[36m[Autoconc: action set to "${args}" — use /autoconc on to start]\x1b[0m\r\n`);
+        const verb = conc.active ? 'updated' : 'set';
+        writeToTerm(`\x1b[36m[Autoconc: action ${verb} to "${args}"]\x1b[0m\r\n`);
         return;
       }
 
