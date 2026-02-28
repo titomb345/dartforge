@@ -16,7 +16,6 @@ The `[Unreleased]` header controls automatic version bumping on merge:
 - Moved timestamp format toggle (12h/24h) from Settings into the Chat panel toolbar — one less settings section, and the control lives where it's actually used
 
 ### Added
-- Automapper re-enabled with terrain fingerprint positioning — hex art is now parsed to extract terrain patterns that uniquely identify map positions; fingerprints verify and correct movement-chain drift, preventing the "jumping around" bug that caused the mapper to be disabled
 - `npm run version:next` command — bump version locally at the start of a feature branch so dev builds reflect the correct upcoming version; idempotent and CI-compatible
 - Manual panel collapse — hover the resize handle between a pinned panel and the terminal to reveal a collapse chevron; click to shrink the panel to its icon strip without unpinning; click the expand chevron at the top of the icon strip to restore; state persists across sessions
 - Who panel font size controls — +/- buttons in the header to adjust player name size (8–18px, persisted)
@@ -48,7 +47,6 @@ The `[Unreleased]` header controls automatic version bumping on merge:
 - `/notify` debug command — was a development-only test for system notifications, not needed
 
 ### Fixed
-- Automapper no longer creates phantom hex rooms in towns — `emitHexRoom` now requires at least one hex art line to have been collected; when survey fires in a non-hex area (no hex art follows), the parser resets instead of emitting a town description as a hex room
 - Aura pill color no longer sticks to the previous color when aura drops to "None" — correctly resets to grey
 - "Bashing" skill is now correctly categorized as Other instead of Combat
 - Chat timestamps no longer show "-1m" for self-sent messages (clock skew fix)
