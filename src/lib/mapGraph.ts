@@ -1,5 +1,6 @@
 /**
- * Map graph — hex-only rooms, edges, coordinate assignment, and pathfinding.
+ * Map graph — hex-only rooms, edges, coordinate assignment, pathfinding,
+ * and terrain fingerprint indexing for position verification.
  */
 
 import {
@@ -26,11 +27,132 @@ export interface MapRoom {
   notes: string;
   lastVisited: number;
   visitCount: number;
+  /** Terrain fingerprint from hex art (null for rooms discovered without survey) */
+  fingerprint: string | null;
 }
 
 export interface MapGraph {
   rooms: Record<string, MapRoom>;
   currentRoomId: string | null;
+}
+
+// ---------------------------------------------------------------------------
+// Fingerprint index — in-memory acceleration structure for position lookup
+// ---------------------------------------------------------------------------
+
+export interface FingerprintIndex {
+  /** Full fingerprint string → room ID */
+  exact: Map<string, string>;
+  /** 1-ring prefix → set of room IDs (for ring-agnostic matching) */
+  prefix: Map<string, Set<string>>;
+}
+
+export interface FingerprintMatch {
+  roomId: string;
+  matchType: 'exact' | 'prefix';
+}
+
+/**
+ * Extract the 1-ring prefix from any fingerprint.
+ * "plains:woods,hills,water,plains,mountains,desert" → same (already 1-ring)
+ * "plains:woods,hills,...:ring2_data" → "plains:woods,hills,..."
+ * "plains" (0-ring) → null (not enough data for matching)
+ */
+function extractOneRingPrefix(fingerprint: string): string | null {
+  const parts = fingerprint.split(':');
+  if (parts.length < 2) return null;
+  return `${parts[0]}:${parts[1]}`;
+}
+
+/**
+ * Build a fingerprint index from all rooms in a graph.
+ * Called once on load, then maintained incrementally.
+ */
+export function buildFingerprintIndex(graph: MapGraph): FingerprintIndex {
+  const exact = new Map<string, string>();
+  const prefix = new Map<string, Set<string>>();
+
+  for (const room of Object.values(graph.rooms)) {
+    if (room.fingerprint) {
+      indexFingerprint({ exact, prefix }, room.fingerprint, room.id);
+    }
+  }
+
+  return { exact, prefix };
+}
+
+/**
+ * Add a single fingerprint to the index.
+ */
+export function indexFingerprint(
+  index: FingerprintIndex,
+  fingerprint: string,
+  roomId: string
+): void {
+  index.exact.set(fingerprint, roomId);
+
+  const oneRingPrefix = extractOneRingPrefix(fingerprint);
+  if (oneRingPrefix) {
+    const set = index.prefix.get(oneRingPrefix) ?? new Set();
+    set.add(roomId);
+    index.prefix.set(oneRingPrefix, set);
+  }
+}
+
+/**
+ * Remove a room's fingerprint from the index.
+ */
+export function deindexFingerprint(
+  index: FingerprintIndex,
+  fingerprint: string,
+  roomId: string
+): void {
+  if (index.exact.get(fingerprint) === roomId) {
+    index.exact.delete(fingerprint);
+  }
+
+  const oneRingPrefix = extractOneRingPrefix(fingerprint);
+  if (oneRingPrefix) {
+    const set = index.prefix.get(oneRingPrefix);
+    if (set) {
+      set.delete(roomId);
+      if (set.size === 0) index.prefix.delete(oneRingPrefix);
+    }
+  }
+}
+
+/**
+ * Look up a fingerprint in the index.
+ * Tries exact match first, then falls back to 1-ring prefix match.
+ * Returns null if no match or ambiguous (multiple rooms share same prefix).
+ */
+export function lookupFingerprint(
+  index: FingerprintIndex,
+  fingerprint: string
+): FingerprintMatch | null {
+  // Exact match
+  const exactMatch = index.exact.get(fingerprint);
+  if (exactMatch) {
+    return { roomId: exactMatch, matchType: 'exact' };
+  }
+
+  // 1-ring prefix match (handles cross-ring: 2-ring query vs stored 1-ring)
+  const oneRingPrefix = extractOneRingPrefix(fingerprint);
+  if (oneRingPrefix) {
+    // Check if the prefix itself is stored as an exact fingerprint
+    const prefixExact = index.exact.get(oneRingPrefix);
+    if (prefixExact) {
+      return { roomId: prefixExact, matchType: 'prefix' };
+    }
+
+    // Check prefix index for rooms sharing this 1-ring pattern
+    const prefixMatches = index.prefix.get(oneRingPrefix);
+    if (prefixMatches && prefixMatches.size === 1) {
+      return { roomId: [...prefixMatches][0], matchType: 'prefix' };
+    }
+  }
+
+  return null;
 }
 
 // ---------------------------------------------------------------------------
@@ -63,7 +185,8 @@ export function upsertRoom(
   coords: HexCoord,
   terrain: HexTerrainType,
   description: string,
-  landmarks: string[]
+  landmarks: string[],
+  fingerprint?: string | null
 ): MapRoom {
   const existing = graph.rooms[id];
   if (existing) {
@@ -73,6 +196,12 @@ export function upsertRoom(
     existing.description = description;
     if (landmarks.length > 0) {
       existing.landmarks = landmarks;
+    }
+    // Update fingerprint — prefer longer fingerprints (more rings = more specific)
+    if (fingerprint) {
+      if (!existing.fingerprint || fingerprint.length > existing.fingerprint.length) {
+        existing.fingerprint = fingerprint;
+      }
     }
     // Ensure all 6 directions exist as potential exits
     for (const dir of COMPASS_DIRECTIONS) {
@@ -93,6 +222,7 @@ export function upsertRoom(
     notes: '',
     lastVisited: Date.now(),
     visitCount: 1,
+    fingerprint: fingerprint ?? null,
   };
   // Initialize all 6 hex directions as potential exits
   for (const dir of COMPASS_DIRECTIONS) {
@@ -213,6 +343,13 @@ export function deserializeGraph(data: SerializedMapGraph): MapGraph {
   const roomIds = Object.keys(rooms);
   if (roomIds.length > 0 && roomIds.some((id) => !id.startsWith('hex:'))) {
     return { rooms: {}, currentRoomId: null };
+  }
+
+  // Backfill fingerprint field for pre-fingerprint rooms
+  for (const room of Object.values(rooms)) {
+    if (!('fingerprint' in room)) {
+      (room as MapRoom).fingerprint = null;
+    }
   }
 
   return { rooms, currentRoomId: data.currentRoomId ?? null };

@@ -1,8 +1,9 @@
-import { useState, useCallback, useEffect, useRef } from 'react';
+import { useState, useCallback, useEffect, useRef, useMemo } from 'react';
 import { useDataStore } from '../contexts/DataStoreContext';
 import { getPlatform } from '../lib/platform';
 import type { ChatFilters } from '../types/chat';
 import { DEFAULT_GAG_GROUPS, type GagGroupSettings } from '../lib/gagPatterns';
+import type { AnnounceMode } from '../types';
 
 let invoke: ((cmd: string, args?: Record<string, unknown>) => Promise<unknown>) | null = null;
 if (getPlatform() === 'tauri') {
@@ -12,6 +13,9 @@ if (getPlatform() === 'tauri') {
 }
 
 const SETTINGS_FILE = 'settings.json';
+
+/** Keyring account key for a character slot */
+const slotAccount = (slot: 0 | 1) => `dartmud-slot-${slot}`;
 
 export const DEFAULT_NUMPAD_MAPPINGS: Record<string, string> = {
   Numpad7: 'nw',
@@ -60,6 +64,7 @@ export function useAppSettings() {
   // Output transforms
   const [boardDatesEnabled, setBoardDatesEnabled] = useState(false);
   const [stripPromptsEnabled, setStripPromptsEnabled] = useState(false);
+  const [antiSpamEnabled, setAntiSpamEnabled] = useState(false);
 
   /* ── New settings ──────────────────────────────────────── */
 
@@ -107,9 +112,11 @@ export function useAppSettings() {
   // Action blocking
   const [actionBlockingEnabled, setActionBlockingEnabled] = useState(true);
 
-  // Who list auto-refresh
+  // Who list
   const [whoAutoRefreshEnabled, setWhoAutoRefreshEnabled] = useState(true);
   const [whoRefreshMinutes, setWhoRefreshMinutes] = useState(5);
+  const [whoFontSize, setWhoFontSize] = useState(11);
+  const [chatFontSize, setChatFontSize] = useState(11);
 
   // Babel language trainer
   const [babelEnabled, setBabelEnabled] = useState(false);
@@ -119,6 +126,19 @@ export function useAppSettings() {
 
   // Gag groups
   const [gagGroups, setGagGroups] = useState<GagGroupSettings>({ ...DEFAULT_GAG_GROUPS });
+
+  // Announce system
+  const [announceMode, setAnnounceMode] = useState<AnnounceMode>('off');
+  const [announcePetMode, setAnnouncePetMode] = useState<AnnounceMode>('off');
+
+  // Auto-caster weight mode
+  const [casterWeightItem, setCasterWeightItem] = useState('tallow');
+  const [casterWeightContainer, setCasterWeightContainer] = useState('bin');
+  const [casterWeightAdjustUp, setCasterWeightAdjustUp] = useState(10);
+  const [casterWeightAdjustDown, setCasterWeightAdjustDown] = useState(5);
+
+  // Auto-conc
+  const [autoConcAction, setAutoConcAction] = useState('');
 
   // Post-sync commands
   const [postSyncEnabled, setPostSyncEnabled] = useState(false);
@@ -137,7 +157,7 @@ export function useAppSettings() {
   const storePassword = useCallback(async (slot: 0 | 1, password: string) => {
     if (!invoke) return;
     try {
-      await invoke('store_credential', { account: `dartmud-slot-${slot}`, password });
+      await invoke('store_credential', { account: slotAccount(slot), password });
     } catch (e) {
       console.error('Failed to store credential:', e);
     }
@@ -146,7 +166,7 @@ export function useAppSettings() {
   const deletePassword = useCallback(async (slot: 0 | 1) => {
     if (!invoke) return;
     try {
-      await invoke('delete_credential', { account: `dartmud-slot-${slot}` });
+      await invoke('delete_credential', { account: slotAccount(slot) });
     } catch (e) {
       console.error('Failed to delete credential:', e);
     }
@@ -177,6 +197,8 @@ export function useAppSettings() {
       if (savedBoardDates != null) setBoardDatesEnabled(savedBoardDates);
       const savedStripPrompts = await dataStore.get<boolean>(SETTINGS_FILE, 'stripPromptsEnabled');
       if (savedStripPrompts != null) setStripPromptsEnabled(savedStripPrompts);
+      const savedAntiSpam = await dataStore.get<boolean>(SETTINGS_FILE, 'antiSpamEnabled');
+      if (savedAntiSpam != null) setAntiSpamEnabled(savedAntiSpam);
 
       // New settings
       const savedScrollback = await dataStore.get<number>(SETTINGS_FILE, 'terminalScrollback');
@@ -240,9 +262,37 @@ export function useAppSettings() {
       if (savedWhoAutoRefresh != null) setWhoAutoRefreshEnabled(savedWhoAutoRefresh);
       const savedWhoMinutes = await dataStore.get<number>(SETTINGS_FILE, 'whoRefreshMinutes');
       if (savedWhoMinutes != null && savedWhoMinutes >= 1) setWhoRefreshMinutes(savedWhoMinutes);
+      const savedWhoFontSize = await dataStore.get<number>(SETTINGS_FILE, 'whoFontSize');
+      if (savedWhoFontSize != null && savedWhoFontSize >= 8 && savedWhoFontSize <= 18)
+        setWhoFontSize(savedWhoFontSize);
+      const savedChatFontSize = await dataStore.get<number>(SETTINGS_FILE, 'chatFontSize');
+      if (savedChatFontSize != null && savedChatFontSize >= 8 && savedChatFontSize <= 18)
+        setChatFontSize(savedChatFontSize);
 
       const savedGagGroups = await dataStore.get<GagGroupSettings>(SETTINGS_FILE, 'gagGroups');
       if (savedGagGroups) setGagGroups(savedGagGroups);
+
+      // Announce
+      const savedAnnounceMode = await dataStore.get<AnnounceMode>(SETTINGS_FILE, 'announceMode');
+      if (savedAnnounceMode) setAnnounceMode(savedAnnounceMode);
+      const savedAnnouncePetMode = await dataStore.get<AnnounceMode>(SETTINGS_FILE, 'announcePetMode');
+      if (savedAnnouncePetMode) setAnnouncePetMode(savedAnnouncePetMode);
+
+      // Auto-caster weight mode
+      const savedCasterWeightItem = await dataStore.get<string | null>(SETTINGS_FILE, 'casterWeightItem');
+      if (savedCasterWeightItem) setCasterWeightItem(savedCasterWeightItem);
+      const savedCasterWeightContainer = await dataStore.get<string>(SETTINGS_FILE, 'casterWeightContainer');
+      if (savedCasterWeightContainer) setCasterWeightContainer(savedCasterWeightContainer);
+      const savedCasterWeightAdjustUp = await dataStore.get<number>(SETTINGS_FILE, 'casterWeightAdjustUp');
+      if (savedCasterWeightAdjustUp != null && savedCasterWeightAdjustUp >= 1)
+        setCasterWeightAdjustUp(savedCasterWeightAdjustUp);
+      const savedCasterWeightAdjustDown = await dataStore.get<number>(SETTINGS_FILE, 'casterWeightAdjustDown');
+      if (savedCasterWeightAdjustDown != null && savedCasterWeightAdjustDown >= 1)
+        setCasterWeightAdjustDown(savedCasterWeightAdjustDown);
+
+      // Auto-conc
+      const savedAutoConcAction = await dataStore.get<string>(SETTINGS_FILE, 'autoConcAction');
+      if (savedAutoConcAction != null) setAutoConcAction(savedAutoConcAction);
 
       // Babel
       const savedBabelEnabled = await dataStore.get<boolean>(SETTINGS_FILE, 'babelEnabled');
@@ -283,7 +333,7 @@ export function useAppSettings() {
             let pw: string | null = null;
             if (invoke) {
               try {
-                pw = (await invoke('get_credential', { account: `dartmud-slot-${slot}` })) as
+                pw = (await invoke('get_credential', { account: slotAccount(slot) })) as
                   | string
                   | null;
               } catch {
@@ -318,31 +368,77 @@ export function useAppSettings() {
     [dataStore]
   );
 
-  /* ── Change handlers (existing settings) ───────────────── */
+  /* ── Change handlers ──────────────────────────────────── */
 
-  const updateAntiIdleEnabled = useCallback(
-    (v: boolean) => {
-      setAntiIdleEnabled(v);
-      persist('antiIdleEnabled', v);
-    },
-    [persist]
-  );
+  // Factory for simple "set state + persist" updaters (stable via useMemo)
+  const updaters = useMemo(() => {
+    const make = <T,>(setter: React.Dispatch<React.SetStateAction<T>>, key: string) =>
+      (v: T) => { setter(v); persist(key, v); };
+    return {
+      // Anti-idle
+      updateAntiIdleEnabled: make(setAntiIdleEnabled, 'antiIdleEnabled'),
+      updateAntiIdleCommand: make(setAntiIdleCommand, 'antiIdleCommand'),
+      updateAntiIdleMinutes: make(setAntiIdleMinutes, 'antiIdleMinutes'),
+      // Alignment tracking
+      updateAlignmentTrackingMinutes: make(setAlignmentTrackingMinutes, 'alignmentTrackingMinutes'),
+      // Output transforms
+      updateBoardDatesEnabled: make(setBoardDatesEnabled, 'boardDatesEnabled'),
+      updateStripPromptsEnabled: make(setStripPromptsEnabled, 'stripPromptsEnabled'),
+      updateAntiSpamEnabled: make(setAntiSpamEnabled, 'antiSpamEnabled'),
+      // Buffer sizes
+      updateTerminalScrollback: make(setTerminalScrollback, 'terminalScrollback'),
+      updateCommandHistorySize: make(setCommandHistorySize, 'commandHistorySize'),
+      updateChatHistorySize: make(setChatHistorySize, 'chatHistorySize'),
+      // Timestamp / echo / badges / logging
+      updateTimestampFormat: make<TimestampFormat>(setTimestampFormat, 'timestampFormat'),
+      updateCommandEchoEnabled: make(setCommandEchoEnabled, 'commandEchoEnabled'),
+      updateShowTimerBadges: make(setShowTimerBadges, 'showTimerBadges'),
+      updateSessionLoggingEnabled: make(setSessionLoggingEnabled, 'sessionLoggingEnabled'),
+      // Numpad / backups
+      updateNumpadMappings: make(setNumpadMappings, 'numpadMappings'),
+      updateAutoBackupEnabled: make(setAutoBackupEnabled, 'autoBackupEnabled'),
+      // Notifications / chimes
+      updateChatNotifications: make(setChatNotifications, 'chatNotifications'),
+      updateCustomChime1: make(setCustomChime1, 'customChime1'),
+      updateCustomChime2: make(setCustomChime2, 'customChime2'),
+      // Counter thresholds
+      updateCounterHotThreshold: make(setCounterHotThreshold, 'counterHotThreshold'),
+      updateCounterColdThreshold: make(setCounterColdThreshold, 'counterColdThreshold'),
+      // Help guide / action blocking
+      updateHasSeenGuide: make(setHasSeenGuide, 'hasSeenGuide'),
+      updateActionBlockingEnabled: make(setActionBlockingEnabled, 'actionBlockingEnabled'),
+      // Who list
+      updateWhoAutoRefreshEnabled: make(setWhoAutoRefreshEnabled, 'whoAutoRefreshEnabled'),
+      updateWhoRefreshMinutes: make(setWhoRefreshMinutes, 'whoRefreshMinutes'),
+      // Gag groups
+      updateGagGroups: make(setGagGroups, 'gagGroups'),
+      // Announce
+      updateAnnounceMode: make<AnnounceMode>(setAnnounceMode, 'announceMode'),
+      updateAnnouncePetMode: make<AnnounceMode>(setAnnouncePetMode, 'announcePetMode'),
+      // Babel
+      updateBabelEnabled: make(setBabelEnabled, 'babelEnabled'),
+      updateBabelLanguage: make(setBabelLanguage, 'babelLanguage'),
+      updateBabelIntervalSeconds: make(setBabelIntervalSeconds, 'babelIntervalSeconds'),
+      updateBabelPhrases: make(setBabelPhrases, 'babelPhrases'),
+      // Post-sync
+      updatePostSyncEnabled: make(setPostSyncEnabled, 'postSyncEnabled'),
+      updatePostSyncCommands: make(setPostSyncCommands, 'postSyncCommands'),
+      // Auto-login
+      updateAutoLoginEnabled: make(setAutoLoginEnabled, 'autoLoginEnabled'),
+      updateAutoLoginActiveSlot: make<0 | 1>(setAutoLoginActiveSlot, 'autoLoginActiveSlot'),
+      updateLastLoginTimestamp: make(setLastLoginTimestamp, 'lastLoginTimestamp'),
+      updateLastLoginSlot: make<0 | 1 | null>(setLastLoginSlot, 'lastLoginSlot'),
+      // Auto-caster weight mode
+      updateCasterWeightItem: make<string>(setCasterWeightItem, 'casterWeightItem'),
+      updateCasterWeightContainer: make(setCasterWeightContainer, 'casterWeightContainer'),
+      updateCasterWeightAdjustUp: make(setCasterWeightAdjustUp, 'casterWeightAdjustUp'),
+      updateCasterWeightAdjustDown: make(setCasterWeightAdjustDown, 'casterWeightAdjustDown'),
+      // Auto-conc
+      updateAutoConcAction: make(setAutoConcAction, 'autoConcAction'),
+    };
+  }, [persist]);
 
-  const updateAntiIdleCommand = useCallback(
-    (v: string) => {
-      setAntiIdleCommand(v);
-      persist('antiIdleCommand', v);
-    },
-    [persist]
-  );
-
-  const updateAntiIdleMinutes = useCallback(
-    (v: number) => {
-      setAntiIdleMinutes(v);
-      persist('antiIdleMinutes', v);
-    },
-    [persist]
-  );
+  // Special updaters with extra logic (can't use the factory)
 
   const updateAlignmentTrackingEnabled = useCallback(
     (v: boolean) => {
@@ -357,245 +453,20 @@ export function useAppSettings() {
     [persist]
   );
 
-  const updateAlignmentTrackingMinutes = useCallback(
+  const updateWhoFontSize = useCallback(
     (v: number) => {
-      setAlignmentTrackingMinutes(v);
-      persist('alignmentTrackingMinutes', v);
+      const clamped = Math.max(8, Math.min(18, v));
+      setWhoFontSize(clamped);
+      persist('whoFontSize', clamped);
     },
     [persist]
   );
 
-  const updateBoardDatesEnabled = useCallback(
-    (v: boolean) => {
-      setBoardDatesEnabled(v);
-      persist('boardDatesEnabled', v);
-    },
-    [persist]
-  );
-
-  const updateStripPromptsEnabled = useCallback(
-    (v: boolean) => {
-      setStripPromptsEnabled(v);
-      persist('stripPromptsEnabled', v);
-    },
-    [persist]
-  );
-
-  /* ── Change handlers (new settings) ────────────────────── */
-
-  const updateTerminalScrollback = useCallback(
+  const updateChatFontSize = useCallback(
     (v: number) => {
-      setTerminalScrollback(v);
-      persist('terminalScrollback', v);
-    },
-    [persist]
-  );
-
-  const updateCommandHistorySize = useCallback(
-    (v: number) => {
-      setCommandHistorySize(v);
-      persist('commandHistorySize', v);
-    },
-    [persist]
-  );
-
-  const updateChatHistorySize = useCallback(
-    (v: number) => {
-      setChatHistorySize(v);
-      persist('chatHistorySize', v);
-    },
-    [persist]
-  );
-
-  const updateTimestampFormat = useCallback(
-    (v: TimestampFormat) => {
-      setTimestampFormat(v);
-      persist('timestampFormat', v);
-    },
-    [persist]
-  );
-
-  const updateCommandEchoEnabled = useCallback(
-    (v: boolean) => {
-      setCommandEchoEnabled(v);
-      persist('commandEchoEnabled', v);
-    },
-    [persist]
-  );
-
-  const updateShowTimerBadges = useCallback(
-    (v: boolean) => {
-      setShowTimerBadges(v);
-      persist('showTimerBadges', v);
-    },
-    [persist]
-  );
-
-  const updateSessionLoggingEnabled = useCallback(
-    (v: boolean) => {
-      setSessionLoggingEnabled(v);
-      persist('sessionLoggingEnabled', v);
-    },
-    [persist]
-  );
-
-  const updateNumpadMappings = useCallback(
-    (v: Record<string, string>) => {
-      setNumpadMappings(v);
-      persist('numpadMappings', v);
-    },
-    [persist]
-  );
-
-  const updateAutoBackupEnabled = useCallback(
-    (v: boolean) => {
-      setAutoBackupEnabled(v);
-      persist('autoBackupEnabled', v);
-    },
-    [persist]
-  );
-
-  const updateChatNotifications = useCallback(
-    (v: ChatFilters) => {
-      setChatNotifications(v);
-      persist('chatNotifications', v);
-    },
-    [persist]
-  );
-
-  const updateCustomChime1 = useCallback(
-    (v: string | null) => {
-      setCustomChime1(v);
-      persist('customChime1', v);
-    },
-    [persist]
-  );
-
-  const updateCustomChime2 = useCallback(
-    (v: string | null) => {
-      setCustomChime2(v);
-      persist('customChime2', v);
-    },
-    [persist]
-  );
-
-  const updateCounterHotThreshold = useCallback(
-    (v: number) => {
-      setCounterHotThreshold(v);
-      persist('counterHotThreshold', v);
-    },
-    [persist]
-  );
-
-  const updateCounterColdThreshold = useCallback(
-    (v: number) => {
-      setCounterColdThreshold(v);
-      persist('counterColdThreshold', v);
-    },
-    [persist]
-  );
-
-  const updateHasSeenGuide = useCallback(
-    (v: boolean) => {
-      setHasSeenGuide(v);
-      persist('hasSeenGuide', v);
-    },
-    [persist]
-  );
-
-  const updateActionBlockingEnabled = useCallback(
-    (v: boolean) => {
-      setActionBlockingEnabled(v);
-      persist('actionBlockingEnabled', v);
-    },
-    [persist]
-  );
-
-  const updateWhoAutoRefreshEnabled = useCallback(
-    (v: boolean) => {
-      setWhoAutoRefreshEnabled(v);
-      persist('whoAutoRefreshEnabled', v);
-    },
-    [persist]
-  );
-
-  const updateWhoRefreshMinutes = useCallback(
-    (v: number) => {
-      setWhoRefreshMinutes(v);
-      persist('whoRefreshMinutes', v);
-    },
-    [persist]
-  );
-
-  const updateGagGroups = useCallback(
-    (v: GagGroupSettings) => {
-      setGagGroups(v);
-      persist('gagGroups', v);
-    },
-    [persist]
-  );
-
-  // Babel
-  const updateBabelEnabled = useCallback(
-    (v: boolean) => {
-      setBabelEnabled(v);
-      persist('babelEnabled', v);
-    },
-    [persist]
-  );
-
-  const updateBabelLanguage = useCallback(
-    (v: string) => {
-      setBabelLanguage(v);
-      persist('babelLanguage', v);
-    },
-    [persist]
-  );
-
-  const updateBabelIntervalSeconds = useCallback(
-    (v: number) => {
-      setBabelIntervalSeconds(v);
-      persist('babelIntervalSeconds', v);
-    },
-    [persist]
-  );
-
-  const updateBabelPhrases = useCallback(
-    (v: string[]) => {
-      setBabelPhrases(v);
-      persist('babelPhrases', v);
-    },
-    [persist]
-  );
-
-  const updatePostSyncEnabled = useCallback(
-    (v: boolean) => {
-      setPostSyncEnabled(v);
-      persist('postSyncEnabled', v);
-    },
-    [persist]
-  );
-
-  const updatePostSyncCommands = useCallback(
-    (v: string) => {
-      setPostSyncCommands(v);
-      persist('postSyncCommands', v);
-    },
-    [persist]
-  );
-
-  const updateAutoLoginEnabled = useCallback(
-    (v: boolean) => {
-      setAutoLoginEnabled(v);
-      persist('autoLoginEnabled', v);
-    },
-    [persist]
-  );
-
-  const updateAutoLoginActiveSlot = useCallback(
-    (v: 0 | 1) => {
-      setAutoLoginActiveSlot(v);
-      persist('autoLoginActiveSlot', v);
+      const clamped = Math.max(8, Math.min(18, v));
+      setChatFontSize(clamped);
+      persist('chatFontSize', clamped);
     },
     [persist]
   );
@@ -619,27 +490,12 @@ export function useAppSettings() {
     [persist, storePassword, deletePassword]
   );
 
-  const updateLastLoginTimestamp = useCallback(
-    (v: number | null) => {
-      setLastLoginTimestamp(v);
-      persist('lastLoginTimestamp', v);
-    },
-    [persist]
-  );
-
-  const updateLastLoginSlot = useCallback(
-    (v: 0 | 1 | null) => {
-      setLastLoginSlot(v);
-      persist('lastLoginSlot', v);
-    },
-    [persist]
-  );
-
+  const chatNotificationsRef = useRef(chatNotifications);
+  chatNotificationsRef.current = chatNotifications;
   const toggleChatNotification = useCallback(
     async (type: keyof ChatFilters) => {
       // On web, request browser notification permission when enabling for the first time
-      const current = chatNotifications[type];
-      if (!current && getPlatform() === 'web') {
+      if (!chatNotificationsRef.current[type] && getPlatform() === 'web') {
         if (typeof Notification !== 'undefined' && Notification.permission === 'default') {
           const result = await Notification.requestPermission();
           if (result !== 'granted') return;
@@ -651,7 +507,7 @@ export function useAppSettings() {
         return next;
       });
     },
-    [persist, chatNotifications]
+    [persist]
   );
 
   return {
@@ -659,96 +515,79 @@ export function useAppSettings() {
     antiIdleEnabled,
     antiIdleCommand,
     antiIdleMinutes,
-    updateAntiIdleEnabled,
-    updateAntiIdleCommand,
-    updateAntiIdleMinutes,
     // Alignment tracking
     alignmentTrackingEnabled,
     alignmentTrackingMinutes,
-    updateAlignmentTrackingEnabled,
-    updateAlignmentTrackingMinutes,
     // Output transforms
     boardDatesEnabled,
     stripPromptsEnabled,
-    updateBoardDatesEnabled,
-    updateStripPromptsEnabled,
+    antiSpamEnabled,
     // Buffer sizes
     terminalScrollback,
     commandHistorySize,
     chatHistorySize,
-    updateTerminalScrollback,
-    updateCommandHistorySize,
-    updateChatHistorySize,
     // Timestamp
     timestampFormat,
-    updateTimestampFormat,
     // Command echo
     commandEchoEnabled,
-    updateCommandEchoEnabled,
     // Timer badges
     showTimerBadges,
-    updateShowTimerBadges,
     // Session logging
     sessionLoggingEnabled,
-    updateSessionLoggingEnabled,
     // Numpad
     numpadMappings,
-    updateNumpadMappings,
     // Backups
     autoBackupEnabled,
-    updateAutoBackupEnabled,
     // Notifications
     chatNotifications,
-    updateChatNotifications,
     toggleChatNotification,
     // Custom chimes
     customChime1,
     customChime2,
-    updateCustomChime1,
-    updateCustomChime2,
     // Counter thresholds
     counterHotThreshold,
     counterColdThreshold,
-    updateCounterHotThreshold,
-    updateCounterColdThreshold,
     // Help guide
     hasSeenGuide,
-    updateHasSeenGuide,
     // Action blocking
     actionBlockingEnabled,
-    updateActionBlockingEnabled,
     // Who list
     whoAutoRefreshEnabled,
     whoRefreshMinutes,
-    updateWhoAutoRefreshEnabled,
-    updateWhoRefreshMinutes,
+    whoFontSize,
+    updateWhoFontSize,
+    chatFontSize,
+    updateChatFontSize,
     // Gag groups
     gagGroups,
-    updateGagGroups,
+    // Announce
+    announceMode,
+    announcePetMode,
     // Babel language trainer
     babelEnabled,
     babelLanguage,
     babelIntervalSeconds,
     babelPhrases,
-    updateBabelEnabled,
-    updateBabelLanguage,
-    updateBabelIntervalSeconds,
-    updateBabelPhrases,
     // Post-sync commands
     postSyncEnabled,
     postSyncCommands,
-    updatePostSyncEnabled,
-    updatePostSyncCommands,
     // Auto-login
     autoLoginEnabled,
     autoLoginActiveSlot,
     autoLoginCharacters,
     lastLoginTimestamp,
     lastLoginSlot,
-    updateAutoLoginEnabled,
-    updateAutoLoginActiveSlot,
+    // Auto-caster weight mode
+    casterWeightItem,
+    casterWeightContainer,
+    casterWeightAdjustUp,
+    casterWeightAdjustDown,
+    // Auto-conc
+    autoConcAction,
+    // Special updaters (have extra logic beyond simple set+persist)
+    updateAlignmentTrackingEnabled,
     updateAutoLoginCharacters,
-    updateLastLoginTimestamp,
-    updateLastLoginSlot,
+    // All simple updaters from factory
+    ...updaters,
   };
 }

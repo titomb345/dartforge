@@ -18,6 +18,7 @@ import {
 import { CSS } from '@dnd-kit/utilities';
 import { StatusReadout } from './StatusReadout';
 import type { ThemeColorKey } from '../lib/defaultTheme';
+import type { AnsiColorSegment } from '../lib/ansiColorExtract';
 import type { FilterFlags } from '../lib/outputFilter';
 
 export type StatusReadoutKey =
@@ -50,6 +51,10 @@ export interface ReadoutData {
   key?: string;
   /** Optional direct CSS color — bypasses theme lookup when set */
   color?: string;
+  /** ANSI color extracted from MUD output — takes priority over color when set */
+  mudColor?: ThemeColorKey | null;
+  /** Per-word color segments for multi-colored descriptors (e.g. "very dim red") */
+  mudColors?: AnsiColorSegment[] | null;
 }
 
 export interface ReadoutConfig {
@@ -123,6 +128,24 @@ function RainbowText({ text }: { text: string }) {
   );
 }
 
+function MultiColorText({
+  segments,
+  theme,
+}: {
+  segments: AnsiColorSegment[];
+  theme: Record<string, string>;
+}) {
+  return (
+    <>
+      {segments.map((seg, i) => (
+        <span key={i} style={{ color: theme[seg.color] ?? seg.color }}>
+          {seg.text}
+        </span>
+      ))}
+    </>
+  );
+}
+
 function SortableReadout({
   config,
   theme,
@@ -167,11 +190,17 @@ function SortableReadout({
       <StatusReadout
         icon={config.icon}
         label={data.label}
-        color={data.color ?? theme[data.themeColor]}
+        color={data.mudColor ? theme[data.mudColor] : (data.color ?? theme[data.themeColor])}
         tooltip={config.tooltip(data)}
         glow={data.severity <= 1}
         danger={data.severity >= config.dangerThreshold}
-        labelNode={data.key === 'scintillating' ? <RainbowText text={data.label} /> : undefined}
+        labelNode={
+          data.key === 'scintillating'
+            ? <RainbowText text={data.label} />
+            : data.mudColors
+              ? <MultiColorText segments={data.mudColors} theme={theme} />
+              : undefined
+        }
         compact={autoCompact || !!compactReadouts[config.id]}
         autoCompact={autoCompact}
         filtered={config.filterKey ? filterFlags[config.filterKey] : undefined}

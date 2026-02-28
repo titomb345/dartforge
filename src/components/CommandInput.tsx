@@ -110,6 +110,24 @@ export const CommandInput = forwardRef<HTMLTextAreaElement, CommandInputProps>(
       babelLanguage,
       babelNextAt,
       onToggleBabel,
+      inscriberActive,
+      inscriberSpell,
+      inscriberCycleCount,
+      onStopInscriber,
+      casterActive,
+      casterSpell,
+      casterPower,
+      casterCycleCount,
+      casterWeightMode,
+      casterCarriedWeight,
+      casterWeightItem,
+      onStopCaster,
+      concActive,
+      concAction,
+      concCycleCount,
+      onStopConc,
+      announceMode,
+      onStopAnnounce,
     } = useCommandInputContext();
     const { commandHistorySize, numpadMappings, showTimerBadges } = useAppSettingsContext();
     const { active: spotlightActive } = useSpotlight();
@@ -424,6 +442,75 @@ export const CommandInput = forwardRef<HTMLTextAreaElement, CommandInputProps>(
             {babelNextAt && (
               <span className="opacity-70">{formatCountdown(babelNextAt - Date.now())}</span>
             )}
+          </span>
+        )}
+
+        {/* Auto-inscriber badge */}
+        {inscriberActive && (
+          <span
+            title={`Autoinscribe: ${inscriberSpell ?? '?'} — click to stop`}
+            onClick={onStopInscriber}
+            className="flex items-center gap-1 px-1.5 py-1 rounded border text-[9px] font-mono self-center shrink-0 ml-1 text-[#60a5fa] border-[#60a5fa]/30 bg-[#60a5fa]/8 cursor-pointer select-none animate-pulse-slow"
+            style={{ filter: 'drop-shadow(0 0 3px rgba(96, 165, 250, 0.25))' }}
+          >
+            <span>Autoinscribe</span>
+            {inscriberCycleCount > 0 && (
+              <span className="opacity-70">x{inscriberCycleCount}</span>
+            )}
+          </span>
+        )}
+
+        {/* Auto-caster badge */}
+        {casterActive && (
+          <span
+            title={
+              casterWeightMode
+                ? `Autocast: ${casterSpell ?? '?'} @${casterPower ?? '?'} — carrying ${casterCarriedWeight} ${casterWeightItem} — click to stop`
+                : `Autocast: ${casterSpell ?? '?'} @${casterPower ?? '?'} — click to stop`
+            }
+            onClick={onStopCaster}
+            className={`flex items-center gap-1 px-1.5 py-1 rounded border text-[9px] font-mono self-center shrink-0 ml-1 cursor-pointer select-none animate-pulse-slow ${
+              casterWeightMode
+                ? 'text-[#fbbf24] border-[#fbbf24]/30 bg-[#fbbf24]/8'
+                : 'text-[#34d399] border-[#34d399]/30 bg-[#34d399]/8'
+            }`}
+            style={{
+              filter: casterWeightMode
+                ? 'drop-shadow(0 0 3px rgba(251, 191, 36, 0.25))'
+                : 'drop-shadow(0 0 3px rgba(52, 211, 153, 0.25))',
+            }}
+          >
+            <span>{casterWeightMode ? 'Autocast+Wt' : 'Autocast'}</span>
+            {casterCycleCount > 0 && (
+              <span className="opacity-70">x{casterCycleCount}</span>
+            )}
+          </span>
+        )}
+
+        {/* Auto-conc badge */}
+        {concActive && (
+          <span
+            title={`Autoconc: ${concAction ?? '?'} — click to stop`}
+            onClick={onStopConc}
+            className="flex items-center gap-1 px-1.5 py-1 rounded border text-[9px] font-mono self-center shrink-0 ml-1 text-[#c084fc] border-[#c084fc]/30 bg-[#c084fc]/8 cursor-pointer select-none animate-pulse-slow"
+            style={{ filter: 'drop-shadow(0 0 3px rgba(192, 132, 252, 0.25))' }}
+          >
+            <span>Autoconc</span>
+            {concCycleCount > 0 && (
+              <span className="opacity-70">x{concCycleCount}</span>
+            )}
+          </span>
+        )}
+
+        {/* Announce badge */}
+        {announceMode !== 'off' && (
+          <span
+            title={`Announce: ${announceMode} — click to stop`}
+            onClick={onStopAnnounce}
+            className="flex items-center gap-1 px-1.5 py-1 rounded border text-[9px] font-mono self-center shrink-0 ml-1 text-[#fb923c] border-[#fb923c]/30 bg-[#fb923c]/8 cursor-pointer select-none"
+            style={{ filter: 'drop-shadow(0 0 3px rgba(251, 146, 60, 0.25))' }}
+          >
+            <span>Announce: {announceMode}</span>
           </span>
         )}
 

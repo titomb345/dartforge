@@ -5,11 +5,24 @@ import { matchAuraLine, type AuraMatch } from './auraPatterns';
 import { matchEncumbranceLine, type EncumbranceMatch } from './encumbrancePatterns';
 import { matchMovementLine, type MovementMatch } from './movementPatterns';
 import { matchAlignmentLine, type AlignmentMatch } from './alignmentPatterns';
-import { matchChatLine } from './chatPatterns';
+import { matchChatLine, isIncompleteChatLine } from './chatPatterns';
 import { transformBoardDateLine } from './boardDatePatterns';
 import { isWhoHeaderLine, isWhoFinalLine, buildWhoSnapshot, type WhoSnapshot } from './whoPatterns';
 import type { ChatMessage } from '../types/chat';
 import { stripAnsi } from './ansiUtils';
+
+/** Sync gag flag keys. */
+type SyncGagFlags = { hp: boolean; score: boolean; combatAlloc: boolean; magicAlloc: boolean; alignment: boolean; who: boolean };
+
+/** Default sync gag flags (all disabled). */
+const SYNC_GAGS_CLEAR: SyncGagFlags = {
+  hp: false,
+  score: false,
+  combatAlloc: false,
+  magicAlloc: false,
+  alignment: false,
+  who: false,
+};
 
 /** Pre-compiled regexes for score block detection (avoid recompiling on every call) */
 const SCORE_NAME_RE = /^You are .+ the .+\.\s+You are a /;
@@ -96,19 +109,16 @@ export class OutputFilter {
   boardDatesEnabled = true;
   /** When true, strip server prompt prefix ("> ") from terminal output. */
   stripPrompts = true;
+  /** When true, collapse consecutive identical lines with a repeat count. */
+  antiSpamEnabled = false;
+  /** Callback to write anti-spam flush output to the terminal asynchronously. */
+  onAntiSpamFlush: ((text: string) => void) | null = null;
   /** Callback invoked when sync gagging completes (all login responses consumed). */
   onSyncEnd: (() => void) | null = null;
 
   /* ---- Sync gag state (pattern-based, NOT blanket suppression) ---- */
   private syncActive = false;
-  private syncGags = {
-    hp: false,
-    score: false,
-    combatAlloc: false,
-    magicAlloc: false,
-    alignment: false,
-    who: false,
-  };
+  private syncGags = { ...SYNC_GAGS_CLEAR };
   /** True while inside the multi-line score block during sync. */
   private syncInScoreBlock = false;
   /** True while a limb header was seen, waiting for its values line. */
@@ -126,13 +136,96 @@ export class OutputFilter {
   /** Safety timer to auto-end sync. */
   private syncTimer: ReturnType<typeof setTimeout> | null = null;
 
+  /* ---- Multi-line chat buffering ---- */
+  private chatLineBuffer: string[] | null = null;
+  /** Max continuation lines before discarding an incomplete chat buffer. */
+  private static readonly CHAT_BUFFER_MAX = 5;
+
   /* ---- Passive who tracking (captures manual `who` output without gagging) ---- */
   private passiveWhoActive = false;
   private passiveWhoLines: string[] = [];
   private passiveWhoRawLines: string[] = [];
 
+  /* ---- Anti-spam state ---- */
+  private prevStrippedLine: string | null = null;
+  private repeatCount = 0;
+  private antiSpamTimer: ReturnType<typeof setTimeout> | null = null;
+
   constructor(callbacks: OutputFilterCallbacks = {}) {
     this.callbacks = callbacks;
+  }
+
+  /** Format the anti-spam count line. */
+  private static antiSpamLine(count: number): string {
+    return `\x1b[90m  [repeated x${count}]\x1b[0m\r\n`;
+  }
+
+  /** Cancel the pending anti-spam flush timer. */
+  private clearAntiSpamTimer(): void {
+    if (this.antiSpamTimer) {
+      clearTimeout(this.antiSpamTimer);
+      this.antiSpamTimer = null;
+    }
+  }
+
+  /** Start (or restart) the anti-spam flush timer. */
+  private startAntiSpamTimer(): void {
+    this.clearAntiSpamTimer();
+    this.antiSpamTimer = setTimeout(() => {
+      this.antiSpamTimer = null;
+      if (this.repeatCount > 0) {
+        const text = OutputFilter.antiSpamLine(this.repeatCount + 1);
+        this.repeatCount = 0;
+        this.prevStrippedLine = null;
+        this.onAntiSpamFlush?.(text);
+      }
+    }, 1000);
+  }
+
+  /** Reset all who-related tracking state (sync + passive). */
+  private resetWhoState(): void {
+    this.syncInWhoBlock = false;
+    this.syncWhoLines = [];
+    this.syncWhoRawLines = [];
+    this.passiveWhoActive = false;
+    this.passiveWhoLines = [];
+    this.passiveWhoRawLines = [];
+  }
+
+  /**
+   * Accumulate a who-list line and fire onWho when the footer is reached.
+   * Returns true when the block is complete.
+   */
+  private accumulateWhoLine(
+    stripped: string,
+    raw: string,
+    lines: string[],
+    rawLines: string[],
+  ): boolean {
+    lines.push(stripped);
+    rawLines.push(raw);
+    if (isWhoFinalLine(stripped)) {
+      this.callbacks.onWho?.(buildWhoSnapshot(lines, rawLines));
+      return true;
+    }
+    return false;
+  }
+
+  /** Clear any pending sync safety timer. */
+  private clearSyncTimer(): void {
+    if (this.syncTimer) {
+      clearTimeout(this.syncTimer);
+      this.syncTimer = null;
+    }
+  }
+
+  /** Start (or restart) the sync safety timer. */
+  private startSyncTimer(ms: number): void {
+    this.clearSyncTimer();
+    this.syncTimer = setTimeout(() => {
+      this.syncTimer = null;
+      this.endSync();
+    }, ms);
   }
 
   /**
@@ -142,30 +235,13 @@ export class OutputFilter {
    */
   startSync(): void {
     this.syncActive = true;
-    this.syncGags = {
-      hp: true,
-      score: true,
-      combatAlloc: true,
-      magicAlloc: true,
-      alignment: true,
-      who: true,
-    };
+    this.syncGags = { hp: true, score: true, combatAlloc: true, magicAlloc: true, alignment: true, who: true };
     this.syncInScoreBlock = false;
     this.syncAllocPending = false;
     this.syncAllocHasData = false;
     this.syncMagicPending = false;
-    this.syncInWhoBlock = false;
-    this.syncWhoLines = [];
-    this.syncWhoRawLines = [];
-    // Abort any in-progress passive who tracking (sync takes over)
-    this.passiveWhoActive = false;
-    this.passiveWhoLines = [];
-    this.passiveWhoRawLines = [];
-    if (this.syncTimer) clearTimeout(this.syncTimer);
-    this.syncTimer = setTimeout(() => {
-      this.syncTimer = null;
-      this.endSync();
-    }, 5000);
+    this.resetWhoState();
+    this.startSyncTimer(5000);
   }
 
   /**
@@ -175,43 +251,21 @@ export class OutputFilter {
   startWhoSync(): void {
     this.syncActive = true;
     this.syncGags.who = true;
-    this.syncInWhoBlock = false;
-    this.syncWhoLines = [];
-    this.syncWhoRawLines = [];
-    // Abort any in-progress passive who tracking (sync takes over)
-    this.passiveWhoActive = false;
-    this.passiveWhoLines = [];
-    this.passiveWhoRawLines = [];
-    if (this.syncTimer) clearTimeout(this.syncTimer);
-    this.syncTimer = setTimeout(() => {
-      this.syncTimer = null;
-      this.endSync();
-    }, 5000);
+    this.resetWhoState();
+    this.startSyncTimer(5000);
   }
 
   /** End sync gagging. */
   endSync(): void {
     const wasActive = this.syncActive;
     this.syncActive = false;
-    this.syncGags = {
-      hp: false,
-      score: false,
-      combatAlloc: false,
-      magicAlloc: false,
-      alignment: false,
-      who: false,
-    };
+    this.syncGags = { ...SYNC_GAGS_CLEAR };
     this.syncInScoreBlock = false;
     this.syncAllocPending = false;
     this.syncAllocHasData = false;
     this.syncMagicPending = false;
-    this.syncInWhoBlock = false;
-    this.syncWhoLines = [];
-    this.syncWhoRawLines = [];
-    if (this.syncTimer) {
-      clearTimeout(this.syncTimer);
-      this.syncTimer = null;
-    }
+    this.resetWhoState();
+    this.clearSyncTimer();
     if (wasActive) this.onSyncEnd?.();
   }
 
@@ -222,20 +276,10 @@ export class OutputFilter {
 
   /** Check if all sync gags are consumed and end sync after a short grace period for the trailing prompt. */
   private checkSyncDone(): void {
-    if (
-      !this.syncGags.hp &&
-      !this.syncGags.score &&
-      !this.syncGags.combatAlloc &&
-      !this.syncGags.magicAlloc &&
-      !this.syncGags.alignment &&
-      !this.syncGags.who
-    ) {
+    const allDone = Object.values(this.syncGags).every((v) => !v);
+    if (allDone) {
       // Brief delay so the trailing ">" prompt from the last command gets gagged too
-      if (this.syncTimer) clearTimeout(this.syncTimer);
-      this.syncTimer = setTimeout(() => {
-        this.syncTimer = null;
-        this.endSync();
-      }, 250);
+      this.startSyncTimer(250);
     }
   }
 
@@ -253,11 +297,7 @@ export class OutputFilter {
       return;
     }
 
-    this.passiveWhoLines.push(stripped);
-    this.passiveWhoRawLines.push(raw);
-    if (isWhoFinalLine(stripped)) {
-      const snapshot = buildWhoSnapshot(this.passiveWhoLines, this.passiveWhoRawLines);
-      this.callbacks.onWho?.(snapshot);
+    if (this.accumulateWhoLine(stripped, raw, this.passiveWhoLines, this.passiveWhoRawLines)) {
       this.passiveWhoActive = false;
       this.passiveWhoLines = [];
       this.passiveWhoRawLines = [];
@@ -379,12 +419,7 @@ export class OutputFilter {
         return true;
       }
       if (this.syncInWhoBlock) {
-        this.syncWhoLines.push(stripped);
-        this.syncWhoRawLines.push(raw);
-        if (isWhoFinalLine(stripped)) {
-          // End of who block — build snapshot and fire callback
-          const snapshot = buildWhoSnapshot(this.syncWhoLines, this.syncWhoRawLines);
-          this.callbacks.onWho?.(snapshot);
+        if (this.accumulateWhoLine(stripped, raw, this.syncWhoLines, this.syncWhoRawLines)) {
           this.syncInWhoBlock = false;
           this.syncWhoLines = [];
           this.syncGags.who = false;
@@ -404,18 +439,18 @@ export class OutputFilter {
   filter(data: string): string {
     this.buffer += data;
 
-    // Extract complete lines (preserving original line endings)
+    // Extract complete lines (preserving original line endings).
+    // Uses an index cursor to avoid O(n²) substring copies.
     const segments: string[] = [];
-    let remaining = this.buffer;
-
+    let start = 0;
+    const buf = this.buffer;
     while (true) {
-      const idx = remaining.indexOf('\n');
+      const idx = buf.indexOf('\n', start);
       if (idx < 0) break;
-      segments.push(remaining.substring(0, idx + 1));
-      remaining = remaining.substring(idx + 1);
+      segments.push(buf.substring(start, idx + 1));
+      start = idx + 1;
     }
-
-    this.buffer = remaining;
+    this.buffer = buf.substring(start);
 
     let output = '';
 
@@ -424,14 +459,13 @@ export class OutputFilter {
       // When prompt + response arrive in the same TCP chunk, the prompt
       // gets prepended to the next response line, e.g. "> There is no exit."
       let seg = segment;
-      if (this.stripPrompts) {
-        const rawStripped = stripAnsi(segment);
-        if (/^> \S/.test(rawStripped)) {
-          seg = segment.replace(/^((?:\x1b\[[0-9;]*m)*)> /, '$1');
-        }
+      const rawStripped = stripAnsi(segment);
+      if (this.stripPrompts && /^> \S/.test(rawStripped)) {
+        seg = segment.replace(/^((?:\x1b\[[0-9;]*m)*)> /, '$1');
       }
 
-      let stripped = stripAnsi(seg).trim();
+      // Reuse rawStripped when segment wasn't modified; otherwise re-strip
+      let stripped = (seg === segment ? rawStripped : stripAnsi(seg)).trim();
       // Always strip server prompt prefix for parsing, even when display keeps it.
       // Without this, "> upper left hand:" won't match limb/magic header regexes.
       // A bare "> " prompt (no content) becomes just ">" after trim — normalize to "".
@@ -454,7 +488,7 @@ export class OutputFilter {
         if (needsMatch.thirst) this.callbacks.onThirst?.(needsMatch.thirst);
       }
 
-      const auraMatch = matchAuraLine(stripped);
+      const auraMatch = matchAuraLine(stripped, seg);
       if (auraMatch) {
         this.callbacks.onAura?.(auraMatch);
       }
@@ -480,16 +514,26 @@ export class OutputFilter {
       }
 
       // --- Chat detection (observational — never strips) ---
-      const chatMatch = matchChatLine(stripped, this.activeCharacter);
-      if (chatMatch) {
-        if (chatMatch.sender === 'Unknown' && this.signatureResolver) {
-          const resolved = this.signatureResolver(chatMatch.message);
-          if (resolved) {
-            chatMatch.sender = resolved.playerName;
-            chatMatch.message = resolved.message;
+      // Supports multi-line messages: when a say/ask/exclaim wraps across lines,
+      // we buffer until the closing quote is found, then match the combined text.
+      if (this.chatLineBuffer !== null) {
+        this.chatLineBuffer.push(stripped);
+        if (stripped.endsWith("'") || this.chatLineBuffer.length > OutputFilter.CHAT_BUFFER_MAX) {
+          const combined = this.chatLineBuffer.join(' ');
+          const chatMatch = matchChatLine(combined, this.activeCharacter);
+          if (chatMatch) {
+            chatMatch.raw = combined;
+            this.fireChatCallback(chatMatch);
           }
+          this.chatLineBuffer = null;
         }
-        this.callbacks.onChat?.(chatMatch);
+      } else {
+        const chatMatch = matchChatLine(stripped, this.activeCharacter);
+        if (chatMatch) {
+          this.fireChatCallback(chatMatch);
+        } else if (isIncompleteChatLine(stripped)) {
+          this.chatLineBuffer = [stripped];
+        }
       }
 
       // --- Sync gagging (pattern-based, only login command responses) ---
@@ -503,6 +547,11 @@ export class OutputFilter {
 
       // --- Passive who tracking (manual `who` → updates panel without gagging) ---
       this.trackPassiveWho(stripped, seg);
+
+      // --- Trigger / onLine callback ---
+      // Fired BEFORE compact-mode gagging so auto-inscriber/auto-caster
+      // always see concentration lines even when they're filtered from display.
+      const lineResult = this.callbacks.onLine?.(stripped, seg);
 
       // --- Compact mode: strip status lines from terminal ---
 
@@ -525,19 +574,43 @@ export class OutputFilter {
         const transformed = transformBoardDateLine(stripped, seg);
         if (transformed !== null) displaySegment = transformed;
       }
-
-      // --- Trigger / onLine callback ---
-      const lineResult = this.callbacks.onLine?.(stripped, seg);
       if (lineResult?.gag) {
         continue; // suppress this line from terminal output
       }
       if (lineResult?.highlight) {
+        // Flush any pending anti-spam count before the highlighted line
+        if (this.repeatCount > 0) {
+          this.clearAntiSpamTimer();
+          output += OutputFilter.antiSpamLine(this.repeatCount + 1);
+          this.repeatCount = 0;
+        }
+        this.prevStrippedLine = stripped;
         output += `\x1b[${lineResult.highlight}m${displaySegment}\x1b[0m`;
         continue;
       }
 
+      // --- Anti-spam: collapse consecutive identical lines ---
+      if (this.antiSpamEnabled && stripped !== '') {
+        if (stripped === this.prevStrippedLine) {
+          this.repeatCount++;
+          this.startAntiSpamTimer();
+          continue; // suppress duplicate
+        }
+        // Different line — flush pending count
+        if (this.repeatCount > 0) {
+          this.clearAntiSpamTimer();
+          output += OutputFilter.antiSpamLine(this.repeatCount + 1);
+          this.repeatCount = 0;
+        }
+        this.prevStrippedLine = stripped;
+      }
+
       output += displaySegment;
     }
+
+    // Note: anti-spam count is NOT flushed at chunk boundaries.
+    // The count accumulates across filter() calls and flushes when
+    // a different line arrives, ensuring a single accurate total.
 
     // Flush remaining buffer if it looks like a prompt or is empty.
     if (this.buffer) {
@@ -559,12 +632,28 @@ export class OutputFilter {
     return output;
   }
 
+  /** Resolve anonymous sender and fire onChat callback. */
+  private fireChatCallback(chatMatch: ChatMessage): void {
+    if (chatMatch.sender === 'Unknown' && this.signatureResolver) {
+      const resolved = this.signatureResolver(chatMatch.message);
+      if (resolved) {
+        chatMatch.sender = resolved.playerName;
+        chatMatch.message = resolved.message;
+      }
+    }
+    this.callbacks.onChat?.(chatMatch);
+  }
+
   /** Reset buffer state (call on disconnect/reconnect) */
   reset(): void {
     this.buffer = '';
+    this.chatLineBuffer = null;
     this.passiveWhoActive = false;
     this.passiveWhoLines = [];
     this.passiveWhoRawLines = [];
+    this.prevStrippedLine = null;
+    this.repeatCount = 0;
+    this.clearAntiSpamTimer();
     this.endSync();
   }
 }

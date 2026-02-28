@@ -1,3 +1,5 @@
+import { fuzzyMatchKey } from './nameUtils';
+
 /** Metadata for a DartMUD spell */
 export interface SpellInfo {
   /** Cast abbreviation, e.g. "mhs" for minor_heal_self */
@@ -116,4 +118,10 @@ export function getSpellByAbbr(abbr: string): { name: string; info: SpellInfo } 
     if (info.abbr === abbr) return { name, info };
   }
   return null;
+}
+
+/** Fuzzy-match a spell by name with punctuation stripped (e.g. "lirrins glow" → "lirrin's_glow") */
+export function findSpellFuzzy(input: string): { name: string; info: SpellInfo } | null {
+  const key = fuzzyMatchKey(input, SPELL_DATA);
+  return key ? { name: key, info: SPELL_DATA[key] } : null;
 }

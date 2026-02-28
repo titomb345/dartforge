@@ -4,13 +4,15 @@ import type { ThemeColorKey } from '../lib/defaultTheme';
 import type { WhoPlayer } from '../lib/whoPatterns';
 import type { WhoTitleMapping } from '../types/whoTitleMap';
 import { panelRootClass } from '../lib/panelUtils';
-import { PinMenuButton } from './PinMenuButton';
-import { PinnedControls } from './PinnedControls';
+import { PanelHeader } from './PanelHeader';
 import { WhoIcon, RotateCcwIcon } from './icons';
+import { ConfirmDeleteButton } from './ConfirmDeleteButton';
+import { FontSizeControl } from './FontSizeControl';
 import { MudInput } from './shared';
 import { useWhoContext } from '../contexts/WhoContext';
 import { useWhoTitleContext } from '../contexts/WhoTitleContext';
 import { useTerminalTheme } from '../contexts/TerminalThemeContext';
+import { useAppSettingsContext } from '../contexts/AppSettingsContext';
 
 interface GuildStyle {
   color: ThemeColorKey;
@@ -103,10 +105,12 @@ function TitleMappingForm({
   initial,
   onSave,
   onCancel,
+  onDelete,
 }: {
   initial?: { playerName: string; confirmed: boolean };
   onSave: (playerName: string, confirmed: boolean) => void;
   onCancel: () => void;
+  onDelete?: () => void;
 }) {
   const [name, setName] = useState(initial?.playerName ?? '');
   const [confirmed, setConfirmed] = useState(initial?.confirmed ?? false);
@@ -127,6 +131,9 @@ function TitleMappingForm({
 
   return (
     <div className="flex items-center gap-1.5 px-3 py-1 bg-[#8be9fd]/5 border-y border-[#8be9fd]/10">
+      {onDelete && (
+        <ConfirmDeleteButton onDelete={onDelete} size={10} variant="fixed" />
+      )}
       <MudInput
         ref={inputRef}
         accent="cyan"
@@ -175,15 +182,13 @@ function TitleAnnotation({
   mapping,
   onEdit,
   onToggle,
-  onDelete,
 }: {
   mapping: WhoTitleMapping;
   onEdit: () => void;
   onToggle: () => void;
-  onDelete: () => void;
 }) {
   return (
-    <span className="group/title inline-flex items-center gap-0.5 ml-1">
+    <span className="inline-flex items-center ml-1">
       <button
         onClick={onEdit}
         onContextMenu={(e) => {
@@ -199,16 +204,6 @@ function TitleAnnotation({
       >
         ({mapping.playerName} {mapping.confirmed ? '\u2713' : '?'})
       </button>
-      <button
-        onClick={(e) => {
-          e.stopPropagation();
-          onDelete();
-        }}
-        className="text-[10px] font-mono text-text-dim hover:text-red cursor-pointer opacity-0 group-hover/title:opacity-100 transition-all duration-150"
-        title="Remove mapping"
-      >
-        &times;
-      </button>
     </span>
   );
 }
@@ -221,6 +216,7 @@ function PlayerRow({
   player,
   mapping,
   editingTitle,
+  fontSize,
   onStartEdit,
   onSave,
   onCancel,
@@ -230,6 +226,7 @@ function PlayerRow({
   player: WhoPlayer;
   mapping: WhoTitleMapping | null;
   editingTitle: string | null;
+  fontSize: number;
   onStartEdit: (whoTitle: string) => void;
   onSave: (whoTitle: string, playerName: string, confirmed: boolean) => void;
   onCancel: () => void;
@@ -249,8 +246,9 @@ function PlayerRow({
 
         {/* Name — colored with ANSI color from MUD output if available */}
         <span
-          className="text-[12px] font-mono truncate flex-1 inline-flex items-center"
+          className="font-mono truncate flex-1 inline-flex items-center"
           style={{
+            fontSize: `${fontSize}px`,
             color: player.nameColor ? theme[player.nameColor] : undefined,
           }}
         >
@@ -261,7 +259,6 @@ function PlayerRow({
               mapping={mapping}
               onEdit={() => onStartEdit(player.name)}
               onToggle={() => onToggle(mapping.id)}
-              onDelete={() => onDelete(mapping.id)}
             />
           )}
           {player.isTitle && !mapping && (
@@ -296,6 +293,7 @@ function PlayerRow({
           }
           onSave={(playerName, confirmed) => onSave(player.name, playerName, confirmed)}
           onCancel={onCancel}
+          onDelete={mapping ? () => onDelete(mapping.id) : undefined}
         />
       )}
     </>
@@ -311,6 +309,7 @@ export function WhoPanel({ mode = 'slideout' }: PinnablePanelProps) {
   const { snapshot, refresh } = useWhoContext();
   const { mappings, resolveTitle, createMapping, updateMapping, deleteMapping } =
     useWhoTitleContext();
+  const { whoFontSize, updateWhoFontSize } = useAppSettingsContext();
   const [, setTick] = useState(0);
   const [editingTitle, setEditingTitle] = useState<string | null>(null);
 
@@ -320,8 +319,6 @@ export function WhoPanel({ mode = 'slideout' }: PinnablePanelProps) {
     const id = setInterval(() => setTick((t) => t + 1), 30_000);
     return () => clearInterval(id);
   }, [snapshot]);
-
-  const playerCount = snapshot?.players.length ?? 0;
 
   const handleSave = (whoTitle: string, playerName: string, confirmed: boolean) => {
     const existing = resolveTitle(whoTitle);
@@ -335,29 +332,21 @@ export function WhoPanel({ mode = 'slideout' }: PinnablePanelProps) {
 
   return (
     <div className={panelRootClass(isPinned)}>
-      {/* Header */}
-      <div className="flex items-center justify-between px-3 py-2.5 border-b border-border-subtle shrink-0">
-        <div className="flex items-center gap-1.5">
-          <span className="text-[13px] font-semibold text-text-heading flex items-center gap-1.5">
-            <WhoIcon size={12} /> Who
-          </span>
-          {playerCount > 0 && (
-            <span className="text-[9px] font-mono px-1.5 py-0.5 rounded bg-[#8be9fd]/10 text-[#8be9fd] border border-[#8be9fd]/20">
-              {playerCount}
-            </span>
-          )}
-        </div>
-        <div className="flex items-center gap-1.5">
-          <button
-            onClick={refresh}
-            title="Refresh who list"
-            className="p-1 rounded text-text-dim hover:text-text-muted transition-colors cursor-pointer"
-          >
-            <RotateCcwIcon size={11} />
-          </button>
-          {isPinned ? <PinnedControls /> : <PinMenuButton panel="who" />}
-        </div>
-      </div>
+      <PanelHeader
+        icon={<WhoIcon size={12} />}
+        title="Who"
+        panel="who"
+        mode={mode}
+      >
+        <FontSizeControl value={whoFontSize} onChange={updateWhoFontSize} />
+        <button
+          onClick={refresh}
+          title="Refresh who list"
+          className="p-1 rounded text-text-dim hover:text-text-muted transition-colors cursor-pointer"
+        >
+          <RotateCcwIcon size={11} />
+        </button>
+      </PanelHeader>
 
       {/* Content */}
       <div className="flex-1 overflow-y-auto">
@@ -375,6 +364,7 @@ export function WhoPanel({ mode = 'slideout' }: PinnablePanelProps) {
                   player={player}
                   mapping={player.isTitle ? resolveTitle(player.name) : null}
                   editingTitle={editingTitle}
+                  fontSize={whoFontSize}
                   onStartEdit={setEditingTitle}
                   onSave={handleSave}
                   onCancel={() => setEditingTitle(null)}

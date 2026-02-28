@@ -3,10 +3,20 @@
 # bumps version in package.json + tauri.conf.json + Cargo.toml,
 # and stamps the changelog with the new version and today's date.
 #
-# Usage: ./scripts/bump-version.sh
-# (no arguments needed — bump type comes from the changelog)
+# Usage: ./scripts/bump-version.sh [--no-stamp]
+#   --no-stamp  Update version files only (skip changelog stamp).
+#               Useful for bumping the version locally during development.
+#               npm run version:next is a shortcut for this.
 
 set -euo pipefail
+
+STAMP=true
+for arg in "$@"; do
+  case "$arg" in
+    --no-stamp) STAMP=false ;;
+    *) echo "Unknown argument: $arg"; exit 1 ;;
+  esac
+done
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 CHANGELOG="$ROOT/CHANGELOG.md"
@@ -26,9 +36,15 @@ if [[ "$TYPE" != "patch" && "$TYPE" != "minor" && "$TYPE" != "major" ]]; then
   exit 1
 fi
 
-# Read current version from package.json
-CURRENT=$(node -p "require('$ROOT/package.json').version")
-IFS='.' read -r MAJOR MINOR PATCH <<< "$CURRENT"
+# Compute target version from the last stamped release in CHANGELOG.md
+# (not from package.json — this makes the script idempotent)
+BASE_LINE=$(grep -m1 '^\## \[[0-9]' "$CHANGELOG" || true)
+if [ -z "$BASE_LINE" ]; then
+  echo "No previous release found in CHANGELOG.md (expected ## [X.Y.Z] - date)"
+  exit 1
+fi
+BASE=$(echo "$BASE_LINE" | sed 's/.*\[\([0-9][0-9]*\.[0-9][0-9]*\.[0-9][0-9]*\)\].*/\1/')
+IFS='.' read -r MAJOR MINOR PATCH <<< "$BASE"
 
 case "$TYPE" in
   major) MAJOR=$((MAJOR + 1)); MINOR=0; PATCH=0 ;;
@@ -37,28 +53,33 @@ case "$TYPE" in
 esac
 
 NEW="$MAJOR.$MINOR.$PATCH"
+cd "$ROOT"
+CURRENT=$(node -p "require('./package.json').version")
 TODAY=$(date +%Y-%m-%d)
 
 echo "Bump type: $TYPE"
+echo "Base:      $BASE (from last changelog release)"
 echo "Version:   $CURRENT -> $NEW"
-echo "Date:      $TODAY"
+if [ "$STAMP" = true ]; then
+  echo "Date:      $TODAY"
+fi
 echo ""
 
 # Update package.json
-cd "$ROOT"
 npm version "$NEW" --no-git-tag-version --allow-same-version
 
-# Update tauri.conf.json
-sed -i "s/\"version\": \"$CURRENT\"/\"version\": \"$NEW\"/" "$ROOT/src-tauri/tauri.conf.json"
+# Update tauri.conf.json (match any semver, not just $CURRENT — idempotent)
+sed -i 's/"version": "[0-9][0-9]*\.[0-9][0-9]*\.[0-9][0-9]*"/"version": "'"$NEW"'"/' "$ROOT/src-tauri/tauri.conf.json"
 
 # Update Cargo.toml (only the first version line — the package version)
-sed -i "0,/^version = \"$CURRENT\"/s//version = \"$NEW\"/" "$ROOT/src-tauri/Cargo.toml"
+sed -i '0,/^version = "[0-9][0-9]*\.[0-9][0-9]*\.[0-9][0-9]*"/s//version = "'"$NEW"'"/' "$ROOT/src-tauri/Cargo.toml"
+
+echo "Updated version files to $NEW"
 
 # Stamp the changelog: replace [Unreleased-<type>] with [X.Y.Z] - YYYY-MM-DD
-sed -i "s/^## \[Unreleased-$TYPE\]/## [$NEW] - $TODAY/" "$CHANGELOG"
-
-echo "Done! Updated:"
-echo "  - package.json"
-echo "  - src-tauri/tauri.conf.json"
-echo "  - src-tauri/Cargo.toml"
-echo "  - CHANGELOG.md -> [$NEW] - $TODAY"
+if [ "$STAMP" = true ]; then
+  sed -i "s/^## \[Unreleased-$TYPE\]/## [$NEW] - $TODAY/" "$CHANGELOG"
+  echo "Stamped CHANGELOG.md -> [$NEW] - $TODAY"
+else
+  echo "(changelog not stamped — use without --no-stamp to stamp)"
+fi

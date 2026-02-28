@@ -208,15 +208,28 @@ export function useVariables(dataStore: DataStore, activeCharacter: string | nul
     return [...charList, ...globalList];
   }, [characterVariables, globalVariables]);
 
-  return {
-    characterVariables,
-    globalVariables,
-    mergedVariables,
-    createVariable,
-    updateVariable,
-    deleteVariable,
-    toggleVariable,
-    setVariable,
-    deleteVariableByName,
-  };
+  return useMemo(
+    () => ({
+      characterVariables,
+      globalVariables,
+      mergedVariables,
+      createVariable,
+      updateVariable,
+      deleteVariable,
+      toggleVariable,
+      setVariable,
+      deleteVariableByName,
+    }),
+    [
+      characterVariables,
+      globalVariables,
+      mergedVariables,
+      createVariable,
+      updateVariable,
+      deleteVariable,
+      toggleVariable,
+      setVariable,
+      deleteVariableByName,
+    ]
+  );
 }

@@ -7,7 +7,7 @@ import { SkillPanel } from './SkillPanel';
 import { ChatPanel } from './ChatPanel';
 import { CounterPanel } from './CounterPanel';
 import { NotesPanel } from './NotesPanel';
-import { MapPanel } from './MapPanel';
+// import { MapPanel } from './MapPanel'; // automapper disabled
 import { AllocPanel } from './AllocPanel';
 import { CurrencyPanel } from './CurrencyPanel';
 import { BabelPanel } from './BabelPanel';
@@ -17,7 +17,7 @@ import {
   CounterIcon,
   TrendingUpIcon,
   NotesIcon,
-  MapIcon,
+  // MapIcon, // automapper disabled
   AllocIcon,
   CoinIcon,
   BabelIcon,
@@ -59,12 +59,13 @@ export const PANEL_META: Record<
     accent: '#fbbf24',
     label: 'Notes',
   },
-  map: {
-    render: () => <MapPanel mode="pinned" />,
-    icon: (s) => <MapIcon size={s} />,
-    accent: '#e8a849',
-    label: 'Map',
-  },
+  // Automapper disabled — leave for future use
+  // map: {
+  //   render: () => <MapPanel mode="pinned" />,
+  //   icon: (s) => <MapIcon size={s} />,
+  //   accent: '#e8a849',
+  //   label: 'Map',
+  // },
   alloc: {
     render: () => <AllocPanel mode="pinned" />,
     icon: (s) => <AllocIcon size={s} />,

@@ -12,13 +12,16 @@ import type {
   TriggerPrefill,
   TriggerScope,
 } from '../types/trigger';
-import { TrashIcon, PlusIcon, ChevronDownIcon, ChevronUpIcon, TriggerIcon } from './icons';
+import { PlusIcon, ChevronDownIcon, ChevronUpIcon, TriggerIcon } from './icons';
+import { PanelHeader } from './PanelHeader';
+import { ConfirmDeleteButton } from './ConfirmDeleteButton';
 import { FilterPill } from './FilterPill';
-import { MudInput, MudTextarea, MudButton, MudNumberInput } from './shared';
+import { MudInput, MudTextarea, MudButton, MudNumberInput, ToggleSwitch } from './shared';
 import { SyntaxHelpTable } from './SyntaxHelpTable';
 import type { HelpRow } from './SyntaxHelpTable';
 import { useAppSettingsContext } from '../contexts/AppSettingsContext';
 import { GAG_GROUPS } from '../lib/gagPatterns';
+import type { GagGroupId } from '../lib/gagPatterns';
 
 interface TriggerPanelProps {
   onClose: () => void;
@@ -84,37 +87,13 @@ function TriggerRow({
   onEdit: (id: TriggerId) => void;
 }) {
   const { toggleTrigger, deleteTrigger } = useTriggerContext();
-  const [confirmingDelete, setConfirmingDelete] = useState(false);
 
   return (
     <div
       className="group flex items-center gap-1.5 px-2 py-1.5 hover:bg-bg-secondary rounded transition-[background] duration-150 cursor-pointer"
       onClick={() => onEdit(trigger.id)}
     >
-      {confirmingDelete ? (
-        <button
-          onClick={(e) => {
-            e.stopPropagation();
-            deleteTrigger(trigger.id, scope);
-            setConfirmingDelete(false);
-          }}
-          onBlur={() => setConfirmingDelete(false)}
-          className="text-[8px] font-mono text-red border border-red/40 rounded px-1 py-px cursor-pointer hover:bg-red/10 shrink-0 transition-colors duration-150"
-        >
-          Del?
-        </button>
-      ) : (
-        <button
-          onClick={(e) => {
-            e.stopPropagation();
-            setConfirmingDelete(true);
-          }}
-          title="Delete trigger"
-          className="w-0 overflow-hidden opacity-0 group-hover:w-4 group-hover:opacity-100 shrink-0 flex items-center justify-center text-text-dim hover:text-red cursor-pointer transition-all duration-150"
-        >
-          <TrashIcon size={9} />
-        </button>
-      )}
+      <ConfirmDeleteButton onDelete={() => deleteTrigger(trigger.id, scope)} />
       <span
         className={`text-[11px] font-mono flex-1 truncate ${
           trigger.matchMode === 'substring'
@@ -720,6 +699,7 @@ export function TriggerPanel({ onClose }: TriggerPanelProps) {
 
   const [scope, setScope] = useState<TriggerScope>('global');
   const [gagsExpanded, setGagsExpanded] = useState(false);
+  const [expandedGagGroup, setExpandedGagGroup] = useState<GagGroupId | null>(null);
   const [groupFilter, setGroupFilter] = useState<string | null>(null);
   const [searchText, setSearchText] = useState('');
   const [editingId, setEditingId] = useState<TriggerId | null>(null);
@@ -780,31 +760,19 @@ export function TriggerPanel({ onClose }: TriggerPanelProps) {
 
   return (
     <div className="w-[420px] h-full bg-bg-primary border-l border-border-subtle flex flex-col overflow-hidden">
-      {/* Header */}
-      <div className="flex items-center justify-between px-3 py-2.5 border-b border-border-subtle shrink-0">
-        <span className="text-[13px] font-semibold text-text-heading flex items-center gap-1.5">
-          <TriggerIcon size={12} /> {titleText}
-        </span>
-        <div className="flex items-center gap-1.5">
-          <button
-            onClick={() => {
-              setCreating(true);
-              setEditingId(null);
-            }}
-            title="New trigger"
-            className="flex items-center justify-center w-5 h-5 rounded-[3px] cursor-pointer text-text-dim hover:text-[#ff79c6] transition-colors duration-150"
-          >
-            <PlusIcon size={11} />
-          </button>
-          <button
-            onClick={onClose}
-            title="Close"
-            className="flex items-center justify-center w-5 h-5 rounded-[3px] cursor-pointer text-text-dim hover:text-text-label transition-colors duration-150 text-[13px]"
-          >
-            ×
-          </button>
-        </div>
-      </div>
+      <PanelHeader icon={<TriggerIcon size={12} />} title={titleText} onClose={onClose}>
+        <button
+          onClick={() => {
+            setCreating(true);
+            setEditingId(null);
+          }}
+          title="New trigger"
+          className="flex items-center gap-1 rounded text-[10px] cursor-pointer px-1.5 py-[2px] border border-border-dim text-text-dim hover:text-[#ff79c6] hover:border-[#ff79c6]/40 transition-colors duration-150"
+        >
+          <PlusIcon size={9} />
+          New Trigger
+        </button>
+      </PanelHeader>
 
       {/* Scope toggle */}
       <div className="flex items-center gap-1.5 px-2 py-2 border-b border-border-subtle shrink-0">
@@ -845,26 +813,59 @@ export function TriggerPanel({ onClose }: TriggerPanelProps) {
           <div className="px-3 pb-2 space-y-1">
             {GAG_GROUPS.map((group) => {
               const enabled = gagGroups[group.id];
+              const isExpanded = expandedGagGroup === group.id;
               return (
-                <label
-                  key={group.id}
-                  className="flex items-center gap-2 cursor-pointer group/gag"
-                >
-                  <input
-                    type="checkbox"
-                    checked={enabled}
-                    onChange={() =>
-                      updateGagGroups({ ...gagGroups, [group.id]: !enabled })
-                    }
-                    className="accent-[#ff79c6] w-3 h-3 cursor-pointer"
-                  />
-                  <span className="text-[11px] text-text-label font-medium w-[60px] shrink-0">
-                    {group.label}
-                  </span>
-                  <span className="text-[10px] text-text-dim truncate">
-                    {group.description}
-                  </span>
-                </label>
+                <div key={group.id}>
+                  <div className="flex items-center gap-2">
+                    <ToggleSwitch
+                      checked={enabled}
+                      onChange={() =>
+                        updateGagGroups({ ...gagGroups, [group.id]: !enabled })
+                      }
+                      accent="#ff79c6"
+                    />
+                    <button
+                      onClick={() =>
+                        updateGagGroups({ ...gagGroups, [group.id]: !enabled })
+                      }
+                      className="text-[11px] text-text-label font-medium w-[60px] shrink-0 text-left cursor-pointer hover:text-[#ff79c6] transition-colors duration-150"
+                    >
+                      {group.label}
+                    </button>
+                    <button
+                      onClick={() =>
+                        setExpandedGagGroup(isExpanded ? null : group.id)
+                      }
+                      className="text-[10px] text-text-dim truncate flex-1 text-left cursor-pointer hover:text-text-label transition-colors duration-150 flex items-center gap-1"
+                    >
+                      <span className="truncate">{group.description}</span>
+                      <span className="text-[9px] font-mono text-text-dim shrink-0">
+                        ({group.patterns.length})
+                      </span>
+                      <span className="shrink-0 transition-transform duration-200" style={{ transform: isExpanded ? 'rotate(180deg)' : 'rotate(0deg)' }}>
+                        <ChevronDownIcon size={7} />
+                      </span>
+                    </button>
+                  </div>
+                  <div
+                    className="grid transition-[grid-template-rows] duration-200 ease-in-out"
+                    style={{ gridTemplateRows: isExpanded ? '1fr' : '0fr' }}
+                  >
+                    <div className="overflow-hidden">
+                      <div className="mt-1 mb-1.5 max-h-[160px] overflow-y-auto rounded border border-border-dim bg-bg-input px-2 py-1.5">
+                        {group.patterns.map((re, i) => (
+                          <div
+                            key={i}
+                            className="text-[10px] font-mono text-text-dim leading-relaxed truncate"
+                            title={re.source}
+                          >
+                            {re.source}
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                </div>
               );
             })}
           </div>

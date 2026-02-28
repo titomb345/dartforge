@@ -101,12 +101,15 @@ export function useSignatureMappings(dataStore: DataStore, activeCharacter: stri
     [sortedMappings]
   );
 
-  return {
-    mappings,
-    sortedMappings,
-    createMapping,
-    updateMapping,
-    deleteMapping,
-    resolveSignature,
-  };
+  return useMemo(
+    () => ({
+      mappings,
+      sortedMappings,
+      createMapping,
+      updateMapping,
+      deleteMapping,
+      resolveSignature,
+    }),
+    [mappings, sortedMappings, createMapping, updateMapping, deleteMapping, resolveSignature]
+  );
 }

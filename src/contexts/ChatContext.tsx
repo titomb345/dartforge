@@ -7,10 +7,12 @@ export interface ChatState {
   mutedSenders: string[];
   soundAlerts: ChatFilters;
   newestFirst: boolean;
+  hideOwnMessages: boolean;
   toggleFilter: (type: ChatType) => void;
   setAllFilters: (filters: ChatFilters) => void;
   toggleSoundAlert: (type: ChatType) => void;
   toggleNewestFirst: () => void;
+  toggleHideOwnMessages: () => void;
   muteSender: (name: string) => void;
   unmuteSender: (name: string) => void;
   updateSender: (signature: string, playerName: string) => void;

@@ -13,7 +13,7 @@ import {
   ChatIcon,
   CounterIcon,
   NotesIcon,
-  MapIcon,
+  // MapIcon, // automapper disabled
   AllocIcon,
   CoinIcon,
   BabelIcon,
@@ -25,7 +25,7 @@ const PANEL_INFO: Record<PinnablePanel, { label: string; icon: ReactNode }> = {
   chat: { label: 'Chat', icon: <ChatIcon size={10} /> },
   counter: { label: 'Counters', icon: <CounterIcon size={10} /> },
   notes: { label: 'Notes', icon: <NotesIcon size={10} /> },
-  map: { label: 'Map', icon: <MapIcon size={10} /> },
+  // map: { label: 'Map', icon: <MapIcon size={10} /> }, // automapper disabled
   alloc: { label: 'Allocations', icon: <AllocIcon size={10} /> },
   currency: { label: 'Currency', icon: <CoinIcon size={10} /> },
   babel: { label: 'Babel', icon: <BabelIcon size={10} /> },

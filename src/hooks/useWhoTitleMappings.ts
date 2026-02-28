@@ -96,12 +96,15 @@ export function useWhoTitleMappings(dataStore: DataStore, activeCharacter: strin
     [sortedMappings]
   );
 
-  return {
-    mappings,
-    sortedMappings,
-    createMapping,
-    updateMapping,
-    deleteMapping,
-    resolveTitle,
-  };
+  return useMemo(
+    () => ({
+      mappings,
+      sortedMappings,
+      createMapping,
+      updateMapping,
+      deleteMapping,
+      resolveTitle,
+    }),
+    [mappings, sortedMappings, createMapping, updateMapping, deleteMapping, resolveTitle]
+  );
 }

@@ -33,7 +33,8 @@ export type ExpandedCommand =
   | { type: 'echo'; text: string }
   | { type: 'spam'; count: number; command: string }
   | { type: 'var'; name: string; value: string; scope: 'character' | 'global' }
-  | { type: 'convert'; args: string };
+  | { type: 'convert'; args: string }
+  | { type: 'error'; message: string };
 
 /** Result of expanding a single user command through the alias engine */
 export interface ExpansionResult {

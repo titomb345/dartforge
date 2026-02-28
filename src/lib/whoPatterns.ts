@@ -1,4 +1,5 @@
 import type { ThemeColorKey } from './defaultTheme';
+import { extractAnsiColor } from './ansiColorExtract';
 
 /** A player entry from the `who` output */
 export interface WhoPlayer {
@@ -37,7 +38,7 @@ export interface WhoSnapshot {
 // Line matchers
 // ---------------------------------------------------------------------------
 
-const WHO_HEADER_RE = /^\s*Name\s+(?:Idle(?: Time)?|State)\s*$/;
+const WHO_HEADER_RE = /^\s*Name\s+(?:Idle(?: Time)?|State)(?:\s+Name\s+(?:Idle(?: Time)?|State))?\s*$/;
 
 /** Real DartMUD names follow "Name the race", optionally with a title prefix like "Master" */
 const REAL_NAME_RE = /^(?:[A-Z][a-z]+ )*[A-Z][a-z]+ the \w+$/;
@@ -65,85 +66,10 @@ export function isWhoHeaderLine(stripped: string): boolean {
 }
 
 // ---------------------------------------------------------------------------
-// ANSI color extraction — maps ANSI SGR params to ThemeColorKey
+// ANSI color extraction — shared utility in ansiColorExtract.ts
 // ---------------------------------------------------------------------------
 
-const ANSI_BASE: ThemeColorKey[] = [
-  'black',
-  'red',
-  'green',
-  'yellow',
-  'blue',
-  'magenta',
-  'cyan',
-  'white',
-];
-const ANSI_BRIGHT: ThemeColorKey[] = [
-  'brightBlack',
-  'brightRed',
-  'brightGreen',
-  'brightYellow',
-  'brightBlue',
-  'brightMagenta',
-  'brightCyan',
-  'brightWhite',
-];
-
-function ansiParamsToThemeKey(params: string): ThemeColorKey | null {
-  const parts = params.split(';').map(Number);
-  let bold = false;
-  let fg = -1;
-
-  for (const p of parts) {
-    if (p === 0) {
-      bold = false;
-      fg = -1;
-    } else if (p === 1) {
-      bold = true;
-    } else if (p >= 30 && p <= 37) {
-      fg = p - 30;
-    } else if (p >= 90 && p <= 97) {
-      fg = p - 90;
-      bold = true;
-    }
-  }
-
-  if (fg < 0) return null;
-  return bold ? ANSI_BRIGHT[fg] : ANSI_BASE[fg];
-}
-
-const ANSI_RE = /\x1b\[([0-9;]*)m/g;
-
-/**
- * Extract the ANSI color active at the position of `name` in the raw line.
- * Walks the raw line tracking visible character position and last ANSI code.
- */
-function extractNameColor(rawLine: string, name: string): ThemeColorKey | null {
-  // Find the name position in visible text
-  const visible = rawLine.replace(ANSI_RE, '');
-  const nameIdx = visible.indexOf(name);
-  if (nameIdx < 0) return null;
-
-  let visPos = 0;
-  let lastAnsi: string | null = null;
-  let i = 0;
-
-  while (i < rawLine.length) {
-    const m = rawLine.slice(i).match(/^\x1b\[([0-9;]*)m/);
-    if (m) {
-      if (visPos <= nameIdx) lastAnsi = m[1];
-      i += m[0].length;
-      continue;
-    }
-    visPos++;
-    if (visPos > nameIdx) break;
-    i++;
-  }
-
-  return lastAnsi ? ansiParamsToThemeKey(lastAnsi) : null;
-}
-
-/** Parse a player row. Returns null if the line doesn't match. */
+/** Parse a single-player segment. Returns null if the segment doesn't match. */
 export function parseWhoPlayerLine(stripped: string): WhoPlayer | null {
   const m = WHO_PLAYER_RE.exec(stripped);
   if (!m) return null;
@@ -159,6 +85,35 @@ export function parseWhoPlayerLine(stripped: string): WhoPlayer | null {
     nameColor: null,
     isTitle: !REAL_NAME_RE.test(name),
   };
+}
+
+/**
+ * Regex to find state boundaries in a who line. Used to split two-column
+ * lines into individual player segments. Idle durations use `\d+\w+` tokens
+ * (e.g. "6m", "54s") so the match stops before the next player entry.
+ */
+const WHO_STATE_SPLIT_RE = /(Online|Away|Busy|Walkup|Idle(?:\s+\d+\w+)*)/g;
+
+/**
+ * Parse all players from a who line (handles both single- and two-column format).
+ * Splits the line at state-word boundaries, then parses each segment individually.
+ */
+export function parseWhoPlayersFromLine(stripped: string): WhoPlayer[] {
+  WHO_STATE_SPLIT_RE.lastIndex = 0;
+  const segments: string[] = [];
+  let cursor = 0;
+  let match: RegExpExecArray | null;
+
+  while ((match = WHO_STATE_SPLIT_RE.exec(stripped)) !== null) {
+    segments.push(stripped.substring(cursor, match.index + match[0].length));
+    cursor = match.index + match[0].length;
+  }
+
+  if (segments.length === 0) return [];
+
+  return segments
+    .map((seg) => parseWhoPlayerLine(seg.trimEnd()))
+    .filter((p): p is WhoPlayer => p !== null);
 }
 
 /** Check if a line is part of the who footer block */
@@ -190,12 +145,14 @@ export function buildWhoSnapshot(lines: string[], rawLines?: string[]): WhoSnaps
 
   for (let idx = 0; idx < lines.length; idx++) {
     const line = lines[idx];
-    const player = parseWhoPlayerLine(line);
-    if (player) {
-      if (rawLines?.[idx]) {
-        player.nameColor = extractNameColor(rawLines[idx], player.name);
+    const linePlayers = parseWhoPlayersFromLine(line);
+    if (linePlayers.length > 0) {
+      for (const player of linePlayers) {
+        if (rawLines?.[idx]) {
+          player.nameColor = extractAnsiColor(rawLines[idx], player.name);
+        }
+        players.push(player);
       }
-      players.push(player);
       continue;
     }
 

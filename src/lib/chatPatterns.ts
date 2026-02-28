@@ -1,14 +1,18 @@
 import type { ChatMessage, ChatType } from '../types/chat';
 
 // Say/Ask/Exclaim: "Name says/asks/exclaims [to target] in lang, 'msg'"
-const SAY_RE = /^(\w+) (says|asks|exclaims)(?: to (?:you|\w+))? in (\w+), '(.+)'$/;
-const SAY_DIRECTED_RE = /^(\w+) (?:says|asks|exclaims) to you in /;
+// "says to you", "asks you" (asks omits "to")
+const SAY_RE = /^(\w+) (says|asks|exclaims)(?: (?:to )?(?:you|\w+))? in (\w+), '(.+)'$/;
+const SAY_DIRECTED_RE = /^(\w+) (?:says|asks|exclaims) (?:to )?you in /;
 
 // Shout/Yell: "Name shouts/yells in lang, 'msg'"
 const SHOUT_RE = /^(\w+) (shouts|yells) in (\w+), '(.+)'$/;
 
 // OOC: "Name says (OOC), 'msg'" — comma may or may not have trailing space
 const OOC_RE = /^(\w+) says \(OOC\),\s*'(.+)'$/;
+
+// Improve announcements: OOC messages containing "+" (e.g. "+", "spell casting +", "teaching+")
+const OOC_IMPROVE_RE = /\+/;
 
 // Tell (mental touch): "A mental touch tells you: 'msg -Sender'." — single or double quotes
 const TELL_RE = /^A mental touch tells you:\s*['"](.+?)['"]\.?$/;
@@ -63,6 +67,19 @@ function make(
 }
 
 /**
+ * Detect the start of a multi-line chat message: the line matches
+ * a say/ask/exclaim/shout/yell/ooc opening but is missing the closing quote.
+ */
+const INCOMPLETE_CHAT_RE =
+  /^(?:\w+ (?:says|asks|exclaims|shouts|yells)(?: (?:to )?(?:you|\w+))? in \w+,\s*'|You (?:say|ask|exclaim|shout|yell) in \w+,\s*'|\w+ says \(OOC\),\s*'|You say \(OOC\),\s*')/;
+
+export function isIncompleteChatLine(line: string): boolean {
+  const cleaned = line.replace(/^(?:> )+/, '').trim();
+  if (!cleaned || cleaned.endsWith("'")) return false;
+  return INCOMPLETE_CHAT_RE.test(cleaned);
+}
+
+/**
  * Match a single ANSI-stripped, trimmed line against all chat patterns.
  * Returns a ChatMessage if matched, null otherwise.
  */
@@ -93,6 +110,7 @@ export function matchChatLine(line: string, activeCharacter: string | null): Cha
 
   m = cleaned.match(OWN_OOC_RE);
   if (m) {
+    if (OOC_IMPROVE_RE.test(m[1])) return null; // skip improve announcements
     return make('ooc', activeCharacter ?? 'You', m[1], cleaned, { isOwn: true });
   }
 
@@ -111,6 +129,7 @@ export function matchChatLine(line: string, activeCharacter: string | null): Cha
 
   m = cleaned.match(OOC_RE);
   if (m) {
+    if (OOC_IMPROVE_RE.test(m[2])) return null; // skip improve announcements
     return make('ooc', m[1], m[2], cleaned);
   }
 

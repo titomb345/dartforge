@@ -15,8 +15,9 @@ import {
   CounterIcon,
   UserIcon,
 } from './icons';
+import { PanelHeader } from './PanelHeader';
 import { DEFAULT_NUMPAD_MAPPINGS } from '../hooks/useAppSettings';
-import { MudInput, MudTextarea, MudNumberInput } from './shared';
+import { MudInput, MudTextarea, MudNumberInput, ToggleSwitch } from './shared';
 import { cn } from '../lib/cn';
 import { useDataStore } from '../contexts/DataStoreContext';
 import { useAppSettingsContext } from '../contexts/AppSettingsContext';
@@ -104,45 +105,6 @@ function SettingsSection({
   );
 }
 
-/* ── Toggle Switch ────────────────────────────────────────── */
-
-function ToggleSwitch({
-  checked,
-  onChange,
-  disabled,
-  accent = '#bd93f9',
-}: {
-  checked: boolean;
-  onChange: (v: boolean) => void;
-  disabled?: boolean;
-  accent?: string;
-}) {
-  return (
-    <button
-      role="switch"
-      aria-checked={checked}
-      onClick={() => !disabled && onChange(!checked)}
-      className={cn(
-        'relative w-[32px] h-[16px] rounded-full border transition-colors duration-200 cursor-pointer shrink-0',
-        disabled && 'opacity-30 cursor-default'
-      )}
-      style={{
-        background: checked ? `${accent}25` : '#1a1a1a',
-        borderColor: checked ? `${accent}60` : '#444',
-      }}
-    >
-      <span
-        className="absolute top-[2px] w-[10px] h-[10px] rounded-full transition-all duration-200"
-        style={{
-          left: checked ? '18px' : '3px',
-          background: checked ? accent : '#666',
-          boxShadow: checked ? `0 0 6px ${accent}40` : 'none',
-        }}
-      />
-    </button>
-  );
-}
-
 /* ── Field Row ────────────────────────────────────────────── */
 
 function FieldRow({
@@ -177,7 +139,7 @@ interface BackupEntry {
 
 /* ── Main Panel ───────────────────────────────────────────── */
 
-export function SettingsPanel() {
+export function SettingsPanel({ onClose }: { onClose: () => void }) {
   const [openSection, setOpenSection] = useState<string | null>(null);
   const toggle = (key: string) => setOpenSection((prev) => (prev === key ? null : key));
 
@@ -201,6 +163,8 @@ export function SettingsPanel() {
     updateBoardDatesEnabled: onBoardDatesEnabledChange,
     stripPromptsEnabled,
     updateStripPromptsEnabled: onStripPromptsEnabledChange,
+    antiSpamEnabled,
+    updateAntiSpamEnabled,
     commandEchoEnabled,
     updateCommandEchoEnabled,
     showTimerBadges,
@@ -211,8 +175,6 @@ export function SettingsPanel() {
     updateCommandHistorySize,
     chatHistorySize,
     updateChatHistorySize,
-    timestampFormat,
-    updateTimestampFormat,
     sessionLoggingEnabled,
     updateSessionLoggingEnabled,
     actionBlockingEnabled,
@@ -294,12 +256,7 @@ export function SettingsPanel() {
 
   return (
     <div className="w-[360px] h-full bg-bg-primary border-l border-border-subtle flex flex-col overflow-hidden">
-      {/* Header */}
-      <div className="flex items-center px-3 py-2.5 border-b border-border-subtle">
-        <span className="text-[13px] font-semibold text-text-heading flex items-center gap-1.5">
-          <GearIcon size={12} /> Settings
-        </span>
-      </div>
+      <PanelHeader icon={<GearIcon size={12} />} title="Settings" onClose={onClose} />
 
       {/* Scrollable sections */}
       <div className="flex-1 overflow-y-auto px-2 py-2 space-y-2">
@@ -627,6 +584,16 @@ export function SettingsPanel() {
           <div className="text-[9px] text-text-dim font-mono leading-relaxed mt-1">
             Show your sent commands as dimmed lines in the terminal.
           </div>
+          <FieldRow label="Anti-spam">
+            <ToggleSwitch
+              checked={antiSpamEnabled}
+              onChange={updateAntiSpamEnabled}
+              accent="#50fa7b"
+            />
+          </FieldRow>
+          <div className="text-[9px] text-text-dim font-mono leading-relaxed mt-1">
+            Collapse consecutive identical lines with a repeat count.
+          </div>
         </SettingsSection>
 
         {/* Counters */}
@@ -732,33 +699,6 @@ export function SettingsPanel() {
           </FieldRow>
         </SettingsSection>
 
-        {/* Timestamps */}
-        <SettingsSection
-          icon={<ClockIcon size={13} />}
-          title="Timestamps"
-          accent="#ff79c6"
-          open={openSection === 'timestamps'}
-          onToggle={() => toggle('timestamps')}
-        >
-          <FieldRow label="Timestamp format">
-            <div className="flex gap-1">
-              {(['12h', '24h'] as const).map((fmt) => (
-                <button
-                  key={fmt}
-                  onClick={() => updateTimestampFormat(fmt)}
-                  className={cn(
-                    'text-[10px] font-mono px-2 py-0.5 rounded border cursor-pointer transition-colors',
-                    timestampFormat === fmt
-                      ? 'text-pink border-pink/40 bg-pink/10'
-                      : 'text-text-dim border-border-dim hover:border-pink/30'
-                  )}
-                >
-                  {fmt}
-                </button>
-              ))}
-            </div>
-          </FieldRow>
-        </SettingsSection>
 
         {/* Session Logging */}
         <SettingsSection

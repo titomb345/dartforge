@@ -207,16 +207,30 @@ export function useTriggers(dataStore: DataStore, activeCharacter: string | null
     return [...charList, ...globalList];
   }, [characterTriggers, globalTriggers]);
 
-  return {
-    characterTriggers,
-    globalTriggers,
-    mergedTriggers,
-    createTrigger,
-    updateTrigger,
-    deleteTrigger,
-    toggleTrigger,
-    duplicateTrigger,
-    triggerPrefill,
-    setTriggerPrefill,
-  };
+  return useMemo(
+    () => ({
+      characterTriggers,
+      globalTriggers,
+      mergedTriggers,
+      createTrigger,
+      updateTrigger,
+      deleteTrigger,
+      toggleTrigger,
+      duplicateTrigger,
+      triggerPrefill,
+      setTriggerPrefill,
+    }),
+    [
+      characterTriggers,
+      globalTriggers,
+      mergedTriggers,
+      createTrigger,
+      updateTrigger,
+      deleteTrigger,
+      toggleTrigger,
+      duplicateTrigger,
+      triggerPrefill,
+      setTriggerPrefill,
+    ]
+  );
 }

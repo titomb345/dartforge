@@ -19,8 +19,10 @@ export interface AppSettingsState {
   // Output transforms
   boardDatesEnabled: boolean;
   stripPromptsEnabled: boolean;
+  antiSpamEnabled: boolean;
   updateBoardDatesEnabled: (v: boolean) => void;
   updateStripPromptsEnabled: (v: boolean) => void;
+  updateAntiSpamEnabled: (v: boolean) => void;
   // Buffer sizes
   terminalScrollback: number;
   commandHistorySize: number;
@@ -86,8 +88,13 @@ export interface AppSettingsState {
   // Who list
   whoAutoRefreshEnabled: boolean;
   whoRefreshMinutes: number;
+  whoFontSize: number;
   updateWhoAutoRefreshEnabled: (v: boolean) => void;
   updateWhoRefreshMinutes: (v: number) => void;
+  updateWhoFontSize: (v: number) => void;
+  // Chat font size
+  chatFontSize: number;
+  updateChatFontSize: (v: number) => void;
   // Auto-login
   autoLoginEnabled: boolean;
   autoLoginActiveSlot: 0 | 1;

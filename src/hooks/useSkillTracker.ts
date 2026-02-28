@@ -1,6 +1,7 @@
 import { useState, useCallback, useEffect, useRef } from 'react';
 import type { Terminal as XTerm } from '@xterm/xterm';
 import type { CharacterSkillFile, SkillMatchResult, SkillRecord } from '../types/skills';
+import type { AnnounceMode } from '../types';
 import { getTierForCount, getTierByName, getImprovesToNextTier } from '../lib/skillTiers';
 import { matchSkillLine } from '../lib/skillPatterns';
 import { smartWrite } from '../lib/terminalUtils';
@@ -36,6 +37,10 @@ export function useSkillTracker(
   // Inline improve toggle
   const [showInlineImproves, setShowInlineImproves] = useState(false);
   const showInlineImprovesRef = useRef(false);
+
+  // Announce mode refs (set by caller via setAnnounceRefs)
+  const announceModeRef = useRef<AnnounceMode>('off');
+  const announcePetModeRef = useRef<AnnounceMode>('off');
 
   // Keep a stable ref to dataStore for use in callbacks
   const dataStoreRef = useRef(dataStore);
@@ -126,6 +131,24 @@ export function useSkillTracker(
     }
   }, []);
 
+  /** Send an OOC announcement for a skill improvement. */
+  const announceImprove = useCallback(
+    (mode: AnnounceMode, skill: string, count: number, petName?: string) => {
+      if (mode === 'off' || !sendCommandRef.current) return;
+      const prefix = petName ? `${petName}'s ` : '';
+      let msg: string;
+      if (mode === 'brief') {
+        msg = 'ooc +';
+      } else if (mode === 'verbose') {
+        msg = `ooc ${prefix}${skill}+ (${count})`;
+      } else {
+        msg = `ooc ${prefix}${skill}+`;
+      }
+      sendCommandRef.current(msg).catch(console.error);
+    },
+    [sendCommandRef]
+  );
+
   const handleSkillMatch = useCallback(
     (match: SkillMatchResult) => {
       const charName = activeCharacterRef.current;
@@ -147,6 +170,9 @@ export function useSkillTracker(
           const line = `\x1b[36m[${match.skill} +1 \u2192 ${newCount} (${tier.abbr})${nextInfo}]\x1b[0m\r\n`;
           smartWrite(terminalRef.current, line);
         }
+
+        // Announce via OOC if enabled
+        announceImprove(announceModeRef.current, match.skill, newCount);
 
         // Send verification command outside updater
         if (sendCommandRef.current) {
@@ -183,6 +209,9 @@ export function useSkillTracker(
           const line = `\x1b[35m[${match.pet}: ${match.skill} +1 \u2192 ${newCount} (${tier.abbr})${nextInfo}]\x1b[0m\r\n`;
           smartWrite(terminalRef.current, line);
         }
+
+        // Announce pet improve via OOC if enabled
+        announceImprove(announcePetModeRef.current, match.skill, newCount, match.pet);
 
         const now = new Date().toISOString();
         setSkillData((prev) => {
@@ -257,7 +286,7 @@ export function useSkillTracker(
         });
       }
     },
-    [sendCommandRef, processorRef, terminalRef]
+    [sendCommandRef, processorRef, terminalRef, announceImprove]
   );
 
   const addSkill = useCallback((skill: string, count = 0) => {
@@ -316,5 +345,7 @@ export function useSkillTracker(
     addSkill,
     updateSkillCount,
     deleteSkill,
+    announceModeRef,
+    announcePetModeRef,
   };
 }

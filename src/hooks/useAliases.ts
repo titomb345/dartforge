@@ -201,16 +201,30 @@ export function useAliases(dataStore: DataStore, activeCharacter: string | null)
     return [...charList, ...globalList];
   }, [characterAliases, globalAliases]);
 
-  return {
-    characterAliases,
-    globalAliases,
-    mergedAliases,
-    enableSpeedwalk,
-    setEnableSpeedwalk,
-    createAlias,
-    updateAlias,
-    deleteAlias,
-    toggleAlias,
-    duplicateAlias,
-  };
+  return useMemo(
+    () => ({
+      characterAliases,
+      globalAliases,
+      mergedAliases,
+      enableSpeedwalk,
+      setEnableSpeedwalk,
+      createAlias,
+      updateAlias,
+      deleteAlias,
+      toggleAlias,
+      duplicateAlias,
+    }),
+    [
+      characterAliases,
+      globalAliases,
+      mergedAliases,
+      enableSpeedwalk,
+      setEnableSpeedwalk,
+      createAlias,
+      updateAlias,
+      deleteAlias,
+      toggleAlias,
+      duplicateAlias,
+    ]
+  );
 }

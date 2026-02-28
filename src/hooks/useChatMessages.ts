@@ -57,6 +57,7 @@ export function useChatMessages(
   const [mutedSenders, setMutedSenders] = useState<string[]>([]);
   const [soundAlerts, setSoundAlerts] = useState<ChatFilters>({ ...DEFAULT_SOUND_ALERTS });
   const [newestFirst, setNewestFirst] = useState(true);
+  const [hideOwnMessages, setHideOwnMessages] = useState(true);
   const loaded = useRef(false);
   const historyLoaded = useRef(false);
 
@@ -65,6 +66,8 @@ export function useChatMessages(
   mutedSendersRef.current = mutedSenders;
   const soundAlertsRef = useRef(soundAlerts);
   soundAlertsRef.current = soundAlerts;
+  const hideOwnMessagesRef = useRef(hideOwnMessages);
+  hideOwnMessagesRef.current = hideOwnMessages;
 
   // Load persisted chat settings
   useEffect(() => {
@@ -79,6 +82,8 @@ export function useChatMessages(
         if (savedAlerts) setSoundAlerts(savedAlerts);
         const savedNewest = await dataStore.get<boolean>(SETTINGS_FILE, 'chatNewestFirst');
         if (savedNewest != null) setNewestFirst(savedNewest);
+        const savedHideOwn = await dataStore.get<boolean>(SETTINGS_FILE, 'chatHideOwnMessages');
+        if (savedHideOwn != null) setHideOwnMessages(savedHideOwn);
       } catch (e) {
         console.error('Failed to load chat settings:', e);
       }
@@ -141,6 +146,11 @@ export function useChatMessages(
     dataStore.set(SETTINGS_FILE, 'chatNewestFirst', newestFirst).catch(console.error);
   }, [newestFirst]);
 
+  useEffect(() => {
+    if (!loaded.current) return;
+    dataStore.set(SETTINGS_FILE, 'chatHideOwnMessages', hideOwnMessages).catch(console.error);
+  }, [hideOwnMessages]);
+
   const handleChatMessage = useCallback((msg: ChatMessage) => {
     const m = mutedSendersRef.current;
     const isMuted = m.some((name) => name.toLowerCase() === msg.sender.toLowerCase());
@@ -162,6 +172,9 @@ export function useChatMessages(
       alertUser(`${msg.sender} (${msg.type})`, msg.message, `dartforge-chat-${msg.type}`);
     }
 
+    // Skip own say/shout/ooc messages when hide-own is active
+    if (msg.isOwn && hideOwnMessagesRef.current) return;
+
     setMessages((prev) => {
       const next = [...prev, msg];
       return next.length > maxMessages ? next.slice(-maxMessages) : next;
@@ -182,6 +195,10 @@ export function useChatMessages(
 
   const toggleNewestFirst = useCallback(() => {
     setNewestFirst((prev) => !prev);
+  }, []);
+
+  const toggleHideOwnMessages = useCallback(() => {
+    setHideOwnMessages((prev) => !prev);
   }, []);
 
   const muteSender = useCallback((name: string) => {
@@ -226,11 +243,13 @@ export function useChatMessages(
     mutedSenders,
     soundAlerts,
     newestFirst,
+    hideOwnMessages,
     handleChatMessage,
     toggleFilter,
     setAllFilters,
     toggleSoundAlert,
     toggleNewestFirst,
+    toggleHideOwnMessages,
     muteSender,
     unmuteSender,
     clearMessages,

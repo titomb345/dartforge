@@ -1,9 +1,9 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import type { PinnablePanelProps } from '../types';
 import { panelRootClass } from '../lib/panelUtils';
-import { PinMenuButton } from './PinMenuButton';
-import { PinnedControls } from './PinnedControls';
-import { NotesIcon, ChevronLeftIcon, ChevronRightSmallIcon, PlusIcon, TrashIcon } from './icons';
+import { PanelHeader } from './PanelHeader';
+import { NotesIcon, ChevronLeftIcon, ChevronRightSmallIcon, PlusIcon } from './icons';
+import { ConfirmDeleteButton } from './ConfirmDeleteButton';
 import { useDataStore } from '../contexts/DataStoreContext';
 import { useSkillTrackerContext } from '../contexts/SkillTrackerContext';
 import { useNotesContext } from '../contexts/NotesContext';
@@ -139,7 +139,6 @@ export function NotesPanel({ mode = 'slideout' }: NotesPanelProps) {
   const [activeTab, setActiveTab] = useState<string | null>(null);
   const [content, setContent] = useState('');
   const [loaded, setLoaded] = useState(false);
-  const [confirmDelete, setConfirmDelete] = useState(false);
 
   const saveTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const characterRef = useRef<string | null>(null);
@@ -202,7 +201,6 @@ export function NotesPanel({ mode = 'slideout' }: NotesPanelProps) {
     const character = activeCharacter;
     characterRef.current = character;
     setLoaded(false);
-    setConfirmDelete(false);
 
     (async () => {
       const meta = metaFileName(character);
@@ -297,7 +295,6 @@ export function NotesPanel({ mode = 'slideout' }: NotesPanelProps) {
       }
 
       setActiveTab(tabName);
-      setConfirmDelete(false);
       await dataStore.set(metaFileName(char), 'activeTab', tabName);
 
       const tabContent = await dataStore.readText(contentFileName(char, slugify(tabName)));
@@ -343,7 +340,6 @@ export function NotesPanel({ mode = 'slideout' }: NotesPanelProps) {
     setTabs(newTabs);
     setActiveTab(name);
     setContent('');
-    setConfirmDelete(false);
 
     await dataStore.writeText(contentFileName(char, slugify(name)), '');
     await persistMeta(char, newTabs, name);
@@ -395,7 +391,6 @@ export function NotesPanel({ mode = 'slideout' }: NotesPanelProps) {
       const adjacent = newTabs[Math.min(index, newTabs.length - 1)];
 
       setTabs(newTabs);
-      setConfirmDelete(false);
 
       // Delete the .txt file
       await dataStore.deleteText(contentFileName(char, slugify(tabName)));
@@ -415,20 +410,11 @@ export function NotesPanel({ mode = 'slideout' }: NotesPanelProps) {
   const currentIndex = tabs.indexOf(activeTab ?? '');
   const total = tabs.length;
 
-  const pinControls = isPinned ? <PinnedControls /> : <PinMenuButton panel="notes" />;
+  const notesTitle = `Notes${activeCharacter ? ` — ${activeCharacter.charAt(0).toUpperCase() + activeCharacter.slice(1)}` : ''}`;
 
   return (
     <div className={panelRootClass(isPinned)}>
-      {/* Header */}
-      <div className="flex items-center justify-between px-3 py-2.5 border-b border-border-subtle shrink-0">
-        <span className="text-[13px] font-semibold text-text-heading flex items-center gap-1.5">
-          <NotesIcon size={12} /> Notes
-          {activeCharacter
-            ? ` — ${activeCharacter.charAt(0).toUpperCase() + activeCharacter.slice(1)}`
-            : ''}
-        </span>
-        <div className="flex items-center gap-1.5 shrink-0">{pinControls}</div>
-      </div>
+      <PanelHeader icon={<NotesIcon size={12} />} title={notesTitle} panel="notes" mode={mode} />
 
       {activeCharacter && loaded && (
         /* Note navigation bar */
@@ -480,27 +466,12 @@ export function NotesPanel({ mode = 'slideout' }: NotesPanelProps) {
             <PlusIcon size={10} />
           </button>
           {activeTab && total > 1 && (
-            <>
-              {confirmDelete ? (
-                <button
-                  onClick={() => {
-                    deleteTab(activeTab);
-                  }}
-                  onBlur={() => setConfirmDelete(false)}
-                  className="text-[8px] font-mono text-red border border-red/40 rounded px-1 py-px cursor-pointer hover:bg-red/10 transition-colors duration-150"
-                >
-                  Del?
-                </button>
-              ) : (
-                <button
-                  onClick={() => setConfirmDelete(true)}
-                  className="flex items-center justify-center w-[18px] h-[18px] rounded text-text-dim hover:text-red cursor-pointer transition-colors"
-                  title="Delete note"
-                >
-                  <TrashIcon size={10} />
-                </button>
-              )}
-            </>
+            <ConfirmDeleteButton
+              key={activeTab}
+              onDelete={() => deleteTab(activeTab)}
+              size={10}
+              variant="fixed"
+            />
           )}
         </div>
       )}

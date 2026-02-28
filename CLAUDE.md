@@ -93,6 +93,8 @@ Versioning is automated via CHANGELOG.md bump hints and GitHub Actions.
 - `src-tauri/tauri.conf.json`
 - `src-tauri/Cargo.toml`
 
+**Always update the changelog:** When a task is complete — whether it's a new feature, bug fix, refactor, or any user-visible change — update `CHANGELOG.md` before committing. If an `[Unreleased-*]` section already exists, add your entry to it under the appropriate sub-heading (Added/Changed/Fixed/Removed). If no unreleased section exists, create one with the right bump type (`[Unreleased-patch]`, `[Unreleased-minor]`, or `[Unreleased-major]`). Every commit with functional changes must have a corresponding changelog entry. **Exception:** Only log `### Fixed` entries for bugs in previously released versions. Fixes to features in the current unreleased section don't need separate entries — just make sure the feature's description in `### Added` or `### Changed` reflects the correct behavior.
+
 ## Guide (`src/lib/helpContent.ts`)
 When adding a new feature, panel, keyboard shortcut, or non-obvious interaction, update the in-app guide:
 - **New panel** → add entry to the "Panels & Layout" section (`key: 'panels'`)
@@ -111,7 +113,7 @@ When adding a new feature, panel, keyboard shortcut, or non-obvious interaction,
 ## Git Workflow
 - **NEVER commit directly to `main`.** Always create a new feature branch.
 - When asked to commit, check the current branch first. If on `main`, create a contextual branch (e.g., `feature/skill-tracker`, `fix/connection-bug`) before committing.
-- PRs go to `staging` (the main branch for PRs).
+- PRs go to `main` (the only long-lived branch — there is no `staging` branch).
 
 ## GitHub
 - Repo: `titomb345/dartforge`

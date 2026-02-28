@@ -1,11 +1,12 @@
 import type { SkillCategory } from '../types/skills';
+import { fuzzyMatchKey } from './nameUtils';
 
 /** Metadata for a non-spell DartMUD skill */
 export interface SkillInfo {
   /** Short abbreviation, or null if none */
   abbr: string | null;
-  /** Which category this skill belongs to */
-  category: SkillCategory;
+  /** Which category this skill belongs to (null = uncategorized → "other") */
+  category: SkillCategory | null;
 }
 
 /**
@@ -17,7 +18,7 @@ export const SKILL_DATA: Record<string, SkillInfo> = {
   'aim blows': { abbr: 'a', category: 'combat' },
   archery: { abbr: null, category: 'combat' },
   'attack speed': { abbr: 's', category: 'combat' },
-  bashing: { abbr: null, category: 'combat' },
+  bashing: { abbr: null, category: null },
   brawling: { abbr: null, category: 'combat' },
   control: { abbr: null, category: 'combat' },
   daring: { abbr: 'd', category: 'combat' },
@@ -92,4 +93,9 @@ export function getSkillByAbbr(abbr: string): string | null {
     if (info.abbr === lower) return name;
   }
   return null;
+}
+
+/** Fuzzy-match a skill by name with punctuation stripped (e.g. "two handed sword" → "two-handed sword") */
+export function findSkillFuzzy(input: string): string | null {
+  return fuzzyMatchKey(input, SKILL_DATA);
 }

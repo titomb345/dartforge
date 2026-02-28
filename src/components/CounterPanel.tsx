@@ -8,13 +8,12 @@ import {
   PauseIcon,
   StopIcon,
   PlusIcon,
-  TrashIcon,
   RotateCcwIcon,
   CounterIcon,
 } from './icons';
+import { ConfirmDeleteButton } from './ConfirmDeleteButton';
 import { useAppSettingsContext } from '../contexts/AppSettingsContext';
-import { PinMenuButton } from './PinMenuButton';
-import { PinnedControls } from './PinnedControls';
+import { PanelHeader } from './PanelHeader';
 
 type CounterPanelProps = PinnablePanelProps;
 
@@ -105,28 +104,12 @@ export function CounterPanel({ mode = 'slideout' }: CounterPanelProps) {
     getSkillPeriodRate,
   } = useImproveCounterContext();
 
-  const [confirmDelete, setConfirmDelete] = useState<string | null>(null);
-  const [confirmClear, setConfirmClear] = useState<string | null>(null);
   const [editingPeriod, setEditingPeriod] = useState(false);
   const [periodDraft, setPeriodDraft] = useState(String(periodLengthMinutes));
   const periodInputRef = useRef<HTMLInputElement>(null);
 
   const isPinned = mode === 'pinned';
   const activeCounter = counters.find((c) => c.id === activeCounterId) ?? null;
-
-  useEffect(() => {
-    if (confirmDelete) {
-      const t = setTimeout(() => setConfirmDelete(null), 3000);
-      return () => clearTimeout(t);
-    }
-  }, [confirmDelete]);
-
-  useEffect(() => {
-    if (confirmClear) {
-      const t = setTimeout(() => setConfirmClear(null), 3000);
-      return () => clearTimeout(t);
-    }
-  }, [confirmClear]);
 
   useEffect(() => {
     if (editingPeriod) periodInputRef.current?.focus();
@@ -138,17 +121,9 @@ export function CounterPanel({ mode = 'slideout' }: CounterPanelProps) {
   };
 
   // Pin controls (shared between header layouts)
-  const pinControls = isPinned ? <PinnedControls /> : <PinMenuButton panel="counter" />;
-
   return (
     <div className={panelRootClass(isPinned)}>
-      {/* Header */}
-      <div className="flex items-center justify-between px-3 py-2.5 border-b border-border-subtle shrink-0">
-        <span className="text-[13px] font-semibold text-text-heading flex items-center gap-1.5">
-          <CounterIcon size={12} /> Counters
-        </span>
-        <div className="flex items-center gap-1.5">{pinControls}</div>
-      </div>
+      <PanelHeader icon={<CounterIcon size={12} />} title="Counters" panel="counter" mode={mode} />
       {/* Counter tabs */}
       <div className="flex items-center gap-1 px-2 py-1.5 border-b border-border-subtle shrink-0">
         <div className="flex items-center gap-1 flex-1 min-w-0 overflow-x-auto">
@@ -215,47 +190,25 @@ export function CounterPanel({ mode = 'slideout' }: CounterPanelProps) {
             </div>
 
             {/* Clear */}
-            {(activeCounter.totalImps > 0 || activeCounter.accumulatedMs > 0) &&
-              (confirmClear === activeCounter.id ? (
-                <button
-                  onClick={() => {
-                    clearCounter(activeCounter.id);
-                    setConfirmClear(null);
-                  }}
-                  className="text-[8px] font-mono text-red border border-red/40 rounded px-1 py-px cursor-pointer hover:bg-red/10 transition-colors duration-150"
-                >
-                  Clear?
-                </button>
-              ) : (
-                <TinyBtn
-                  onClick={() => setConfirmClear(activeCounter.id)}
-                  title="Clear counter"
-                  accent="dim"
-                >
-                  <RotateCcwIcon size={8} />
-                </TinyBtn>
-              ))}
+            {(activeCounter.totalImps > 0 || activeCounter.accumulatedMs > 0) && (
+              <ConfirmDeleteButton
+                key={`clear-${activeCounter.id}`}
+                onDelete={() => clearCounter(activeCounter.id)}
+                icon={<RotateCcwIcon size={10} />}
+                confirmText="Clear?"
+                title="Clear counter"
+                variant="fixed"
+              />
+            )}
             {/* Delete */}
-            {counters.length > 1 &&
-              (confirmDelete === activeCounter.id ? (
-                <button
-                  onClick={() => {
-                    deleteCounter(activeCounter.id);
-                    setConfirmDelete(null);
-                  }}
-                  className="text-[8px] font-mono text-red border border-red/40 rounded px-1 py-px cursor-pointer hover:bg-red/10 transition-colors duration-150"
-                >
-                  Del?
-                </button>
-              ) : (
-                <TinyBtn
-                  onClick={() => setConfirmDelete(activeCounter.id)}
-                  title="Delete counter"
-                  accent="dim"
-                >
-                  <TrashIcon size={8} />
-                </TinyBtn>
-              ))}
+            {counters.length > 1 && (
+              <ConfirmDeleteButton
+                key={activeCounter.id}
+                onDelete={() => deleteCounter(activeCounter.id)}
+                size={10}
+                variant="fixed"
+              />
+            )}
             {/* Period config */}
             {editingPeriod ? (
               <input

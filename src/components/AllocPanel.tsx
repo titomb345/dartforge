@@ -11,18 +11,17 @@ import {
   MAGIC_SLOT_SHORT,
 } from '../types/alloc';
 import { calcNull, calcArcane } from '../lib/allocPatterns';
-import { PinMenuButton } from './PinMenuButton';
-import { PinnedControls } from './PinnedControls';
+import { PanelHeader } from './PanelHeader';
 import {
   ChevronLeftIcon,
   ChevronRightSmallIcon,
   PlusIcon,
-  TrashIcon,
   CopyIcon,
   CheckIcon,
   AllocIcon,
   ChevronDownSmallIcon,
 } from './icons';
+import { ConfirmDeleteButton } from './ConfirmDeleteButton';
 import { cn } from '../lib/cn';
 
 /** Dropdown menu for "Save to Profile" action. */
@@ -559,8 +558,6 @@ function ProfileView() {
     loadProfileToLive,
   } = useAllocContext();
 
-  const [confirmDelete, setConfirmDelete] = useState(false);
-
   const profileNum = data.profiles.length > 0 ? data.currentProfileIndex + 1 : 0;
   const profileTotal = data.profiles.length;
   // Use detectedLimbs for canonical ordering; fall back to profile keys for limbs not yet detected
@@ -646,26 +643,12 @@ function ProfileView() {
             >
               <ChevronLeftIcon size={10} />
             </button>
-            {confirmDelete ? (
-              <button
-                onClick={() => {
-                  deleteProfile(currentProfile.id);
-                  setConfirmDelete(false);
-                }}
-                onBlur={() => setConfirmDelete(false)}
-                className="text-[8px] font-mono text-red border border-red/40 rounded px-1 py-px cursor-pointer hover:bg-red/10 transition-colors duration-150"
-              >
-                Del?
-              </button>
-            ) : (
-              <button
-                onClick={() => setConfirmDelete(true)}
-                className="flex items-center justify-center w-[18px] h-[18px] rounded text-text-dim hover:text-red cursor-pointer transition-colors"
-                title="Delete profile"
-              >
-                <TrashIcon size={10} />
-              </button>
-            )}
+            <ConfirmDeleteButton
+              key={currentProfile.id}
+              onDelete={() => deleteProfile(currentProfile.id)}
+              size={10}
+              variant="fixed"
+            />
           </>
         )}
       </div>
@@ -845,8 +828,6 @@ function MagicProfileView() {
     loadMagicProfileToLive,
   } = useAllocContext();
 
-  const [confirmDelete, setConfirmDelete] = useState(false);
-
   const profileNum = magicData.profiles.length > 0 ? magicData.currentProfileIndex + 1 : 0;
   const profileTotal = magicData.profiles.length;
 
@@ -930,27 +911,12 @@ function MagicProfileView() {
             >
               <ChevronLeftIcon size={10} />
             </button>
-            {confirmDelete ? (
-              <button
-                onClick={() => {
-                  deleteMagicProfile(currentMagicProfile.id);
-                  setConfirmDelete(false);
-                }}
-                onBlur={() => setConfirmDelete(false)}
-                className="flex items-center gap-0.5 px-1 py-[1px] rounded text-[9px] font-semibold cursor-pointer transition-all duration-200 border border-red/40 bg-red/10 text-red"
-                autoFocus
-              >
-                confirm?
-              </button>
-            ) : (
-              <button
-                onClick={() => setConfirmDelete(true)}
-                className="flex items-center justify-center w-[18px] h-[18px] rounded text-text-dim hover:text-red cursor-pointer transition-colors"
-                title="Delete profile"
-              >
-                <TrashIcon size={10} />
-              </button>
-            )}
+            <ConfirmDeleteButton
+              key={currentMagicProfile.id}
+              onDelete={() => deleteMagicProfile(currentMagicProfile.id)}
+              size={10}
+              variant="fixed"
+            />
           </>
         )}
       </div>
@@ -1031,15 +997,7 @@ export function AllocPanel({ mode = 'slideout' }: AllocPanelProps) {
           : 'w-[420px] h-full bg-bg-primary border-l border-border-subtle flex flex-col overflow-hidden'
       }
     >
-      {/* Header */}
-      <div className="flex items-center justify-between px-3 py-2.5 border-b border-border-subtle shrink-0">
-        <span className="text-[13px] font-semibold text-text-heading flex items-center gap-1.5">
-          <AllocIcon size={12} /> Allocations
-        </span>
-        <div className="flex items-center gap-1.5">
-          {isPinned ? <PinnedControls /> : <PinMenuButton panel="alloc" />}
-        </div>
-      </div>
+      <PanelHeader icon={<AllocIcon size={12} />} title="Allocations" panel="alloc" mode={mode} />
       {/* Tabs & view toggle */}
       <div className="flex items-center gap-1.5 px-2 py-1.5 border-b border-border-subtle shrink-0">
         <TabToggle tab={allocTab} onSetTab={setAllocTab} />

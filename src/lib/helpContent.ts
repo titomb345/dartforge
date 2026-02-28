@@ -333,6 +333,41 @@ export const HELP_CATEGORIES: HelpCategory[] = [
         description:
           'Cycle movement mode: Normal → Leading → Rowing. When active, direction commands are automatically prefixed (e.g. "e" becomes "lead e"). Also toggleable via Numpad /.',
       },
+      {
+        title: '/apt',
+        description:
+          'Look up aptitude for a spell or skill. Accepts abbreviations — "/apt lg" expands to "show aptitude:lirrin\'s_glow". Echoes the resolved name so you know what was looked up.',
+      },
+      {
+        title: '/skill',
+        description:
+          'Show skill details. Accepts abbreviations — "/skill mt" expands to "show skills magic theory". Pass a full name if no abbreviation is set.',
+      },
+      {
+        title: '/autoinscribe',
+        description:
+          'Automated inscription practice loop. "/autoinscribe <spell> @<power>" starts the cycle — checks concentration, inscribes, invokes, and repeats. "/autoinscribe power @<n>" adjusts power mid-loop. "/autoinscribe off" stops. "/autoinscribe status" shows current state. A blue badge appears while active.',
+      },
+      {
+        title: '/autocast',
+        description:
+          'Automated spell practice loop with power auto-adjustment and weight mode. "/autocast <spell> @<power> [args]" starts the cycle. Power adjusts dynamically: fail = power up (easier), success = power down (harder). When power hits the floor (50) and a weight item is configured, enters weight mode — takes weight from a container on success, puts it back on fail. "/autocast adjust power @<n>" sets power directly. "/autocast adjust power <up> <down>" sets power adjustment steps. "/autocast adjust weight <n>" force-sets carried weight. "/autocast adjust weight <up> <down>" sets weight take/put steps. "/autocast set item <item>" sets the weight item (default: tallow). "/autocast set container <name>" sets the container (default: bin). "/autocast clear container" removes the container (use ground). "/autocast off" stops (returns all weight). "/autocast status" shows current state. Green badge when active; amber badge in weight mode.',
+      },
+      {
+        title: '/autoconc',
+        description:
+          'Auto-execute any command(s) on full concentration (BEBT). "/autoconc <action>" saves the action (does not start). "/autoconc on" starts with the saved action — fires once on BEBT, then waits for conc to drop and recover before firing again. The action supports aliases, /spam, /delay, /echo, /var, and semicolons for multi-command chains. "/autoconc off" stops. "/autoconc status" shows current state. The action persists across sessions. A purple badge appears while active.',
+      },
+      {
+        title: '/announce',
+        description:
+          'Auto-broadcast skill improvements via OOC. "/announce on" sends "skillname+", "/announce brief" sends just "+", "/announce verbose" sends "skillname+ (count)". "/announce pet on|brief|verbose" controls pet announcements separately. "/announce off" disables. An orange badge shows when active.',
+      },
+      {
+        title: '/counter',
+        description:
+          'Manage improve counters from the command line. "/counter list" shows all counters with status, imps, and elapsed time. "/counter status" shows a quick one-liner for the active counter. "/counter info" shows detailed stats including rates and skills. "/counter start|pause|stop|clear" controls the active counter. "/counter switch <name>" switches the active counter by name (partial match).',
+      },
     ],
   },
   {
@@ -371,6 +406,11 @@ export const HELP_CATEGORIES: HelpCategory[] = [
         title: 'Gag Groups',
         description:
           'Built-in pattern sets that suppress noisy MUD output. Toggle groups on/off in the Triggers panel: Pets, Creatures, Citizens, Trainers, Sparring, Channels, and Quests.',
+      },
+      {
+        title: 'Anti-Spam',
+        description:
+          'Collapses consecutive identical lines into a single line with a dim repeat count (e.g. "x5"). Enable in Settings > Output.',
       },
       {
         title: 'Command Chaining',

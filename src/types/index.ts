@@ -1,5 +1,7 @@
 export type ClassMode = 'mage' | 'fighter' | 'multi';
 
+export type AnnounceMode = 'off' | 'on' | 'brief' | 'verbose';
+
 export type Panel =
   | 'appearance'
   | 'skills'
@@ -11,7 +13,7 @@ export type Panel =
   | 'variables'
   | 'notes'
   | 'settings'
-  | 'map'
+  // | 'map' // automapper disabled
   | 'alloc'
   | 'currency'
   | 'who'
@@ -23,7 +25,7 @@ export type PinnablePanel =
   | 'chat'
   | 'counter'
   | 'notes'
-  | 'map'
+  // | 'map' // automapper disabled
   | 'alloc'
   | 'currency'
   | 'who'

@@ -1,7 +1,7 @@
 import { useRef, useState, useEffect, useCallback, useLayoutEffect, useMemo } from 'react';
 import { useLatestRef } from './hooks/useLatestRef';
 import type { Terminal as XTerm } from '@xterm/xterm';
-import { getPlatform, getAppVersion, setWindowTitle, alertUser } from './lib/platform';
+import { getPlatform, getAppVersion, setWindowTitle } from './lib/platform';
 import { Terminal } from './components/Terminal';
 import { CommandInput } from './components/CommandInput';
 import { Toolbar } from './components/Toolbar';
@@ -51,6 +51,7 @@ import { expandInput } from './lib/aliasEngine';
 import { executeCommands, type CommandRunner } from './lib/commandUtils';
 import { OutputFilter, DEFAULT_FILTER_FLAGS, type FilterFlags } from './lib/outputFilter';
 import { matchSkillLine } from './lib/skillPatterns';
+import { getTierForCount, getImprovesToNextTier } from './lib/skillTiers';
 import type { Panel, PanelLayout, PinnablePanel, DockSide } from './types';
 import { PinnedRegion } from './components/PinnedRegion';
 import { CollapsedPanelStrip } from './components/CollapsedPanelStrip';
@@ -73,15 +74,19 @@ import { useSignatureMappings } from './hooks/useSignatureMappings';
 import { matchTriggers, expandTriggerBody, resetTriggerCooldowns } from './lib/triggerEngine';
 import { smartWrite } from './lib/terminalUtils';
 import { ActionBlocker, type ActionBlockerState } from './lib/actionBlocker';
+import { AutoInscriber, type AutoInscriberState } from './lib/autoInscriber';
+import { AutoCaster, type AutoCasterState } from './lib/autoCaster';
+import { AutoConc, type AutoConcState } from './lib/autoConc';
 import { type MovementMode, getNextMode, applyMovementMode, movementModeLabel } from './lib/movementMode';
 import { shouldGagLine } from './lib/gagPatterns';
 import { stripAnsi } from './lib/ansiUtils';
 import { SignatureProvider } from './contexts/SignatureContext';
 import { parseConvertCommand, formatMultiConversion } from './lib/currency';
-import { useMapTracker } from './hooks/useMapTracker';
-import { MapProvider } from './contexts/MapContext';
+// Automapper disabled
+// import { useMapTracker } from './hooks/useMapTracker';
+// import { MapProvider } from './contexts/MapContext';
 import { PanelProvider } from './contexts/PanelLayoutContext';
-import { MapPanel } from './components/MapPanel';
+// import { MapPanel } from './components/MapPanel';
 import { useAllocations } from './hooks/useAllocations';
 import { AllocProvider } from './contexts/AllocContext';
 import { AllocPanel } from './components/AllocPanel';
@@ -115,6 +120,8 @@ import { AppSettingsProvider } from './contexts/AppSettingsContext';
 import { SpotlightProvider } from './contexts/SpotlightContext';
 import { SpotlightOverlay } from './components/SpotlightOverlay';
 import { HelpPanel } from './components/HelpPanel';
+import { getSpellByAbbr, findSpellFuzzy } from './lib/spellData';
+import { getSkillByAbbr, findSkillFuzzy } from './lib/skillData';
 
 /** Commands to send automatically after login */
 const LOGIN_COMMANDS = [
@@ -170,6 +177,13 @@ function AppMain() {
   const [debugMode, setDebugMode] = useState(false);
   const [activePanel, setActivePanel] = useState<Panel | null>(null);
   const togglePanel = (panel: Panel) => setActivePanel((v) => (v === panel ? null : panel));
+  const closePanel = useCallback(() => setActivePanel(null), []);
+  const writeToTerm = useCallback(
+    (text: string) => {
+      if (terminalRef.current) smartWrite(terminalRef.current, text);
+    },
+    []
+  );
   const [panelLayout, setPanelLayout] = useState<PanelLayout>({ left: [], right: [] });
   const [pinnedWidths, setPinnedWidths] = useState<{ left: number; right: number }>({
     left: 320,
@@ -178,6 +192,10 @@ function AppMain() {
   const [panelHeights, setPanelHeights] = useState<{ left: number[]; right: number[] }>({
     left: [],
     right: [],
+  });
+  const [collapsedSides, setCollapsedSides] = useState<{ left: boolean; right: boolean }>({
+    left: false,
+    right: false,
   });
   const panelLayoutLoadedRef = useRef(false);
   const [compactReadouts, setCompactReadouts] = useState<Record<string, boolean>>({});
@@ -198,6 +216,7 @@ function AppMain() {
     alignmentTrackingMinutes,
     boardDatesEnabled,
     stripPromptsEnabled,
+    antiSpamEnabled,
     postSyncEnabled,
     postSyncCommands,
     autoLoginEnabled,
@@ -276,6 +295,17 @@ function AppMain() {
         Array.isArray(savedHeights.right)
       ) {
         setPanelHeights(savedHeights);
+      }
+      const savedCollapsed = await dataStore.get<{ left: boolean; right: boolean }>(
+        'settings.json',
+        'collapsedSides'
+      );
+      if (
+        savedCollapsed != null &&
+        typeof savedCollapsed.left === 'boolean' &&
+        typeof savedCollapsed.right === 'boolean'
+      ) {
+        setCollapsedSides(savedCollapsed);
       }
       const savedStatusOrder = await dataStore.get<StatusReadoutKey[]>(
         'settings.json',
@@ -368,23 +398,24 @@ function AppMain() {
     });
   }, []);
 
-  // Persist panel layout
+  // Persist panel layout, widths, heights, and collapsed state
   useEffect(() => {
     if (!panelLayoutLoadedRef.current) return;
     dataStore.set('settings.json', 'panelLayout', panelLayout).catch(console.error);
-  }, [panelLayout]);
-
-  // Persist pinned panel widths
-  useEffect(() => {
-    if (!panelLayoutLoadedRef.current) return;
     dataStore.set('settings.json', 'pinnedWidths', pinnedWidths).catch(console.error);
-  }, [pinnedWidths]);
-
-  // Persist vertical panel height ratios
-  useEffect(() => {
-    if (!panelLayoutLoadedRef.current) return;
     dataStore.set('settings.json', 'panelHeights', panelHeights).catch(console.error);
-  }, [panelHeights]);
+    dataStore.set('settings.json', 'collapsedSides', collapsedSides).catch(console.error);
+  }, [panelLayout, pinnedWidths, panelHeights, collapsedSides]);
+
+  // Clear collapsed flag when a side has no pinned panels
+  useEffect(() => {
+    if (panelLayout.left.length === 0 && collapsedSides.left) {
+      setCollapsedSides((p) => ({ ...p, left: false }));
+    }
+    if (panelLayout.right.length === 0 && collapsedSides.right) {
+      setCollapsedSides((p) => ({ ...p, right: false }));
+    }
+  }, [panelLayout, collapsedSides]);
 
   // Callbacks for vertical resize ratio changes
   const onLeftHeightRatiosChange = useCallback((ratios: number[]) => {
@@ -396,6 +427,17 @@ function AppMain() {
 
   // Viewport-aware panel width budget
   const budget = useViewportBudget(pinnedWidths, panelLayout);
+
+  // Merge manual collapse with viewport-auto-collapse
+  const leftIsCollapsed = budget.leftCollapsed || collapsedSides.left;
+  const rightIsCollapsed = budget.rightCollapsed || collapsedSides.right;
+  const effectiveLeftWidth = collapsedSides.left ? 0 : budget.effectiveLeftWidth;
+  const effectiveRightWidth = collapsedSides.right ? 0 : budget.effectiveRightWidth;
+
+  const collapseLeft = useCallback(() => setCollapsedSides((p) => ({ ...p, left: true })), []);
+  const expandLeft = useCallback(() => setCollapsedSides((p) => ({ ...p, left: false })), []);
+  const collapseRight = useCallback(() => setCollapsedSides((p) => ({ ...p, right: true })), []);
+  const expandRight = useCallback(() => setCollapsedSides((p) => ({ ...p, right: false })), []);
 
   // Resize hooks for pinned regions (dynamic max from budget)
   const leftResize = useResize({
@@ -434,11 +476,13 @@ function AppMain() {
     mutedSenders,
     soundAlerts: chatSoundAlerts,
     newestFirst: chatNewestFirst,
+    hideOwnMessages: chatHideOwnMessages,
     handleChatMessage,
     toggleFilter: toggleChatFilter,
     setAllFilters: setAllChatFilters,
     toggleSoundAlert: toggleChatSoundAlert,
     toggleNewestFirst: toggleChatNewestFirst,
+    toggleHideOwnMessages: toggleChatHideOwnMessages,
     muteSender,
     unmuteSender,
     updateSender,
@@ -456,7 +500,7 @@ function AppMain() {
   const updateHungerRef = useLatestRef(updateHunger);
   const updateThirstRef = useLatestRef(updateThirst);
 
-  const { aura, updateAura } = useAura();
+  const { aura, auraMudColor, auraMudColors, updateAura } = useAura();
   const updateAuraRef = useLatestRef(updateAura);
 
   const { encumbrance, updateEncumbrance } = useEncumbrance();
@@ -474,36 +518,16 @@ function AppMain() {
   const outputFilterRef = useRef<OutputFilter | null>(null);
   if (!outputFilterRef.current) {
     outputFilterRef.current = new OutputFilter({
-      onConcentration: (match) => {
-        updateConcentrationRef.current(match);
-      },
-      onHealth: (match) => {
-        updateHealthRef.current(match);
-      },
-      onHunger: (level) => {
-        updateHungerRef.current(level);
-      },
-      onThirst: (level) => {
-        updateThirstRef.current(level);
-      },
-      onAura: (match) => {
-        updateAuraRef.current(match);
-      },
-      onEncumbrance: (match) => {
-        updateEncumbranceRef.current(match);
-      },
-      onMovement: (match) => {
-        updateMovementRef.current(match);
-      },
-      onAlignment: (match) => {
-        updateAlignmentRef.current(match);
-      },
-      onChat: (msg) => {
-        handleChatMessageRef.current(msg);
-      },
-      onWho: (snapshot) => {
-        updateWhoSnapshotRef.current(snapshot);
-      },
+      onConcentration: (match) => updateConcentrationRef.current(match),
+      onHealth: (match) => updateHealthRef.current(match),
+      onHunger: (level) => updateHungerRef.current(level),
+      onThirst: (level) => updateThirstRef.current(level),
+      onAura: (match) => updateAuraRef.current(match),
+      onEncumbrance: (match) => updateEncumbranceRef.current(match),
+      onMovement: (match) => updateMovementRef.current(match),
+      onAlignment: (match) => updateAlignmentRef.current(match),
+      onChat: (msg) => handleChatMessageRef.current(msg),
+      onWho: (snapshot) => updateWhoSnapshotRef.current(snapshot),
       onLine: (stripped, raw) => {
         // Action blocker — check for unblock triggers
         const blocker = actionBlockerRef.current;
@@ -513,13 +537,14 @@ function AppMain() {
           blocker.processServerLine(stripped)
         ) {
           const { toSend, reblocked } = blocker.flush();
-          const remaining = reblocked ? blocker.queueLength : 0;
-          if (terminalRef.current) {
+          // Only show [UNBLOCKED] when there are queued commands to report
+          if (toSend.length > 0 || reblocked) {
+            const remaining = reblocked ? blocker.queueLength : 0;
             let msg = '[UNBLOCKED';
             if (toSend.length > 0) msg += ` — sending ${toSend.length} queued`;
             if (remaining > 0) msg += `, re-queuing ${remaining} behind ${blocker.blockLabel}`;
             msg += ']';
-            smartWrite(terminalRef.current, `\x1b[32m${msg}\x1b[0m\r\n`);
+            writeToTerm(`\x1b[32m${msg}\x1b[0m\r\n`);
           }
           // Flush queued commands via raw sendCommand (bypasses blocker)
           (async () => {
@@ -529,7 +554,16 @@ function AppMain() {
           })();
         }
 
-        // TODO: Re-enable when automapper is ready
+        // Auto-inscriber — watch for loop patterns
+        autoInscriberRef.current.processServerLine(stripped);
+
+        // Auto-caster — watch for cast loop patterns
+        autoCasterRef.current.processServerLine(stripped);
+
+        // Auto-conc — watch for BEBT to execute action
+        autoConcRef.current.processServerLine(stripped);
+
+        // Feed to automapper room parser — disabled
         // mapFeedLineRef.current(stripped);
 
         // Feed to allocation parser
@@ -612,6 +646,20 @@ function AppMain() {
     }
   }, [stripPromptsEnabled]);
 
+  // Keep anti-spam in sync with OutputFilter
+  useEffect(() => {
+    if (outputFilterRef.current) {
+      outputFilterRef.current.antiSpamEnabled = antiSpamEnabled;
+    }
+  }, [antiSpamEnabled]);
+
+  // Wire anti-spam flush callback so the timer can write to the terminal
+  useEffect(() => {
+    if (outputFilterRef.current) {
+      outputFilterRef.current.onAntiSpamFlush = writeToTerm;
+    }
+  }, [writeToTerm]);
+
   // Persist per-readout compact state
   useEffect(() => {
     if (!settingsLoadedRef.current) return;
@@ -688,6 +736,63 @@ function AppMain() {
   const actionBlockingEnabledRef = useLatestRef(appSettings.actionBlockingEnabled);
   const gagGroupsRef = useLatestRef(appSettings.gagGroups);
 
+  // Auto-inscriber — automated inscription practice loop
+  const autoInscriberRef = useRef(new AutoInscriber());
+  const [inscriberState, setInscriberState] = useState<AutoInscriberState>(() =>
+    autoInscriberRef.current.getState()
+  );
+  useEffect(() => {
+    autoInscriberRef.current.onChange = () =>
+      setInscriberState(autoInscriberRef.current.getState());
+    return () => {
+      autoInscriberRef.current.onChange = null;
+    };
+  }, []);
+
+  // Auto-caster — automated spell practice loop
+  const autoCasterRef = useRef(new AutoCaster());
+  const [casterState, setCasterState] = useState<AutoCasterState>(() =>
+    autoCasterRef.current.getState()
+  );
+  useEffect(() => {
+    autoCasterRef.current.onChange = () => setCasterState(autoCasterRef.current.getState());
+    return () => {
+      autoCasterRef.current.onChange = null;
+    };
+  }, []);
+
+  // Sync persisted weight config to auto-caster when settings load
+  useEffect(() => {
+    autoCasterRef.current.configureWeight(
+      appSettings.casterWeightItem || 'tallow',
+      appSettings.casterWeightContainer || null,
+      appSettings.casterWeightAdjustUp,
+      appSettings.casterWeightAdjustDown
+    );
+  }, [
+    appSettings.casterWeightItem,
+    appSettings.casterWeightContainer,
+    appSettings.casterWeightAdjustUp,
+    appSettings.casterWeightAdjustDown,
+  ]);
+
+  // Auto-conc — auto-execute on full concentration
+  const autoConcRef = useRef(new AutoConc());
+  const [concState, setConcState] = useState<AutoConcState>(() =>
+    autoConcRef.current.getState()
+  );
+  useEffect(() => {
+    autoConcRef.current.onChange = () => setConcState(autoConcRef.current.getState());
+    return () => {
+      autoConcRef.current.onChange = null;
+    };
+  }, []);
+
+  // Sync persisted action to auto-conc when settings load
+  useEffect(() => {
+    autoConcRef.current.setAction(appSettings.autoConcAction);
+  }, [appSettings.autoConcAction]);
+
   // Movement mode — direction command prefixing (lead/row/sneak)
   const [movementMode, setMovementMode] = useState<MovementMode>('normal');
   const movementModeRef = useLatestRef(movementMode);
@@ -704,25 +809,27 @@ function AppMain() {
     addSkill,
     updateSkillCount,
     deleteSkill,
+    announceModeRef,
+    announcePetModeRef,
   } = useSkillTracker(sendCommandRef, processorRef, terminalRef, dataStore);
   const skillDataRef = useLatestRef(skillData);
+
+  // Keep announce mode refs in sync with settings
+  announceModeRef.current = appSettings.announceMode;
+  announcePetModeRef.current = appSettings.announcePetMode;
 
   const cycleMovementMode = useCallback(() => {
     const hasSneaking = !!skillDataRef.current.skills['sneaking'];
     const next = getNextMode(movementModeRef.current, hasSneaking);
     setMovementMode(next);
-    if (terminalRef.current) {
-      smartWrite(
-        terminalRef.current,
-        `\x1b[36m[Movement mode: ${movementModeLabel(next)}]\x1b[0m\r\n`
-      );
-    }
-  }, [skillDataRef, movementModeRef, terminalRef]);
+    writeToTerm(`\x1b[36m[Movement mode: ${movementModeLabel(next)}]\x1b[0m\r\n`);
+  }, [skillDataRef, movementModeRef, writeToTerm]);
 
   // Improve counter hook
   const improveCounters = useImproveCounters();
   const { handleCounterMatch } = improveCounters;
   const handleCounterMatchRef = useLatestRef(handleCounterMatch);
+  const improveCountersRef = useLatestRef(improveCounters);
 
   // Alias system
   const aliasState = useAliases(dataStore, activeCharacter);
@@ -783,14 +890,9 @@ function AppMain() {
         },
         'global'
       );
-      if (terminalRef.current) {
-        smartWrite(
-          terminalRef.current,
-          `\x1b[90m[Gag trigger created for: ${selectedText}]\x1b[0m\r\n`
-        );
-      }
+      writeToTerm(`\x1b[90m[Gag trigger created for: ${selectedText}]\x1b[0m\r\n`);
     },
-    [triggerState.createTrigger]
+    [triggerState.createTrigger, writeToTerm]
   );
 
   // Context menu → notes panel integration
@@ -811,9 +913,8 @@ function AppMain() {
   const { resolveSignature } = signatureState;
   const resolveSignatureRef = useLatestRef(resolveSignature);
 
-  // Map tracker
-  const mapTracker = useMapTracker(dataStore, activeCharacter);
-  // TODO: Re-enable when automapper is ready
+  // Map tracker — disabled (automapper not ready)
+  // const mapTracker = useMapTracker(dataStore, activeCharacter);
   // const mapFeedLineRef = useLatestRef(mapTracker.feedLine);
   // const mapTrackCommandRef = useLatestRef(mapTracker.trackCommand);
 
@@ -928,9 +1029,7 @@ function AppMain() {
     const blocker = actionBlockerRef.current;
     if (actionBlockingEnabledRef.current && blocker.blocked) {
       blocker.enqueue(command);
-      if (terminalRef.current) {
-        smartWrite(terminalRef.current, `\x1b[33mQUEUED: ${command}\x1b[0m\r\n`);
-      }
+      writeToTerm(`\x1b[33mQUEUED: ${command}\x1b[0m\r\n`);
       return;
     }
     if (actionBlockingEnabledRef.current) {
@@ -943,13 +1042,10 @@ function AppMain() {
   // Keep trigger runner in sync for use in the output filter closure
   triggerRunnerRef.current = {
     send: async (text) => {
+      // mapTrackCommandRef.current(text); // automapper disabled
       await sendCommandRef.current?.(text);
     },
-    echo: (text) => {
-      if (terminalRef.current) {
-        smartWrite(terminalRef.current, `\x1b[36m${text}\x1b[0m\r\n`);
-      }
-    },
+    echo: (text) => writeToTerm(`\x1b[36m${text}\x1b[0m\r\n`),
     expand: (input) =>
       expandInput(input, mergedAliasesRef.current, {
         enableSpeedwalk: enableSpeedwalkRef.current,
@@ -961,10 +1057,9 @@ function AppMain() {
     convert: (args) => {
       const parsed = parseConvertCommand(`/convert ${args}`);
       if (typeof parsed === 'string') {
-        if (terminalRef.current) smartWrite(terminalRef.current, `\x1b[31m${parsed}\x1b[0m\r\n`);
+        writeToTerm(`\x1b[31m[Convert] ${parsed}\x1b[0m\r\n`);
       } else {
-        if (terminalRef.current)
-          smartWrite(terminalRef.current, `${formatMultiConversion(parsed)}\r\n`);
+        writeToTerm(`${formatMultiConversion(parsed)}\r\n`);
       }
     },
     getVariables: () => mergedVariablesRef.current,
@@ -977,9 +1072,7 @@ function AppMain() {
       if (!postSyncEnabledRef.current) return;
       const raw = postSyncCommandsRef.current.trim();
       if (!raw) return;
-      if (terminalRef.current) {
-        smartWrite(terminalRef.current, '\x1b[90m[login commands]\x1b[0m\r\n');
-      }
+      writeToTerm('\x1b[90m[login commands]\x1b[0m\r\n');
       const result = expandInput(raw, mergedAliasesRef.current, {
         enableSpeedwalk: enableSpeedwalkRef.current,
         activeCharacter: activeCharacterRef.current,
@@ -998,65 +1091,41 @@ function AppMain() {
   // Alias-expanded send: preprocesses input through the alias engine
   const handleSend = useCallback(
     async (rawInput: string) => {
+      const trimmed = rawInput.trim();
+
       // Command echo — write dimmed line to terminal before processing
-      if (commandEchoRef.current && terminalRef.current && rawInput.trim()) {
+      if (commandEchoRef.current && trimmed) {
         if (passwordModeRef.current) {
-          smartWrite(terminalRef.current, '\x1b[90m> ******\x1b[0m\r\n');
+          writeToTerm('\x1b[90m> ******\x1b[0m\r\n');
         } else {
-          smartWrite(terminalRef.current, `\x1b[90m> ${rawInput}\x1b[0m\r\n`);
+          writeToTerm(`\x1b[90m> ${rawInput}\x1b[0m\r\n`);
         }
       }
 
       // Session logging — log sent command
-      if (rawInput.trim()) logCommandRef.current?.(rawInput);
+      if (trimmed) logCommandRef.current?.(rawInput);
 
-      // Built-in /notify test command — fires a test notification to debug the backend
-      if (/^\/notify\b/i.test(rawInput.trim())) {
-        const msg = rawInput.trim().slice(7).trim() || 'Test notification from DartForge';
-        if (terminalRef.current) {
-          smartWrite(terminalRef.current, `\x1b[36mSending test notification...\x1b[0m\r\n`);
-        }
-        alertUser('DartForge', msg)
-          .then(() => {
-            if (terminalRef.current)
-              smartWrite(terminalRef.current, `\x1b[32mNotification sent (no error).\x1b[0m\r\n`);
-          })
-          .catch((e) => {
-            if (terminalRef.current)
-              smartWrite(terminalRef.current, `\x1b[31mNotification error: ${e}\x1b[0m\r\n`);
-          });
-        return;
-      }
+
 
       // Built-in /block — manually activate action blocking
-      if (/^\/block\b/i.test(rawInput.trim())) {
+      if (/^\/block\b/i.test(trimmed)) {
         const blocker = actionBlockerRef.current;
         if (blocker.blocked) {
-          if (terminalRef.current) {
-            smartWrite(
-              terminalRef.current,
-              `\x1b[33m[Already blocked: ${blocker.blockLabel}]\x1b[0m\r\n`
-            );
-          }
+          writeToTerm(`\x1b[33m[Already blocked: ${blocker.blockLabel}]\x1b[0m\r\n`);
         } else {
           blocker.block({ key: 'manual', label: 'Manual', pattern: /^$/ });
-          if (terminalRef.current) {
-            smartWrite(terminalRef.current, '\x1b[33m[BLOCKED — manual]\x1b[0m\r\n');
-          }
+          writeToTerm('\x1b[33m[BLOCKED — manual]\x1b[0m\r\n');
         }
         return;
       }
 
       // Built-in /unblock — manually release block and flush queue
-      if (/^\/unblock\b/i.test(rawInput.trim())) {
+      if (/^\/unblock\b/i.test(trimmed)) {
         const blocker = actionBlockerRef.current;
         const queued = blocker.forceUnblock();
-        if (terminalRef.current) {
-          smartWrite(
-            terminalRef.current,
-            `\x1b[32m[UNBLOCKED — ${queued.length} queued command(s) released]\x1b[0m\r\n`
-          );
-        }
+        writeToTerm(
+          `\x1b[32m[UNBLOCKED — ${queued.length} queued command(s) released]\x1b[0m\r\n`
+        );
         // Send queued commands via raw sendCommand (bypasses blocker)
         (async () => {
           for (const cmd of queued) {
@@ -1067,91 +1136,637 @@ function AppMain() {
       }
 
       // Built-in /movemode — cycle movement mode
-      if (/^\/movemode\b/i.test(rawInput.trim())) {
+      if (/^\/movemode\b/i.test(trimmed)) {
         cycleMovementMode();
         return;
       }
 
-      // Built-in /convert command — intercept before alias expansion
-      if (/^\/convert\b/i.test(rawInput.trim())) {
-        if (terminalRef.current) {
-          const parsed = parseConvertCommand(rawInput.trim());
-          if (typeof parsed === 'string') {
-            smartWrite(terminalRef.current, `\x1b[31m${parsed}\x1b[0m\r\n`);
+      // Built-in /autoinscribe — automated inscription practice loop
+      if (/^\/autoinscribe\b/i.test(trimmed)) {
+        const args = trimmed.slice(14).trim();
+        const argsLower = args.toLowerCase();
+        const inscriber = autoInscriberRef.current;
+
+        if (argsLower === 'off' || argsLower === 'stop') {
+          inscriber.stop((msg) => writeToTerm(`\x1b[36m${msg}\x1b[0m\r\n`));
+          return;
+        }
+
+        if (argsLower.startsWith('power ')) {
+          const p = parseInt(argsLower.slice(6).trim().replace(/^@/, ''), 10);
+          if (isNaN(p) || p < 1) {
+            writeToTerm('\x1b[31m[Autoinscribe] Usage: /autoinscribe power @<number>\x1b[0m\r\n');
           } else {
-            const output = formatMultiConversion(parsed);
-            smartWrite(terminalRef.current, `${output}\r\n`);
+            inscriber.setPower(p, (msg) => writeToTerm(`\x1b[36m${msg}\x1b[0m\r\n`));
           }
+          return;
+        }
+
+        if (argsLower === 'status') {
+          const s = inscriber.getState();
+          const cyan = '\x1b[36m';
+          const reset = '\x1b[0m';
+          const line = (text: string) => writeToTerm(`${cyan}${text}${reset}\r\n`);
+
+          if (!s.active) {
+            line('[Autoinscribe: OFF]');
+          } else {
+            line(`[Autoinscribe: ${s.spell} @${s.power}]`);
+            line(`  Phase: ${s.phase} | Cycles: ${s.cycleCount}`);
+          }
+          return;
+        }
+
+        // /autoinscribe <spell> @<power>
+        const parts = args.split(/\s+/);
+        if (parts.length < 2) {
+          writeToTerm(
+            '\x1b[31m[Autoinscribe] Usage:\r\n' +
+            '  /autoinscribe <spell> @<power>  Start inscribe loop\r\n' +
+            '  /autoinscribe off               Stop inscribing\r\n' +
+            '  /autoinscribe status             Show current state\r\n' +
+            '  /autoinscribe power @<n>         Adjust power mid-loop\x1b[0m\r\n'
+          );
+          return;
+        }
+
+        const spellArg = parts[0];
+        const powerRaw = parts[1].replace(/^@/, '');
+        const powerArg = parseInt(powerRaw, 10);
+        if (isNaN(powerArg) || powerArg < 1) {
+          writeToTerm('\x1b[31m[Autoinscribe] Power must be a positive number (e.g. @200).\x1b[0m\r\n');
+          return;
+        }
+
+        // Resolve abbreviation for display only — MUD gets the raw input
+        const spellLookup = getSpellByAbbr(spellArg) ?? findSpellFuzzy(spellArg);
+        const displaySpell = spellLookup ? spellLookup.name : spellArg;
+
+        inscriber.start(
+          spellArg,
+          powerArg,
+          async (cmd) => await sendCommand(cmd),
+          (msg) => writeToTerm(`\x1b[36m${msg.replace(spellArg, displaySpell)}\x1b[0m\r\n`),
+          (key, label) => {
+            if (actionBlockingEnabledRef.current) {
+              actionBlockerRef.current.block({ key, label, pattern: /(?!)/ });
+            }
+          }
+        );
+        return;
+      }
+
+      // Built-in /autocast — automated spell practice loop
+      if (/^\/autocast\b/i.test(trimmed)) {
+        const args = trimmed.slice(9).trim();
+        const argsLower = args.toLowerCase();
+        const caster = autoCasterRef.current;
+
+        if (argsLower === 'off' || argsLower === 'stop') {
+          caster.stop((msg) => writeToTerm(`\x1b[36m${msg}\x1b[0m\r\n`));
+          return;
+        }
+
+        if (argsLower.startsWith('adjust ')) {
+          const adjustRest = argsLower.slice(7).trim();
+
+          if (adjustRest.startsWith('power ')) {
+            const adjustParts = adjustRest.slice(6).trim().replace(/^@/, '').split(/\s+/);
+            if (adjustParts.length === 1) {
+              // /autocast adjust power @<n> — set power directly
+              const p = parseInt(adjustParts[0], 10);
+              if (isNaN(p) || p < 1) {
+                writeToTerm('\x1b[31m[Autocast] Usage: /autocast adjust power @<n> | /autocast adjust power <up> <down>\x1b[0m\r\n');
+              } else {
+                caster.setPower(p, (msg) => writeToTerm(`\x1b[36m${msg}\x1b[0m\r\n`));
+              }
+            } else {
+              // /autocast adjust power <up> <down> — set adjustment amounts
+              const up = parseInt(adjustParts[0], 10);
+              const down = parseInt(adjustParts[1], 10);
+              if (isNaN(up) || isNaN(down) || up < 1 || down < 1) {
+                writeToTerm('\x1b[31m[Autocast] Usage: /autocast adjust power @<n> | /autocast adjust power <up> <down>\x1b[0m\r\n');
+              } else {
+                caster.setAdjust(up, down, (msg) => writeToTerm(`\x1b[36m${msg}\x1b[0m\r\n`));
+              }
+            }
+            return;
+          }
+
+          if (adjustRest.startsWith('weight ')) {
+            const adjustParts = adjustRest.slice(7).trim().split(/\s+/);
+            if (adjustParts.length === 1) {
+              // /autocast adjust weight <n> — force-set carried weight
+              const w = parseInt(adjustParts[0], 10);
+              if (isNaN(w) || w < 0) {
+                writeToTerm('\x1b[31m[Autocast] Usage: /autocast adjust weight <n> | /autocast adjust weight <up> <down>\x1b[0m\r\n');
+              } else {
+                caster.setCarriedWeight(w, (msg) => writeToTerm(`\x1b[36m${msg}\x1b[0m\r\n`));
+              }
+            } else {
+              // /autocast adjust weight <up> <down> — set adjustment amounts
+              const up = parseInt(adjustParts[0], 10);
+              const down = parseInt(adjustParts[1], 10);
+              if (isNaN(up) || isNaN(down) || up < 1 || down < 1) {
+                writeToTerm('\x1b[31m[Autocast] Usage: /autocast adjust weight <n> | /autocast adjust weight <up> <down>\x1b[0m\r\n');
+              } else {
+                caster.setWeightAdjust(up, down, (msg) => writeToTerm(`\x1b[36m${msg}\x1b[0m\r\n`));
+                appSettings.updateCasterWeightAdjustUp(up);
+                appSettings.updateCasterWeightAdjustDown(down);
+              }
+            }
+            return;
+          }
+
+          writeToTerm(
+            '\x1b[31m[Autocast] Usage:\r\n  /autocast adjust power @<n>\r\n  /autocast adjust power <up> <down>\r\n  /autocast adjust weight <n>\r\n  /autocast adjust weight <up> <down>\x1b[0m\r\n'
+          );
+          return;
+        }
+
+        if (argsLower.startsWith('set ')) {
+          const setRest = args.slice(4).trim();
+          const setRestLower = setRest.toLowerCase();
+
+          if (setRestLower.startsWith('item ')) {
+            const itemName = setRest.slice(5).trim();
+            if (!itemName) {
+              writeToTerm('\x1b[31m[Autocast] Usage: /autocast set item <item>\x1b[0m\r\n');
+            } else {
+              caster.setWeightItem(itemName, (msg) => writeToTerm(`\x1b[36m${msg}\x1b[0m\r\n`));
+              appSettings.updateCasterWeightItem(itemName);
+            }
+            return;
+          }
+
+          if (setRestLower.startsWith('container ')) {
+            const containerName = setRest.slice(10).trim();
+            if (!containerName) {
+              writeToTerm('\x1b[31m[Autocast] Usage: /autocast set container <name> | /autocast clear container\r\n  Use "none" or "clear" to remove the container.\x1b[0m\r\n');
+            } else {
+              const val = /^(none|null|clear)$/i.test(containerName) ? null : containerName;
+              caster.setWeightContainer(
+                val,
+                (msg) => writeToTerm(`\x1b[36m${msg}\x1b[0m\r\n`)
+              );
+              appSettings.updateCasterWeightContainer(val ?? '');
+            }
+            return;
+          }
+
+          writeToTerm(
+            '\x1b[31m[Autocast] Usage:\r\n  /autocast set item <item>\r\n  /autocast set container <name>\x1b[0m\r\n'
+          );
+          return;
+        }
+
+        // /autocast clear container
+        if (argsLower === 'clear container') {
+          caster.setWeightContainer(null, (msg) => writeToTerm(`\x1b[36m${msg}\x1b[0m\r\n`));
+          appSettings.updateCasterWeightContainer('');
+          return;
+        }
+
+        if (argsLower === 'status') {
+          const s = caster.getState();
+          const cyan = '\x1b[36m';
+          const reset = '\x1b[0m';
+          const line = (text: string) => writeToTerm(`${cyan}${text}${reset}\r\n`);
+
+          if (!s.active) {
+            line('[Autocast: OFF]');
+            line(`  Power adjust: +${s.adjustUp} on fail / -${s.adjustDown} on success`);
+            if (s.weightItem) {
+              const loc = s.weightContainer ? ` from ${s.weightContainer}` : '';
+              line(`  Weight item:  ${s.weightItem}${loc}`);
+              line(`  Weight adjust: take ${s.weightAdjustUp} on success, put ${s.weightAdjustDown} on fail`);
+            } else {
+              line('  Weight: not configured');
+            }
+          } else {
+            const argsStr = s.args ? ` ${s.args}` : '';
+            line(`[Autocast: ${s.spell} @${s.power}${argsStr}]`);
+            line(`  Phase: ${s.phase} | Cycles: ${s.cycleCount} | Success: ${s.successCount} | Fail: ${s.failCount}`);
+            line(`  Power adjust: +${s.adjustUp} on fail / -${s.adjustDown} on success`);
+            if (s.weightMode) {
+              line(`  WEIGHT MODE: carrying ${s.carriedWeight} ${s.weightItem}`);
+            }
+            if (s.weightItem) {
+              const loc = s.weightContainer ? ` from ${s.weightContainer}` : '';
+              line(`  Weight item:  ${s.weightItem}${loc}`);
+              line(`  Weight adjust: take ${s.weightAdjustUp} on success, put ${s.weightAdjustDown} on fail`);
+            }
+          }
+          return;
+        }
+
+        // /autocast <spell> @<power> [args]
+        const parts = args.split(/\s+/);
+        if (parts.length < 2) {
+          writeToTerm(
+            '\x1b[31m[Autocast] Usage:\r\n' +
+            '  /autocast <spell> @<power> [args]   Start casting\r\n' +
+            '  /autocast off                       Stop casting\r\n' +
+            '  /autocast status                    Show current state\r\n' +
+            '  /autocast adjust power @<n>         Set power directly\r\n' +
+            '  /autocast adjust power <up> <down>  Set power adjust steps\r\n' +
+            '  /autocast adjust weight <n>         Set carried weight\r\n' +
+            '  /autocast adjust weight <up> <down> Set weight adjust steps\r\n' +
+            '  /autocast set item <item>        Set weight item\r\n' +
+            '  /autocast set container <name>      Set weight container\r\n' +
+            '  /autocast clear container            Clear container (ground)\x1b[0m\r\n'
+          );
+          return;
+        }
+
+        const spellArg = parts[0];
+        const powerRaw = parts[1].replace(/^@/, '');
+        const powerArg = parseInt(powerRaw, 10);
+        if (isNaN(powerArg) || powerArg < 1) {
+          writeToTerm('\x1b[31m[Autocast] Power must be a positive number (e.g. @200).\x1b[0m\r\n');
+          return;
+        }
+
+        const extraArgs = parts.slice(2).join(' ') || null;
+
+        // Resolve abbreviation for display only — MUD gets the raw input
+        const spellLookup = getSpellByAbbr(spellArg) ?? findSpellFuzzy(spellArg);
+        const displaySpell = spellLookup ? spellLookup.name : spellArg;
+
+        caster.start(
+          spellArg,
+          powerArg,
+          extraArgs,
+          async (cmd) => await sendCommand(cmd),
+          (msg) => writeToTerm(`\x1b[36m${msg.replace(spellArg, displaySpell)}\x1b[0m\r\n`),
+          (key, label) => {
+            if (actionBlockingEnabledRef.current) {
+              actionBlockerRef.current.block({ key, label, pattern: /(?!)/ });
+            }
+          },
+          async (cmd) => await sendCommandRef.current!(cmd)
+        );
+        return;
+      }
+
+      // Built-in /autoconc — auto-execute on full concentration
+      if (/^\/autoconc\b/i.test(trimmed)) {
+        const args = trimmed.slice(9).trim();
+        const argsLower = args.toLowerCase();
+        const conc = autoConcRef.current;
+
+        if (argsLower === 'off' || argsLower === 'stop') {
+          conc.stop((msg) => writeToTerm(`\x1b[36m${msg}\x1b[0m\r\n`));
+          return;
+        }
+
+        if (argsLower === 'status') {
+          const s = conc.getState();
+          const cyan = '\x1b[36m';
+          const reset = '\x1b[0m';
+          const line = (text: string) => writeToTerm(`${cyan}${text}${reset}\r\n`);
+
+          if (!s.active) {
+            line(`[Autoconc: OFF${s.action ? ` | Action: ${s.action}` : ''}]`);
+          } else {
+            line(`[Autoconc: ${s.action}]`);
+            line(`  Phase: ${s.phase} | Cycles: ${s.cycleCount}`);
+          }
+          return;
+        }
+
+        // Start helpers
+        const startConc = (action: string) => {
+          conc.start(
+            action,
+            async (cmd) => await sendCommand(cmd),
+            async (action) => {
+              const result = expandInput(action, mergedAliasesRef.current, {
+                enableSpeedwalk: enableSpeedwalkRef.current,
+                activeCharacter: activeCharacterRef.current,
+              });
+              await executeCommands(result.commands, triggerRunnerRef.current);
+            },
+            (msg) => writeToTerm(`\x1b[36m${msg}\x1b[0m\r\n`)
+          );
+        };
+
+        if (argsLower === 'on' || argsLower === 'start') {
+          const saved = conc.action || appSettings.autoConcAction;
+          if (!saved) {
+            writeToTerm(
+              '\x1b[31m[Autoconc] No action set. Use /autoconc <action> to set one first.\x1b[0m\r\n'
+            );
+          } else {
+            startConc(saved);
+          }
+          return;
+        }
+
+        if (!args) {
+          writeToTerm(
+            '\x1b[31m[Autoconc] Usage:\r\n' +
+            '  /autoconc <action>    Set action (does not start)\r\n' +
+            '  /autoconc on          Start with saved action\r\n' +
+            '  /autoconc off         Stop the loop\r\n' +
+            '  /autoconc status      Show current state\x1b[0m\r\n'
+          );
+          return;
+        }
+
+        // Anything else = save action only (user must /autoconc on to start)
+        conc.setAction(args);
+        appSettings.updateAutoConcAction(args);
+        const verb = conc.active ? 'updated' : 'set';
+        writeToTerm(`\x1b[36m[Autoconc: action ${verb} to "${args}"]\x1b[0m\r\n`);
+        return;
+      }
+
+      // Built-in /announce — toggle skill improvement OOC announcements
+      if (/^\/announce\b/i.test(trimmed)) {
+        const args = trimmed.slice(9).trim().toLowerCase();
+        const VALID_MODES = ['on', 'off', 'brief', 'verbose'] as const;
+        type Mode = (typeof VALID_MODES)[number];
+        const isValidMode = (s: string): s is Mode => (VALID_MODES as readonly string[]).includes(s);
+
+        if (!args || args === 'status') {
+          writeToTerm(
+            `\x1b[36m[Announce: ${appSettings.announceMode} | Pets: ${appSettings.announcePetMode}]\x1b[0m\r\n`
+          );
+          return;
+        }
+
+        if (args.startsWith('pet ')) {
+          const petArg = args.slice(4).trim();
+          if (isValidMode(petArg)) {
+            appSettings.updateAnnouncePetMode(petArg);
+            writeToTerm(`\x1b[36m[Announce pets: ${petArg}]\x1b[0m\r\n`);
+          } else {
+            writeToTerm('\x1b[31m[Announce] Usage: /announce pet on|off|brief|verbose\x1b[0m\r\n');
+          }
+          return;
+        }
+
+        if (isValidMode(args)) {
+          appSettings.updateAnnounceMode(args);
+          writeToTerm(`\x1b[36m[Announce: ${args}]\x1b[0m\r\n`);
+          return;
+        }
+
+        writeToTerm(
+          '\x1b[31m[Announce] Usage: /announce on|off|brief|verbose | /announce pet on|off|brief|verbose | /announce status\x1b[0m\r\n'
+        );
+        return;
+      }
+
+      // Built-in /convert command — intercept before alias expansion
+      if (/^\/convert\b/i.test(trimmed)) {
+        const parsed = parseConvertCommand(trimmed);
+        if (typeof parsed === 'string') {
+          writeToTerm(`\x1b[31m[Convert] ${parsed}\x1b[0m\r\n`);
+        } else {
+          writeToTerm(`${formatMultiConversion(parsed)}\r\n`);
         }
         return;
       }
 
       // Built-in /var command — manage user variables
-      if (/^\/var\b/i.test(rawInput.trim())) {
-        const varInput = rawInput.trim().slice(4).trim();
-        if (terminalRef.current) {
-          if (!varInput) {
-            // /var — list all variables
-            const vars = mergedVariablesRef.current.filter((v) => v.enabled);
-            if (vars.length === 0) {
-              smartWrite(terminalRef.current, '\x1b[36mNo variables set.\x1b[0m\r\n');
-            } else {
-              smartWrite(terminalRef.current, '\x1b[36m--- Variables ---\x1b[0m\r\n');
-              for (const v of vars) {
-                smartWrite(terminalRef.current, `\x1b[36m  $${v.name} = ${v.value}\x1b[0m\r\n`);
-              }
-            }
-          } else if (varInput.startsWith('-d ')) {
-            // /var -d <name> — delete variable
-            const name = varInput.slice(3).trim();
-            if (deleteVariableByNameRef.current(name)) {
-              smartWrite(terminalRef.current, `\x1b[36mDeleted variable $${name}\x1b[0m\r\n`);
-            } else {
-              smartWrite(terminalRef.current, `\x1b[31mVariable "$${name}" not found.\x1b[0m\r\n`);
-            }
+      if (/^\/var\b/i.test(trimmed)) {
+        const varInput = trimmed.slice(4).trim();
+        if (!varInput) {
+          // /var — list all variables
+          const vars = mergedVariablesRef.current.filter((v) => v.enabled);
+          if (vars.length === 0) {
+            writeToTerm('\x1b[36mNo variables set.\x1b[0m\r\n');
           } else {
-            // /var <name> <value> or /var -g <name> <value>
-            let scope: 'character' | 'global' = 'character';
-            let rest = varInput;
-            if (rest.startsWith('-g ')) {
-              scope = 'global';
-              rest = rest.slice(3).trim();
-            }
-            const spaceIdx = rest.indexOf(' ');
-            if (spaceIdx === -1) {
-              // /var <name> — search variables by name (regex)
-              const query = rest;
-              let re: RegExp;
-              try {
-                re = new RegExp(query, 'i');
-              } catch {
-                re = new RegExp(query.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i');
-              }
-              const matches = mergedVariablesRef.current.filter(
-                (v) => v.enabled && re.test(v.name)
-              );
-              if (matches.length === 0) {
-                smartWrite(
-                  terminalRef.current,
-                  `\x1b[36mNo variables matching "${query}".\x1b[0m\r\n`
-                );
-              } else {
-                smartWrite(
-                  terminalRef.current,
-                  `\x1b[36m--- Variables matching "${query}" ---\x1b[0m\r\n`
-                );
-                for (const v of matches) {
-                  smartWrite(terminalRef.current, `\x1b[36m  $${v.name} = ${v.value}\x1b[0m\r\n`);
-                }
-              }
-            } else {
-              const name = rest.slice(0, spaceIdx);
-              const value = rest.slice(spaceIdx + 1);
-              setVarRef.current(name, value, scope);
-              smartWrite(terminalRef.current, `\x1b[36m$${name} = ${value} (${scope})\x1b[0m\r\n`);
+            writeToTerm('\x1b[36m--- Variables ---\x1b[0m\r\n');
+            for (const v of vars) {
+              writeToTerm(`\x1b[36m  $${v.name} = ${v.value}\x1b[0m\r\n`);
             }
           }
+        } else if (varInput.startsWith('-d ')) {
+          // /var -d <name> — delete variable
+          const name = varInput.slice(3).trim();
+          if (deleteVariableByNameRef.current(name)) {
+            writeToTerm(`\x1b[36mDeleted variable $${name}\x1b[0m\r\n`);
+          } else {
+            writeToTerm(`\x1b[31m[Var] Variable "$${name}" not found.\x1b[0m\r\n`);
+          }
+        } else {
+          // /var <name> <value> or /var -g <name> <value>
+          let scope: 'character' | 'global' = 'character';
+          let rest = varInput;
+          if (rest.startsWith('-g ')) {
+            scope = 'global';
+            rest = rest.slice(3).trim();
+          }
+          const spaceIdx = rest.indexOf(' ');
+          if (spaceIdx === -1) {
+            // /var <name> — search variables by name (regex)
+            const query = rest;
+            let re: RegExp;
+            try {
+              re = new RegExp(query, 'i');
+            } catch {
+              re = new RegExp(query.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i');
+            }
+            const matches = mergedVariablesRef.current.filter(
+              (v) => v.enabled && re.test(v.name)
+            );
+            if (matches.length === 0) {
+              writeToTerm(`\x1b[36mNo variables matching "${query}".\x1b[0m\r\n`);
+            } else {
+              writeToTerm(`\x1b[36m--- Variables matching "${query}" ---\x1b[0m\r\n`);
+              for (const v of matches) {
+                writeToTerm(`\x1b[36m  $${v.name} = ${v.value}\x1b[0m\r\n`);
+              }
+            }
+          } else {
+            const name = rest.slice(0, spaceIdx);
+            const value = rest.slice(spaceIdx + 1);
+            setVarRef.current(name, value, scope);
+            writeToTerm(`\x1b[36m$${name} = ${value} (${scope})\x1b[0m\r\n`);
+          }
         }
+        return;
+      }
+
+      // Built-in /apt — show aptitude for a spell or skill (abbreviation or full name)
+      if (/^\/apt\b/i.test(trimmed)) {
+        const arg = trimmed.slice(4).trim();
+        if (!arg) {
+          writeToTerm('\x1b[31m[Apt] Usage: /apt <abbreviation or name>\x1b[0m\r\n');
+          return;
+        }
+        // Try abbreviation first, then fuzzy name match, fall back to raw input
+        const spell = getSpellByAbbr(arg) ?? findSpellFuzzy(arg);
+        const skill = !spell ? (getSkillByAbbr(arg) ?? findSkillFuzzy(arg)) : null;
+        const resolved = spell ? spell.name : skill ?? arg;
+        writeToTerm(`\x1b[36m[Aptitude: ${resolved}]\x1b[0m\r\n`);
+        await sendCommand(`show aptitude:${resolved}`);
+        return;
+      }
+
+      // Built-in /skill — show skills for a spell or skill (abbreviation or full name)
+      if (/^\/skill\b/i.test(trimmed)) {
+        const arg = trimmed.slice(6).trim();
+        if (!arg) {
+          writeToTerm('\x1b[31m[Skill] Usage: /skill <abbreviation or name>\x1b[0m\r\n');
+          return;
+        }
+        // Try abbreviation first, then fuzzy name match, fall back to raw input
+        const skill = getSkillByAbbr(arg) ?? findSkillFuzzy(arg);
+        const spell = !skill ? (getSpellByAbbr(arg) ?? findSpellFuzzy(arg)) : null;
+        const resolved = skill ?? (spell ? spell.name : arg);
+        const known = !!(skill || spell);
+        if (known) {
+          const rec = skillDataRef.current.skills[resolved];
+          if (rec) {
+            const tier = getTierForCount(rec.count);
+            const toNext = getImprovesToNextTier(rec.count);
+            const nextStr = toNext > 0 ? ` | next: ${toNext}` : '';
+            writeToTerm(
+              `\x1b[36m[Skill: ${resolved} | count: ${rec.count} | level: ${tier.name}${nextStr}]\x1b[0m\r\n`
+            );
+          } else {
+            writeToTerm(`\x1b[36m[Skill: ${resolved} | no data tracked]\x1b[0m\r\n`);
+          }
+        } else {
+          writeToTerm(`\x1b[36m[Skill: unknown]\x1b[0m\r\n`);
+        }
+        await sendCommand(`show skills ${resolved}`);
+        return;
+      }
+
+      // Built-in /counter — manage improve counters
+      if (/^\/counter\b/i.test(trimmed)) {
+        const args = trimmed.slice(8).trim();
+        const argsLower = args.toLowerCase();
+        const ic = improveCountersRef.current;
+        const cv = counterValueRef.current;
+        const { counters, activeCounterId, getElapsedMs, getPerMinuteRate, getPerPeriodRate, getPerHourRate, getSkillsSorted, periodLengthMinutes } = ic;
+
+        const fmtDur = (ms: number) => {
+          const s = Math.floor(ms / 1000);
+          const h = Math.floor(s / 3600);
+          const m = Math.floor((s % 3600) / 60);
+          const sec = s % 60;
+          if (h > 0) return `${h}h ${m}m ${sec}s`;
+          return `${m}m ${sec}s`;
+        };
+
+        const statusIcon = (st: string) =>
+          st === 'running' ? '\x1b[32m●\x1b[36m' : st === 'paused' ? '\x1b[33m❚❚\x1b[36m' : '\x1b[90m■\x1b[36m';
+
+        if (argsLower === 'list') {
+          if (counters.length === 0) {
+            writeToTerm('\x1b[31m[Counter] No counters created.\x1b[0m\r\n');
+          } else {
+            let out = '\x1b[36m[Counters]\r\n';
+            for (const c of counters) {
+              const active = c.id === activeCounterId ? ' \x1b[33m*\x1b[36m' : '';
+              out += `  ${statusIcon(c.status)} ${c.name}${active}  ${c.status}  ${c.totalImps} imps  ${fmtDur(getElapsedMs(c))}\r\n`;
+            }
+            writeToTerm(`${out}\x1b[0m`);
+          }
+          return;
+        }
+
+        if (argsLower === 'status') {
+          const ac = counters.find((c) => c.id === activeCounterId);
+          if (!ac) {
+            writeToTerm('\x1b[31m[Counter] No active counter.\x1b[0m\r\n');
+            return;
+          }
+          const perMin = getPerMinuteRate(ac).toFixed(2);
+          const perHr = getPerHourRate(ac).toFixed(1);
+          writeToTerm(`\x1b[36m[${statusIcon(ac.status)} ${ac.name}]  ${ac.status}  ${ac.totalImps} imps  ${fmtDur(getElapsedMs(ac))}  ${perMin}/min  ${perHr}/hr\x1b[0m\r\n`);
+          return;
+        }
+
+        if (argsLower === 'info') {
+          const ac = counters.find((c) => c.id === activeCounterId);
+          if (!ac) {
+            writeToTerm('\x1b[31m[Counter] No active counter.\x1b[0m\r\n');
+            return;
+          }
+          const skills = getSkillsSorted(ac);
+          const skillStr = skills.length > 0
+            ? skills.map((s) => `${s.skill} (${s.count})`).join(', ')
+            : 'none';
+          const perMin = getPerMinuteRate(ac).toFixed(2);
+          const perPer = getPerPeriodRate(ac).toFixed(1);
+          const perHr = getPerHourRate(ac).toFixed(1);
+          let out = `\x1b[36m[Counter "${ac.name}"]\r\n`;
+          out += `  Status:   ${ac.status}\r\n`;
+          out += `  Imps:     ${ac.totalImps}\r\n`;
+          out += `  Elapsed:  ${fmtDur(getElapsedMs(ac))}\r\n`;
+          out += `  Rate:     ${perMin}/min  |  ${perPer}/${periodLengthMinutes}m  |  ${perHr}/hr\r\n`;
+          out += `  Skills:   ${skillStr}\r\n`;
+          if (ac.startedAt) out += `  Started:  ${ac.startedAt}\r\n`;
+          writeToTerm(`${out}\x1b[0m`);
+          return;
+        }
+
+        if (argsLower === 'start') {
+          const ac = counters.find((c) => c.id === activeCounterId);
+          if (!ac) { writeToTerm('\x1b[31m[Counter] No active counter.\x1b[0m\r\n'); return; }
+          if (ac.status === 'running') { writeToTerm(`\x1b[36m[Counter "${ac.name}" already running]\x1b[0m\r\n`); return; }
+          if (ac.status === 'paused') cv.resumeCounter(ac.id);
+          else cv.startCounter(ac.id);
+          return;
+        }
+
+        if (argsLower === 'pause') {
+          const ac = counters.find((c) => c.id === activeCounterId);
+          if (!ac) { writeToTerm('\x1b[31m[Counter] No active counter.\x1b[0m\r\n'); return; }
+          if (ac.status !== 'running') { writeToTerm(`\x1b[36m[Counter "${ac.name}" not running]\x1b[0m\r\n`); return; }
+          cv.pauseCounter(ac.id);
+          return;
+        }
+
+        if (argsLower === 'stop') {
+          const ac = counters.find((c) => c.id === activeCounterId);
+          if (!ac) { writeToTerm('\x1b[31m[Counter] No active counter.\x1b[0m\r\n'); return; }
+          if (ac.status === 'stopped') { writeToTerm(`\x1b[36m[Counter "${ac.name}" already stopped]\x1b[0m\r\n`); return; }
+          cv.stopCounter(ac.id);
+          return;
+        }
+
+        if (argsLower === 'clear') {
+          const ac = counters.find((c) => c.id === activeCounterId);
+          if (!ac) { writeToTerm('\x1b[31m[Counter] No active counter.\x1b[0m\r\n'); return; }
+          cv.clearCounter(ac.id);
+          return;
+        }
+
+        if (argsLower.startsWith('switch ')) {
+          const name = args.slice(7).trim();
+          if (!name) { writeToTerm('\x1b[31m[Counter] Usage: /counter switch <name>\x1b[0m\r\n'); return; }
+          const nameLower = name.toLowerCase();
+          const match = counters.find((c) => c.name.toLowerCase() === nameLower)
+            ?? counters.find((c) => c.name.toLowerCase().includes(nameLower));
+          if (!match) {
+            writeToTerm(`\x1b[31m[Counter] No counter matching "${name}".\x1b[0m\r\n`);
+          } else {
+            ic.setActiveCounterId(match.id);
+            writeToTerm(`\x1b[36m[Counter switched to "${match.name}"]\x1b[0m\r\n`);
+          }
+          return;
+        }
+
+        // No args or unrecognized — show usage
+        writeToTerm(
+          '\x1b[31m[Counter] Usage:\r\n' +
+          '  /counter list            List all counters\r\n' +
+          '  /counter status          Active counter one-liner\r\n' +
+          '  /counter info            Detailed stats for active counter\r\n' +
+          '  /counter start           Start/resume active counter\r\n' +
+          '  /counter pause           Pause active counter\r\n' +
+          '  /counter stop            Stop active counter\r\n' +
+          '  /counter clear           Clear active counter\r\n' +
+          '  /counter switch <name>   Switch active counter by name\x1b[0m\r\n'
+        );
         return;
       }
 
@@ -1166,9 +1781,9 @@ function AppMain() {
         activeCharacter: activeCharacterRef.current,
       });
       await executeCommands(result.commands, {
+        ...triggerRunnerRef.current,
         send: async (text) => {
-          // TODO: Re-enable when automapper is ready
-          // mapTrackCommandRef.current(text);
+          // mapTrackCommandRef.current(text); // automapper disabled
           await sendCommandRef.current?.(text);
           // Update live allocs directly from outgoing set commands
           const parsed = parseAllocCommand(text);
@@ -1194,30 +1809,6 @@ function AppMain() {
             handleMagicParseRef.current({ alloc: updated, arcane: 0 });
           }
         },
-        echo: (text) => {
-          if (terminalRef.current) {
-            smartWrite(terminalRef.current, `\x1b[36m${text}\x1b[0m\r\n`);
-          }
-        },
-        expand: (input) =>
-          expandInput(input, mergedAliasesRef.current, {
-            enableSpeedwalk: enableSpeedwalkRef.current,
-            activeCharacter: activeCharacterRef.current,
-          }).commands,
-        setVar: (name, value, scope) => {
-          setVarRef.current(name, value, scope);
-        },
-        convert: (args) => {
-          const parsed = parseConvertCommand(`/convert ${args}`);
-          if (typeof parsed === 'string') {
-            if (terminalRef.current)
-              smartWrite(terminalRef.current, `\x1b[31m${parsed}\x1b[0m\r\n`);
-          } else {
-            if (terminalRef.current)
-              smartWrite(terminalRef.current, `${formatMultiConversion(parsed)}\r\n`);
-          }
-        },
-        getVariables: () => mergedVariablesRef.current,
       });
     },
     [sendCommand]
@@ -1229,7 +1820,11 @@ function AppMain() {
       setLoggedIn(false);
       resetTriggerCooldowns();
       actionBlockerRef.current.reset();
+      autoInscriberRef.current.reset();
+      autoCasterRef.current.reset();
+      autoConcRef.current.reset();
       setMovementMode('normal');
+      setWhoSnapshot(null);
     }
   }, [connected]);
 
@@ -1315,7 +1910,7 @@ function AppMain() {
       },
       {
         id: 'aura',
-        data: aura,
+        data: aura ? { ...aura, mudColor: auraMudColor, mudColors: auraMudColors } : null,
         icon: <AuraIcon size={11} />,
         tooltip: (d) =>
           d.key === 'none' ? 'You have no aura.' : `Your aura appears to be ${d.descriptor}.`,
@@ -1328,7 +1923,7 @@ function AppMain() {
         icon: <FoodIcon size={11} />,
         tooltip: (d) => `You are ${d.descriptor}.`,
         filterKey: 'hunger',
-        dangerThreshold: 6,
+        dangerThreshold: 7,
       },
       {
         id: 'thirst',
@@ -1336,7 +1931,7 @@ function AppMain() {
         icon: <DropletIcon size={11} />,
         tooltip: (d) => `You are ${d.descriptor}.`,
         filterKey: 'thirst',
-        dangerThreshold: 6,
+        dangerThreshold: 7,
       },
       {
         id: 'encumbrance',
@@ -1364,7 +1959,7 @@ function AppMain() {
         dangerThreshold: 99,
       },
     ],
-    [health, concentration, aura, hunger, thirst, encumbrance, movement, alignment]
+    [health, concentration, aura, auraMudColor, auraMudColors, hunger, thirst, encumbrance, movement, alignment]
   );
 
   const skillTrackerValue = useMemo(
@@ -1395,10 +1990,12 @@ function AppMain() {
       mutedSenders,
       soundAlerts: chatSoundAlerts,
       newestFirst: chatNewestFirst,
+      hideOwnMessages: chatHideOwnMessages,
       toggleFilter: toggleChatFilter,
       setAllFilters: setAllChatFilters,
       toggleSoundAlert: toggleChatSoundAlert,
       toggleNewestFirst: toggleChatNewestFirst,
+      toggleHideOwnMessages: toggleChatHideOwnMessages,
       muteSender,
       unmuteSender,
       updateSender,
@@ -1409,33 +2006,65 @@ function AppMain() {
       mutedSenders,
       chatSoundAlerts,
       chatNewestFirst,
+      chatHideOwnMessages,
       toggleChatFilter,
       setAllChatFilters,
       toggleChatSoundAlert,
       toggleChatNewestFirst,
+      toggleChatHideOwnMessages,
       muteSender,
       unmuteSender,
       updateSender,
     ]
   );
 
-  const counterValue = useMemo(
-    () => improveCounters,
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- callbacks are stable (useCallback), only state values change
-    [improveCounters.counters, improveCounters.activeCounterId, improveCounters.periodLengthMinutes]
+  const counterEcho = useCallback(
+    (id: string, action: string) => {
+      const c = improveCounters.counters.find((c) => c.id === id);
+      if (c) writeToTerm(`\x1b[36m[Counter "${c.name}" ${action}]\x1b[0m\r\n`);
+    },
+    [improveCounters.counters, writeToTerm]
   );
+
+  const counterValue = useMemo(
+    () => ({
+      ...improveCounters,
+      startCounter: (id: string) => {
+        counterEcho(id, 'started');
+        improveCounters.startCounter(id);
+      },
+      pauseCounter: (id: string) => {
+        counterEcho(id, 'paused');
+        improveCounters.pauseCounter(id);
+      },
+      resumeCounter: (id: string) => {
+        counterEcho(id, 'resumed');
+        improveCounters.resumeCounter(id);
+      },
+      stopCounter: (id: string) => {
+        counterEcho(id, 'stopped');
+        improveCounters.stopCounter(id);
+      },
+      clearCounter: (id: string) => {
+        counterEcho(id, 'cleared');
+        improveCounters.clearCounter(id);
+      },
+    }),
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- callbacks are stable (useCallback), only state values change
+    [improveCounters.counters, improveCounters.activeCounterId, improveCounters.periodLengthMinutes, counterEcho]
+  );
+  const counterValueRef = useLatestRef(counterValue);
 
   // Toggle active counter: stopped→running, running→paused, paused→running
   const toggleActiveCounter = useCallback(() => {
-    const { activeCounterId, counters, startCounter, pauseCounter, resumeCounter } =
-      improveCounters;
+    const { activeCounterId, counters } = improveCounters;
     if (!activeCounterId) return;
     const counter = counters.find((c) => c.id === activeCounterId);
     if (!counter) return;
-    if (counter.status === 'running') pauseCounter(activeCounterId);
-    else if (counter.status === 'paused') resumeCounter(activeCounterId);
-    else startCounter(activeCounterId);
-  }, [improveCounters]);
+    if (counter.status === 'running') counterValue.pauseCounter(activeCounterId);
+    else if (counter.status === 'paused') counterValue.resumeCounter(activeCounterId);
+    else counterValue.startCounter(activeCounterId);
+  }, [improveCounters, counterValue]);
 
   // Who list context value
   const whoValue = useMemo(
@@ -1478,6 +2107,30 @@ function AppMain() {
       babelLanguage: appSettings.babelLanguage,
       babelNextAt,
       onToggleBabel: () => appSettings.updateBabelEnabled(false),
+      inscriberActive: inscriberState.active,
+      inscriberSpell: inscriberState.spell,
+      inscriberCycleCount: inscriberState.cycleCount,
+      onStopInscriber: () =>
+        autoInscriberRef.current.stop((msg) => writeToTerm(`\x1b[36m${msg}\x1b[0m\r\n`)),
+      casterActive: casterState.active,
+      casterSpell: casterState.spell,
+      casterPower: casterState.power,
+      casterCycleCount: casterState.cycleCount,
+      casterWeightMode: casterState.weightMode,
+      casterCarriedWeight: casterState.carriedWeight,
+      casterWeightItem: casterState.weightItem,
+      onStopCaster: () =>
+        autoCasterRef.current.stop((msg) => writeToTerm(`\x1b[36m${msg}\x1b[0m\r\n`)),
+      concActive: concState.active,
+      concAction: concState.action,
+      concCycleCount: concState.cycleCount,
+      onStopConc: () =>
+        autoConcRef.current.stop((msg) => writeToTerm(`\x1b[36m${msg}\x1b[0m\r\n`)),
+      announceMode: appSettings.announceMode,
+      onStopAnnounce: () => {
+        appSettings.updateAnnounceMode('off');
+        appSettings.updateAnnouncePetMode('off');
+      },
     }),
     [
       connected,
@@ -1509,6 +2162,13 @@ function AppMain() {
       appSettings.babelLanguage,
       babelNextAt,
       appSettings.updateBabelEnabled,
+      inscriberState,
+      casterState,
+      concState,
+      appSettings.announceMode,
+      appSettings.updateAnnounceMode,
+      appSettings.updateAnnouncePetMode,
+      writeToTerm,
     ]
   );
 
@@ -1520,6 +2180,16 @@ function AppMain() {
     setTimeout(() => reconnect(), 300);
   }, [autoLoginActiveSlot, appSettings.updateAutoLoginActiveSlot, disconnect, reconnect]);
 
+  // Memoized toolbar callbacks to avoid re-renders
+  const handleReconnect = useCallback(() => {
+    reconnect();
+    requestAnimationFrame(() => inputRef.current?.focus());
+  }, [reconnect]);
+  const handleDisconnect = useCallback(() => {
+    disconnect();
+    requestAnimationFrame(() => inputRef.current?.focus());
+  }, [disconnect]);
+
   const appSettingsWithExtras = useMemo(
     () => ({
       ...appSettings,
@@ -1528,6 +2198,16 @@ function AppMain() {
     }),
     [appSettings, switchCharacter, connected]
   );
+
+  // Automapper disabled — leave for future use
+  // const handleMapWalkTo = useCallback(
+  //   async (directions: string[]) => {
+  //     for (const dir of directions) {
+  //       await sendCommand(dir);
+  //     }
+  //   },
+  //   [sendCommand]
+  // );
 
   return (
     <TerminalThemeProvider value={theme}>
@@ -1541,7 +2221,7 @@ function AppMain() {
                     <SkillTrackerProvider value={skillTrackerValue}>
                       <ChatProvider value={chatValue}>
                         <ImproveCounterProvider value={counterValue}>
-                          <MapProvider value={mapTracker}>
+                          {/* MapProvider disabled — automapper not ready */}
                             <AllocProvider value={allocState}>
                               <WhoProvider value={whoValue}>
                                 <WhoTitleProvider value={whoTitleState}>
@@ -1555,23 +2235,17 @@ function AppMain() {
                                     <div className="flex flex-col h-screen bg-bg-canvas text-text-primary relative p-1 gap-1">
                                       <Toolbar
                                         connected={connected}
-                                        onReconnect={() => {
-                                          reconnect();
-                                          requestAnimationFrame(() => inputRef.current?.focus());
-                                        }}
-                                        onDisconnect={() => {
-                                          disconnect();
-                                          requestAnimationFrame(() => inputRef.current?.focus());
-                                        }}
+                                        onReconnect={handleReconnect}
+                                        onDisconnect={handleDisconnect}
                                       />
                                       <div className="flex-1 overflow-hidden flex flex-row gap-1 relative">
                                         {/* Left pinned region — full, collapsed strip, or hidden */}
-                                        {budget.effectiveLeftWidth > 0 ? (
+                                        {effectiveLeftWidth > 0 ? (
                                           <>
                                             <PinnedRegion
                                               side="left"
                                               panels={panelLayout.left}
-                                              width={budget.effectiveLeftWidth}
+                                              width={effectiveLeftWidth}
                                               otherSidePanels={panelLayout.right}
                                               onUnpin={unpinPanel}
                                               onSwapSide={swapPanelSide}
@@ -1586,12 +2260,13 @@ function AppMain() {
                                                 onMouseDown={leftResize.handleMouseDown}
                                                 isDragging={leftResize.isDragging}
                                                 constrained={
-                                                  budget.effectiveLeftWidth < pinnedWidths.left
+                                                  effectiveLeftWidth < pinnedWidths.left
                                                 }
+                                                onCollapse={collapseLeft}
                                               />
                                             )}
                                           </>
-                                        ) : budget.leftCollapsed && panelLayout.left.length > 0 ? (
+                                        ) : leftIsCollapsed && panelLayout.left.length > 0 ? (
                                           <CollapsedPanelStrip
                                             side="left"
                                             panels={panelLayout.left}
@@ -1601,6 +2276,11 @@ function AppMain() {
                                             onSwapSide={swapPanelSide}
                                             onSwapWith={swapPanelsWith}
                                             onMovePanel={movePanel}
+                                            onExpand={
+                                              collapsedSides.left && !budget.leftCollapsed
+                                                ? expandLeft
+                                                : undefined
+                                            }
                                           />
                                         ) : null}
 
@@ -1663,7 +2343,7 @@ function AppMain() {
                                         </div>
 
                                         {/* Right pinned region — full, collapsed strip, or hidden */}
-                                        {budget.effectiveRightWidth > 0 ? (
+                                        {effectiveRightWidth > 0 ? (
                                           <>
                                             {panelLayout.right.length > 0 && (
                                               <ResizeHandle
@@ -1671,14 +2351,15 @@ function AppMain() {
                                                 onMouseDown={rightResize.handleMouseDown}
                                                 isDragging={rightResize.isDragging}
                                                 constrained={
-                                                  budget.effectiveRightWidth < pinnedWidths.right
+                                                  effectiveRightWidth < pinnedWidths.right
                                                 }
+                                                onCollapse={collapseRight}
                                               />
                                             )}
                                             <PinnedRegion
                                               side="right"
                                               panels={panelLayout.right}
-                                              width={budget.effectiveRightWidth}
+                                              width={effectiveRightWidth}
                                               otherSidePanels={panelLayout.left}
                                               onUnpin={unpinPanel}
                                               onSwapSide={swapPanelSide}
@@ -1688,7 +2369,7 @@ function AppMain() {
                                               onHeightRatiosChange={onRightHeightRatiosChange}
                                             />
                                           </>
-                                        ) : budget.rightCollapsed &&
+                                        ) : rightIsCollapsed &&
                                           panelLayout.right.length > 0 ? (
                                           <CollapsedPanelStrip
                                             side="right"
@@ -1699,6 +2380,11 @@ function AppMain() {
                                             onSwapSide={swapPanelSide}
                                             onSwapWith={swapPanelsWith}
                                             onMovePanel={movePanel}
+                                            onExpand={
+                                              collapsedSides.right && !budget.rightCollapsed
+                                                ? expandRight
+                                                : undefined
+                                            }
                                           />
                                         ) : null}
 
@@ -1714,10 +2400,11 @@ function AppMain() {
                                             onResetDisplay={resetDisplay}
                                             debugMode={debugMode}
                                             onToggleDebug={toggleDebug}
+                                            onClose={closePanel}
                                           />
                                         </SlideOut>
                                         <SlideOut panel="settings">
-                                          <SettingsPanel />
+                                          <SettingsPanel onClose={closePanel} />
                                         </SlideOut>
                                         <SlideOut panel="skills" pinnable="skills">
                                           <SkillPanel mode="slideout" />
@@ -1732,27 +2419,22 @@ function AppMain() {
                                           <NotesPanel mode="slideout" />
                                         </SlideOut>
                                         <SlideOut panel="aliases">
-                                          <AliasPanel onClose={() => setActivePanel(null)} />
+                                          <AliasPanel onClose={closePanel} />
                                         </SlideOut>
                                         <SlideOut panel="triggers">
-                                          <TriggerPanel onClose={() => setActivePanel(null)} />
+                                          <TriggerPanel onClose={closePanel} />
                                         </SlideOut>
                                         <SlideOut panel="timers">
-                                          <TimerPanel onClose={() => setActivePanel(null)} />
+                                          <TimerPanel onClose={closePanel} />
                                         </SlideOut>
                                         <SlideOut panel="variables">
-                                          <VariablePanel onClose={() => setActivePanel(null)} />
+                                          <VariablePanel onClose={closePanel} />
                                         </SlideOut>
+                                        {/* Automapper disabled
                                         <SlideOut panel="map" pinnable="map">
-                                          <MapPanel
-                                            mode="slideout"
-                                            onWalkTo={async (directions) => {
-                                              for (const dir of directions) {
-                                                await sendCommand(dir);
-                                              }
-                                            }}
-                                          />
+                                          <MapPanel mode="slideout" onWalkTo={handleMapWalkTo} />
                                         </SlideOut>
+                                        */}
                                         <SlideOut panel="alloc" pinnable="alloc">
                                           <AllocPanel mode="slideout" />
                                         </SlideOut>
@@ -1766,7 +2448,7 @@ function AppMain() {
                                           <WhoPanel mode="slideout" />
                                         </SlideOut>
                                         <SlideOut panel="help">
-                                          <HelpPanel />
+                                          <HelpPanel onClose={closePanel} />
                                         </SlideOut>
                                       </div>
                                     </div>
@@ -1776,7 +2458,7 @@ function AppMain() {
                                 </WhoTitleProvider>
                               </WhoProvider>
                             </AllocProvider>
-                          </MapProvider>
+                          {/* </MapProvider> */}
                         </ImproveCounterProvider>
                       </ChatProvider>
                     </SkillTrackerProvider>

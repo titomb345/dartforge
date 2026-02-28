@@ -1,6 +1,7 @@
 import { createContext, useContext } from 'react';
 import type { ActiveTimerBadge } from '../hooks/useTimerEngines';
 import type { MovementMode } from '../lib/movementMode';
+import type { AnnounceMode } from '../types';
 
 export interface CommandInputState {
   // Connection
@@ -40,6 +41,28 @@ export interface CommandInputState {
   babelLanguage: string;
   babelNextAt: number | null;
   onToggleBabel: () => void;
+  // Auto-inscriber
+  inscriberActive: boolean;
+  inscriberSpell: string | null;
+  inscriberCycleCount: number;
+  onStopInscriber: () => void;
+  // Auto-caster
+  casterActive: boolean;
+  casterSpell: string | null;
+  casterPower: number | null;
+  casterCycleCount: number;
+  casterWeightMode: boolean;
+  casterCarriedWeight: number;
+  casterWeightItem: string;
+  onStopCaster: () => void;
+  // Auto-conc
+  concActive: boolean;
+  concAction: string | null;
+  concCycleCount: number;
+  onStopConc: () => void;
+  // Announce
+  announceMode: AnnounceMode;
+  onStopAnnounce: () => void;
   // Custom timers
   activeTimers: ActiveTimerBadge[];
   onToggleTimer: (id: string) => void;
