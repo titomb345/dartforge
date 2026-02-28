@@ -26,7 +26,7 @@ The `[Unreleased]` header controls automatic version bumping on merge:
 - Added `--color-pink` to theme for consistent theming of TELL badges
 - Shared `PanelHeader` component for consistent panel headers with optional toolbar row
 - Anti-spam — collapses consecutive identical MUD output lines into a single line with a dim repeat count (e.g. `[x5 repeated]`); flushes after 1 second of inactivity or when the next different line arrives; toggle in Settings > Output
-- `/counter` command — manage improve counters from the command line; `/counter status` shows all counters, `/counter info` shows detailed stats for the active counter, `/counter start|pause|stop|clear` controls the active counter, `/counter switch <name>` switches by name
+- `/counter` command — manage improve counters from the command line; `/counter list` shows all counters, `/counter status` shows a quick one-liner for the active counter, `/counter info` shows detailed stats, `/counter start|pause|stop|clear` controls the active counter, `/counter switch <name>` switches by name
 - Counter actions (start, pause, resume, stop, clear) now echo feedback to the terminal window
 - `/apt` command — show aptitude info for a spell or skill by abbreviation or name (e.g. `/apt sc`, `/apt fireball`); displays current improve count, tier, and improves to next tier
 - `/spam` echo — `/spam` now prints `[Spam: command (xN)]` in the terminal before executing
@@ -39,9 +39,13 @@ The `[Unreleased]` header controls automatic version bumping on merge:
 - `/autoconc` command — auto-execute any command(s) on full concentration (BEBT); `/autoconc <action>` saves the action (does not start — use `/autoconc on` to start); fires the action once on BEBT, then waits for conc to drop and recover before firing again (single-shot re-arm); actions support aliases, `/spam`, `/delay`, `/echo`, `/var`, and semicolons for multi-command chains; `/autoconc on` starts with the saved action (persisted across sessions); `/autoconc off` stops; `/autoconc status` shows current state; purple badge in command input shows status and click-to-stop; auto-stops on unconscious
 
 ### Changed
+- All built-in `/` command error and usage messages now use a consistent `[CommandName]` prefix in red (e.g. `[Autocast] Usage: ...`, `[Counter] No active counter.`) — makes it clear which command produced the error; `/spam`, `/delay`, and `/echo` now show usage errors instead of being sent raw to the MUD when syntax is wrong
 - Aura status bar color now extracted from the MUD's actual ANSI color codes instead of using hardcoded hex values — matches in-game colors exactly and follows terminal theme customization
 - Multi-colored aura descriptors (e.g. "very dim red", "reddish-orange") now render each word in its MUD ANSI color in the status bar pill instead of a single flat color
 - Auto-tools (`/autocast`, `/autoinscribe`, `/autoconc`) no longer poll concentration by sending `conc` every 2 seconds — they passively watch natural MUD concentration recovery messages instead; `on` sends a single initial `conc` to kick off
+
+### Removed
+- `/notify` debug command — was a development-only test for system notifications, not needed
 
 ### Fixed
 - Automapper no longer creates phantom hex rooms in towns — `emitHexRoom` now requires at least one hex art line to have been collected; when survey fires in a non-hex area (no hex art follows), the parser resets instead of emitting a town description as a hex room

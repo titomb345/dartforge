@@ -366,7 +366,7 @@ export const HELP_CATEGORIES: HelpCategory[] = [
       {
         title: '/counter',
         description:
-          'Manage improve counters from the command line. "/counter status" shows all counters with status, imps, and elapsed time. "/counter info" shows detailed stats for the active counter including rates and skills. "/counter start|pause|stop|clear" controls the active counter. "/counter switch <name>" switches the active counter by name (partial match).',
+          'Manage improve counters from the command line. "/counter list" shows all counters with status, imps, and elapsed time. "/counter status" shows a quick one-liner for the active counter. "/counter info" shows detailed stats including rates and skills. "/counter start|pause|stop|clear" controls the active counter. "/counter switch <name>" switches the active counter by name (partial match).',
       },
     ],
   },

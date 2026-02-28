@@ -1,7 +1,7 @@
 import { useRef, useState, useEffect, useCallback, useLayoutEffect, useMemo } from 'react';
 import { useLatestRef } from './hooks/useLatestRef';
 import type { Terminal as XTerm } from '@xterm/xterm';
-import { getPlatform, getAppVersion, setWindowTitle, alertUser } from './lib/platform';
+import { getPlatform, getAppVersion, setWindowTitle } from './lib/platform';
 import { Terminal } from './components/Terminal';
 import { CommandInput } from './components/CommandInput';
 import { Toolbar } from './components/Toolbar';
@@ -829,6 +829,7 @@ function AppMain() {
   const improveCounters = useImproveCounters();
   const { handleCounterMatch } = improveCounters;
   const handleCounterMatchRef = useLatestRef(handleCounterMatch);
+  const improveCountersRef = useLatestRef(improveCounters);
 
   // Alias system
   const aliasState = useAliases(dataStore, activeCharacter);
@@ -1056,7 +1057,7 @@ function AppMain() {
     convert: (args) => {
       const parsed = parseConvertCommand(`/convert ${args}`);
       if (typeof parsed === 'string') {
-        writeToTerm(`\x1b[31m${parsed}\x1b[0m\r\n`);
+        writeToTerm(`\x1b[31m[Convert] ${parsed}\x1b[0m\r\n`);
       } else {
         writeToTerm(`${formatMultiConversion(parsed)}\r\n`);
       }
@@ -1104,15 +1105,7 @@ function AppMain() {
       // Session logging — log sent command
       if (trimmed) logCommandRef.current?.(rawInput);
 
-      // Built-in /notify test command — fires a test notification to debug the backend
-      if (/^\/notify\b/i.test(trimmed)) {
-        const msg = trimmed.slice(7).trim() || 'Test notification from DartForge';
-        writeToTerm('\x1b[36mSending test notification...\x1b[0m\r\n');
-        alertUser('DartForge', msg)
-          .then(() => writeToTerm('\x1b[32mNotification sent (no error).\x1b[0m\r\n'))
-          .catch((e) => writeToTerm(`\x1b[31mNotification error: ${e}\x1b[0m\r\n`));
-        return;
-      }
+
 
       // Built-in /block — manually activate action blocking
       if (/^\/block\b/i.test(trimmed)) {
@@ -1162,7 +1155,7 @@ function AppMain() {
         if (argsLower.startsWith('power ')) {
           const p = parseInt(argsLower.slice(6).trim().replace(/^@/, ''), 10);
           if (isNaN(p) || p < 1) {
-            writeToTerm('\x1b[31mUsage: /autoinscribe power @<number>\x1b[0m\r\n');
+            writeToTerm('\x1b[31m[Autoinscribe] Usage: /autoinscribe power @<number>\x1b[0m\r\n');
           } else {
             inscriber.setPower(p, (msg) => writeToTerm(`\x1b[36m${msg}\x1b[0m\r\n`));
           }
@@ -1188,7 +1181,7 @@ function AppMain() {
         const parts = args.split(/\s+/);
         if (parts.length < 2) {
           writeToTerm(
-            '\x1b[31mUsage:\r\n' +
+            '\x1b[31m[Autoinscribe] Usage:\r\n' +
             '  /autoinscribe <spell> @<power>  Start inscribe loop\r\n' +
             '  /autoinscribe off               Stop inscribing\r\n' +
             '  /autoinscribe status             Show current state\r\n' +
@@ -1201,7 +1194,7 @@ function AppMain() {
         const powerRaw = parts[1].replace(/^@/, '');
         const powerArg = parseInt(powerRaw, 10);
         if (isNaN(powerArg) || powerArg < 1) {
-          writeToTerm('\x1b[31mPower must be a positive number (e.g. @200).\x1b[0m\r\n');
+          writeToTerm('\x1b[31m[Autoinscribe] Power must be a positive number (e.g. @200).\x1b[0m\r\n');
           return;
         }
 
@@ -1243,7 +1236,7 @@ function AppMain() {
               // /autocast adjust power @<n> — set power directly
               const p = parseInt(adjustParts[0], 10);
               if (isNaN(p) || p < 1) {
-                writeToTerm('\x1b[31mUsage: /autocast adjust power @<n> | /autocast adjust power <up> <down>\x1b[0m\r\n');
+                writeToTerm('\x1b[31m[Autocast] Usage: /autocast adjust power @<n> | /autocast adjust power <up> <down>\x1b[0m\r\n');
               } else {
                 caster.setPower(p, (msg) => writeToTerm(`\x1b[36m${msg}\x1b[0m\r\n`));
               }
@@ -1252,7 +1245,7 @@ function AppMain() {
               const up = parseInt(adjustParts[0], 10);
               const down = parseInt(adjustParts[1], 10);
               if (isNaN(up) || isNaN(down) || up < 1 || down < 1) {
-                writeToTerm('\x1b[31mUsage: /autocast adjust power @<n> | /autocast adjust power <up> <down>\x1b[0m\r\n');
+                writeToTerm('\x1b[31m[Autocast] Usage: /autocast adjust power @<n> | /autocast adjust power <up> <down>\x1b[0m\r\n');
               } else {
                 caster.setAdjust(up, down, (msg) => writeToTerm(`\x1b[36m${msg}\x1b[0m\r\n`));
               }
@@ -1266,7 +1259,7 @@ function AppMain() {
               // /autocast adjust weight <n> — force-set carried weight
               const w = parseInt(adjustParts[0], 10);
               if (isNaN(w) || w < 0) {
-                writeToTerm('\x1b[31mUsage: /autocast adjust weight <n> | /autocast adjust weight <up> <down>\x1b[0m\r\n');
+                writeToTerm('\x1b[31m[Autocast] Usage: /autocast adjust weight <n> | /autocast adjust weight <up> <down>\x1b[0m\r\n');
               } else {
                 caster.setCarriedWeight(w, (msg) => writeToTerm(`\x1b[36m${msg}\x1b[0m\r\n`));
               }
@@ -1275,7 +1268,7 @@ function AppMain() {
               const up = parseInt(adjustParts[0], 10);
               const down = parseInt(adjustParts[1], 10);
               if (isNaN(up) || isNaN(down) || up < 1 || down < 1) {
-                writeToTerm('\x1b[31mUsage: /autocast adjust weight <n> | /autocast adjust weight <up> <down>\x1b[0m\r\n');
+                writeToTerm('\x1b[31m[Autocast] Usage: /autocast adjust weight <n> | /autocast adjust weight <up> <down>\x1b[0m\r\n');
               } else {
                 caster.setWeightAdjust(up, down, (msg) => writeToTerm(`\x1b[36m${msg}\x1b[0m\r\n`));
                 appSettings.updateCasterWeightAdjustUp(up);
@@ -1286,7 +1279,7 @@ function AppMain() {
           }
 
           writeToTerm(
-            '\x1b[31mUsage:\r\n  /autocast adjust power @<n>\r\n  /autocast adjust power <up> <down>\r\n  /autocast adjust weight <n>\r\n  /autocast adjust weight <up> <down>\x1b[0m\r\n'
+            '\x1b[31m[Autocast] Usage:\r\n  /autocast adjust power @<n>\r\n  /autocast adjust power <up> <down>\r\n  /autocast adjust weight <n>\r\n  /autocast adjust weight <up> <down>\x1b[0m\r\n'
           );
           return;
         }
@@ -1298,7 +1291,7 @@ function AppMain() {
           if (setRestLower.startsWith('item ')) {
             const itemName = setRest.slice(5).trim();
             if (!itemName) {
-              writeToTerm('\x1b[31mUsage: /autocast set item <item>\x1b[0m\r\n');
+              writeToTerm('\x1b[31m[Autocast] Usage: /autocast set item <item>\x1b[0m\r\n');
             } else {
               caster.setWeightItem(itemName, (msg) => writeToTerm(`\x1b[36m${msg}\x1b[0m\r\n`));
               appSettings.updateCasterWeightItem(itemName);
@@ -1309,7 +1302,7 @@ function AppMain() {
           if (setRestLower.startsWith('container ')) {
             const containerName = setRest.slice(10).trim();
             if (!containerName) {
-              writeToTerm('\x1b[31mUsage: /autocast set container <name> | /autocast clear container\r\n  Use "none" or "clear" to remove the container.\x1b[0m\r\n');
+              writeToTerm('\x1b[31m[Autocast] Usage: /autocast set container <name> | /autocast clear container\r\n  Use "none" or "clear" to remove the container.\x1b[0m\r\n');
             } else {
               const val = /^(none|null|clear)$/i.test(containerName) ? null : containerName;
               caster.setWeightContainer(
@@ -1322,7 +1315,7 @@ function AppMain() {
           }
 
           writeToTerm(
-            '\x1b[31mUsage:\r\n  /autocast set item <item>\r\n  /autocast set container <name>\x1b[0m\r\n'
+            '\x1b[31m[Autocast] Usage:\r\n  /autocast set item <item>\r\n  /autocast set container <name>\x1b[0m\r\n'
           );
           return;
         }
@@ -1371,7 +1364,7 @@ function AppMain() {
         const parts = args.split(/\s+/);
         if (parts.length < 2) {
           writeToTerm(
-            '\x1b[31mUsage:\r\n' +
+            '\x1b[31m[Autocast] Usage:\r\n' +
             '  /autocast <spell> @<power> [args]   Start casting\r\n' +
             '  /autocast off                       Stop casting\r\n' +
             '  /autocast status                    Show current state\r\n' +
@@ -1390,7 +1383,7 @@ function AppMain() {
         const powerRaw = parts[1].replace(/^@/, '');
         const powerArg = parseInt(powerRaw, 10);
         if (isNaN(powerArg) || powerArg < 1) {
-          writeToTerm('\x1b[31mPower must be a positive number (e.g. @200).\x1b[0m\r\n');
+          writeToTerm('\x1b[31m[Autocast] Power must be a positive number (e.g. @200).\x1b[0m\r\n');
           return;
         }
 
@@ -1462,7 +1455,7 @@ function AppMain() {
           const saved = conc.action || appSettings.autoConcAction;
           if (!saved) {
             writeToTerm(
-              '\x1b[31mNo action set. Use /autoconc <action> to set one first.\x1b[0m\r\n'
+              '\x1b[31m[Autoconc] No action set. Use /autoconc <action> to set one first.\x1b[0m\r\n'
             );
           } else {
             startConc(saved);
@@ -1472,7 +1465,7 @@ function AppMain() {
 
         if (!args) {
           writeToTerm(
-            '\x1b[31mUsage:\r\n' +
+            '\x1b[31m[Autoconc] Usage:\r\n' +
             '  /autoconc <action>    Set action (does not start)\r\n' +
             '  /autoconc on          Start with saved action\r\n' +
             '  /autoconc off         Stop the loop\r\n' +
@@ -1509,7 +1502,7 @@ function AppMain() {
             appSettings.updateAnnouncePetMode(petArg);
             writeToTerm(`\x1b[36m[Announce pets: ${petArg}]\x1b[0m\r\n`);
           } else {
-            writeToTerm('\x1b[31mUsage: /announce pet on|off|brief|verbose\x1b[0m\r\n');
+            writeToTerm('\x1b[31m[Announce] Usage: /announce pet on|off|brief|verbose\x1b[0m\r\n');
           }
           return;
         }
@@ -1521,7 +1514,7 @@ function AppMain() {
         }
 
         writeToTerm(
-          '\x1b[31mUsage: /announce on|off|brief|verbose | /announce pet on|off|brief|verbose | /announce status\x1b[0m\r\n'
+          '\x1b[31m[Announce] Usage: /announce on|off|brief|verbose | /announce pet on|off|brief|verbose | /announce status\x1b[0m\r\n'
         );
         return;
       }
@@ -1530,7 +1523,7 @@ function AppMain() {
       if (/^\/convert\b/i.test(trimmed)) {
         const parsed = parseConvertCommand(trimmed);
         if (typeof parsed === 'string') {
-          writeToTerm(`\x1b[31m${parsed}\x1b[0m\r\n`);
+          writeToTerm(`\x1b[31m[Convert] ${parsed}\x1b[0m\r\n`);
         } else {
           writeToTerm(`${formatMultiConversion(parsed)}\r\n`);
         }
@@ -1557,7 +1550,7 @@ function AppMain() {
           if (deleteVariableByNameRef.current(name)) {
             writeToTerm(`\x1b[36mDeleted variable $${name}\x1b[0m\r\n`);
           } else {
-            writeToTerm(`\x1b[31mVariable "$${name}" not found.\x1b[0m\r\n`);
+            writeToTerm(`\x1b[31m[Var] Variable "$${name}" not found.\x1b[0m\r\n`);
           }
         } else {
           // /var <name> <value> or /var -g <name> <value>
@@ -1602,7 +1595,7 @@ function AppMain() {
       if (/^\/apt\b/i.test(trimmed)) {
         const arg = trimmed.slice(4).trim();
         if (!arg) {
-          writeToTerm('\x1b[31mUsage: /apt <abbreviation or name>\x1b[0m\r\n');
+          writeToTerm('\x1b[31m[Apt] Usage: /apt <abbreviation or name>\x1b[0m\r\n');
           return;
         }
         // Try abbreviation first, then fuzzy name match, fall back to raw input
@@ -1618,7 +1611,7 @@ function AppMain() {
       if (/^\/skill\b/i.test(trimmed)) {
         const arg = trimmed.slice(6).trim();
         if (!arg) {
-          writeToTerm('\x1b[31mUsage: /skill <abbreviation or name>\x1b[0m\r\n');
+          writeToTerm('\x1b[31m[Skill] Usage: /skill <abbreviation or name>\x1b[0m\r\n');
           return;
         }
         // Try abbreviation first, then fuzzy name match, fall back to raw input
@@ -1649,7 +1642,9 @@ function AppMain() {
       if (/^\/counter\b/i.test(trimmed)) {
         const args = trimmed.slice(8).trim();
         const argsLower = args.toLowerCase();
-        const { counters, activeCounterId, getElapsedMs, getPerMinuteRate, getPerPeriodRate, getPerHourRate, getSkillsSorted, periodLengthMinutes } = improveCounters;
+        const ic = improveCountersRef.current;
+        const cv = counterValueRef.current;
+        const { counters, activeCounterId, getElapsedMs, getPerMinuteRate, getPerPeriodRate, getPerHourRate, getSkillsSorted, periodLengthMinutes } = ic;
 
         const fmtDur = (ms: number) => {
           const s = Math.floor(ms / 1000);
@@ -1663,13 +1658,13 @@ function AppMain() {
         const statusIcon = (st: string) =>
           st === 'running' ? '\x1b[32m●\x1b[36m' : st === 'paused' ? '\x1b[33m❚❚\x1b[36m' : '\x1b[90m■\x1b[36m';
 
-        if (argsLower === 'status') {
+        if (argsLower === 'list') {
           if (counters.length === 0) {
-            writeToTerm('\x1b[36m[Counters] No counters created.\x1b[0m\r\n');
+            writeToTerm('\x1b[31m[Counter] No counters created.\x1b[0m\r\n');
           } else {
             let out = '\x1b[36m[Counters]\r\n';
             for (const c of counters) {
-              const active = c.id === activeCounterId ? ' *' : '';
+              const active = c.id === activeCounterId ? ' \x1b[33m*\x1b[36m' : '';
               out += `  ${statusIcon(c.status)} ${c.name}${active}  ${c.status}  ${c.totalImps} imps  ${fmtDur(getElapsedMs(c))}\r\n`;
             }
             writeToTerm(`${out}\x1b[0m`);
@@ -1677,10 +1672,22 @@ function AppMain() {
           return;
         }
 
+        if (argsLower === 'status') {
+          const ac = counters.find((c) => c.id === activeCounterId);
+          if (!ac) {
+            writeToTerm('\x1b[31m[Counter] No active counter.\x1b[0m\r\n');
+            return;
+          }
+          const perMin = getPerMinuteRate(ac).toFixed(2);
+          const perHr = getPerHourRate(ac).toFixed(1);
+          writeToTerm(`\x1b[36m[${statusIcon(ac.status)} ${ac.name}]  ${ac.status}  ${ac.totalImps} imps  ${fmtDur(getElapsedMs(ac))}  ${perMin}/min  ${perHr}/hr\x1b[0m\r\n`);
+          return;
+        }
+
         if (argsLower === 'info') {
           const ac = counters.find((c) => c.id === activeCounterId);
           if (!ac) {
-            writeToTerm('\x1b[31mNo active counter.\x1b[0m\r\n');
+            writeToTerm('\x1b[31m[Counter] No active counter.\x1b[0m\r\n');
             return;
           }
           const skills = getSkillsSorted(ac);
@@ -1703,46 +1710,46 @@ function AppMain() {
 
         if (argsLower === 'start') {
           const ac = counters.find((c) => c.id === activeCounterId);
-          if (!ac) { writeToTerm('\x1b[31mNo active counter.\x1b[0m\r\n'); return; }
+          if (!ac) { writeToTerm('\x1b[31m[Counter] No active counter.\x1b[0m\r\n'); return; }
           if (ac.status === 'running') { writeToTerm(`\x1b[36m[Counter "${ac.name}" already running]\x1b[0m\r\n`); return; }
-          if (ac.status === 'paused') counterValue.resumeCounter(ac.id);
-          else counterValue.startCounter(ac.id);
+          if (ac.status === 'paused') cv.resumeCounter(ac.id);
+          else cv.startCounter(ac.id);
           return;
         }
 
         if (argsLower === 'pause') {
           const ac = counters.find((c) => c.id === activeCounterId);
-          if (!ac) { writeToTerm('\x1b[31mNo active counter.\x1b[0m\r\n'); return; }
+          if (!ac) { writeToTerm('\x1b[31m[Counter] No active counter.\x1b[0m\r\n'); return; }
           if (ac.status !== 'running') { writeToTerm(`\x1b[36m[Counter "${ac.name}" not running]\x1b[0m\r\n`); return; }
-          counterValue.pauseCounter(ac.id);
+          cv.pauseCounter(ac.id);
           return;
         }
 
         if (argsLower === 'stop') {
           const ac = counters.find((c) => c.id === activeCounterId);
-          if (!ac) { writeToTerm('\x1b[31mNo active counter.\x1b[0m\r\n'); return; }
+          if (!ac) { writeToTerm('\x1b[31m[Counter] No active counter.\x1b[0m\r\n'); return; }
           if (ac.status === 'stopped') { writeToTerm(`\x1b[36m[Counter "${ac.name}" already stopped]\x1b[0m\r\n`); return; }
-          counterValue.stopCounter(ac.id);
+          cv.stopCounter(ac.id);
           return;
         }
 
         if (argsLower === 'clear') {
           const ac = counters.find((c) => c.id === activeCounterId);
-          if (!ac) { writeToTerm('\x1b[31mNo active counter.\x1b[0m\r\n'); return; }
-          counterValue.clearCounter(ac.id);
+          if (!ac) { writeToTerm('\x1b[31m[Counter] No active counter.\x1b[0m\r\n'); return; }
+          cv.clearCounter(ac.id);
           return;
         }
 
         if (argsLower.startsWith('switch ')) {
           const name = args.slice(7).trim();
-          if (!name) { writeToTerm('\x1b[31mUsage: /counter switch <name>\x1b[0m\r\n'); return; }
+          if (!name) { writeToTerm('\x1b[31m[Counter] Usage: /counter switch <name>\x1b[0m\r\n'); return; }
           const nameLower = name.toLowerCase();
           const match = counters.find((c) => c.name.toLowerCase() === nameLower)
             ?? counters.find((c) => c.name.toLowerCase().includes(nameLower));
           if (!match) {
-            writeToTerm(`\x1b[31mNo counter matching "${name}".\x1b[0m\r\n`);
+            writeToTerm(`\x1b[31m[Counter] No counter matching "${name}".\x1b[0m\r\n`);
           } else {
-            improveCounters.setActiveCounterId(match.id);
+            ic.setActiveCounterId(match.id);
             writeToTerm(`\x1b[36m[Counter switched to "${match.name}"]\x1b[0m\r\n`);
           }
           return;
@@ -1750,9 +1757,9 @@ function AppMain() {
 
         // No args or unrecognized — show usage
         writeToTerm(
-          '\x1b[36m' +
-          'Usage:\r\n' +
-          '  /counter status          Show all counters\r\n' +
+          '\x1b[31m[Counter] Usage:\r\n' +
+          '  /counter list            List all counters\r\n' +
+          '  /counter status          Active counter one-liner\r\n' +
           '  /counter info            Detailed stats for active counter\r\n' +
           '  /counter start           Start/resume active counter\r\n' +
           '  /counter pause           Pause active counter\r\n' +
@@ -2046,6 +2053,7 @@ function AppMain() {
     // eslint-disable-next-line react-hooks/exhaustive-deps -- callbacks are stable (useCallback), only state values change
     [improveCounters.counters, improveCounters.activeCounterId, improveCounters.periodLengthMinutes, counterEcho]
   );
+  const counterValueRef = useLatestRef(counterValue);
 
   // Toggle active counter: stopped→running, running→paused, paused→running
   const toggleActiveCounter = useCallback(() => {

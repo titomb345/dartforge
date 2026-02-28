@@ -48,11 +48,17 @@ export function parseDirective(cmd: string): ExpandedCommand {
   if (delayMatch) {
     return { type: 'delay', ms: parseInt(delayMatch[1], 10) };
   }
+  if (/^\/delay\b/i.test(trimmed)) {
+    return { type: 'error', message: '[Delay] Usage: /delay <ms>' };
+  }
 
   // /echo <text>
   const echoMatch = trimmed.match(/^\/echo\s+(.+)$/i);
   if (echoMatch) {
     return { type: 'echo', text: echoMatch[1] };
+  }
+  if (/^\/echo\b/i.test(trimmed)) {
+    return { type: 'error', message: '[Echo] Usage: /echo <text>' };
   }
 
   // /spam <count> <command>
@@ -60,6 +66,9 @@ export function parseDirective(cmd: string): ExpandedCommand {
   if (spamMatch) {
     const count = Math.min(parseInt(spamMatch[1], 10), 1000);
     return { type: 'spam', count, command: spamMatch[2] };
+  }
+  if (/^\/spam\b/i.test(trimmed)) {
+    return { type: 'error', message: '[Spam] Usage: /spam <count> <command>' };
   }
 
   // /var [-g] <name> <value>
@@ -119,6 +128,9 @@ export function formatCommandPreview(
         break;
       case 'convert':
         lines.push(`[convert] ${cmd.args}`);
+        break;
+      case 'error':
+        lines.push(`[error] ${cmd.message}`);
         break;
     }
   }
@@ -203,6 +215,9 @@ export async function executeCommands(
       }
       case 'convert':
         runner.convert(ev(cmd.args));
+        break;
+      case 'error':
+        runner.echo(`\x1b[31m${cmd.message}\x1b[0m`);
         break;
     }
   }
