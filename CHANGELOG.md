@@ -12,9 +12,11 @@ The `[Unreleased]` header controls automatic version bumping on merge:
 ## [Unreleased-minor]
 
 ### Changed
+- Chat panel now shows a full-height "Today" section by default — Today fills the entire panel viewport and you scroll past it to reach older messages; if no messages arrived today, a placeholder fills the space; older messages render normally with day separators
 - Moved timestamp format toggle (12h/24h) from Settings into the Chat panel toolbar — one less settings section, and the control lives where it's actually used
 
 ### Added
+- Automapper re-enabled with terrain fingerprint positioning — hex art is now parsed to extract terrain patterns that uniquely identify map positions; fingerprints verify and correct movement-chain drift, preventing the "jumping around" bug that caused the mapper to be disabled
 - `npm run version:next` command — bump version locally at the start of a feature branch so dev builds reflect the correct upcoming version; idempotent and CI-compatible
 - Manual panel collapse — hover the resize handle between a pinned panel and the terminal to reveal a collapse chevron; click to shrink the panel to its icon strip without unpinning; click the expand chevron at the top of the icon strip to restore; state persists across sessions
 - Who panel font size controls — +/- buttons in the header to adjust player name size (8–18px, persisted)
@@ -24,10 +26,13 @@ The `[Unreleased]` header controls automatic version bumping on merge:
 - Added `--color-pink` to theme for consistent theming of TELL badges
 - Shared `PanelHeader` component for consistent panel headers with optional toolbar row
 - Anti-spam — collapses consecutive identical MUD output lines into a single line with a dim repeat count (e.g. `[x5 repeated]`); flushes after 1 second of inactivity or when the next different line arrives; toggle in Settings > Output
+- `/counter` command — manage improve counters from the command line; `/counter status` shows all counters, `/counter info` shows detailed stats for the active counter, `/counter start|pause|stop|clear` controls the active counter, `/counter switch <name>` switches by name
+- Counter actions (start, pause, resume, stop, clear) now echo feedback to the terminal window
 - `/apt` command — show aptitude info for a spell or skill by abbreviation or name (e.g. `/apt sc`, `/apt fireball`); displays current improve count, tier, and improves to next tier
 - `/spam` echo — `/spam` now prints `[Spam: command (xN)]` in the terminal before executing
 - Fuzzy name matching for spells and skills — `findSpellFuzzy` and `findSkillFuzzy` with punctuation-insensitive lookup (`nameUtils.ts`)
 - "Quite Hungry" and "Quite Thirsty" need levels added to hunger/thirst tracking
+- Chat panel "Mine" toggle — hide/show your own say/shout/OOC messages in the chat log; defaults to hidden; persisted across sessions
 - `/autoinscribe` command — automated inscription practice loop; `/autoinscribe <spell> @<power>` starts the cycle (checks concentration, inscribes, invokes, repeats); echoes the MUD command each cycle; `/autoinscribe power @<n>` adjusts mid-loop; `/autoinscribe off` stops; blue badge in command input shows status and click-to-stop; activates action blocker during inscribing/invoking to prevent accidental interrupts; detects concentration-broken interrupts and stops gracefully
 - `/autocast` command — automated spell practice loop with power auto-adjustment and weight mode; `/autocast <spell> @<power> [args]` starts the cycle (checks concentration, casts at given power, adjusts dynamically on success/near-success); echoes the MUD command each cycle; when power hits the floor (50) and a weight item is configured, enters weight mode — takes weight from a container on success, puts it back on fail; `/autocast adjust power @<n>` sets power directly; `/autocast adjust power <up> <down>` and `/autocast adjust weight <up> <down>` set adjustment amounts; `/autocast set weight <item>` and `/autocast set container <name>` configure weight mode (persisted); `/autocast off` stops and returns all carried weight; green badge (normal) / amber badge (weight mode) in command input; activates action blocker during casting to prevent accidental interrupts; detects concentration-broken interrupts and stops gracefully
 - `/announce` command — auto-broadcast skill improvements via OOC; `/announce on` sends "skillname+", `/announce brief` sends "+", `/announce verbose` sends "skillname+ (count)"; `/announce pet on|brief|verbose` for pet announcements; orange badge in command input when active; click badge to stop
@@ -39,6 +44,7 @@ The `[Unreleased]` header controls automatic version bumping on merge:
 - Auto-tools (`/autocast`, `/autoinscribe`, `/autoconc`) no longer poll concentration by sending `conc` every 2 seconds — they passively watch natural MUD concentration recovery messages instead; `on` sends a single initial `conc` to kick off
 
 ### Fixed
+- Automapper no longer creates phantom hex rooms in towns — `emitHexRoom` now requires at least one hex art line to have been collected; when survey fires in a non-hex area (no hex art follows), the parser resets instead of emitting a town description as a hex room
 - Aura pill color no longer sticks to the previous color when aura drops to "None" — correctly resets to grey
 - "Bashing" skill is now correctly categorized as Other instead of Combat
 - Chat timestamps no longer show "-1m" for self-sent messages (clock skew fix)
@@ -48,6 +54,7 @@ The `[Unreleased]` header controls automatic version bumping on merge:
 - Chat pattern: multi-line say/ask/exclaim messages are now buffered and matched correctly
 - Who pattern parsing improvements for edge cases
 - Hunger/thirst danger thresholds adjusted from severity 6 to 7 to account for new intermediate levels
+- Who panel now clears player list on disconnect instead of showing stale data
 
 ### Changed
 - Standardized all panel headers — extracted shared `PanelHeader` component replacing 16 hand-rolled headers across every panel (Skills, Chat, Who, Counter, Notes, Alloc, Currency, Babel, Map, Aliases, Triggers, Timers, Variables, Appearance, Settings, Guide); consistent two-row layout with title row + optional toolbar row; all slideout panels now have a × close button

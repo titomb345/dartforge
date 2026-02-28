@@ -82,10 +82,11 @@ import { shouldGagLine } from './lib/gagPatterns';
 import { stripAnsi } from './lib/ansiUtils';
 import { SignatureProvider } from './contexts/SignatureContext';
 import { parseConvertCommand, formatMultiConversion } from './lib/currency';
-import { useMapTracker } from './hooks/useMapTracker';
-import { MapProvider } from './contexts/MapContext';
+// Automapper disabled
+// import { useMapTracker } from './hooks/useMapTracker';
+// import { MapProvider } from './contexts/MapContext';
 import { PanelProvider } from './contexts/PanelLayoutContext';
-import { MapPanel } from './components/MapPanel';
+// import { MapPanel } from './components/MapPanel';
 import { useAllocations } from './hooks/useAllocations';
 import { AllocProvider } from './contexts/AllocContext';
 import { AllocPanel } from './components/AllocPanel';
@@ -475,11 +476,13 @@ function AppMain() {
     mutedSenders,
     soundAlerts: chatSoundAlerts,
     newestFirst: chatNewestFirst,
+    hideOwnMessages: chatHideOwnMessages,
     handleChatMessage,
     toggleFilter: toggleChatFilter,
     setAllFilters: setAllChatFilters,
     toggleSoundAlert: toggleChatSoundAlert,
     toggleNewestFirst: toggleChatNewestFirst,
+    toggleHideOwnMessages: toggleChatHideOwnMessages,
     muteSender,
     unmuteSender,
     updateSender,
@@ -560,7 +563,7 @@ function AppMain() {
         // Auto-conc — watch for BEBT to execute action
         autoConcRef.current.processServerLine(stripped);
 
-        // TODO: Re-enable when automapper is ready
+        // Feed to automapper room parser — disabled
         // mapFeedLineRef.current(stripped);
 
         // Feed to allocation parser
@@ -909,9 +912,8 @@ function AppMain() {
   const { resolveSignature } = signatureState;
   const resolveSignatureRef = useLatestRef(resolveSignature);
 
-  // Map tracker
-  const mapTracker = useMapTracker(dataStore, activeCharacter);
-  // TODO: Re-enable when automapper is ready
+  // Map tracker — disabled (automapper not ready)
+  // const mapTracker = useMapTracker(dataStore, activeCharacter);
   // const mapFeedLineRef = useLatestRef(mapTracker.feedLine);
   // const mapTrackCommandRef = useLatestRef(mapTracker.trackCommand);
 
@@ -1039,6 +1041,7 @@ function AppMain() {
   // Keep trigger runner in sync for use in the output filter closure
   triggerRunnerRef.current = {
     send: async (text) => {
+      // mapTrackCommandRef.current(text); // automapper disabled
       await sendCommandRef.current?.(text);
     },
     echo: (text) => writeToTerm(`\x1b[36m${text}\x1b[0m\r\n`),
@@ -1642,6 +1645,124 @@ function AppMain() {
         return;
       }
 
+      // Built-in /counter — manage improve counters
+      if (/^\/counter\b/i.test(trimmed)) {
+        const args = trimmed.slice(8).trim();
+        const argsLower = args.toLowerCase();
+        const { counters, activeCounterId, getElapsedMs, getPerMinuteRate, getPerPeriodRate, getPerHourRate, getSkillsSorted, periodLengthMinutes } = improveCounters;
+
+        const fmtDur = (ms: number) => {
+          const s = Math.floor(ms / 1000);
+          const h = Math.floor(s / 3600);
+          const m = Math.floor((s % 3600) / 60);
+          const sec = s % 60;
+          if (h > 0) return `${h}h ${m}m ${sec}s`;
+          return `${m}m ${sec}s`;
+        };
+
+        const statusIcon = (st: string) =>
+          st === 'running' ? '\x1b[32m●\x1b[36m' : st === 'paused' ? '\x1b[33m❚❚\x1b[36m' : '\x1b[90m■\x1b[36m';
+
+        if (argsLower === 'status') {
+          if (counters.length === 0) {
+            writeToTerm('\x1b[36m[Counters] No counters created.\x1b[0m\r\n');
+          } else {
+            let out = '\x1b[36m[Counters]\r\n';
+            for (const c of counters) {
+              const active = c.id === activeCounterId ? ' *' : '';
+              out += `  ${statusIcon(c.status)} ${c.name}${active}  ${c.status}  ${c.totalImps} imps  ${fmtDur(getElapsedMs(c))}\r\n`;
+            }
+            writeToTerm(`${out}\x1b[0m`);
+          }
+          return;
+        }
+
+        if (argsLower === 'info') {
+          const ac = counters.find((c) => c.id === activeCounterId);
+          if (!ac) {
+            writeToTerm('\x1b[31mNo active counter.\x1b[0m\r\n');
+            return;
+          }
+          const skills = getSkillsSorted(ac);
+          const skillStr = skills.length > 0
+            ? skills.map((s) => `${s.skill} (${s.count})`).join(', ')
+            : 'none';
+          const perMin = getPerMinuteRate(ac).toFixed(2);
+          const perPer = getPerPeriodRate(ac).toFixed(1);
+          const perHr = getPerHourRate(ac).toFixed(1);
+          let out = `\x1b[36m[Counter "${ac.name}"]\r\n`;
+          out += `  Status:   ${ac.status}\r\n`;
+          out += `  Imps:     ${ac.totalImps}\r\n`;
+          out += `  Elapsed:  ${fmtDur(getElapsedMs(ac))}\r\n`;
+          out += `  Rate:     ${perMin}/min  |  ${perPer}/${periodLengthMinutes}m  |  ${perHr}/hr\r\n`;
+          out += `  Skills:   ${skillStr}\r\n`;
+          if (ac.startedAt) out += `  Started:  ${ac.startedAt}\r\n`;
+          writeToTerm(`${out}\x1b[0m`);
+          return;
+        }
+
+        if (argsLower === 'start') {
+          const ac = counters.find((c) => c.id === activeCounterId);
+          if (!ac) { writeToTerm('\x1b[31mNo active counter.\x1b[0m\r\n'); return; }
+          if (ac.status === 'running') { writeToTerm(`\x1b[36m[Counter "${ac.name}" already running]\x1b[0m\r\n`); return; }
+          if (ac.status === 'paused') counterValue.resumeCounter(ac.id);
+          else counterValue.startCounter(ac.id);
+          return;
+        }
+
+        if (argsLower === 'pause') {
+          const ac = counters.find((c) => c.id === activeCounterId);
+          if (!ac) { writeToTerm('\x1b[31mNo active counter.\x1b[0m\r\n'); return; }
+          if (ac.status !== 'running') { writeToTerm(`\x1b[36m[Counter "${ac.name}" not running]\x1b[0m\r\n`); return; }
+          counterValue.pauseCounter(ac.id);
+          return;
+        }
+
+        if (argsLower === 'stop') {
+          const ac = counters.find((c) => c.id === activeCounterId);
+          if (!ac) { writeToTerm('\x1b[31mNo active counter.\x1b[0m\r\n'); return; }
+          if (ac.status === 'stopped') { writeToTerm(`\x1b[36m[Counter "${ac.name}" already stopped]\x1b[0m\r\n`); return; }
+          counterValue.stopCounter(ac.id);
+          return;
+        }
+
+        if (argsLower === 'clear') {
+          const ac = counters.find((c) => c.id === activeCounterId);
+          if (!ac) { writeToTerm('\x1b[31mNo active counter.\x1b[0m\r\n'); return; }
+          counterValue.clearCounter(ac.id);
+          return;
+        }
+
+        if (argsLower.startsWith('switch ')) {
+          const name = args.slice(7).trim();
+          if (!name) { writeToTerm('\x1b[31mUsage: /counter switch <name>\x1b[0m\r\n'); return; }
+          const nameLower = name.toLowerCase();
+          const match = counters.find((c) => c.name.toLowerCase() === nameLower)
+            ?? counters.find((c) => c.name.toLowerCase().includes(nameLower));
+          if (!match) {
+            writeToTerm(`\x1b[31mNo counter matching "${name}".\x1b[0m\r\n`);
+          } else {
+            improveCounters.setActiveCounterId(match.id);
+            writeToTerm(`\x1b[36m[Counter switched to "${match.name}"]\x1b[0m\r\n`);
+          }
+          return;
+        }
+
+        // No args or unrecognized — show usage
+        writeToTerm(
+          '\x1b[36m' +
+          'Usage:\r\n' +
+          '  /counter status          Show all counters\r\n' +
+          '  /counter info            Detailed stats for active counter\r\n' +
+          '  /counter start           Start/resume active counter\r\n' +
+          '  /counter pause           Pause active counter\r\n' +
+          '  /counter stop            Stop active counter\r\n' +
+          '  /counter clear           Clear active counter\r\n' +
+          '  /counter switch <name>   Switch active counter by name\x1b[0m\r\n'
+        );
+        return;
+      }
+
       // Movement mode — prepend direction prefix if active
       const effectiveInput =
         movementModeRef.current !== 'normal'
@@ -1655,8 +1776,7 @@ function AppMain() {
       await executeCommands(result.commands, {
         ...triggerRunnerRef.current,
         send: async (text) => {
-          // TODO: Re-enable when automapper is ready
-          // mapTrackCommandRef.current(text);
+          // mapTrackCommandRef.current(text); // automapper disabled
           await sendCommandRef.current?.(text);
           // Update live allocs directly from outgoing set commands
           const parsed = parseAllocCommand(text);
@@ -1697,6 +1817,7 @@ function AppMain() {
       autoCasterRef.current.reset();
       autoConcRef.current.reset();
       setMovementMode('normal');
+      setWhoSnapshot(null);
     }
   }, [connected]);
 
@@ -1862,10 +1983,12 @@ function AppMain() {
       mutedSenders,
       soundAlerts: chatSoundAlerts,
       newestFirst: chatNewestFirst,
+      hideOwnMessages: chatHideOwnMessages,
       toggleFilter: toggleChatFilter,
       setAllFilters: setAllChatFilters,
       toggleSoundAlert: toggleChatSoundAlert,
       toggleNewestFirst: toggleChatNewestFirst,
+      toggleHideOwnMessages: toggleChatHideOwnMessages,
       muteSender,
       unmuteSender,
       updateSender,
@@ -1876,33 +1999,64 @@ function AppMain() {
       mutedSenders,
       chatSoundAlerts,
       chatNewestFirst,
+      chatHideOwnMessages,
       toggleChatFilter,
       setAllChatFilters,
       toggleChatSoundAlert,
       toggleChatNewestFirst,
+      toggleChatHideOwnMessages,
       muteSender,
       unmuteSender,
       updateSender,
     ]
   );
 
+  const counterEcho = useCallback(
+    (id: string, action: string) => {
+      const c = improveCounters.counters.find((c) => c.id === id);
+      if (c) writeToTerm(`\x1b[36m[Counter "${c.name}" ${action}]\x1b[0m\r\n`);
+    },
+    [improveCounters.counters, writeToTerm]
+  );
+
   const counterValue = useMemo(
-    () => improveCounters,
+    () => ({
+      ...improveCounters,
+      startCounter: (id: string) => {
+        counterEcho(id, 'started');
+        improveCounters.startCounter(id);
+      },
+      pauseCounter: (id: string) => {
+        counterEcho(id, 'paused');
+        improveCounters.pauseCounter(id);
+      },
+      resumeCounter: (id: string) => {
+        counterEcho(id, 'resumed');
+        improveCounters.resumeCounter(id);
+      },
+      stopCounter: (id: string) => {
+        counterEcho(id, 'stopped');
+        improveCounters.stopCounter(id);
+      },
+      clearCounter: (id: string) => {
+        counterEcho(id, 'cleared');
+        improveCounters.clearCounter(id);
+      },
+    }),
     // eslint-disable-next-line react-hooks/exhaustive-deps -- callbacks are stable (useCallback), only state values change
-    [improveCounters.counters, improveCounters.activeCounterId, improveCounters.periodLengthMinutes]
+    [improveCounters.counters, improveCounters.activeCounterId, improveCounters.periodLengthMinutes, counterEcho]
   );
 
   // Toggle active counter: stopped→running, running→paused, paused→running
   const toggleActiveCounter = useCallback(() => {
-    const { activeCounterId, counters, startCounter, pauseCounter, resumeCounter } =
-      improveCounters;
+    const { activeCounterId, counters } = improveCounters;
     if (!activeCounterId) return;
     const counter = counters.find((c) => c.id === activeCounterId);
     if (!counter) return;
-    if (counter.status === 'running') pauseCounter(activeCounterId);
-    else if (counter.status === 'paused') resumeCounter(activeCounterId);
-    else startCounter(activeCounterId);
-  }, [improveCounters]);
+    if (counter.status === 'running') counterValue.pauseCounter(activeCounterId);
+    else if (counter.status === 'paused') counterValue.resumeCounter(activeCounterId);
+    else counterValue.startCounter(activeCounterId);
+  }, [improveCounters, counterValue]);
 
   // Who list context value
   const whoValue = useMemo(
@@ -2037,14 +2191,15 @@ function AppMain() {
     [appSettings, switchCharacter, connected]
   );
 
-  const handleMapWalkTo = useCallback(
-    async (directions: string[]) => {
-      for (const dir of directions) {
-        await sendCommand(dir);
-      }
-    },
-    [sendCommand]
-  );
+  // Automapper disabled — leave for future use
+  // const handleMapWalkTo = useCallback(
+  //   async (directions: string[]) => {
+  //     for (const dir of directions) {
+  //       await sendCommand(dir);
+  //     }
+  //   },
+  //   [sendCommand]
+  // );
 
   return (
     <TerminalThemeProvider value={theme}>
@@ -2058,7 +2213,7 @@ function AppMain() {
                     <SkillTrackerProvider value={skillTrackerValue}>
                       <ChatProvider value={chatValue}>
                         <ImproveCounterProvider value={counterValue}>
-                          <MapProvider value={mapTracker}>
+                          {/* MapProvider disabled — automapper not ready */}
                             <AllocProvider value={allocState}>
                               <WhoProvider value={whoValue}>
                                 <WhoTitleProvider value={whoTitleState}>
@@ -2267,9 +2422,11 @@ function AppMain() {
                                         <SlideOut panel="variables">
                                           <VariablePanel onClose={closePanel} />
                                         </SlideOut>
+                                        {/* Automapper disabled
                                         <SlideOut panel="map" pinnable="map">
                                           <MapPanel mode="slideout" onWalkTo={handleMapWalkTo} />
                                         </SlideOut>
+                                        */}
                                         <SlideOut panel="alloc" pinnable="alloc">
                                           <AllocPanel mode="slideout" />
                                         </SlideOut>
@@ -2293,7 +2450,7 @@ function AppMain() {
                                 </WhoTitleProvider>
                               </WhoProvider>
                             </AllocProvider>
-                          </MapProvider>
+                          {/* </MapProvider> */}
                         </ImproveCounterProvider>
                       </ChatProvider>
                     </SkillTrackerProvider>

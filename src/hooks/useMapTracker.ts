@@ -1,6 +1,9 @@
 /**
  * useMapTracker — React hook that ties the room parser, movement tracker,
  * and map graph together for hex-only wilderness mapping.
+ *
+ * Uses terrain fingerprints from hex art to verify and correct positions,
+ * preventing drift from accumulated movement tracking errors.
  */
 
 import { useRef, useState, useCallback, useEffect, useMemo } from 'react';
@@ -9,6 +12,7 @@ import { MovementTracker } from '../lib/movementTracker';
 import {
   type MapGraph,
   type MapRoom,
+  type FingerprintIndex,
   createGraph,
   upsertRoom,
   linkRooms,
@@ -17,9 +21,13 @@ import {
   findPath,
   serializeGraph,
   deserializeGraph,
+  buildFingerprintIndex,
+  indexFingerprint,
+  deindexFingerprint,
+  lookupFingerprint,
   type PathResult,
 } from '../lib/mapGraph';
-import type { HexCoord } from '../lib/hexUtils';
+import { coordKey, type HexCoord } from '../lib/hexUtils';
 import { type DataStore } from '../contexts/DataStoreContext';
 
 function mapFilename(character: string): string {
@@ -55,6 +63,7 @@ export function useMapTracker(
   activeCharacter: string | null
 ): MapTrackerState & MapTrackerActions {
   const graphRef = useRef<MapGraph>(createGraph());
+  const fpIndexRef = useRef<FingerprintIndex>({ exact: new Map(), prefix: new Map() });
   const [state, setState] = useState<MapTrackerState>({
     graph: graphRef.current,
     currentRoomId: null,
@@ -88,53 +97,108 @@ export function useMapTracker(
     });
   }, []);
 
-  // Handle parsed hex room
+  // Handle parsed hex room — core positioning logic with fingerprint verification
   const handleHexRoom = useCallback(
     (parsed: ParsedHexRoom) => {
       const graph = graphRef.current;
+      const fpIndex = fpIndexRef.current;
       const tracker = movementTracker.current;
 
-      // Get pending movement
+      // Get pending movement from tracker
       const prevRoomId = tracker.getCurrentRoomId();
-      const movement = prevRoomId ? tracker.onRoomParsed('') : null; // pass empty, we'll set it below
+      const movement = prevRoomId ? tracker.onRoomParsed('') : null;
+
+      // Step 1: Compute candidate position from movement chain
+      let chainCoords: HexCoord | null = null;
+      let chainRoomId: string | null = null;
+      let chainCollision: string | undefined;
+
+      if (movement && graph.rooms[movement.fromRoomId]) {
+        const fromRoom = graph.rooms[movement.fromRoomId];
+        const { coords: newCoords, collision } = assignCoords(graph, fromRoom, movement.direction);
+        chainCoords = newCoords;
+        chainCollision = collision;
+        chainRoomId = collision ?? makeHexRoomId(newCoords.q, newCoords.r);
+      }
+
+      // Step 2: Fingerprint verification
+      const fpMatch = parsed.fingerprint ? lookupFingerprint(fpIndex, parsed.fingerprint) : null;
 
       let coords: HexCoord;
       let roomId: string;
+      let fingerprintOverrodeChain = false;
 
-      if (movement && graph.rooms[movement.fromRoomId]) {
-        // We have a movement direction + known previous hex → compute new coords
-        const fromRoom = graph.rooms[movement.fromRoomId];
-        const { coords: newCoords, collision } = assignCoords(graph, fromRoom, movement.direction);
-
-        if (collision) {
-          // Room already exists at this position — revisit it
-          coords = newCoords;
-          roomId = collision;
+      if (fpMatch) {
+        // Known fingerprint — use fingerprint position
+        const fpRoom = graph.rooms[fpMatch.roomId];
+        if (fpRoom) {
+          coords = fpRoom.coords;
+          roomId = fpMatch.roomId;
+          // Check if fingerprint disagrees with chain
+          if (chainRoomId && chainRoomId !== fpMatch.roomId) {
+            const chainKey = chainCoords ? coordKey(chainCoords) : null;
+            const fpKey = coordKey(fpRoom.coords);
+            if (chainKey !== fpKey) {
+              // Chain drifted — fingerprint wins, don't link from prev room
+              fingerprintOverrodeChain = true;
+            }
+          }
+        } else if (chainCoords) {
+          // Fingerprint points to a deleted room — fall through to chain logic
+          coords = chainCoords;
+          roomId = chainCollision ?? makeHexRoomId(chainCoords.q, chainCoords.r);
+        } else if (prevRoomId && graph.rooms[prevRoomId]) {
+          coords = graph.rooms[prevRoomId].coords;
+          roomId = prevRoomId;
         } else {
-          coords = newCoords;
-          roomId = makeHexRoomId(coords.q, coords.r);
+          coords = { q: 0, r: 0 };
+          roomId = makeHexRoomId(0, 0);
         }
-      } else if (prevRoomId && graph.rooms[prevRoomId]) {
-        // No movement context (look/survey) — stay at current position
-        coords = graph.rooms[prevRoomId].coords;
-        roomId = prevRoomId;
       } else {
-        // First hex room ever — place at origin
-        coords = { q: 0, r: 0 };
-        roomId = makeHexRoomId(0, 0);
+        // Unknown fingerprint (or no fingerprint) — use chain positioning
+        if (chainCoords) {
+          coords = chainCoords;
+          roomId = chainCollision ?? makeHexRoomId(chainCoords.q, chainCoords.r);
+        } else if (prevRoomId && graph.rooms[prevRoomId]) {
+          // No movement (look/survey) — stay at current position
+          coords = graph.rooms[prevRoomId].coords;
+          roomId = prevRoomId;
+        } else {
+          // First room or broken chain — place at origin
+          coords = { q: 0, r: 0 };
+          roomId = makeHexRoomId(0, 0);
+        }
       }
 
-      // Upsert room
-      upsertRoom(graph, roomId, coords, parsed.terrain, parsed.description, parsed.landmarks);
+      // Step 3: Update fingerprint index before upsert (need old fingerprint)
+      const oldFingerprint = graph.rooms[roomId]?.fingerprint ?? null;
 
-      // Link rooms if we moved
-      if (movement && graph.rooms[movement.fromRoomId] && movement.fromRoomId !== roomId) {
+      // Step 4: Upsert room with fingerprint
+      upsertRoom(graph, roomId, coords, parsed.terrain, parsed.description, parsed.landmarks, parsed.fingerprint);
+
+      // Step 5: Incrementally update fingerprint index
+      if (parsed.fingerprint) {
+        const newFingerprint = graph.rooms[roomId]?.fingerprint;
+        if (oldFingerprint && oldFingerprint !== newFingerprint) {
+          deindexFingerprint(fpIndex, oldFingerprint, roomId);
+        }
+        if (newFingerprint) {
+          indexFingerprint(fpIndex, newFingerprint, roomId);
+        }
+      }
+
+      // Step 6: Link rooms if we moved AND fingerprint didn't override chain
+      if (
+        movement &&
+        graph.rooms[movement.fromRoomId] &&
+        movement.fromRoomId !== roomId &&
+        !fingerprintOverrodeChain
+      ) {
         linkRooms(graph, movement.fromRoomId, roomId, movement.direction);
       }
 
-      // Update tracker's current room to the actual room ID
+      // Step 7: Update tracker and state
       tracker.setCurrentRoom(roomId);
-
       graph.currentRoomId = roomId;
       syncState();
       scheduleSave();
@@ -168,11 +232,13 @@ export function useMapTracker(
       }>(mapFilename(activeCharacter), 'mapData');
       if (data) {
         graphRef.current = deserializeGraph(data);
+        fpIndexRef.current = buildFingerprintIndex(graphRef.current);
         if (graphRef.current.currentRoomId) {
           movementTracker.current.setCurrentRoom(graphRef.current.currentRoomId);
         }
       } else {
         graphRef.current = createGraph();
+        fpIndexRef.current = { exact: new Map(), prefix: new Map() };
       }
       syncState();
     })().catch(console.error);
@@ -217,6 +283,7 @@ export function useMapTracker(
 
   const clearMap = useCallback(() => {
     graphRef.current = createGraph();
+    fpIndexRef.current = { exact: new Map(), prefix: new Map() };
     movementTracker.current = new MovementTracker();
     syncState();
     scheduleSave();

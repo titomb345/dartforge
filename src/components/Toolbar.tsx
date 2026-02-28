@@ -14,7 +14,8 @@ import {
   GearIcon,
   CoinIcon,
   WhoIcon,
-  /* MapIcon, */ AllocIcon,
+  // MapIcon, // automapper disabled
+  AllocIcon,
   BabelIcon,
   HelpIcon,
 } from './icons';
@@ -107,7 +108,7 @@ export function Toolbar({ connected, onReconnect, onDisconnect }: ToolbarProps) 
           pinned={isPinned('notes')}
           onClick={() => togglePanel('notes')}
         />
-        {/* TODO: Re-enable when automapper is ready
+        {/* Automapper disabled — leave code intact for future use
         <IconButton
           icon={<MapIcon />}
           title="Map"

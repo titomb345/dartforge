@@ -4,14 +4,23 @@
  * Hex-only mapper: only parses wilderness hex rooms. Towns/dungeons are ignored.
  *
  * Detection flow:
- * 1. "You gaze at your surroundings." → enter hex-art-skipping mode (survey command)
- * 2. Skip ASCII hex art lines (border patterns: ------, /...\, -...- , \.../)
- * 3. After hex art ends, parse wilderness description lines
- * 4. Also detect wilderness descriptions WITHOUT preceding hex art (normal movement)
- * 5. Extract terrain + landmarks, emit parsed hex room event
+ * 1. "You gaze at your surroundings." → enter collecting-hex-art mode
+ * 2. Collect ASCII hex art lines into a buffer
+ * 3. When hex art ends, parse it via hexArtParser → extract terrain fingerprint
+ * 4. Collect wilderness description lines
+ * 5. Extract terrain + landmarks + fingerprint, emit parsed hex room event
+ *
+ * "You gaze at your surroundings." is the only entry point. It only appears
+ * in the hex wilderness, so towns/dungeons are never processed.
  */
 
 import { detectHexTerrain, type HexTerrainType } from './hexTerrainPatterns';
+import {
+  isHexArtLine,
+  parseHexArt,
+  generateFingerprint,
+  type ParsedHexArt,
+} from './hexArtParser';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -21,6 +30,10 @@ export interface ParsedHexRoom {
   terrain: HexTerrainType;
   description: string;
   landmarks: string[];
+  /** Terrain fingerprint from hex art (null if no hex art was parsed) */
+  fingerprint: string | null;
+  /** Full parsed hex art data (null if no hex art was parsed) */
+  hexArt: ParsedHexArt | null;
 }
 
 export type RoomParserEvent = { type: 'hex-room'; room: ParsedHexRoom } | { type: 'move-failed' };
@@ -32,18 +45,13 @@ export type RoomParserEvent = { type: 'hex-room'; room: ParsedHexRoom } | { type
 /** Survey command trigger */
 const SURVEY_RE = /^(?:> )*You gaze at your surroundings\./;
 
-/** ASCII hex art border lines */
-const HEX_ART_RE = /^(?:> )*(?:\s*-{3,}|\s*[/\\].*[/\\]\s*$|\s*-[^a-zA-Z]*-\s*$)/;
-
-/** Hex art top/bottom borders: lines that are mostly dashes and spaces */
-const HEX_BORDER_RE = /^(?:> )*\s*-[-\s]+$/;
-
-/** Hex art side lines: contain / or \ mixed with terrain chars */
-const HEX_SIDE_RE = /^(?:> )*\s*[/\\][ .^~"whsx-]*[/\\]\s*$/;
-
 /** Wilderness room starts — description lines */
 const WILDERNESS_START_RE =
   /^(?:> )*(?:You are (?:in|on|at|standing)|This is (?:a |an |the )|The ground is |A vast |The )/;
+
+/** Health/condition status messages that false-positive on WILDERNESS_START_RE */
+const HEALTH_STATUS_RE =
+  /^(?:> )*You are (?:in (?:perfect health|good shape|bad shape|terrible shape|(?:very )?(?:poor|rough|awful) shape)|mortally wounded|gravely |seriously |badly |wounded|slightly |barely wounded)/;
 
 /** Lighting sentences that end room descriptions */
 const LIGHTING_RE =
@@ -51,7 +59,7 @@ const LIGHTING_RE =
 
 /** Failed movement messages */
 const MOVE_FAIL_RE =
-  /^(?:> )*(?:There is no exit in that direction\.|The .+ is closed\.|You (?:can't|cannot) go that way\.|You can't see to move!)/;
+  /^(?:> )*(?:There is no exit in that direction\.|The .+ is closed\.|You (?:can't|cannot) go that way\.|You can't see to move!|You must swim )/;
 
 /** Lines that are clearly NOT part of a wilderness description */
 const NON_WILDERNESS_RE =
@@ -61,11 +69,12 @@ const NON_WILDERNESS_RE =
 // State machine
 // ---------------------------------------------------------------------------
 
-type ParserState = 'idle' | 'skipping-hex-art' | 'reading-description';
+type ParserState = 'idle' | 'collecting-hex-art' | 'reading-description';
 
 export class RoomParser {
   private state: ParserState = 'idle';
   private descLines: string[] = [];
+  private hexArtLines: string[] = [];
   private linesSinceStart = 0;
   private onEvent: (event: RoomParserEvent) => void;
 
@@ -90,8 +99,8 @@ export class RoomParser {
       case 'idle':
         this.handleIdle(line, rawLine);
         break;
-      case 'skipping-hex-art':
-        this.handleHexArt(line, rawLine);
+      case 'collecting-hex-art':
+        this.handleCollectingHexArt(line, rawLine);
         break;
       case 'reading-description':
         this.handleDescription(line, rawLine);
@@ -99,33 +108,18 @@ export class RoomParser {
     }
   }
 
-  private handleIdle(line: string, rawLine: string): void {
-    // Survey command: "You gaze at your surroundings."
+  private handleIdle(_line: string, rawLine: string): void {
+    // "You gaze at your surroundings." is the ONLY entry point.
+    // It always precedes hex art in the wilderness. Nothing else triggers collection.
     if (SURVEY_RE.test(rawLine)) {
-      this.state = 'skipping-hex-art';
+      this.state = 'collecting-hex-art';
       this.descLines = [];
+      this.hexArtLines = [];
       this.linesSinceStart = 0;
-      return;
-    }
-
-    // Hex art border at start (movement triggered hex display without survey text)
-    if (this.isHexArtLine(line)) {
-      this.state = 'skipping-hex-art';
-      this.descLines = [];
-      this.linesSinceStart = 0;
-      return;
-    }
-
-    // Direct wilderness description (movement without hex art display)
-    if (WILDERNESS_START_RE.test(rawLine)) {
-      this.descLines = [line];
-      this.state = 'reading-description';
-      this.linesSinceStart = 1;
-      return;
     }
   }
 
-  private handleHexArt(line: string, rawLine: string): void {
+  private handleCollectingHexArt(line: string, rawLine: string): void {
     this.linesSinceStart++;
 
     // Safety: if we've been in hex art too long, something went wrong
@@ -134,14 +128,36 @@ export class RoomParser {
       return;
     }
 
-    // Skip empty lines within hex art
-    if (!line) return;
+    // Skip empty lines within hex art (padding before/between art)
+    if (!line) {
+      if (this.hexArtLines.length > 0 && this.hexArtLines.length < 3) return;
+      // Empty line after significant hex art — transition to description
+      if (this.hexArtLines.length >= 3) {
+        this.state = 'reading-description';
+        this.linesSinceStart = 0;
+        return;
+      }
+      return;
+    }
 
     // Still in hex art?
-    if (this.isHexArtLine(line)) return;
+    if (isHexArtLine(line)) {
+      this.hexArtLines.push(line);
+      return;
+    }
 
-    // Transition: first non-hex-art line should be the wilderness description
-    if (WILDERNESS_START_RE.test(rawLine) || !NON_WILDERNESS_RE.test(rawLine)) {
+    // First non-hex-art, non-empty line: hex art is done, transition to description
+    if (
+      WILDERNESS_START_RE.test(rawLine) &&
+      !HEALTH_STATUS_RE.test(rawLine)
+    ) {
+      this.descLines = [line];
+      this.state = 'reading-description';
+      this.linesSinceStart = 1;
+      return;
+    }
+
+    if (!NON_WILDERNESS_RE.test(rawLine) && line.length > 0) {
       this.descLines = [line];
       this.state = 'reading-description';
       this.linesSinceStart = 1;
@@ -183,13 +199,6 @@ export class RoomParser {
     this.descLines.push(line);
   }
 
-  private isHexArtLine(line: string): boolean {
-    if (HEX_BORDER_RE.test(line)) return true;
-    if (HEX_SIDE_RE.test(line)) return true;
-    if (HEX_ART_RE.test(line)) return true;
-    return false;
-  }
-
   private emitHexRoom(): void {
     if (this.descLines.length === 0) {
       this.reset();
@@ -208,12 +217,24 @@ export class RoomParser {
       }
     }
 
+    // Parse hex art and generate fingerprint if we collected art lines
+    let fingerprint: string | null = null;
+    let hexArt: ParsedHexArt | null = null;
+    if (this.hexArtLines.length >= 5) {
+      hexArt = parseHexArt(this.hexArtLines);
+      if (hexArt) {
+        fingerprint = generateFingerprint(hexArt);
+      }
+    }
+
     this.onEvent({
       type: 'hex-room',
       room: {
         terrain,
         description: fullDescription,
         landmarks,
+        fingerprint,
+        hexArt,
       },
     });
 
@@ -223,6 +244,7 @@ export class RoomParser {
   private reset(): void {
     this.state = 'idle';
     this.descLines = [];
+    this.hexArtLines = [];
     this.linesSinceStart = 0;
   }
 }

@@ -363,6 +363,11 @@ export const HELP_CATEGORIES: HelpCategory[] = [
         description:
           'Auto-broadcast skill improvements via OOC. "/announce on" sends "skillname+", "/announce brief" sends just "+", "/announce verbose" sends "skillname+ (count)". "/announce pet on|brief|verbose" controls pet announcements separately. "/announce off" disables. An orange badge shows when active.',
       },
+      {
+        title: '/counter',
+        description:
+          'Manage improve counters from the command line. "/counter status" shows all counters with status, imps, and elapsed time. "/counter info" shows detailed stats for the active counter including rates and skills. "/counter start|pause|stop|clear" controls the active counter. "/counter switch <name>" switches the active counter by name (partial match).',
+      },
     ],
   },
   {

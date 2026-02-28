@@ -52,7 +52,8 @@ export function MapPanel({ mode = 'slideout', onWalkTo }: MapPanelProps) {
 
   return (
     <div className={panelRootClass(isPinned)} style={!isPinned ? { width: 480 } : undefined}>
-      <PanelHeader icon={<MapIcon size={12} />} title={mapTitle} panel="map" mode={mode} />
+      {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
+      <PanelHeader icon={<MapIcon size={12} />} title={mapTitle} panel={'map' as any} mode={mode} />
 
       {/* Toolbar row */}
       <div className="flex items-center gap-1 px-2 py-1 border-b border-border-subtle shrink-0 text-[10px]">

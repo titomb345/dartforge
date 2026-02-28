@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, useMemo, useCallback } from 'react';
 import { useChatContext } from '../contexts/ChatContext';
 import { useSignatureContext } from '../contexts/SignatureContext';
-import type { ChatType } from '../types/chat';
+import type { ChatType, ChatMessage } from '../types/chat';
 import type { PinnablePanelProps } from '../types';
 import { panelRootClass } from '../lib/panelUtils';
 import { SortAscIcon, SortDescIcon, ChatIcon, ClockIcon } from './icons';
@@ -65,6 +65,8 @@ export function ChatPanel({ mode = 'slideout' }: PinnablePanelProps) {
     setAllFilters,
     toggleSoundAlert,
     toggleNewestFirst,
+    hideOwnMessages,
+    toggleHideOwnMessages,
     muteSender,
     unmuteSender,
     updateSender,
@@ -96,6 +98,21 @@ export function ChatPanel({ mode = 'slideout' }: PinnablePanelProps) {
     });
     return newestFirst ? [...filtered].reverse() : filtered;
   }, [messages, filters, mutedSenders, newestFirst]);
+
+  // Split messages into today vs older
+  const todayKey = getDayKey(new Date(now));
+  const { todayMessages, olderMessages } = useMemo(() => {
+    const today: ChatMessage[] = [];
+    const older: ChatMessage[] = [];
+    for (const msg of visibleMessages) {
+      if (getDayKey(msg.timestamp) === todayKey) {
+        today.push(msg);
+      } else {
+        older.push(msg);
+      }
+    }
+    return { todayMessages: today, olderMessages: older };
+  }, [visibleMessages, todayKey]);
 
   // Track scroll position to determine auto-scroll behavior
   const handleScroll = () => {
@@ -235,8 +252,19 @@ export function ChatPanel({ mode = 'slideout' }: PinnablePanelProps) {
         ))}
       </div>
 
-      {/* Muted / Sigs toggles */}
+      {/* Mine / Muted / Sigs toggles */}
       <div className="flex items-center gap-1.5 px-2 py-1.5 border-b border-border-subtle shrink-0">
+        <button
+          onClick={toggleHideOwnMessages}
+          title={hideOwnMessages ? 'Own messages hidden (click to show)' : 'Own messages shown (click to hide)'}
+          className={`text-[10px] font-mono px-1.5 py-0.5 rounded border cursor-pointer transition-colors duration-150 whitespace-nowrap ${
+            !hideOwnMessages
+              ? 'bg-green/15 border-green/30 text-green'
+              : 'border-transparent text-text-dim hover:text-green/70'
+          }`}
+        >
+          Mine
+        </button>
         <button
           onClick={toggleMutedSection}
           className={`text-[10px] font-mono px-1.5 py-0.5 rounded border cursor-pointer transition-colors duration-150 whitespace-nowrap ${
@@ -284,30 +312,87 @@ export function ChatPanel({ mode = 'slideout' }: PinnablePanelProps) {
 
       {/* Message list */}
       <div ref={scrollRef} onScroll={handleScroll} className="flex-1 overflow-y-auto py-1">
-        {visibleMessages.length === 0 && (
-          <div className="px-3 py-4 text-xs text-text-dim">
-            {noneActive
-              ? 'No filters active. Enable a chat type above.'
-              : 'No messages yet. Chat will appear here as it happens.'}
-          </div>
+        {newestFirst ? (
+          <>
+            {/* Today section — always full-height */}
+            <div className="min-h-full flex flex-col">
+              <DaySeparator label="Today" />
+              {todayMessages.length === 0 ? (
+                <div className="flex-1 flex items-center justify-center px-3">
+                  <span className="text-xs text-text-dim">
+                    {noneActive
+                      ? 'No filters active. Enable a chat type above.'
+                      : visibleMessages.length === 0
+                        ? 'No messages yet. Chat will appear here as it happens.'
+                        : 'No messages today — scroll down for earlier chat.'}
+                  </span>
+                </div>
+              ) : (
+                todayMessages.map((msg) => (
+                  <ChatMessageRow key={msg.id} msg={msg} now={now} fontSize={chatFontSize} onMute={muteSender} onIdentify={handleIdentify} />
+                ))
+              )}
+            </div>
+            {/* Older messages — flat list with day separators */}
+            {(() => {
+              const elements: React.ReactNode[] = [];
+              let lastDayKey: string | null = null;
+              for (const msg of olderMessages) {
+                const dayKey = getDayKey(msg.timestamp);
+                if (dayKey !== lastDayKey) {
+                  elements.push(
+                    <DaySeparator key={`sep-${dayKey}`} label={formatDaySeparator(msg.timestamp, now)} />,
+                  );
+                  lastDayKey = dayKey;
+                }
+                elements.push(
+                  <ChatMessageRow key={msg.id} msg={msg} now={now} fontSize={chatFontSize} onMute={muteSender} onIdentify={handleIdentify} />,
+                );
+              }
+              return elements;
+            })()}
+          </>
+        ) : (
+          <>
+            {/* Older messages — flat list with day separators */}
+            {(() => {
+              const elements: React.ReactNode[] = [];
+              let lastDayKey: string | null = null;
+              for (const msg of olderMessages) {
+                const dayKey = getDayKey(msg.timestamp);
+                if (dayKey !== lastDayKey) {
+                  elements.push(
+                    <DaySeparator key={`sep-${dayKey}`} label={formatDaySeparator(msg.timestamp, now)} />,
+                  );
+                  lastDayKey = dayKey;
+                }
+                elements.push(
+                  <ChatMessageRow key={msg.id} msg={msg} now={now} fontSize={chatFontSize} onMute={muteSender} onIdentify={handleIdentify} />,
+                );
+              }
+              return elements;
+            })()}
+            {/* Today section — always full-height */}
+            <div className="min-h-full flex flex-col">
+              <DaySeparator label="Today" />
+              {todayMessages.length === 0 ? (
+                <div className="flex-1 flex items-center justify-center px-3">
+                  <span className="text-xs text-text-dim">
+                    {noneActive
+                      ? 'No filters active. Enable a chat type above.'
+                      : visibleMessages.length === 0
+                        ? 'No messages yet. Chat will appear here as it happens.'
+                        : 'No messages today — scroll up for earlier chat.'}
+                  </span>
+                </div>
+              ) : (
+                todayMessages.map((msg) => (
+                  <ChatMessageRow key={msg.id} msg={msg} now={now} fontSize={chatFontSize} onMute={muteSender} onIdentify={handleIdentify} />
+                ))
+              )}
+            </div>
+          </>
         )}
-        {(() => {
-          const elements: React.ReactNode[] = [];
-          let lastDayKey: string | null = null;
-          for (const msg of visibleMessages) {
-            const dayKey = getDayKey(msg.timestamp);
-            if (dayKey !== lastDayKey) {
-              elements.push(
-                <DaySeparator key={`sep-${dayKey}`} label={formatDaySeparator(msg.timestamp, now)} />,
-              );
-              lastDayKey = dayKey;
-            }
-            elements.push(
-              <ChatMessageRow key={msg.id} msg={msg} now={now} fontSize={chatFontSize} onMute={muteSender} onIdentify={handleIdentify} />,
-            );
-          }
-          return elements;
-        })()}
       </div>
     </div>
   );

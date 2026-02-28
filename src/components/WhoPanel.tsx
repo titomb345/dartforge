@@ -320,8 +320,6 @@ export function WhoPanel({ mode = 'slideout' }: PinnablePanelProps) {
     return () => clearInterval(id);
   }, [snapshot]);
 
-  const playerCount = snapshot?.players.length ?? 0;
-
   const handleSave = (whoTitle: string, playerName: string, confirmed: boolean) => {
     const existing = resolveTitle(whoTitle);
     if (existing) {
@@ -339,13 +337,6 @@ export function WhoPanel({ mode = 'slideout' }: PinnablePanelProps) {
         title="Who"
         panel="who"
         mode={mode}
-        badge={
-          playerCount > 0 ? (
-            <span className="text-[9px] font-mono px-1.5 py-0.5 rounded bg-[#8be9fd]/10 text-[#8be9fd] border border-[#8be9fd]/20">
-              {playerCount}
-            </span>
-          ) : undefined
-        }
       >
         <FontSizeControl value={whoFontSize} onChange={updateWhoFontSize} />
         <button
