@@ -140,6 +140,15 @@ export function DropboxDataStoreProvider({ children }: { children: ReactNode }) 
         await uploadFile(currentToken, path, content);
       } catch (e) {
         console.error(`Dropbox upload failed for ${filename}:`, e);
+        // Record as pending so it retries on next page load
+        try {
+          const raw = localStorage.getItem(PENDING_UPLOADS_KEY);
+          const pending: string[] = raw ? JSON.parse(raw) : [];
+          if (!pending.includes(filename)) {
+            pending.push(filename);
+            localStorage.setItem(PENDING_UPLOADS_KEY, JSON.stringify(pending));
+          }
+        } catch { /* noop */ }
       }
     }, DROPBOX_DEBOUNCE_MS);
 
