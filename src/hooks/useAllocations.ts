@@ -44,6 +44,9 @@ function genId(): string {
 }
 
 export interface AllocState {
+  // Connection
+  activeCharacter: string | null;
+
   // Combat
   data: AllocData;
   view: AllocView;
@@ -684,6 +687,9 @@ export function useAllocations(
 
   return useMemo(
     () => ({
+      // Connection
+      activeCharacter,
+
       // Combat
       data,
       view,
@@ -736,6 +742,6 @@ export function useAllocations(
       loadMagicProfileToLive,
     }),
     // eslint-disable-next-line react-hooks/exhaustive-deps -- callbacks are stable (useCallback); only state/derived values trigger recomputation
-    [data, view, allocTab, currentProfile, magicData, magicView, currentMagicProfile]
+    [activeCharacter, data, view, allocTab, currentProfile, magicData, magicView, currentMagicProfile]
   );
 }

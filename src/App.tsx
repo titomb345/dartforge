@@ -2232,7 +2232,7 @@ function AppMain() {
                                   pinPanel={pinPanel}
                                 >
                                   <SpotlightProvider>
-                                    <div className="flex flex-col h-screen bg-bg-canvas text-text-primary relative p-1 gap-1">
+                                    <div className="flex flex-col h-dvh bg-bg-canvas text-text-primary relative p-1 gap-1 overflow-hidden">
                                       <Toolbar
                                         connected={connected}
                                         onReconnect={handleReconnect}

@@ -987,7 +987,8 @@ function MagicProfileView() {
 
 export function AllocPanel({ mode = 'slideout' }: AllocPanelProps) {
   const isPinned = mode === 'pinned';
-  const { view, setView, allocTab, setAllocTab, magicView, setMagicView } = useAllocContext();
+  const { activeCharacter, view, setView, allocTab, setAllocTab, magicView, setMagicView } =
+    useAllocContext();
 
   return (
     <div
@@ -998,26 +999,35 @@ export function AllocPanel({ mode = 'slideout' }: AllocPanelProps) {
       }
     >
       <PanelHeader icon={<AllocIcon size={12} />} title="Allocations" panel="alloc" mode={mode} />
-      {/* Tabs & view toggle */}
-      <div className="flex items-center gap-1.5 px-2 py-1.5 border-b border-border-subtle shrink-0">
-        <TabToggle tab={allocTab} onSetTab={setAllocTab} />
-        {allocTab === 'combat' ? (
-          <ViewToggle view={view} onSetView={setView} accent={ACCENT} />
-        ) : (
-          <ViewToggle view={magicView} onSetView={setMagicView} accent={MAGIC_ACCENT} />
-        )}
-      </div>
 
-      {allocTab === 'combat' ? (
-        view === 'live' ? (
-          <LiveView />
-        ) : (
-          <ProfileView />
-        )
-      ) : magicView === 'live' ? (
-        <MagicLiveView />
+      {!activeCharacter ? (
+        <div className="flex items-center justify-center h-full text-[10px] text-text-dim font-mono">
+          Not connected
+        </div>
       ) : (
-        <MagicProfileView />
+        <>
+          {/* Tabs & view toggle */}
+          <div className="flex items-center gap-1.5 px-2 py-1.5 border-b border-border-subtle shrink-0">
+            <TabToggle tab={allocTab} onSetTab={setAllocTab} />
+            {allocTab === 'combat' ? (
+              <ViewToggle view={view} onSetView={setView} accent={ACCENT} />
+            ) : (
+              <ViewToggle view={magicView} onSetView={setMagicView} accent={MAGIC_ACCENT} />
+            )}
+          </div>
+
+          {allocTab === 'combat' ? (
+            view === 'live' ? (
+              <LiveView />
+            ) : (
+              <ProfileView />
+            )
+          ) : magicView === 'live' ? (
+            <MagicLiveView />
+          ) : (
+            <MagicProfileView />
+          )}
+        </>
       )}
     </div>
   );

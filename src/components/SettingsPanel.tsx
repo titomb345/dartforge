@@ -22,6 +22,7 @@ import { cn } from '../lib/cn';
 import { useDataStore } from '../contexts/DataStoreContext';
 import { useAppSettingsContext } from '../contexts/AppSettingsContext';
 import { getPlatform } from '../lib/platform';
+import { loadStorageMode } from '../lib/dropbox';
 
 /* ── Tauri imports (lazy) ─────────────────────────────────── */
 
@@ -766,6 +767,14 @@ export function SettingsPanel({ onClose }: { onClose: () => void }) {
           />
         )}
 
+        {/* Data Storage — Web only */}
+        {!isTauri && (
+          <WebStorageSection
+            open={openSection === 'web-storage'}
+            onToggle={() => toggle('web-storage')}
+          />
+        )}
+
         {/* Backups — Tauri only */}
         {isTauri && (
           <BackupsSection open={openSection === 'backups'} onToggle={() => toggle('backups')} />
@@ -1035,6 +1044,47 @@ function CustomSoundsSection({
         Choose custom audio files for chat alert sounds. Supports WAV, MP3, OGG, and WebM (max 5
         MB).
       </div>
+    </SettingsSection>
+  );
+}
+
+/* ── Data Storage Section (Web-only) ──────────────────────── */
+
+function WebStorageSection({ open, onToggle }: { open: boolean; onToggle: () => void }) {
+  const mode = loadStorageMode();
+
+  return (
+    <SettingsSection
+      open={open}
+      onToggle={onToggle}
+      icon={<FolderIcon size={13} />}
+      title="Data Storage"
+      accent="#8be9fd"
+    >
+      <FieldRow label="Current mode">
+        <span className="text-[10px] font-mono text-text-label">
+          {mode === 'dropbox' ? 'Dropbox Sync' : mode === 'local' ? 'Local Storage' : 'Not set'}
+        </span>
+      </FieldRow>
+      <div className="text-[9px] text-text-dim font-mono leading-relaxed mt-1">
+        Change where DartForge stores your settings and skill data. Resetting will reload the page.
+      </div>
+      <button
+        onClick={() => {
+          if (confirm('Reset storage mode? The page will reload and you can choose again.')) {
+            localStorage.removeItem('dartforge:storage_mode');
+            window.location.reload();
+          }
+        }}
+        className={cn(
+          'w-full flex items-center justify-center gap-1.5 px-2 py-1 rounded mt-1',
+          'text-[10px] font-mono text-text-dim border border-border-dim',
+          'hover:text-cyan hover:border-cyan/30 transition-colors cursor-pointer'
+        )}
+      >
+        <RotateCcwIcon size={9} />
+        Change storage mode
+      </button>
     </SettingsSection>
   );
 }

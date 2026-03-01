@@ -22,6 +22,7 @@ import {
 import { getPlatform } from '../lib/platform';
 import { cn } from '../lib/cn';
 import { usePanelContext } from '../contexts/PanelLayoutContext';
+import { StorageModeButton } from './StorageModeButton';
 
 interface ToolbarProps {
   connected: boolean;
@@ -33,7 +34,7 @@ export function Toolbar({ connected, onReconnect, onDisconnect }: ToolbarProps) 
   const { activePanel, togglePanel, isPinned } = usePanelContext();
 
   return (
-    <div className="flex items-center px-2.5 py-1 bg-bg-primary rounded-lg">
+    <div className="flex items-center px-2.5 py-1 bg-bg-primary rounded-lg shrink-0">
       <button
         onClick={connected ? onDisconnect : onReconnect}
         title={connected ? 'Disconnect' : 'Reconnect'}
@@ -57,7 +58,12 @@ export function Toolbar({ connected, onReconnect, onDisconnect }: ToolbarProps) 
       <div className="flex-1" />
 
       <div className="flex items-center gap-1">
-        {getPlatform() === 'web' && <DropboxButton />}
+        {getPlatform() === 'web' && (
+          <>
+            <DropboxButton />
+            <StorageModeButton />
+          </>
+        )}
         <IconButton
           icon={<WhoIcon />}
           title="Who"
