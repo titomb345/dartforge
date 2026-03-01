@@ -1,6 +1,6 @@
 import type { MudTransport, TransportCallbacks } from './transport';
 
-const DEFAULT_PROXY_URL = 'wss://dartforge-proxy.fly.dev';
+const DEFAULT_PROXY_URL = 'wss://dartforge-proxy.billbergquist.workers.dev/ws';
 
 export class WebSocketTransport implements MudTransport {
   private ws: WebSocket | null = null;
