@@ -375,13 +375,6 @@ export function useAllocations(
   }, []);
 
   const handleAllocParse = useCallback((result: AllocParseResult) => {
-    console.log(
-      '[alloc] parsed limbs:',
-      result.limbs.map((l) => {
-        const sum = Object.values(l.alloc).reduce((a, b) => a + b, 0);
-        return `${l.limb} (sum=${sum}, null=${l.null})`;
-      })
-    );
     const newLimbNames = result.limbs.map((l) => l.limb);
 
     // Build a map of the parsed allocations
@@ -438,7 +431,6 @@ export function useAllocations(
       const alloc = profile.limbs[limb];
       if (!alloc) return;
       const cmd = buildAllocCommand(limb, alloc);
-      console.log('[alloc] apply limb:', cmd);
       sendCommandRef.current(cmd).catch(console.error);
       // Update live state directly — we already know the values
       setData((prev) => ({
@@ -463,7 +455,6 @@ export function useAllocations(
           const alloc = profile.limbs[limb];
           if (!alloc) continue;
           const cmd = buildAllocCommand(limb, alloc);
-          console.log('[alloc] apply all:', cmd);
           await send(cmd);
         }
         setProfileActive(profileId, true);
@@ -487,7 +478,6 @@ export function useAllocations(
       const alloc = dataRef.current.liveAllocations[limb];
       if (!alloc) return;
       const cmd = buildAllocCommand(limb, alloc);
-      console.log('[alloc] apply live limb:', cmd);
       sendCommandRef.current(cmd).catch(console.error);
     },
     [sendCommandRef]
@@ -504,7 +494,6 @@ export function useAllocations(
         const alloc = live[limb];
         if (!alloc) continue;
         const cmd = buildAllocCommand(limb, alloc);
-        console.log('[alloc] apply live all:', cmd);
         await send(cmd);
       }
     })().catch(console.error);
@@ -659,7 +648,6 @@ export function useAllocations(
   }, []);
 
   const handleMagicParse = useCallback((result: MagicParseResult) => {
-    console.log('[alloc] parsed magic:', result.alloc, 'arcane:', result.arcane);
     setMagicData((prev) => ({
       ...prev,
       liveAllocation: { ...result.alloc },
@@ -671,7 +659,6 @@ export function useAllocations(
       const profile = magicDataRef.current.profiles.find((p) => p.id === profileId);
       if (!profile || !sendCommandRef.current) return;
       const cmd = buildMagicAllocCommand(profile.alloc);
-      console.log('[alloc] apply magic:', cmd);
       sendCommandRef.current(cmd).catch(console.error);
       setMagicData((prev) => ({ ...prev, liveAllocation: { ...profile.alloc } }));
       setMagicProfileActive(profileId, true);
@@ -683,7 +670,6 @@ export function useAllocations(
     if (!sendCommandRef.current) return;
     const alloc = magicDataRef.current.liveAllocation;
     const cmd = buildMagicAllocCommand(alloc);
-    console.log('[alloc] apply magic live:', cmd);
     sendCommandRef.current(cmd).catch(console.error);
   }, [sendCommandRef]);
 

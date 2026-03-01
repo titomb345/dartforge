@@ -301,17 +301,12 @@ export function SettingsPanel({ onClose }: { onClose: () => void }) {
                   onSubmit={(e) => e.preventDefault()}
                   autoComplete="on"
                 >
-                  <input
-                    type="hidden"
-                    name={`dartmud-slot-${slot}`}
-                    value={`dartmud-slot-${slot}`}
-                  />
                   <FieldRow label="Name">
                     <MudInput
                       accent="cyan"
                       size="sm"
-                      name="username"
-                      autoComplete="username"
+                      name={`dartmud-char${slot}-username`}
+                      autoComplete={`section-char${slot} username`}
                       value={autoLoginCharacters[slot]?.name ?? ''}
                       onChange={(e) => updateCharacterField(slot, 'name', e.target.value)}
                       placeholder="Character name"
@@ -324,8 +319,8 @@ export function SettingsPanel({ onClose }: { onClose: () => void }) {
                       type="password"
                       accent="cyan"
                       size="sm"
-                      name="password"
-                      autoComplete="current-password"
+                      name={`dartmud-char${slot}-password`}
+                      autoComplete={`section-char${slot} current-password`}
                       value={autoLoginCharacters[slot]?.password ?? ''}
                       onChange={(e) => updateCharacterField(slot, 'password', e.target.value)}
                       placeholder="Password"

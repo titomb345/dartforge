@@ -89,6 +89,7 @@ export class MudProxy implements DurableObject {
         break;
       case 'disconnect':
         this.disconnectMud();
+        this.send({ type: 'status', connected: false, message: 'Disconnected' });
         break;
       case 'ping':
         this.send({ type: 'pong' });
