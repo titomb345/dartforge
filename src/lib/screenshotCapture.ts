@@ -2,10 +2,12 @@
  * Capture the visible terminal viewport as a styled PNG with macOS-style
  * window chrome and copy it to the clipboard.
  *
- * xterm.js renders colored text on <canvas> elements. DOM cloning loses
- * canvas pixel data, so we draw directly from xterm's canvases onto our
- * own compositing canvas.
+ * xterm.js v6 uses a DOM renderer by default (no <canvas> elements).
+ * We use html-to-image to rasterize the .xterm-screen DOM, then composite
+ * it onto a canvas with window chrome.
  */
+import { toBlob } from 'html-to-image';
+
 export async function captureTerminalScreenshot(
   terminalElement: HTMLElement,
   terminalBackground: string,
@@ -13,13 +15,19 @@ export async function captureTerminalScreenshot(
   const screen = terminalElement.querySelector('.xterm-screen') as HTMLElement | null;
   if (!screen) throw new Error('Could not find .xterm-screen element');
 
-  // xterm.js renders text on one or more canvas layers
-  const canvases = screen.querySelectorAll('canvas');
-  if (canvases.length === 0) throw new Error('Could not find xterm canvas elements');
-
   const screenRect = screen.getBoundingClientRect();
   const termWidth = Math.round(screenRect.width);
   const termHeight = Math.round(screenRect.height);
+
+  // Rasterize the DOM-rendered terminal to an image
+  const termBlob = await toBlob(screen, {
+    width: termWidth,
+    height: termHeight,
+    pixelRatio: 2,
+    backgroundColor: terminalBackground,
+  });
+  if (!termBlob) throw new Error('Failed to rasterize terminal');
+  const termImg = await createImageBitmap(termBlob);
 
   // Layout constants
   const SCALE = 2;
@@ -97,21 +105,15 @@ export async function captureTerminalScreenshot(
   ctx.textAlign = 'start';
   ctx.textBaseline = 'alphabetic';
 
-  // --- Terminal content (drawn from xterm's canvases) ---
+  // --- Terminal content ---
   const contentX = chromeX + CONTENT_PAD_X;
   const contentY = chromeY + TITLE_H + CONTENT_PAD_Y;
 
-  // Clip to the chrome rounded rect so canvas doesn't overflow corners
+  // Clip to the chrome rounded rect so content doesn't overflow corners
   ctx.save();
   roundRect(ctx, chromeX, chromeY, innerW, innerH, BORDER_RADIUS);
   ctx.clip();
-
-  // Draw each xterm canvas layer (text, selections, decorations, etc.)
-  for (const c of canvases) {
-    if (c.width > 0 && c.height > 0) {
-      ctx.drawImage(c, contentX, contentY, termWidth, termHeight);
-    }
-  }
+  ctx.drawImage(termImg, contentX, contentY, termWidth, termHeight);
   ctx.restore();
 
   // --- Convert to blob and copy to clipboard ---
