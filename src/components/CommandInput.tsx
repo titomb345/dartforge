@@ -35,6 +35,10 @@ const NUMPAD_DIRECTIONS: Record<string, string> = {
   Numpad3: 'se',
   Numpad0: 'u',
   NumpadAdd: 'back',
+  NumpadDivide: '/counter info',
+  NumpadMultiply: '/counter toggle',
+  NumpadSubtract: '/movemode',
+  NumpadDecimal: 'survey',
 };
 
 interface TabState {
@@ -83,7 +87,6 @@ export const CommandInput = forwardRef<HTMLTextAreaElement, CommandInputProps>(
       passwordMode,
       skipHistory,
       recentLinesRef,
-      onToggleCounter,
       antiIdleEnabled,
       antiIdleCommand,
       antiIdleMinutes,
@@ -133,10 +136,6 @@ export const CommandInput = forwardRef<HTMLTextAreaElement, CommandInputProps>(
     const { active: spotlightActive } = useSpotlight();
     const numpadRef = useRef(numpadMappings);
     numpadRef.current = numpadMappings;
-    const toggleCounterRef = useRef(onToggleCounter);
-    toggleCounterRef.current = onToggleCounter;
-    const toggleMovementModeRef = useRef(onToggleMovementMode);
-    toggleMovementModeRef.current = onToggleMovementMode;
     const onHistoryChangeRef = useRef(onHistoryChange);
     onHistoryChangeRef.current = onHistoryChange;
     const [value, setValue] = useState('');
@@ -248,20 +247,6 @@ export const CommandInput = forwardRef<HTMLTextAreaElement, CommandInputProps>(
         if (numpadDir) {
           e.preventDefault();
           onSend(numpadDir);
-          return;
-        }
-
-        // Numpad * — toggle active improve counter
-        if (e.code === 'NumpadMultiply' && toggleCounterRef.current) {
-          e.preventDefault();
-          toggleCounterRef.current();
-          return;
-        }
-
-        // Numpad / — cycle movement mode
-        if (e.code === 'NumpadDivide') {
-          e.preventDefault();
-          toggleMovementModeRef.current();
           return;
         }
 

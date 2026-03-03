@@ -786,7 +786,21 @@ export function SettingsPanel({ onClose }: { onClose: () => void }) {
 
 /* ── Numpad Mappings Section ──────────────────────────────── */
 
+/*
+ * Numpad layout (3 cols × 6 rows):
+ *
+ *  [ / ][ * ][ - ]
+ *  [ 7 ][ 8 ][ 9 ]
+ *  [ 4 ][ 5 ][ 6 ]
+ *  [ 1 ][ 2 ][ 3 ]
+ *  [   0   ][ . ][ + ]
+ */
 const NUMPAD_GRID = [
+  [
+    { key: 'NumpadDivide', label: '/' },
+    { key: 'NumpadMultiply', label: '*' },
+    { key: 'NumpadSubtract', label: '-' },
+  ],
   [
     { key: 'Numpad7', label: '7' },
     { key: 'Numpad8', label: '8' },
@@ -804,7 +818,8 @@ const NUMPAD_GRID = [
   ],
 ];
 const NUMPAD_BOTTOM = [
-  { key: 'Numpad0', label: '0', span: 2 },
+  { key: 'Numpad0', label: '0', span: 1 },
+  { key: 'NumpadDecimal', label: '.', span: 1 },
   { key: 'NumpadAdd', label: '+', span: 1 },
 ];
 
@@ -846,12 +861,8 @@ function NumpadSection({
         ))}
       </div>
       <div className="grid grid-cols-3 gap-1 mt-1">
-        {NUMPAD_BOTTOM.map(({ key, label, span }) => (
-          <div
-            key={key}
-            className="flex flex-col items-center gap-0.5"
-            style={{ gridColumn: `span ${span}` }}
-          >
+        {NUMPAD_BOTTOM.map(({ key, label }) => (
+          <div key={key} className="flex flex-col items-center gap-0.5">
             <span className="text-[9px] font-mono text-text-dim">{label}</span>
             <MudInput
               accent="purple"

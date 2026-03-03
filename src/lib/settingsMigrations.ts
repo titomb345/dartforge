@@ -7,7 +7,7 @@ import type { DataStore } from '../contexts/DataStoreContext';
  * baseline. Existing beta users (version > 1) are normalized to 1 so
  * future migrations apply correctly to everyone.
  */
-export const CURRENT_VERSION = 14;
+export const CURRENT_VERSION = 15;
 
 /** Raw store contents — all keys are optional since older stores may lack them. */
 export type StoreData = Record<string, unknown>;
@@ -229,6 +229,17 @@ const MIGRATIONS: MigrationFn[] = [
   // v13 → v14: Map fingerprint schema
   (data) => {
     data.mapSchemaVersion = 3;
+    return data;
+  },
+  // v14 → v15: Add configurable numpad operator keys
+  (data) => {
+    const mappings = data.numpadMappings as Record<string, string> | undefined;
+    if (mappings && typeof mappings === 'object') {
+      if (!('NumpadDivide' in mappings)) mappings.NumpadDivide = '/counter info';
+      if (!('NumpadMultiply' in mappings)) mappings.NumpadMultiply = '/counter toggle';
+      if (!('NumpadSubtract' in mappings)) mappings.NumpadSubtract = '/movemode';
+      if (!('NumpadDecimal' in mappings)) mappings.NumpadDecimal = 'survey';
+    }
     return data;
   },
 ];

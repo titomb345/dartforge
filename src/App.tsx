@@ -73,6 +73,7 @@ import { TimerPanel } from './components/TimerPanel';
 import { useSignatureMappings } from './hooks/useSignatureMappings';
 import { matchTriggers, expandTriggerBody, resetTriggerCooldowns } from './lib/triggerEngine';
 import { smartWrite } from './lib/terminalUtils';
+import { captureTerminalScreenshot } from './lib/screenshotCapture';
 import { ActionBlocker, type ActionBlockerState } from './lib/actionBlocker';
 import { AutoInscriber, type AutoInscriberState } from './lib/autoInscriber';
 import { AutoCaster, type AutoCasterState } from './lib/autoCaster';
@@ -1717,6 +1718,15 @@ function AppMain() {
           return;
         }
 
+        if (argsLower === 'toggle') {
+          const ac = counters.find((c) => c.id === activeCounterId);
+          if (!ac) { writeToTerm('\x1b[31m[Counter] No active counter.\x1b[0m\r\n'); return; }
+          if (ac.status === 'running') cv.pauseCounter(ac.id);
+          else if (ac.status === 'paused') cv.resumeCounter(ac.id);
+          else cv.startCounter(ac.id);
+          return;
+        }
+
         if (argsLower === 'pause') {
           const ac = counters.find((c) => c.id === activeCounterId);
           if (!ac) { writeToTerm('\x1b[31m[Counter] No active counter.\x1b[0m\r\n'); return; }
@@ -1762,6 +1772,7 @@ function AppMain() {
           '  /counter status          Active counter one-liner\r\n' +
           '  /counter info            Detailed stats for active counter\r\n' +
           '  /counter start           Start/resume active counter\r\n' +
+          '  /counter toggle          Toggle start/pause\r\n' +
           '  /counter pause           Pause active counter\r\n' +
           '  /counter stop            Stop active counter\r\n' +
           '  /counter clear           Clear active counter\r\n' +
@@ -2190,6 +2201,18 @@ function AppMain() {
     requestAnimationFrame(() => inputRef.current?.focus());
   }, [disconnect]);
 
+  const handleScreenshot = useCallback(async () => {
+    const term = terminalRef.current;
+    if (!term?.element) return;
+    try {
+      await captureTerminalScreenshot(term.element, xtermTheme.background ?? '#000000');
+      smartWrite(term, '\r\n\x1b[90m[Screenshot copied to clipboard]\x1b[0m\r\n');
+    } catch (err) {
+      console.error('Screenshot failed:', err);
+      smartWrite(term, '\r\n\x1b[31m[Screenshot failed]\x1b[0m\r\n');
+    }
+  }, [xtermTheme.background]);
+
   const appSettingsWithExtras = useMemo(
     () => ({
       ...appSettings,
@@ -2237,6 +2260,7 @@ function AppMain() {
                                         connected={connected}
                                         onReconnect={handleReconnect}
                                         onDisconnect={handleDisconnect}
+                                        onScreenshot={handleScreenshot}
                                       />
                                       <div className="flex-1 overflow-hidden flex flex-row gap-1 relative">
                                         {/* Left pinned region — full, collapsed strip, or hidden */}
@@ -2299,6 +2323,7 @@ function AppMain() {
                                               onAddToTrigger={handleAddToTrigger}
                                               onGagLine={handleGagLine}
                                               onOpenInNotes={handleOpenInNotes}
+                                              onScreenshot={handleScreenshot}
                                             />
                                           </div>
                                           {/* Status bar + command input */}

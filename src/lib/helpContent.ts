@@ -220,6 +220,13 @@ export const HELP_CATEGORIES: HelpCategory[] = [
         helpId: 'game-clock',
         interaction: 'click',
       },
+      {
+        title: 'Screenshot to Clipboard',
+        description:
+          'Click the camera icon in the toolbar (or press Ctrl+Shift+S) to capture the visible terminal as a styled PNG and copy it to your clipboard. Great for sharing moments on Discord.',
+        helpId: 'toolbar-screenshot',
+        interaction: 'click',
+      },
     ],
   },
   {
@@ -237,14 +244,12 @@ export const HELP_CATEGORIES: HelpCategory[] = [
       {
         title: 'Toggle Active Counter',
         description:
-          'Quickly toggle your active improve counter between running and paused states.',
-        kbd: ['Numpad *'],
+          'Toggle your active improve counter between running and paused states. Configurable in Settings → Numpad Mappings (default: Numpad *).',
       },
       {
         title: 'Cycle Movement Mode',
         description:
-          'Cycle through movement modes: Normal → Leading → Rowing. Active mode prefixes all direction commands automatically.',
-        kbd: ['Numpad /'],
+          'Cycle through movement modes: Normal → Leading → Rowing. Configurable in Settings → Numpad Mappings (default: Numpad /).',
       },
       {
         title: 'Tab Completion',
@@ -286,6 +291,12 @@ export const HELP_CATEGORIES: HelpCategory[] = [
         description:
           'Adjust the terminal font size on the fly. Ctrl and + to zoom in, Ctrl and - to zoom out, Ctrl and 0 to reset to default (14px).',
         kbd: ['Ctrl +', 'Ctrl -', 'Ctrl 0'],
+      },
+      {
+        title: 'Screenshot to Clipboard',
+        description:
+          'Capture the visible terminal as a styled PNG with macOS-style window chrome and copy it to your clipboard. Perfect for sharing in Discord.',
+        kbd: ['Ctrl', 'Shift', 'S'],
       },
     ],
   },
@@ -366,7 +377,7 @@ export const HELP_CATEGORIES: HelpCategory[] = [
       {
         title: '/counter',
         description:
-          'Manage improve counters from the command line. "/counter list" shows all counters with status, imps, and elapsed time. "/counter status" shows a quick one-liner for the active counter. "/counter info" shows detailed stats including rates and skills. "/counter start|pause|stop|clear" controls the active counter. "/counter switch <name>" switches the active counter by name (partial match).',
+          'Manage improve counters from the command line. "/counter list" shows all counters with status, imps, and elapsed time. "/counter status" shows a quick one-liner for the active counter. "/counter info" shows detailed stats including rates and skills. "/counter start|toggle|pause|stop|clear" controls the active counter. "/counter toggle" smart-toggles between start and pause. "/counter switch <name>" switches the active counter by name (partial match).',
       },
     ],
   },

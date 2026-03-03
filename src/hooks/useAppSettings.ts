@@ -29,6 +29,10 @@ export const DEFAULT_NUMPAD_MAPPINGS: Record<string, string> = {
   Numpad3: 'se',
   Numpad0: 'u',
   NumpadAdd: 'back',
+  NumpadDivide: '/counter info',
+  NumpadMultiply: '/counter toggle',
+  NumpadSubtract: '/movemode',
+  NumpadDecimal: 'survey',
 };
 
 const DEFAULT_NOTIFICATIONS: ChatFilters = {
