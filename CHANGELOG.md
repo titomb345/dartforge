@@ -27,6 +27,7 @@ The `[Unreleased]` header controls automatic version bumping on merge:
 - Numpad `/`, `*`, `-`, and `.` keys are now configurable in Settings → Numpad Mappings (previously `/` and `*` were hardcoded, `-` and `.` were ignored)
 
 ### Fixed
+- Screenshot Mode failing in desktop app — now uses Tauri clipboard plugin for image writing instead of unsupported web Clipboard API
 - Gagged lines leaving orphan blank lines in terminal — empty separator lines adjacent to gagged content (gag groups, triggers, compact mode) are now suppressed so gagging doesn't leave vertical whitespace gaps
 - Dropbox sync overwriting allocations — initial sync now uses remote data entirely for non-skill files instead of shallow-merging with localStorage, preventing stale local data from corrupting allocation profiles
 - Web client disconnect not updating UI — proxy now sends a status message to the client on disconnect

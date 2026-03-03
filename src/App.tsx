@@ -2208,8 +2208,9 @@ function AppMain() {
       await captureTerminalScreenshot(term.element, xtermTheme.background ?? '#000000');
       smartWrite(term, '\r\n\x1b[90m[Screenshot copied to clipboard]\x1b[0m\r\n');
     } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
       console.error('Screenshot failed:', err);
-      smartWrite(term, '\r\n\x1b[31m[Screenshot failed]\x1b[0m\r\n');
+      smartWrite(term, `\r\n\x1b[31m[Screenshot failed: ${msg}]\x1b[0m\r\n`);
     }
   }, [xtermTheme.background]);
 

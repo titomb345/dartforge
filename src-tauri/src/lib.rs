@@ -128,6 +128,7 @@ pub fn run() {
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_store::Builder::default().build())
         .plugin(tauri_plugin_dialog::init())
+        .plugin(tauri_plugin_clipboard_manager::init())
         .manage(ConnectionState {
             cmd_tx: Mutex::new(None),
             task_handle: Mutex::new(None),

@@ -122,7 +122,15 @@ export async function captureTerminalScreenshot(
     }, 'image/png');
   });
 
-  await navigator.clipboard.write([new ClipboardItem({ 'image/png': blob })]);
+  if ('__TAURI_INTERNALS__' in window) {
+    const { writeImage } = await import('@tauri-apps/plugin-clipboard-manager');
+    const { Image } = await import('@tauri-apps/api/image');
+    const bytes = new Uint8Array(await blob.arrayBuffer());
+    const image = await Image.fromBytes(bytes);
+    await writeImage(image);
+  } else {
+    await navigator.clipboard.write([new ClipboardItem({ 'image/png': blob })]);
+  }
 }
 
 function roundRect(
