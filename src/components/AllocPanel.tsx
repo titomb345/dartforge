@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect } from 'react';
 import { useAllocContext } from '../contexts/AllocContext';
+import { useAppSettingsContext } from '../contexts/AppSettingsContext';
 import type { PinnablePanelProps } from '../types';
 import type { AllocView, AllocTab, LimbAllocation, MagicAllocation } from '../types/alloc';
 import {
@@ -987,8 +988,9 @@ function MagicProfileView() {
 
 export function AllocPanel({ mode = 'slideout' }: AllocPanelProps) {
   const isPinned = mode === 'pinned';
-  const { activeCharacter, view, setView, allocTab, setAllocTab, magicView, setMagicView } =
+  const { view, setView, allocTab, setAllocTab, magicView, setMagicView } =
     useAllocContext();
+  const { connected } = useAppSettingsContext();
 
   return (
     <div
@@ -1000,7 +1002,7 @@ export function AllocPanel({ mode = 'slideout' }: AllocPanelProps) {
     >
       <PanelHeader icon={<AllocIcon size={12} />} title="Allocations" panel="alloc" mode={mode} />
 
-      {!activeCharacter ? (
+      {!connected ? (
         <div className="flex items-center justify-center h-full text-[10px] text-text-dim font-mono">
           Not connected
         </div>

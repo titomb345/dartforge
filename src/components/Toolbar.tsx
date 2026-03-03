@@ -18,6 +18,7 @@ import {
   AllocIcon,
   BabelIcon,
   HelpIcon,
+  CameraIcon,
 } from './icons';
 import { getPlatform } from '../lib/platform';
 import { cn } from '../lib/cn';
@@ -28,9 +29,10 @@ interface ToolbarProps {
   connected: boolean;
   onReconnect: () => void;
   onDisconnect: () => void;
+  onScreenshot: () => void;
 }
 
-export function Toolbar({ connected, onReconnect, onDisconnect }: ToolbarProps) {
+export function Toolbar({ connected, onReconnect, onDisconnect, onScreenshot }: ToolbarProps) {
   const { activePanel, togglePanel, isPinned } = usePanelContext();
 
   return (
@@ -209,6 +211,13 @@ export function Toolbar({ connected, onReconnect, onDisconnect }: ToolbarProps) 
           panelId="settings"
           toggled={activePanel === 'settings'}
           onClick={() => togglePanel('settings')}
+        />
+        <IconButton
+          icon={<CameraIcon />}
+          title="Screenshot"
+          accent="#f472b6"
+          helpId="toolbar-screenshot"
+          onClick={onScreenshot}
         />
         <div className="w-px h-[18px] bg-border-dim mx-1.5" />
         <IconButton

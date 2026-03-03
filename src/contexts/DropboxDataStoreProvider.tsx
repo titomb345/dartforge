@@ -265,9 +265,9 @@ export function DropboxDataStoreProvider({ children }: { children: ReactNode }) 
                 filesToUpload.push(file.name);
               }
             } else {
-              // Remote wins entirely — no merge with (possibly stale) localStorage
-              cacheRef.current.set(file.name, remoteData);
-              localStorage.setItem(PREFIX + file.name, JSON.stringify(remoteData));
+              const merged = { ...localData, ...remoteData };
+              cacheRef.current.set(file.name, merged);
+              localStorage.setItem(PREFIX + file.name, JSON.stringify(merged));
             }
           } catch (e) {
             console.error(`Failed to sync ${file.name}:`, e);

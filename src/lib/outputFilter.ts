@@ -146,6 +146,9 @@ export class OutputFilter {
   private passiveWhoLines: string[] = [];
   private passiveWhoRawLines: string[] = [];
 
+  /* ---- Gag-adjacent blank line suppression ---- */
+  private lastLineGagged = false;
+
   /* ---- Anti-spam state ---- */
   private prevStrippedLine: string | null = null;
   private repeatCount = 0;
@@ -542,6 +545,8 @@ export class OutputFilter {
       if (this.syncActive && this.shouldSyncGag(stripped, seg, healthMatch)) {
         // Fire onLine so alloc/magic parsers and triggers still process
         this.callbacks.onLine?.(stripped, seg);
+        output += '\x1b[0m'; // reset color state so gagged line doesn't bleed
+        this.lastLineGagged = true;
         continue; // suppress only this specific sync response line
       }
 
@@ -565,6 +570,8 @@ export class OutputFilter {
           (this.filterFlags.movement && movementMatch) ||
           (this.filterFlags.alignment && alignmentMatch))
       ) {
+        output += '\x1b[0m'; // reset color state so gagged line doesn't bleed
+        this.lastLineGagged = true;
         continue;
       }
 
@@ -575,6 +582,8 @@ export class OutputFilter {
         if (transformed !== null) displaySegment = transformed;
       }
       if (lineResult?.gag) {
+        output += '\x1b[0m'; // reset color state so gagged line doesn't bleed
+        this.lastLineGagged = true;
         continue; // suppress this line from terminal output
       }
       if (lineResult?.highlight) {
@@ -585,8 +594,18 @@ export class OutputFilter {
           this.repeatCount = 0;
         }
         this.prevStrippedLine = stripped;
+        this.lastLineGagged = false;
         output += `\x1b[${lineResult.highlight}m${displaySegment}\x1b[0m`;
         continue;
+      }
+
+      // --- Suppress blank lines left behind by gagged content ---
+      if (stripped === '' && this.lastLineGagged) {
+        continue;
+      }
+      // Non-gagged, non-empty line clears the gag-adjacent flag
+      if (stripped !== '') {
+        this.lastLineGagged = false;
       }
 
       // --- Anti-spam: collapse consecutive identical lines ---
@@ -594,6 +613,7 @@ export class OutputFilter {
         if (stripped === this.prevStrippedLine) {
           this.repeatCount++;
           this.startAntiSpamTimer();
+          output += '\x1b[0m'; // reset color state so gagged line doesn't bleed
           continue; // suppress duplicate
         }
         // Different line — flush pending count
@@ -651,6 +671,7 @@ export class OutputFilter {
     this.passiveWhoActive = false;
     this.passiveWhoLines = [];
     this.passiveWhoRawLines = [];
+    this.lastLineGagged = false;
     this.prevStrippedLine = null;
     this.repeatCount = 0;
     this.clearAntiSpamTimer();
