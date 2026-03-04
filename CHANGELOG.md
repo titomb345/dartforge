@@ -21,6 +21,8 @@ The `[Unreleased]` header controls automatic version bumping on merge:
 - Script editor fills the full panel height instead of starting at a fixed 120px minimum
 
 ### Added
+- Skill panel shows total improvement count at the bottom of the skill list, reflecting the currently selected category
+- Removed character name from the Skills panel header for a cleaner look
 - Configurable command separator — the character(s) used to chain multiple commands is now configurable in Settings > Output (default `;;` for new installs, `;` preserved for existing users). Single semicolons in normal text (e.g. "say hey; how are you?") no longer break into separate commands when using `;;`
 - Quick Buttons — customizable command buttons in a row between the terminal and status bar; click to fire commands or scripts instantly; right-click for edit, delete, enable/disable, and reorder; supports both command mode (with alias expansion) and JavaScript script mode; persists across sessions
 - JavaScript scripting engine for triggers, aliases, and timers — toggle "Script" in the editor to write JS bodies with `send()`, `echo()`, `await delay()`, `spam()`, `setVar()`, `getVar()`, and capture variables (`$0`-`$9`, `$line`, `$me`). Supports `if/else`, loops, `await`, and shared functions via the Global Script panel

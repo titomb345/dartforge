@@ -353,6 +353,17 @@ export function SkillPanel({ mode = 'slideout' }: SkillPanelProps) {
     return categorizedSkills[filter].length > 0 ? [filter] : [];
   }, [filter, categorizedSkills]);
 
+  const categoryTotals = useMemo(() => {
+    const totals: Record<string, number> = { all: 0 };
+    for (const cat of CATEGORY_ORDER) {
+      const sum = categorizedSkills[cat].reduce((acc, r) => acc + r.count, 0);
+      totals[cat] = sum;
+    }
+    // "all" total = sum of player skills only (not double-counting categories)
+    totals.all = Object.values(skillData.skills).reduce((acc, r) => acc + r.count, 0);
+    return totals;
+  }, [categorizedSkills, skillData.skills]);
+
   const hasAnySkills = CATEGORY_ORDER.some((cat) => categorizedSkills[cat].length > 0);
 
   const handleAddSkill = (e: React.FormEvent) => {
@@ -368,7 +379,7 @@ export function SkillPanel({ mode = 'slideout' }: SkillPanelProps) {
 
   const isPinned = mode === 'pinned';
 
-  const titleText = `Skills${activeCharacter ? ` (${charDisplayName(activeCharacter)})` : ''}`;
+  const titleText = 'Skills';
 
   const addButton = activeCharacter ? (
     <button
@@ -545,6 +556,16 @@ export function SkillPanel({ mode = 'slideout' }: SkillPanelProps) {
               />
             );
           })
+        )}
+
+        {/* Totals */}
+        {hasAnySkills && (
+          <div className="flex items-center gap-1.5 px-2 pt-2 mt-1 border-t border-border-subtle">
+            <span className="text-[10px] text-text-dim flex-1">Total</span>
+            <span className="text-[11px] font-mono text-text-dim">
+              {categoryTotals[filter].toLocaleString()} imps
+            </span>
+          </div>
         )}
       </div>
     </div>
