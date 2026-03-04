@@ -525,11 +525,13 @@ function TriggerEditor({
           </div>
           {showHelp && (bodyMode === 'script' ? <ScriptSyntaxHelp /> : <BodySyntaxHelp />)}
           {bodyMode === 'script' ? (
-            <ScriptEditor
-              value={body}
-              onChange={setBody}
-              placeholder="// JavaScript — use await for async calls\nawait send('cast heal');\necho('Healing triggered by: ' + $0);"
-            />
+            <div style={{ height: 150 }}>
+              <ScriptEditor
+                value={body}
+                onChange={setBody}
+                placeholder="// JavaScript — use await for async calls\nawait send('cast heal');\necho('Healing triggered by: ' + $0);"
+              />
+            </div>
           ) : (
             <MudTextarea
               accent="pink"

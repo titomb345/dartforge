@@ -353,11 +353,13 @@ function AliasEditor({
           </div>
           {showHelp && (bodyMode === 'script' ? <ScriptSyntaxHelp /> : <BodySyntaxHelp />)}
           {bodyMode === 'script' ? (
-            <ScriptEditor
-              value={body}
-              onChange={setBody}
-              placeholder={`// JavaScript — use await for async calls\nif ($1 === 'start') {\n  await send('cast shield');\n} else {\n  echo('Usage: ${pattern} start|stop');\n}`}
-            />
+            <div style={{ height: 150 }}>
+              <ScriptEditor
+                value={body}
+                onChange={setBody}
+                placeholder={`// JavaScript — use await for async calls\nif ($1 === 'start') {\n  await send('cast shield');\n} else {\n  echo('Usage: ${pattern} start|stop');\n}`}
+              />
+            </div>
           ) : (
             <MudTextarea
               accent="purple"
