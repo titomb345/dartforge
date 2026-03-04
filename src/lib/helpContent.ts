@@ -416,7 +416,7 @@ export const HELP_CATEGORIES: HelpCategory[] = [
       {
         title: 'Triggers',
         description:
-          'Auto-react to MUD output. Match patterns with Substring, Exact, or Regex. Supports gag (hide line), highlight (color line), cooldown, and sound alerts.',
+          'Auto-react to MUD output. Match patterns with Substring, Exact, or Regex. Supports gag (hide line), highlight (color line), cooldown, and sound alerts. Multi-line mode buffers lines between a start pattern and an end pattern (regex), then fires with the joined text — ideal for tells and messages that wrap across multiple lines.',
         helpId: 'toolbar-triggers',
       },
       {

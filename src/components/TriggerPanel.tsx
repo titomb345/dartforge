@@ -108,6 +108,14 @@ function TriggerRow({
       >
         {trigger.pattern}
       </span>
+      {trigger.multiLine && (
+        <span
+          title="Multi-line trigger"
+          className="text-[8px] font-mono px-1 py-px rounded border border-[#bd93f9]/40 text-[#bd93f9] bg-[#bd93f9]/10 shrink-0"
+        >
+          ML
+        </span>
+      )}
       {trigger.bodyMode === 'script' && (
         <span
           title="JavaScript script mode"
@@ -267,6 +275,8 @@ function TriggerEditor({
       highlight: string | null;
       soundAlert: boolean;
       bodyMode?: BodyMode;
+      multiLine?: boolean;
+      endPattern?: string;
     },
     scope: TriggerScope,
     existingId?: TriggerId
@@ -287,6 +297,8 @@ function TriggerEditor({
   const [bodyMode, setBodyMode] = useState<BodyMode>(
     trigger?.bodyMode ?? prefill?.bodyMode ?? 'text'
   );
+  const [multiLine, setMultiLine] = useState(trigger?.multiLine ?? false);
+  const [endPattern, setEndPattern] = useState(trigger?.endPattern ?? '');
 
   // Custom highlight color state
   const initCustom =
@@ -354,6 +366,7 @@ function TriggerEditor({
           highlight,
           soundAlert,
           bodyMode,
+          ...(multiLine ? { multiLine: true, endPattern: endPattern.trim() } : {}),
         },
         scope,
         trigger?.id
@@ -388,6 +401,7 @@ function TriggerEditor({
                     highlight,
                     soundAlert,
                     bodyMode,
+                    ...(multiLine ? { multiLine: true, endPattern: endPattern.trim() } : {}),
                   },
                   scope,
                   trigger?.id
@@ -430,6 +444,47 @@ function TriggerEditor({
             </select>
           </div>
         </div>
+
+        {/* Multi-line toggle + end pattern */}
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={() => setMultiLine(!multiLine)}
+            title={
+              multiLine
+                ? 'Multi-line ON — buffers lines between start and end patterns'
+                : 'Multi-line OFF — matches single lines only'
+            }
+            className={`text-[9px] font-mono px-2 py-1 rounded border cursor-pointer transition-colors duration-150 ${
+              multiLine
+                ? 'text-[#bd93f9] border-[#bd93f9]/40 bg-[#bd93f9]/10'
+                : 'text-text-dim border-border-dim bg-transparent hover:text-text-label'
+            }`}
+          >
+            Multi-line
+          </button>
+          {multiLine && (
+            <div className="flex-1">
+              <MudInput
+                accent="pink"
+                value={endPattern}
+                onChange={(e) => setEndPattern(e.target.value)}
+                onKeyDown={handleFieldKeyDown}
+                placeholder="End pattern regex, e.g. '$"
+                className="w-full"
+              />
+            </div>
+          )}
+        </div>
+
+        {multiLine && (
+          <div className="text-[9px] text-text-dim bg-bg-primary rounded border border-border-dim px-2 py-1.5 leading-relaxed">
+            <span className="text-[#bd93f9]">Multi-line mode:</span> Pattern above is the{' '}
+            <strong>start</strong> pattern. Lines are buffered until the{' '}
+            <strong>end pattern</strong> (regex) matches. The joined text is then matched
+            against the start pattern for captures ($0, $1, etc.). Max 10 lines.
+          </div>
+        )}
 
         {/* Body */}
         <div>
@@ -809,6 +864,9 @@ export function TriggerPanel({ onClose }: TriggerPanelProps) {
         gag: boolean;
         highlight: string | null;
         soundAlert: boolean;
+        bodyMode?: BodyMode;
+        multiLine?: boolean;
+        endPattern?: string;
       },
       saveScope: TriggerScope,
       existingId?: TriggerId

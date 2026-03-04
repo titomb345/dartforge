@@ -19,6 +19,10 @@ const MAX_FIRES_PER_SECOND = 20;
 /** Cache compiled regex patterns to avoid re-compiling on every match */
 const regexCache = new Map<string, RegExp | null>();
 
+/** Active multi-line buffers: triggerId → accumulated lines */
+const mlBuffers = new Map<string, { stripped: string[]; raw: string[] }>();
+const ML_MAX_LINES = 10;
+
 /**
  * Match a single stripped output line against the trigger list.
  * Returns all matching triggers (multiple triggers can fire on the same line).
@@ -55,6 +59,8 @@ export function matchTriggers(
 
   for (const trigger of sorted) {
     if (!trigger.enabled) continue;
+    // Skip multi-line triggers in the single-line loop
+    if (trigger.multiLine && trigger.endPattern) continue;
 
     // Global rate limit check
     if (recentFires.length >= MAX_FIRES_PER_SECOND) break;
@@ -71,7 +77,111 @@ export function matchTriggers(
     }
   }
 
+  // --- Multi-line trigger processing ---
+
+  // Phase 1: Check active buffers — append line and test end pattern
+  for (const trigger of sorted) {
+    if (!trigger.enabled || !trigger.multiLine || !trigger.endPattern) continue;
+    const buf = mlBuffers.get(trigger.id);
+    if (!buf) continue;
+
+    if (recentFires.length >= MAX_FIRES_PER_SECOND) break;
+
+    buf.stripped.push(strippedLine);
+    buf.raw.push(rawLine);
+
+    const endMatched = testEndPattern(trigger.endPattern, strippedLine);
+    if (endMatched || buf.stripped.length >= ML_MAX_LINES) {
+      // Buffer complete — join and match full pattern
+      const result = fireMultiLineBuffer(trigger, buf, now);
+      mlBuffers.delete(trigger.id);
+      if (result) {
+        matches.push(result);
+        cooldownMap.set(trigger.id, now);
+        recentFires.push(now);
+      }
+    }
+  }
+
+  // Phase 2: Check multi-line triggers not currently buffering — test start pattern
+  for (const trigger of sorted) {
+    if (!trigger.enabled || !trigger.multiLine || !trigger.endPattern) continue;
+    if (mlBuffers.has(trigger.id)) continue;
+
+    if (recentFires.length >= MAX_FIRES_PER_SECOND) break;
+
+    const startResult = matchSingle(strippedLine, rawLine, trigger);
+    if (startResult) {
+      // Start buffering
+      const buf = { stripped: [strippedLine], raw: [rawLine] };
+
+      // Check if end pattern also matches on the same line (single-line case)
+      const endMatched = testEndPattern(trigger.endPattern, strippedLine);
+      if (endMatched) {
+        // Fire immediately with this single line
+        const lastFired = cooldownMap.get(trigger.id) ?? 0;
+        if (trigger.cooldownMs > 0 && now - lastFired < trigger.cooldownMs) continue;
+        const result = fireMultiLineBuffer(trigger, buf, now);
+        if (result) {
+          matches.push(result);
+          cooldownMap.set(trigger.id, now);
+          recentFires.push(now);
+        }
+      } else {
+        mlBuffers.set(trigger.id, buf);
+      }
+    }
+  }
+
   return matches;
+}
+
+/** Test an end pattern (regex) against a stripped line */
+function testEndPattern(endPattern: string, strippedLine: string): boolean {
+  const cacheKey = `end:${endPattern}`;
+  let re = regexCache.get(cacheKey);
+  if (re === undefined) {
+    try {
+      re = new RegExp(endPattern, 'i');
+    } catch {
+      re = null;
+    }
+    regexCache.set(cacheKey, re);
+  }
+  return re ? re.test(strippedLine) : false;
+}
+
+/** Join a multi-line buffer and run the trigger's pattern against it for captures */
+function fireMultiLineBuffer(
+  trigger: Trigger,
+  buf: { stripped: string[]; raw: string[] },
+  _now: number
+): TriggerMatch | null {
+  const joinedStripped = buf.stripped.join(' ');
+  const joinedRaw = buf.raw.join(' ');
+
+  // Run trigger's pattern as regex against joined text for captures
+  const cacheKey = `ml:${trigger.pattern}`;
+  let re = regexCache.get(cacheKey);
+  if (re === undefined) {
+    try {
+      re = new RegExp(trigger.pattern, 'i');
+    } catch {
+      re = null;
+    }
+    regexCache.set(cacheKey, re);
+  }
+
+  if (re) {
+    const match = re.exec(joinedStripped);
+    if (match) {
+      const captures = match.slice(0).map((g) => g ?? '');
+      return { trigger, line: joinedStripped, rawLine: joinedRaw, captures };
+    }
+  }
+
+  // Pattern didn't match joined text — still fire with basic captures
+  return { trigger, line: joinedStripped, rawLine: joinedRaw, captures: [joinedStripped] };
 }
 
 function matchSingle(stripped: string, raw: string, trigger: Trigger): TriggerMatch | null {
@@ -151,9 +261,10 @@ export function expandTriggerBody(
   return commands;
 }
 
-/** Reset all cooldown state and caches (call on disconnect) */
+/** Reset all cooldown state, caches, and multi-line buffers (call on disconnect) */
 export function resetTriggerCooldowns(): void {
   cooldownMap.clear();
   recentFires = [];
   regexCache.clear();
+  mlBuffers.clear();
 }

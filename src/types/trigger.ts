@@ -33,6 +33,10 @@ export interface Trigger {
   highlight: string | null;
   /** Play a sound alert when this trigger fires */
   soundAlert: boolean;
+  /** Enable multi-line buffering (start pattern + end pattern) */
+  multiLine?: boolean;
+  /** Regex pattern that signals the end of a multi-line buffer */
+  endPattern?: string;
   /** When this trigger was created (ISO string) */
   createdAt: string;
   /** When this trigger was last modified (ISO string) */
@@ -47,6 +51,8 @@ export interface TriggerPrefill {
   body: string;
   group: string;
   bodyMode?: BodyMode;
+  multiLine?: boolean;
+  endPattern?: string;
 }
 
 /** Result of a trigger match — used by the trigger engine */

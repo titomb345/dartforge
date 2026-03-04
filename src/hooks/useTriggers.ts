@@ -98,6 +98,8 @@ export function useTriggers(dataStore: DataStore, activeCharacter: string | null
         highlight?: string | null;
         soundAlert?: boolean;
         bodyMode?: BodyMode;
+        multiLine?: boolean;
+        endPattern?: string;
       },
       scope: TriggerScope
     ): TriggerId => {
@@ -114,6 +116,8 @@ export function useTriggers(dataStore: DataStore, activeCharacter: string | null
         highlight: partial.highlight ?? null,
         soundAlert: partial.soundAlert ?? false,
         bodyMode: partial.bodyMode,
+        multiLine: partial.multiLine,
+        endPattern: partial.endPattern,
         createdAt: now,
         updatedAt: now,
       };
@@ -194,6 +198,8 @@ export function useTriggers(dataStore: DataStore, activeCharacter: string | null
           highlight: original.highlight,
           soundAlert: original.soundAlert,
           bodyMode: original.bodyMode,
+          multiLine: original.multiLine,
+          endPattern: original.endPattern,
         },
         scope
       );

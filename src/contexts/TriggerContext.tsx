@@ -23,6 +23,8 @@ export interface TriggerState {
       highlight?: string | null;
       soundAlert?: boolean;
       bodyMode?: BodyMode;
+      multiLine?: boolean;
+      endPattern?: string;
     },
     scope: TriggerScope
   ) => TriggerId;
