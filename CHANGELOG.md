@@ -14,10 +14,16 @@ The `[Unreleased]` header controls automatic version bumping on merge:
 ### Changed
 - Web client proxy ported from Fly.io/Rust to a Cloudflare Worker using Durable Objects — eliminates hosting costs by running on Cloudflare's free tier
 - Removed old Fly.io Rust proxy (account expired, code no longer needed)
+- Chat "Mine" filter is now a visual toggle — own messages are always captured and stored; toggling "Mine" instantly shows/hides them without losing history
+
+### Fixed
+- Script editor (Global Script panel) now scrolls with the mouse wheel when content exceeds the panel height
+- Script editor fills the full panel height instead of starting at a fixed 120px minimum
 
 ### Added
 - JavaScript scripting engine for triggers and aliases — toggle "Script" in the editor to write JS bodies with `send()`, `echo()`, `await delay()`, `spam()`, `setVar()`, `getVar()`, and capture variables (`$0`-`$9`, `$line`, `$me`). Supports `if/else`, loops, `await`, and shared functions via the Global Script panel
 - Global Script panel — define reusable JavaScript functions and constants shared across all script-mode triggers and aliases; accessible from the toolbar Scripts button
+- Multi-line trigger matching — triggers can now buffer lines between a start pattern and an end pattern (regex), then fire with the joined text; ideal for tells and messages that wrap across multiple lines; toggle "Multi-line" in the trigger editor and set an end pattern; max 10 lines safety cap; buffers clear on disconnect
 - CodeMirror 6 editor for all script bodies — syntax highlighting, line numbers, bracket matching, Tab/Shift+Tab indentation, and Ctrl+S save support replaces plain textareas in the Global Script panel, trigger editor, and alias editor
 - `spam(count, text)` scripting API — send a command N times (max 1000), matching `/spam` directive syntax
 - Retry with exponential backoff for Dropbox uploads — up to 4 retries on 429/5xx errors (1s, 2s, 4s, 8s backoff); failed uploads are queued as pending and retried on next page load

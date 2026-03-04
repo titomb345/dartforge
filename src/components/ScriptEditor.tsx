@@ -46,13 +46,11 @@ interface ScriptEditorProps {
   onChange: (value: string) => void;
   placeholder?: string;
   className?: string;
-  /** Minimum height in pixels (default 120) */
-  minHeight?: number;
-  /** If provided, Ctrl+S triggers this callback */
+/** If provided, Ctrl+S triggers this callback */
   onSave?: () => void;
 }
 
-export function ScriptEditor({ value, onChange, placeholder, className, minHeight = 120, onSave }: ScriptEditorProps) {
+export function ScriptEditor({ value, onChange, placeholder, className, onSave }: ScriptEditorProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const viewRef = useRef<EditorView | null>(null);
   const onChangeRef = useRef(onChange);
@@ -86,9 +84,9 @@ export function ScriptEditor({ value, onChange, placeholder, className, minHeigh
       }
     });
 
-    const minHeightTheme = EditorView.theme({
-      '.cm-editor': { minHeight: `${minHeight}px` },
-      '.cm-scroller': { minHeight: `${minHeight}px` },
+    const sizeTheme = EditorView.theme({
+      '&': { height: '100%' },
+      '.cm-scroller': { overflow: 'auto' },
     });
 
     const state = EditorState.create({
@@ -99,7 +97,7 @@ export function ScriptEditor({ value, onChange, placeholder, className, minHeigh
         javascript(),
         oneDark,
         cyanTheme,
-        minHeightTheme,
+        sizeTheme,
         saveKeymap,
         updateListener,
         EditorView.lineWrapping,
@@ -140,7 +138,7 @@ export function ScriptEditor({ value, onChange, placeholder, className, minHeigh
     <div
       ref={containerRef}
       className={className}
-      style={{ borderRadius: '4px', overflow: 'hidden', border: '1px solid rgba(139, 233, 253, 0.2)' }}
+      style={{ borderRadius: '4px', overflow: 'hidden', border: '1px solid rgba(139, 233, 253, 0.2)', height: '100%' }}
     />
   );
 }
