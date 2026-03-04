@@ -1,5 +1,6 @@
 import { useCallback, useRef, useState, useEffect, useMemo } from 'react';
 import { useTimerContext } from '../contexts/TimerContext';
+import { useAppSettingsContext } from '../contexts/AppSettingsContext';
 import { useSkillTrackerContext } from '../contexts/SkillTrackerContext';
 import { expandInput } from '../lib/aliasEngine';
 import { formatCommandPreview } from '../lib/commandUtils';
@@ -96,12 +97,12 @@ const TIMER_HELP_ROWS: HelpRow[] = [
     desc: 'User-defined variable (set via /var)',
     example: '/var target goblin  \u2192  $target = goblin',
   },
-  { token: ';', desc: 'Command separator \u2014 sends multiple commands', example: 'hp;score' },
-  { token: '\\;', desc: 'Literal semicolon (not a separator)' },
+  { token: ';; (default)', desc: 'Command separator \u2014 sends multiple commands (configurable in Settings)', example: 'hp;;score' },
+  { token: '\\;;', desc: 'Literal separator (escaped with \\)' },
   {
     token: '/delay <ms>',
     desc: 'Pause between commands (milliseconds)',
-    example: '/delay 1000;cast heal',
+    example: '/delay 1000;;cast heal',
   },
   {
     token: '/echo <text>',
@@ -168,6 +169,7 @@ function TimerEditor({
   const [group, setGroup] = useState(timer?.group ?? '');
   const [showInStatusBar, setShowInStatusBar] = useState(timer?.showInStatusBar !== false);
   const [scope, setScope] = useState<TimerScope>(initialScope);
+  const { commandSeparator } = useAppSettingsContext();
   const [intervalValue, setIntervalValue] = useState(() => {
     if (!timer) return 30;
     return timer.intervalSeconds >= 60 && timer.intervalSeconds % 60 === 0
@@ -191,8 +193,8 @@ function TimerEditor({
   const preview = useMemo(() => {
     if (bodyMode === 'script' || !body.trim()) return null;
     try {
-      const result = expandInput(body, [], { activeCharacter });
-      const expand = (input: string) => expandInput(input, [], { activeCharacter }).commands;
+      const result = expandInput(body, [], { activeCharacter, separator: commandSeparator });
+      const expand = (input: string) => expandInput(input, [], { activeCharacter, separator: commandSeparator }).commands;
       const text = formatCommandPreview(result.commands, expand).join('\n');
       return text || '(no commands)';
     } catch {

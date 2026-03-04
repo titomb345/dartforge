@@ -7,7 +7,7 @@ import type { DataStore } from '../contexts/DataStoreContext';
  * baseline. Existing beta users (version > 1) are normalized to 1 so
  * future migrations apply correctly to everyone.
  */
-export const CURRENT_VERSION = 15;
+export const CURRENT_VERSION = 16;
 
 /** Raw store contents — all keys are optional since older stores may lack them. */
 export type StoreData = Record<string, unknown>;
@@ -240,6 +240,11 @@ const MIGRATIONS: MigrationFn[] = [
       if (!('NumpadSubtract' in mappings)) mappings.NumpadSubtract = '/movemode';
       if (!('NumpadDecimal' in mappings)) mappings.NumpadDecimal = 'survey';
     }
+    return data;
+  },
+  // v15 → v16: Configurable command separator (existing users keep `;` for backward compat)
+  (data) => {
+    if (!('commandSeparator' in data)) data.commandSeparator = ';';
     return data;
   },
 ];

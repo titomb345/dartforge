@@ -137,7 +137,7 @@ export const HELP_CATEGORIES: HelpCategory[] = [
       {
         title: 'Timers Panel',
         description:
-          'Create repeating timers that execute commands at set intervals. Supports text mode (semicolons, /delay, /echo, /spam, /var) or JavaScript script mode. Toggle "Show countdown in status bar" per timer to control which countdowns appear next to the command input. Character-scoped or Global.',
+          'Create repeating timers that execute commands at set intervals. Supports text mode (command separator, /delay, /echo, /spam, /var) or JavaScript script mode. Toggle "Show countdown in status bar" per timer to control which countdowns appear next to the command input. Character-scoped or Global.',
         helpId: 'toolbar-timers',
       },
       {
@@ -232,6 +232,12 @@ export const HELP_CATEGORIES: HelpCategory[] = [
           'Click the camera icon in the toolbar (or press Ctrl+Shift+S) to capture the visible terminal as a styled PNG and copy it to your clipboard. Great for sharing moments on Discord.',
         helpId: 'toolbar-screenshot',
         interaction: 'click',
+      },
+      {
+        title: 'Quick Button Context Menu',
+        description:
+          'Right-click any quick button to edit, delete, enable/disable, or reorder it. Click the "+" button at the end of the row to add a new one.',
+        interaction: 'right-click',
       },
     ],
   },
@@ -373,7 +379,7 @@ export const HELP_CATEGORIES: HelpCategory[] = [
       {
         title: '/autoconc',
         description:
-          'Auto-execute any command(s) on full concentration (BEBT). "/autoconc <action>" saves the action (does not start). "/autoconc on" starts with the saved action — fires once on BEBT, then waits for conc to drop and recover before firing again. The action supports aliases, /spam, /delay, /echo, /var, and semicolons for multi-command chains. "/autoconc off" stops. "/autoconc status" shows current state. The action persists across sessions. A purple badge appears while active.',
+          'Auto-execute any command(s) on full concentration (BEBT). "/autoconc <action>" saves the action (does not start). "/autoconc on" starts with the saved action — fires once on BEBT, then waits for conc to drop and recover before firing again. The action supports aliases, /spam, /delay, /echo, /var, and the command separator for multi-command chains. "/autoconc off" stops. "/autoconc status" shows current state. The action persists across sessions. A purple badge appears while active.',
       },
       {
         title: '/announce',
@@ -432,7 +438,7 @@ export const HELP_CATEGORIES: HelpCategory[] = [
       {
         title: 'Command Chaining',
         description:
-          'Use semicolons to chain commands: "kill rat;loot corpse". Escape with \\; for a literal semicolon.',
+          'Chain commands with the configured separator (default ";;"), e.g. "kill rat;;loot corpse". Change it in Settings > Output. Prefix with \\ to use the separator literally.',
       },
       {
         title: 'Script Mode',

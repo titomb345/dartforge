@@ -126,6 +126,8 @@ import { SpotlightOverlay } from './components/SpotlightOverlay';
 import { HelpPanel } from './components/HelpPanel';
 import { getSpellByAbbr, findSpellFuzzy } from './lib/spellData';
 import { getSkillByAbbr, findSkillFuzzy } from './lib/skillData';
+import { QuickButtonBar } from './components/QuickButtonBar';
+import type { QuickButton } from './types';
 
 /** Commands to send automatically after login */
 const LOGIN_COMMANDS = [
@@ -210,6 +212,8 @@ function AppMain() {
   const [loggedIn, setLoggedIn] = useState(false);
   const statusBarRef = useRef<HTMLDivElement | null>(null);
   const [autoCompact, setAutoCompact] = useState(false);
+  const [quickButtons, setQuickButtons] = useState<QuickButton[]>([]);
+  const quickButtonsLoadedRef = useRef(false);
 
   const appSettings = useAppSettings();
   const {
@@ -318,6 +322,11 @@ function AppMain() {
       if (Array.isArray(savedStatusOrder) && savedStatusOrder.length > 0) {
         setStatusBarOrder(savedStatusOrder);
       }
+      const savedButtons = await dataStore.get<QuickButton[]>('settings.json', 'quickButtons');
+      if (Array.isArray(savedButtons)) {
+        setQuickButtons(savedButtons);
+      }
+      quickButtonsLoadedRef.current = true;
 
       panelLayoutLoadedRef.current = true;
       settingsLoadedRef.current = true;
@@ -616,7 +625,7 @@ function AppMain() {
                     globalScriptRef.current
                   )
                 : (() => {
-                    const raw = expandTriggerBody(match.trigger.body, match, activeCharacterRef.current);
+                    const raw = expandTriggerBody(match.trigger.body, match, activeCharacterRef.current, commandSeparatorRef.current);
                     const commands = raw.flatMap((cmd) =>
                       cmd.type === 'send' ? triggerRunnerRef.current.expand(cmd.text) : [cmd]
                     );
@@ -854,6 +863,7 @@ function AppMain() {
   );
   const hasScriptAliasesRef = useLatestRef(hasScriptAliases);
   const activeCharacterRef = useLatestRef(activeCharacter);
+  const commandSeparatorRef = useLatestRef(appSettings.commandSeparator);
 
   // Variable system
   const variableState = useVariables(dataStore, activeCharacter);
@@ -1071,6 +1081,7 @@ function AppMain() {
       expandInput(input, mergedAliasesRef.current, {
         enableSpeedwalk: enableSpeedwalkRef.current,
         activeCharacter: activeCharacterRef.current,
+        separator: commandSeparatorRef.current,
       }).commands,
     setVar: (name, value, scope) => {
       setVarRef.current(name, value, scope);
@@ -1097,6 +1108,7 @@ function AppMain() {
       const result = expandInput(raw, mergedAliasesRef.current, {
         enableSpeedwalk: enableSpeedwalkRef.current,
         activeCharacter: activeCharacterRef.current,
+        separator: commandSeparatorRef.current,
       });
       executeCommands(result.commands, triggerRunnerRef.current);
     };
@@ -1465,6 +1477,7 @@ function AppMain() {
               const result = expandInput(action, mergedAliasesRef.current, {
                 enableSpeedwalk: enableSpeedwalkRef.current,
                 activeCharacter: activeCharacterRef.current,
+                separator: commandSeparatorRef.current,
               });
               await executeCommands(result.commands, triggerRunnerRef.current);
             },
@@ -1825,6 +1838,7 @@ function AppMain() {
       const result = expandInput(effectiveInput, mergedAliasesRef.current, {
         enableSpeedwalk: enableSpeedwalkRef.current,
         activeCharacter: activeCharacterRef.current,
+        separator: commandSeparatorRef.current,
       });
       await executeCommands(result.commands, {
         ...triggerRunnerRef.current,
@@ -1892,6 +1906,71 @@ function AppMain() {
     [dataStore]
   );
 
+  // Quick buttons — persist + CRUD
+  const persistButtons = useCallback(
+    (next: QuickButton[]) => {
+      setQuickButtons(next);
+      dataStore.set('settings.json', 'quickButtons', next).catch(console.error);
+    },
+    [dataStore]
+  );
+
+  const addQuickButton = useCallback(
+    (data: Omit<QuickButton, 'id'>) => {
+      const btn: QuickButton = { ...data, id: crypto.randomUUID() };
+      persistButtons([...quickButtons, btn]);
+    },
+    [quickButtons, persistButtons]
+  );
+
+  const updateQuickButton = useCallback(
+    (id: string, data: Partial<QuickButton>) => {
+      persistButtons(quickButtons.map((b) => (b.id === id ? { ...b, ...data } : b)));
+    },
+    [quickButtons, persistButtons]
+  );
+
+  const deleteQuickButton = useCallback(
+    (id: string) => {
+      persistButtons(quickButtons.filter((b) => b.id !== id));
+    },
+    [quickButtons, persistButtons]
+  );
+
+  const reorderQuickButton = useCallback(
+    (id: string, direction: 'left' | 'right') => {
+      const idx = quickButtons.findIndex((b) => b.id === id);
+      if (idx < 0) return;
+      const targetIdx = direction === 'left' ? idx - 1 : idx + 1;
+      if (targetIdx < 0 || targetIdx >= quickButtons.length) return;
+      const next = [...quickButtons];
+      [next[idx], next[targetIdx]] = [next[targetIdx], next[idx]];
+      persistButtons(next);
+    },
+    [quickButtons, persistButtons]
+  );
+
+  const fireQuickButton = useCallback(
+    async (body: string, bodyMode: 'commands' | 'script') => {
+      if (bodyMode === 'script') {
+        await executeAliasScript(
+          body,
+          [],
+          activeCharacterRef.current,
+          triggerRunnerRef.current,
+          globalScriptRef.current
+        );
+      } else {
+        // Send each line through handleSend (gets alias expansion)
+        for (const line of body.split('\n')) {
+          const trimmed = line.trim();
+          if (trimmed) await handleSend(trimmed);
+        }
+      }
+    },
+    [handleSend]
+  );
+
   // Post-sync commands
   const postSyncEnabledRef = useLatestRef(postSyncEnabled);
   const postSyncCommandsRef = useLatestRef(postSyncCommands);
@@ -1929,6 +2008,7 @@ function AppMain() {
     activeCharacterRef,
     triggerRunnerRef,
     globalScriptRef,
+    commandSeparatorRef,
   });
 
   // First-launch: auto-open Guide panel
@@ -2363,6 +2443,15 @@ function AppMain() {
                                               onScreenshot={handleScreenshot}
                                             />
                                           </div>
+                                          {/* Quick buttons */}
+                                          <QuickButtonBar
+                                            buttons={quickButtons}
+                                            onFire={fireQuickButton}
+                                            onAdd={addQuickButton}
+                                            onUpdate={updateQuickButton}
+                                            onDelete={deleteQuickButton}
+                                            onReorder={reorderQuickButton}
+                                          />
                                           {/* Status bar + command input */}
                                           <div className="rounded-lg bg-bg-primary overflow-hidden shrink-0">
                                             <div

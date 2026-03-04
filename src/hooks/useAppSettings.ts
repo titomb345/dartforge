@@ -144,6 +144,9 @@ export function useAppSettings() {
   // Auto-conc
   const [autoConcAction, setAutoConcAction] = useState('');
 
+  // Command separator
+  const [commandSeparator, setCommandSeparator] = useState(';;');
+
   // Post-sync commands
   const [postSyncEnabled, setPostSyncEnabled] = useState(false);
   const [postSyncCommands, setPostSyncCommands] = useState('');
@@ -310,6 +313,10 @@ export function useAppSettings() {
       if (Array.isArray(savedBabelPhrases) && savedBabelPhrases.length > 0)
         setBabelPhrases(savedBabelPhrases);
 
+      const savedCommandSeparator = await dataStore.get<string>(SETTINGS_FILE, 'commandSeparator');
+      if (savedCommandSeparator != null && savedCommandSeparator.length > 0)
+        setCommandSeparator(savedCommandSeparator);
+
       const savedPostSyncEnabled = await dataStore.get<boolean>(SETTINGS_FILE, 'postSyncEnabled');
       if (savedPostSyncEnabled != null) setPostSyncEnabled(savedPostSyncEnabled);
       const savedPostSyncCommands = await dataStore.get<string>(SETTINGS_FILE, 'postSyncCommands');
@@ -439,6 +446,8 @@ export function useAppSettings() {
       updateCasterWeightAdjustDown: make(setCasterWeightAdjustDown, 'casterWeightAdjustDown'),
       // Auto-conc
       updateAutoConcAction: make(setAutoConcAction, 'autoConcAction'),
+      // Command separator
+      updateCommandSeparator: make(setCommandSeparator, 'commandSeparator'),
     };
   }, [persist]);
 
@@ -588,6 +597,8 @@ export function useAppSettings() {
     casterWeightAdjustDown,
     // Auto-conc
     autoConcAction,
+    // Command separator
+    commandSeparator,
     // Special updaters (have extra logic beyond simple set+persist)
     updateAlignmentTrackingEnabled,
     updateAutoLoginCharacters,

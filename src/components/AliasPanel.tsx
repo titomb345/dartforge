@@ -1,5 +1,6 @@
 import { useCallback, useRef, useState, useEffect, useMemo } from 'react';
 import { useAliasContext } from '../contexts/AliasContext';
+import { useAppSettingsContext } from '../contexts/AppSettingsContext';
 import { useSkillTrackerContext } from '../contexts/SkillTrackerContext';
 import { expandInput } from '../lib/aliasEngine';
 import { formatCommandPreview } from '../lib/commandUtils';
@@ -108,15 +109,15 @@ const ALIAS_HELP_ROWS: HelpRow[] = [
     example: '/var target goblin  \u2192  $target = goblin',
   },
   {
-    token: ';',
-    desc: 'Command separator \u2014 sends multiple commands',
-    example: 'kill $1;loot corpse',
+    token: ';; (default)',
+    desc: 'Command separator \u2014 sends multiple commands (configurable in Settings)',
+    example: 'kill $1;;loot corpse',
   },
-  { token: '\\;', desc: 'Literal semicolon (not a separator)' },
+  { token: '\\;;', desc: 'Literal separator (escaped with \\)' },
   {
     token: '/delay <ms>',
     desc: 'Pause between commands (milliseconds)',
-    example: 'cast shield;/delay 1500;cast armor',
+    example: 'cast shield;;/delay 1500;;cast armor',
   },
   {
     token: '/echo <text>',
@@ -212,6 +213,7 @@ function AliasEditor({
   const [testInput, setTestInput] = useState('');
   const [showHelp, setShowHelp] = useState(false);
   const patternRef = useRef<HTMLInputElement>(null);
+  const { commandSeparator } = useAppSettingsContext();
 
   useEffect(() => {
     patternRef.current?.focus();
@@ -232,14 +234,14 @@ function AliasEditor({
       updatedAt: '',
     };
     try {
-      const opts = { activeCharacter };
+      const opts = { activeCharacter, separator: commandSeparator };
       const result = expandInput(testInput, [tempAlias], opts);
       const expand = (input: string) => expandInput(input, [tempAlias], opts).commands;
       return formatCommandPreview(result.commands, expand).join('\n');
     } catch {
       return '[expansion error]';
     }
-  }, [testInput, pattern, matchMode, body, activeCharacter]);
+  }, [testInput, pattern, matchMode, body, activeCharacter, commandSeparator]);
 
   const canSave = pattern.trim().length > 0 && body.trim().length > 0;
 

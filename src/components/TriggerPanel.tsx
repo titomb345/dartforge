@@ -1,5 +1,6 @@
 import { useCallback, useRef, useState, useEffect, useMemo } from 'react';
 import { useTriggerContext } from '../contexts/TriggerContext';
+import { useAppSettingsContext } from '../contexts/AppSettingsContext';
 import { useSkillTrackerContext } from '../contexts/SkillTrackerContext';
 import { matchTriggers, expandTriggerBody } from '../lib/triggerEngine';
 import { formatCommandPreview } from '../lib/commandUtils';
@@ -21,7 +22,6 @@ import { MudInput, MudTextarea, MudButton, MudNumberInput, ToggleSwitch } from '
 import { ScriptEditor } from './ScriptEditor';
 import { SyntaxHelpTable, SCRIPT_API_HELP_ROWS, SCRIPT_ACCENT } from './SyntaxHelpTable';
 import type { HelpRow } from './SyntaxHelpTable';
-import { useAppSettingsContext } from '../contexts/AppSettingsContext';
 import { GAG_GROUPS } from '../lib/gagPatterns';
 import type { GagGroupId } from '../lib/gagPatterns';
 
@@ -170,15 +170,15 @@ const TRIGGER_HELP_ROWS: HelpRow[] = [
     example: '/var target goblin  \u2192  $target = goblin',
   },
   {
-    token: ';',
-    desc: 'Command separator — sends multiple commands',
-    example: '/echo Alert!;say hello',
+    token: ';; (default)',
+    desc: 'Command separator — sends multiple commands (configurable in Settings)',
+    example: '/echo Alert!;;say hello',
   },
-  { token: '\\;', desc: 'Literal semicolon (not a separator)' },
+  { token: '\\;;', desc: 'Literal separator (escaped with \\)' },
   {
     token: '/delay <ms>',
     desc: 'Pause between commands (milliseconds)',
-    example: '/delay 1000;cast heal',
+    example: '/delay 1000;;cast heal',
   },
   {
     token: '/echo <text>',
@@ -299,6 +299,7 @@ function TriggerEditor({
   );
   const [multiLine, setMultiLine] = useState(trigger?.multiLine ?? false);
   const [endPattern, setEndPattern] = useState(trigger?.endPattern ?? '');
+  const { commandSeparator } = useAppSettingsContext();
 
   // Custom highlight color state
   const initCustom =
@@ -342,13 +343,13 @@ function TriggerEditor({
     try {
       const matches = matchTriggers(testInput, testInput, [tempTrigger]);
       if (matches.length === 0) return { matched: false, text: 'No match' };
-      const commands = expandTriggerBody(body, matches[0], activeCharacter);
+      const commands = expandTriggerBody(body, matches[0], activeCharacter, commandSeparator);
       const text = formatCommandPreview(commands).join('\n');
       return { matched: true, text: text || '(no commands)' };
     } catch {
       return { matched: false, text: '[error]' };
     }
-  }, [testInput, pattern, matchMode, body, activeCharacter]);
+  }, [testInput, pattern, matchMode, body, activeCharacter, commandSeparator]);
 
   const canSave = pattern.trim().length > 0;
 

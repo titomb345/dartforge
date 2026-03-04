@@ -231,7 +231,8 @@ function matchSingle(stripped: string, raw: string, trigger: Trigger): TriggerMa
 export function expandTriggerBody(
   body: string,
   match: TriggerMatch,
-  activeCharacter?: string | null
+  activeCharacter?: string | null,
+  separator?: string
 ): ExpandedCommand[] {
   let result = body;
 
@@ -249,8 +250,8 @@ export function expandTriggerBody(
     result = result.split(`$${i}`).join(match.captures[i] ?? '');
   }
 
-  // Split on semicolons and parse directives (variables expanded at execution time)
-  const segments = splitCommands(result);
+  // Split on configured separator and parse directives (variables expanded at execution time)
+  const segments = splitCommands(result, separator);
   const commands: ExpandedCommand[] = [];
   for (const segment of segments) {
     const trimmed = segment.trim();

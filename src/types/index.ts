@@ -44,6 +44,7 @@ export interface PinnablePanelProps {
 }
 
 export type { SkillTier, SkillRecord, CharacterSkillFile, SkillMatchResult } from './skills';
+export type { QuickButtonId, QuickButton } from './quickButton';
 
 export interface MudOutputPayload {
   data: string;

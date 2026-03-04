@@ -68,6 +68,7 @@ interface TimerEnginesDeps {
   activeCharacterRef: React.RefObject<string | null>;
   triggerRunnerRef: React.RefObject<CommandRunner>;
   globalScriptRef: React.RefObject<string>;
+  commandSeparatorRef: React.RefObject<string>;
 }
 
 export function useTimerEngines({
@@ -94,6 +95,7 @@ export function useTimerEngines({
   activeCharacterRef,
   triggerRunnerRef,
   globalScriptRef,
+  commandSeparatorRef,
 }: TimerEnginesDeps) {
   // Anti-idle timer — sends command at interval when connected + logged in + enabled
   const antiIdleEnabledRef = useLatestRef(antiIdleEnabled);
@@ -226,6 +228,7 @@ export function useTimerEngines({
           const result = expandInput(timer.body, mergedAliasesRef.current, {
             enableSpeedwalk: enableSpeedwalkRef.current,
             activeCharacter: activeCharacterRef.current,
+            separator: commandSeparatorRef.current,
           });
           executeCommands(result.commands, triggerRunnerRef.current);
         }

@@ -168,6 +168,8 @@ export function SettingsPanel({ onClose }: { onClose: () => void }) {
     updateAntiSpamEnabled,
     commandEchoEnabled,
     updateCommandEchoEnabled,
+    commandSeparator,
+    updateCommandSeparator,
     showTimerBadges,
     updateShowTimerBadges,
     terminalScrollback,
@@ -531,14 +533,14 @@ export function SettingsPanel({ onClose }: { onClose: () => void }) {
               size="sm"
               value={postSyncCommands}
               onChange={(e) => updatePostSyncCommands(e.target.value)}
-              placeholder="inventory;who;/echo Ready!"
+              placeholder="inventory;;who;;/echo Ready!"
               rows={5}
               className="w-full"
             />
           </div>
           <div className="text-[9px] text-text-dim font-mono leading-relaxed mt-1">
-            Sent automatically after logging in. Supports semicolons, aliases, /delay, /echo, /spam,
-            /var.
+            Sent automatically after logging in. Supports the command separator, aliases, /delay,
+            /echo, /spam, /var.
           </div>
         </SettingsSection>
 
@@ -579,6 +581,23 @@ export function SettingsPanel({ onClose }: { onClose: () => void }) {
           </FieldRow>
           <div className="text-[9px] text-text-dim font-mono leading-relaxed mt-1">
             Show your sent commands as dimmed lines in the terminal.
+          </div>
+          <FieldRow label="Command separator">
+            <MudInput
+              accent="green"
+              value={commandSeparator}
+              onChange={(e) => {
+                const v = e.target.value;
+                if (v.length > 0) updateCommandSeparator(v);
+              }}
+              className="w-[60px] text-center font-mono"
+            />
+          </FieldRow>
+          <div className="text-[9px] text-text-dim font-mono leading-relaxed mt-1">
+            Character(s) used to chain multiple commands (e.g. &quot;kill
+            rat{commandSeparator}loot corpse&quot;). Prefix with \ to use
+            literally. If you change this, update existing alias/trigger bodies
+            to match.
           </div>
           <FieldRow label="Anti-spam">
             <ToggleSwitch

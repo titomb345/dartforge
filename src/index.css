@@ -82,6 +82,13 @@ input[type='number'] {
   -webkit-text-security: disc;
 }
 
+/* Quick button pill hover glow */
+.qb-pill:not(:disabled):hover {
+  background: color-mix(in srgb, var(--qb-color) 12%, transparent);
+  border-color: color-mix(in srgb, var(--qb-color) 55%, transparent);
+  filter: drop-shadow(0 0 6px color-mix(in srgb, var(--qb-color) 30%, transparent));
+}
+
 /* IconButton accent states via CSS custom property */
 .icon-btn:not(:disabled):not(.icon-btn-on):hover {
   background: color-mix(in srgb, var(--btn-accent) 7%, transparent);
