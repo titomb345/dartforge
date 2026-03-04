@@ -16,6 +16,10 @@ The `[Unreleased]` header controls automatic version bumping on merge:
 - Removed old Fly.io Rust proxy (account expired, code no longer needed)
 
 ### Added
+- JavaScript scripting engine for triggers and aliases — toggle "Script" in the editor to write JS bodies with `send()`, `echo()`, `await delay()`, `spam()`, `setVar()`, `getVar()`, and capture variables (`$0`-`$9`, `$line`, `$me`). Supports `if/else`, loops, `await`, and shared functions via the Global Script panel
+- Global Script panel — define reusable JavaScript functions and constants shared across all script-mode triggers and aliases; accessible from the toolbar Scripts button
+- CodeMirror 6 editor for all script bodies — syntax highlighting, line numbers, bracket matching, Tab/Shift+Tab indentation, and Ctrl+S save support replaces plain textareas in the Global Script panel, trigger editor, and alias editor
+- `spam(count, text)` scripting API — send a command N times (max 1000), matching `/spam` directive syntax
 - Retry with exponential backoff for Dropbox uploads — up to 4 retries on 429/5xx errors (1s, 2s, 4s, 8s backoff); failed uploads are queued as pending and retried on next page load
 - Allocation panel "Not connected" state — shows a placeholder until the user logs in, matching the Who panel pattern
 - StorageModeButton component for switching storage modes

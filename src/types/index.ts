@@ -12,6 +12,7 @@ export type Panel =
   | 'timers'
   | 'variables'
   | 'notes'
+  | 'scripts'
   | 'settings'
   // | 'map' // automapper disabled
   | 'alloc'

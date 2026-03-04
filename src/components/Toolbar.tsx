@@ -10,6 +10,7 @@ import {
   TriggerIcon,
   TimerIcon,
   VariableIcon,
+  CodeIcon,
   NotesIcon,
   GearIcon,
   CoinIcon,
@@ -194,6 +195,15 @@ export function Toolbar({ connected, onReconnect, onDisconnect, onScreenshot }: 
           panelId="variables"
           toggled={activePanel === 'variables'}
           onClick={() => togglePanel('variables')}
+        />
+        <IconButton
+          icon={<CodeIcon />}
+          title="Scripts"
+          accent="#8be9fd"
+          helpId="toolbar-scripts"
+          panelId="scripts"
+          toggled={activePanel === 'scripts'}
+          onClick={() => togglePanel('scripts')}
         />
         <div className="w-px h-[18px] bg-border-dim mx-1.5" />
         <IconButton

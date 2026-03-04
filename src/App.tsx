@@ -47,7 +47,7 @@ import { useAlignment } from './hooks/useAlignment';
 import { useDataStore } from './contexts/DataStoreContext';
 import { buildXtermTheme } from './lib/defaultTheme';
 import { OutputProcessor } from './lib/outputProcessor';
-import { expandInput } from './lib/aliasEngine';
+import { expandInput, matchAlias } from './lib/aliasEngine';
 import { executeCommands, type CommandRunner } from './lib/commandUtils';
 import { OutputFilter, DEFAULT_FILTER_FLAGS, type FilterFlags } from './lib/outputFilter';
 import { matchSkillLine } from './lib/skillPatterns';
@@ -72,6 +72,9 @@ import { TimerProvider } from './contexts/TimerContext';
 import { TimerPanel } from './components/TimerPanel';
 import { useSignatureMappings } from './hooks/useSignatureMappings';
 import { matchTriggers, expandTriggerBody, resetTriggerCooldowns } from './lib/triggerEngine';
+import { executeTriggerScript, executeAliasScript } from './lib/scriptEngine';
+import { useGlobalScript } from './hooks/useGlobalScript';
+import { ScriptPanel } from './components/ScriptPanel';
 import { smartWrite } from './lib/terminalUtils';
 import { captureTerminalScreenshot } from './lib/screenshotCapture';
 import { ActionBlocker, type ActionBlockerState } from './lib/actionBlocker';
@@ -602,19 +605,26 @@ function AppMain() {
 
           // Expand and execute trigger body asynchronously
           if (match.trigger.body.trim()) {
-            const raw = expandTriggerBody(match.trigger.body, match, activeCharacterRef.current);
-            // Re-expand send commands through the alias engine so aliases work in trigger bodies
-            const commands = raw.flatMap((cmd) =>
-              cmd.type === 'send' ? triggerRunnerRef.current.expand(cmd.text) : [cmd]
-            );
             triggerFiringRef.current = true;
-            (async () => {
-              try {
-                await executeCommands(commands, triggerRunnerRef.current);
-              } finally {
-                triggerFiringRef.current = false;
-              }
-            })();
+            const work =
+              match.trigger.bodyMode === 'script'
+                ? executeTriggerScript(
+                    match.trigger.body,
+                    match,
+                    activeCharacterRef.current,
+                    triggerRunnerRef.current,
+                    globalScriptRef.current
+                  )
+                : (() => {
+                    const raw = expandTriggerBody(match.trigger.body, match, activeCharacterRef.current);
+                    const commands = raw.flatMap((cmd) =>
+                      cmd.type === 'send' ? triggerRunnerRef.current.expand(cmd.text) : [cmd]
+                    );
+                    return executeCommands(commands, triggerRunnerRef.current);
+                  })();
+            work.finally(() => {
+              triggerFiringRef.current = false;
+            });
           }
         }
 
@@ -837,6 +847,12 @@ function AppMain() {
   const { mergedAliases, enableSpeedwalk } = aliasState;
   const mergedAliasesRef = useLatestRef(mergedAliases);
   const enableSpeedwalkRef = useLatestRef(enableSpeedwalk);
+  // Fast flag: skip matchAlias pre-check when no script aliases exist (common case)
+  const hasScriptAliases = useMemo(
+    () => mergedAliases.some((a) => a.bodyMode === 'script' && a.enabled),
+    [mergedAliases]
+  );
+  const hasScriptAliasesRef = useLatestRef(hasScriptAliases);
   const activeCharacterRef = useLatestRef(activeCharacter);
 
   // Variable system
@@ -859,6 +875,10 @@ function AppMain() {
     convert: () => {},
     getVariables: () => [],
   });
+
+  // Global script system
+  const { script: globalScript, saveScript: saveGlobalScript } = useGlobalScript(dataStore);
+  const globalScriptRef = useLatestRef(globalScript);
 
   // Timer system
   const timerState = useTimers(dataStore, activeCharacter);
@@ -1787,6 +1807,21 @@ function AppMain() {
           ? applyMovementMode(rawInput, movementModeRef.current)
           : rawInput;
 
+      // Check for script-mode alias before text expansion (skip if no script aliases exist)
+      if (hasScriptAliasesRef.current) {
+        const aliasMatch = matchAlias(effectiveInput.trim(), mergedAliasesRef.current);
+        if (aliasMatch?.alias.bodyMode === 'script') {
+          await executeAliasScript(
+            aliasMatch.alias.body,
+            aliasMatch.args,
+            activeCharacterRef.current,
+            triggerRunnerRef.current,
+            globalScriptRef.current
+          );
+          return;
+        }
+      }
+
       const result = expandInput(effectiveInput, mergedAliasesRef.current, {
         enableSpeedwalk: enableSpeedwalkRef.current,
         activeCharacter: activeCharacterRef.current,
@@ -2455,6 +2490,13 @@ function AppMain() {
                                         </SlideOut>
                                         <SlideOut panel="variables">
                                           <VariablePanel onClose={closePanel} />
+                                        </SlideOut>
+                                        <SlideOut panel="scripts">
+                                          <ScriptPanel
+                                            script={globalScript}
+                                            onSave={saveGlobalScript}
+                                            onClose={closePanel}
+                                          />
                                         </SlideOut>
                                         {/* Automapper disabled
                                         <SlideOut panel="map" pinnable="map">

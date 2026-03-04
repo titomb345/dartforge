@@ -102,7 +102,7 @@ const MATCH_MODE_PRIORITY: Record<AliasMatchMode, number> = {
  * so that e.g. an exact "port" fires before a prefix "port".
  * Returns the matched alias and extracted arguments, or null.
  */
-function matchAlias(segment: string, aliases: Alias[]): { alias: Alias; args: string[] } | null {
+export function matchAlias(segment: string, aliases: Alias[]): { alias: Alias; args: string[] } | null {
   const trimmed = segment.trim();
   if (!trimmed) return null;
 

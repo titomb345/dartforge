@@ -1,5 +1,5 @@
 import { createContext, useContext } from 'react';
-import type { Alias, AliasId, AliasMatchMode, AliasScope } from '../types/alias';
+import type { Alias, AliasBodyMode, AliasId, AliasMatchMode, AliasScope } from '../types/alias';
 
 export interface AliasState {
   characterAliases: Record<AliasId, Alias>;
@@ -8,7 +8,7 @@ export interface AliasState {
   enableSpeedwalk: boolean;
   setEnableSpeedwalk: (value: boolean) => void;
   createAlias: (
-    partial: { pattern: string; matchMode: AliasMatchMode; body: string; group: string },
+    partial: { pattern: string; matchMode: AliasMatchMode; body: string; group: string; bodyMode?: AliasBodyMode },
     scope: AliasScope
   ) => AliasId;
   updateAlias: (

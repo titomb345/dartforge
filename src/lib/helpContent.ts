@@ -140,6 +140,12 @@ export const HELP_CATEGORIES: HelpCategory[] = [
           'Create repeating timers that execute commands at set intervals. Supports full alias/trigger body syntax including semicolons, /delay, /echo, /spam, and /var. Character-scoped or Global.',
         helpId: 'toolbar-timers',
       },
+      {
+        title: 'Global Script',
+        description:
+          'Define shared JavaScript functions and constants available to all script-mode triggers and aliases. Open via the toolbar Scripts button (</>). Changes apply on next trigger/alias execution.',
+        helpId: 'toolbar-scripts',
+      },
     ],
   },
   {
@@ -427,6 +433,11 @@ export const HELP_CATEGORIES: HelpCategory[] = [
         title: 'Command Chaining',
         description:
           'Use semicolons to chain commands: "kill rat;loot corpse". Escape with \\; for a literal semicolon.',
+      },
+      {
+        title: 'Script Mode',
+        description:
+          'Triggers and aliases can use JavaScript instead of text expansion. Toggle "Script" in the editor to write JS bodies with send(), echo(), delay(), setVar(), getVar(), and capture variables ($0-$9, $line, $me). Define shared functions in the Global Script panel. Errors appear in red in the terminal.',
       },
     ],
   },

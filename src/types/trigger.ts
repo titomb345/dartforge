@@ -7,6 +7,9 @@ export type TriggerMatchMode = 'substring' | 'exact' | 'regex';
 /** Trigger scope — character-specific or shared across all characters */
 export type TriggerScope = 'character' | 'global';
 
+/** Whether the trigger body is plain text expansion or JavaScript */
+export type BodyMode = 'text' | 'script';
+
 /** An individual trigger definition */
 export interface Trigger {
   id: TriggerId;
@@ -16,6 +19,8 @@ export interface Trigger {
   matchMode: TriggerMatchMode;
   /** The response body. Supports $0, $1–$9, $line, $me, ;, /delay, /echo */
   body: string;
+  /** Body interpretation mode: 'text' (default) or 'script' (JavaScript) */
+  bodyMode?: BodyMode;
   /** Whether this trigger is active */
   enabled: boolean;
   /** User-assigned group for organization */
@@ -41,6 +46,7 @@ export interface TriggerPrefill {
   gag: boolean;
   body: string;
   group: string;
+  bodyMode?: BodyMode;
 }
 
 /** Result of a trigger match — used by the trigger engine */
