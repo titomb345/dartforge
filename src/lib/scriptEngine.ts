@@ -115,6 +115,39 @@ export async function executeTriggerScript(
   }
 }
 
+// ── Timer param layout (static — never changes) ─────────────────────
+
+const TIMER_PARAM_NAMES: string[] = [
+  'send', 'echo', 'delay', 'setVar', 'getVar', 'spam',
+  '$me', '$Me',
+];
+
+/**
+ * Execute a timer's script-mode body.
+ */
+export async function executeTimerScript(
+  body: string,
+  activeCharacter: string | null,
+  runner: CommandRunner,
+  globalScript: string
+): Promise<void> {
+  const api = buildApi(runner);
+  const ch = charNames(activeCharacter);
+
+  const paramValues: unknown[] = [
+    api.send, api.echo, delay, api.setVar, api.getVar, api.spam,
+    ch.name, ch.cap,
+  ];
+
+  try {
+    const fn = getOrCompile(TIMER_PARAM_NAMES, body, globalScript);
+    await fn(...paramValues);
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    runner.echo(`\x1b[31m[Script Error] ${msg}\x1b[0m`);
+  }
+}
+
 // ── Alias param layout (static — never changes) ─────────────────────
 
 const ALIAS_PARAM_NAMES: string[] = [

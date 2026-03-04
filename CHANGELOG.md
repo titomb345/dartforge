@@ -21,7 +21,8 @@ The `[Unreleased]` header controls automatic version bumping on merge:
 - Script editor fills the full panel height instead of starting at a fixed 120px minimum
 
 ### Added
-- JavaScript scripting engine for triggers and aliases — toggle "Script" in the editor to write JS bodies with `send()`, `echo()`, `await delay()`, `spam()`, `setVar()`, `getVar()`, and capture variables (`$0`-`$9`, `$line`, `$me`). Supports `if/else`, loops, `await`, and shared functions via the Global Script panel
+- JavaScript scripting engine for triggers, aliases, and timers — toggle "Script" in the editor to write JS bodies with `send()`, `echo()`, `await delay()`, `spam()`, `setVar()`, `getVar()`, and capture variables (`$0`-`$9`, `$line`, `$me`). Supports `if/else`, loops, `await`, and shared functions via the Global Script panel
+- Per-timer status bar visibility toggle — each timer can be shown or hidden in the command input countdown area via a "Show countdown in status bar" checkbox in the timer editor
 - Global Script panel — define reusable JavaScript functions and constants shared across all script-mode triggers and aliases; accessible from the toolbar Scripts button
 - Multi-line trigger matching — triggers can now buffer lines between a start pattern and an end pattern (regex), then fire with the joined text; ideal for tells and messages that wrap across multiple lines; toggle "Multi-line" in the trigger editor and set an end pattern; max 10 lines safety cap; buffers clear on disconnect
 - CodeMirror 6 editor for all script bodies — syntax highlighting, line numbers, bracket matching, Tab/Shift+Tab indentation, and Ctrl+S save support replaces plain textareas in the Global Script panel, trigger editor, and alias editor

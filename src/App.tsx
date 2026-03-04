@@ -1928,6 +1928,7 @@ function AppMain() {
     enableSpeedwalkRef,
     activeCharacterRef,
     triggerRunnerRef,
+    globalScriptRef,
   });
 
   // First-launch: auto-open Guide panel

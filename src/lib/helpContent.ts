@@ -137,7 +137,7 @@ export const HELP_CATEGORIES: HelpCategory[] = [
       {
         title: 'Timers Panel',
         description:
-          'Create repeating timers that execute commands at set intervals. Supports full alias/trigger body syntax including semicolons, /delay, /echo, /spam, and /var. Character-scoped or Global.',
+          'Create repeating timers that execute commands at set intervals. Supports text mode (semicolons, /delay, /echo, /spam, /var) or JavaScript script mode. Toggle "Show countdown in status bar" per timer to control which countdowns appear next to the command input. Character-scoped or Global.',
         helpId: 'toolbar-timers',
       },
       {

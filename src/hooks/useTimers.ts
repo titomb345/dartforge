@@ -1,6 +1,6 @@
 import { useState, useCallback, useEffect, useRef, useMemo } from 'react';
 import type { DataStore } from '../contexts/DataStoreContext';
-import type { Timer, TimerId, TimerScope } from '../types/timer';
+import type { Timer, TimerId, TimerScope, TimerBodyMode } from '../types/timer';
 
 const TIMERS_FILE = 'timers.json';
 const GLOBAL_KEY = 'global';
@@ -81,8 +81,10 @@ export function useTimers(dataStore: DataStore, activeCharacter: string | null) 
       partial: {
         name: string;
         body: string;
+        bodyMode?: TimerBodyMode;
         intervalSeconds: number;
         group: string;
+        showInStatusBar?: boolean;
       },
       scope: TimerScope
     ): TimerId => {
@@ -91,8 +93,10 @@ export function useTimers(dataStore: DataStore, activeCharacter: string | null) 
         id: generateId(),
         name: partial.name,
         body: partial.body,
+        ...(partial.bodyMode && partial.bodyMode !== 'text' ? { bodyMode: partial.bodyMode } : {}),
         intervalSeconds: partial.intervalSeconds,
         enabled: true,
+        ...(partial.showInStatusBar === false ? { showInStatusBar: false } : {}),
         group: partial.group,
         createdAt: now,
         updatedAt: now,
@@ -167,8 +171,10 @@ export function useTimers(dataStore: DataStore, activeCharacter: string | null) 
         {
           name: `${original.name}_copy`,
           body: original.body,
+          bodyMode: original.bodyMode,
           intervalSeconds: original.intervalSeconds,
           group: original.group,
+          showInStatusBar: original.showInStatusBar,
         },
         scope
       );
