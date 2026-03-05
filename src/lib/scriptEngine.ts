@@ -12,6 +12,17 @@ const AsyncFunction = Object.getPrototypeOf(async function () {}).constructor as
 /** Shared delay helper — no need to recreate per invocation */
 const delay = (ms: number): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms));
 
+// ── Idle tracking ────────────────────────────────────────────────────
+// In-memory timestamp of the last user-typed command (not timers/triggers/aliases).
+// Initialized to Date.now() so a fresh session counts as "active".
+
+let _lastUserInputTimeTs = Date.now();
+
+/** Called from handleSend to stamp the last user-typed command time. */
+export function stampUserInput(): void {
+  _lastUserInputTimeTs = Date.now();
+}
+
 // ── Compiled function cache ──────────────────────────────────────────
 // Key = paramNames.length + '\0' + globalScript + '\0' + body
 // Avoids recompiling the same script on every trigger fire.
@@ -68,7 +79,10 @@ function buildApi(runner: CommandRunner) {
     }
   };
 
-  return { send, echo, setVar, getVar, spam };
+  /** Returns the epoch ms of the last user-typed command (0 = none this session). */
+  const lastUserInputTime = (): number => _lastUserInputTimeTs;
+
+  return { send, echo, setVar, getVar, spam, lastUserInputTime };
 }
 
 function charNames(activeCharacter: string | null) {
@@ -79,7 +93,7 @@ function charNames(activeCharacter: string | null) {
 // ── Trigger param layout (static — never changes) ───────────────────
 
 const TRIGGER_PARAM_NAMES: string[] = [
-  'send', 'echo', 'delay', 'setVar', 'getVar', 'spam',
+  'send', 'echo', 'delay', 'setVar', 'getVar', 'spam', 'lastUserInputTime',
   '$0', '$1', '$2', '$3', '$4', '$5', '$6', '$7', '$8', '$9',
   '$line', '$me', '$Me',
 ];
@@ -98,7 +112,7 @@ export async function executeTriggerScript(
   const ch = charNames(activeCharacter);
 
   const paramValues: unknown[] = [
-    api.send, api.echo, delay, api.setVar, api.getVar, api.spam,
+    api.send, api.echo, delay, api.setVar, api.getVar, api.spam, api.lastUserInputTime,
     match.captures[0] ?? '', match.captures[1] ?? '', match.captures[2] ?? '',
     match.captures[3] ?? '', match.captures[4] ?? '', match.captures[5] ?? '',
     match.captures[6] ?? '', match.captures[7] ?? '', match.captures[8] ?? '',
@@ -118,7 +132,7 @@ export async function executeTriggerScript(
 // ── Timer param layout (static — never changes) ─────────────────────
 
 const TIMER_PARAM_NAMES: string[] = [
-  'send', 'echo', 'delay', 'setVar', 'getVar', 'spam',
+  'send', 'echo', 'delay', 'setVar', 'getVar', 'spam', 'lastUserInputTime',
   '$me', '$Me',
 ];
 
@@ -135,7 +149,7 @@ export async function executeTimerScript(
   const ch = charNames(activeCharacter);
 
   const paramValues: unknown[] = [
-    api.send, api.echo, delay, api.setVar, api.getVar, api.spam,
+    api.send, api.echo, delay, api.setVar, api.getVar, api.spam, api.lastUserInputTime,
     ch.name, ch.cap,
   ];
 
@@ -151,7 +165,7 @@ export async function executeTimerScript(
 // ── Alias param layout (static — never changes) ─────────────────────
 
 const ALIAS_PARAM_NAMES: string[] = [
-  'send', 'echo', 'delay', 'setVar', 'getVar', 'spam',
+  'send', 'echo', 'delay', 'setVar', 'getVar', 'spam', 'lastUserInputTime',
   '$1', '$2', '$3', '$4', '$5', '$6', '$7', '$8', '$9',
   'args', 'argList', '$me', '$Me',
 ];
@@ -170,7 +184,7 @@ export async function executeAliasScript(
   const ch = charNames(activeCharacter);
 
   const paramValues: unknown[] = [
-    api.send, api.echo, delay, api.setVar, api.getVar, api.spam,
+    api.send, api.echo, delay, api.setVar, api.getVar, api.spam, api.lastUserInputTime,
     matchedArgs[0] ?? '', matchedArgs[1] ?? '', matchedArgs[2] ?? '',
     matchedArgs[3] ?? '', matchedArgs[4] ?? '', matchedArgs[5] ?? '',
     matchedArgs[6] ?? '', matchedArgs[7] ?? '', matchedArgs[8] ?? '',

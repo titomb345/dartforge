@@ -443,7 +443,7 @@ export const HELP_CATEGORIES: HelpCategory[] = [
       {
         title: 'Script Mode',
         description:
-          'Triggers and aliases can use JavaScript instead of text expansion. Toggle "Script" in the editor to write JS bodies with send(), echo(), delay(), setVar(), getVar(), and capture variables ($0-$9, $line, $me). Define shared functions in the Global Script panel. Errors appear in red in the terminal.',
+          'Triggers and aliases can use JavaScript instead of text expansion. Toggle "Script" in the editor to write JS bodies with send(), echo(), delay(), setVar(), getVar(), lastUserInputTime(), and capture variables ($0-$9, $line, $me). Define shared functions in the Global Script panel. Errors appear in red in the terminal.',
       },
     ],
   },

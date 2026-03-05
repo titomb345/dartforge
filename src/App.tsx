@@ -72,7 +72,7 @@ import { TimerProvider } from './contexts/TimerContext';
 import { TimerPanel } from './components/TimerPanel';
 import { useSignatureMappings } from './hooks/useSignatureMappings';
 import { matchTriggers, expandTriggerBody, resetTriggerCooldowns } from './lib/triggerEngine';
-import { executeTriggerScript, executeAliasScript } from './lib/scriptEngine';
+import { executeTriggerScript, executeAliasScript, stampUserInput } from './lib/scriptEngine';
 import { useGlobalScript } from './hooks/useGlobalScript';
 import { ScriptPanel } from './components/ScriptPanel';
 import { smartWrite } from './lib/terminalUtils';
@@ -1138,6 +1138,8 @@ function AppMain() {
       // Session logging — log sent command
       if (trimmed) logCommandRef.current?.(rawInput);
 
+      // Idle tracking — stamp last user-typed command time (in-memory only)
+      if (trimmed) stampUserInput();
 
 
       // Built-in /block — manually activate action blocking
