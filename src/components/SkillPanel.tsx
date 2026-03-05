@@ -558,16 +558,17 @@ export function SkillPanel({ mode = 'slideout' }: SkillPanelProps) {
           })
         )}
 
-        {/* Totals */}
-        {hasAnySkills && (
-          <div className="flex items-center gap-1.5 px-2 pt-2 mt-1 border-t border-border-subtle">
-            <span className="text-[10px] text-text-dim flex-1">Total</span>
-            <span className="text-[11px] font-mono text-text-dim">
-              {categoryTotals[filter].toLocaleString()} imps
-            </span>
-          </div>
-        )}
       </div>
+
+      {/* Totals — always visible at bottom */}
+      {hasAnySkills && (
+        <div className="flex items-center gap-1.5 px-3 py-1.5 border-t border-border-subtle shrink-0">
+          <span className="text-[10px] text-text-dim flex-1">Total</span>
+          <span className="text-[11px] font-mono text-text-dim">
+            {categoryTotals[filter].toLocaleString()} imps
+          </span>
+        </div>
+      )}
     </div>
   );
 }
