@@ -9,7 +9,7 @@ The `[Unreleased]` header controls automatic version bumping on merge:
 - `[Unreleased-minor]` → 0.1.0 → 0.2.0
 - `[Unreleased-major]` → 0.1.0 → 1.0.0
 
-## [Unreleased-minor]
+## [1.4.0] - 2026-03-05
 
 ### Changed
 - Web client proxy ported from Fly.io/Rust to a Cloudflare Worker using Durable Objects — eliminates hosting costs by running on Cloudflare's free tier
