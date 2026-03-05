@@ -1138,8 +1138,8 @@ function AppMain() {
       // Session logging — log sent command
       if (trimmed) logCommandRef.current?.(rawInput);
 
-      // Idle tracking — stamp last user-typed command time (in-memory only)
-      if (trimmed) stampUserInput();
+      // Idle tracking — stamp on any keypress-driven send (even empty Enter)
+      stampUserInput();
 
 
       // Built-in /block — manually activate action blocking
@@ -1948,6 +1948,8 @@ function AppMain() {
 
   const fireQuickButton = useCallback(
     async (body: string, bodyMode: 'commands' | 'script') => {
+      // Quick button clicks are user activity — stamp idle tracker
+      stampUserInput();
       if (bodyMode === 'script') {
         await executeAliasScript(
           body,
@@ -2423,7 +2425,7 @@ function AppMain() {
 
                                         {/* Center: Terminal + bottom controls */}
                                         <div
-                                          className="flex-1 overflow-hidden flex flex-col gap-1"
+                                          className="flex-1 overflow-hidden flex flex-col"
                                           style={{ minWidth: MIN_TERMINAL_WIDTH }}
                                         >
                                           <div className="flex-1 overflow-hidden rounded-lg flex flex-col">

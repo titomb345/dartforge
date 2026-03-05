@@ -1,4 +1,5 @@
 import type { ChatMessage, ChatType } from '../types/chat';
+import { cleanLine } from './lineUtils';
 
 // Say/Ask/Exclaim: "Name says/asks/exclaims [to target] in lang, 'msg'"
 // "says to you", "asks you" (asks omits "to")
@@ -74,7 +75,7 @@ const INCOMPLETE_CHAT_RE =
   /^(?:\w+ (?:says|asks|exclaims|shouts|yells)(?: (?:to )?(?:you|\w+))? in \w+,\s*'|You (?:say|ask|exclaim|shout|yell) in \w+,\s*'|\w+ says \(OOC\),\s*'|You say \(OOC\),\s*')/;
 
 export function isIncompleteChatLine(line: string): boolean {
-  const cleaned = line.replace(/^(?:> )+/, '').trim();
+  const cleaned = cleanLine(line);
   if (!cleaned || cleaned.endsWith("'")) return false;
   return INCOMPLETE_CHAT_RE.test(cleaned);
 }
@@ -85,7 +86,7 @@ export function isIncompleteChatLine(line: string): boolean {
  */
 export function matchChatLine(line: string, activeCharacter: string | null): ChatMessage | null {
   // Strip leading "> " prompts (MUD sometimes prepends these)
-  const cleaned = line.replace(/^(?:> )+/, '').trim();
+  const cleaned = cleanLine(line);
   if (!cleaned) return null;
 
   let m: RegExpMatchArray | null;

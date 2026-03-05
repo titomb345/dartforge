@@ -32,22 +32,6 @@ const CELL_W = 26;
 const APPLY_W = 14;
 
 /* ------------------------------------------------------------------ */
-/*  Limb name abbreviation                                              */
-/* ------------------------------------------------------------------ */
-
-/** Shorten common DartMUD limb prefixes so names fit in narrow panels. */
-function abbreviateLimb(name: string): string {
-  let s = name;
-  s = s.replace(/^upper\s+left\b/i, 'UL');
-  s = s.replace(/^upper\s+right\b/i, 'UR');
-  s = s.replace(/^lower\s+left\b/i, 'LL');
-  s = s.replace(/^lower\s+right\b/i, 'LR');
-  s = s.replace(/^upper\b/i, 'Up.');
-  s = s.replace(/^lower\b/i, 'Lo.');
-  return s;
-}
-
-/* ------------------------------------------------------------------ */
 /*  Shared sub-components                                              */
 /* ------------------------------------------------------------------ */
 
@@ -509,7 +493,7 @@ function LiveView() {
                   className="flex-1 min-w-0 text-[10px] text-text-label truncate pr-1"
                   title={limb}
                 >
-                  {abbreviateLimb(limb)}
+                  {limb}
                 </div>
                 {ALLOC_SLOTS.map((slot) => (
                   <AllocCell
@@ -696,7 +680,7 @@ function ProfileView() {
                       className="flex-1 min-w-0 text-[10px] text-text-label truncate pr-1"
                       title={limb}
                     >
-                      {abbreviateLimb(limb)}
+                      {limb}
                     </div>
                     {ALLOC_SLOTS.map((slot) => (
                       <AllocCell

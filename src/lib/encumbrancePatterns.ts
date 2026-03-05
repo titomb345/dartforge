@@ -1,4 +1,5 @@
 import type { ThemeColorKey } from './defaultTheme';
+import { cleanLine, stripScorePrefix } from './lineUtils';
 
 /** A single encumbrance state with display metadata */
 export interface EncumbranceLevel {
@@ -92,15 +93,10 @@ for (const level of ENCUMBRANCE_LEVELS) {
  * - "You find it easy to move." (standalone, if it exists)
  */
 export function matchEncumbranceLine(line: string): EncumbranceMatch | null {
-  const cleaned = line.replace(/^(?:> )+/, '').trim();
+  const cleaned = cleanLine(line);
   if (!cleaned) return null;
 
-  // Strip optional "Encumbrance : " prefix (score output)
-  let text = cleaned;
-  const prefixMatch = cleaned.match(/^Encumbrance\s*:\s*(.+)$/i);
-  if (prefixMatch) {
-    text = prefixMatch[1].trim();
-  }
+  const text = stripScorePrefix(cleaned, 'Encumbrance');
 
   const level = ENCUMBRANCE_LOOKUP.get(text);
   if (level) return { level, raw: cleaned };

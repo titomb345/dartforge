@@ -1,4 +1,5 @@
 import type { SkillMatchResult } from '../types/skills';
+import { cleanLine } from './lineUtils';
 
 /** Self-improve: * You think your [SKILL] skill has improved. * */
 const SELF_IMPROVE_RE = /^\* You think your (.+?) skill has improved\. \*$/;
@@ -20,8 +21,7 @@ const FILTERED_SKILLS = new Set(['concentration', 'encumbrance', 'held', 'worn']
  * Lines may have leading "> " prompts which are stripped before matching.
  */
 export function matchSkillLine(line: string): SkillMatchResult | null {
-  // Strip leading "> " prompts (MUD sometimes prepends these)
-  const cleaned = line.replace(/^(?:> )+/, '').trim();
+  const cleaned = cleanLine(line);
   if (!cleaned) return null;
 
   let match = cleaned.match(SELF_IMPROVE_RE);

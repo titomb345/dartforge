@@ -10,6 +10,20 @@ const RESERVED_PREFIXES = [
   'me', // $me
 ];
 
+/** Cache compiled regex patterns keyed by the sorted variable name list */
+let cachedPatternKey = '';
+let cachedPattern: RegExp | null = null;
+
+function getVariablePattern(safeNames: string[]): RegExp {
+  const key = safeNames.join('|');
+  if (key === cachedPatternKey && cachedPattern) return cachedPattern;
+
+  const escaped = safeNames.map((n) => n.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'));
+  cachedPattern = new RegExp(`\\$(${escaped.join('|')})(?![a-zA-Z0-9_])`, 'gi');
+  cachedPatternKey = key;
+  return cachedPattern;
+}
+
 /**
  * Expand user-defined $variables in a text string.
  *
@@ -48,9 +62,9 @@ export function expandVariables(text: string, variables: Variable[]): string {
 
   if (safeNames.length === 0) return text;
 
-  // Escape regex special characters in variable names
-  const escaped = safeNames.map((n) => n.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'));
-  const pattern = new RegExp(`\\$(${escaped.join('|')})(?![a-zA-Z0-9_])`, 'gi');
+  const pattern = getVariablePattern(safeNames);
+  // Reset lastIndex since the regex has the 'g' flag and is cached
+  pattern.lastIndex = 0;
 
   return text.replace(pattern, (_, name) => {
     return varMap.get(name.toLowerCase()) ?? `$${name}`;

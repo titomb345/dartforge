@@ -1,4 +1,5 @@
 import type { ThemeColorKey } from './defaultTheme';
+import { cleanLine, stripScorePrefix } from './lineUtils';
 
 /** A single concentration state with display metadata */
 export interface ConcentrationLevel {
@@ -86,23 +87,23 @@ export interface ConcentrationMatch {
   raw: string;
 }
 
+/** Pre-built lookup map for O(1) concentration message matching. */
+const CONCENTRATION_LOOKUP = new Map<string, ConcentrationLevel>();
+for (const level of CONCENTRATION_LEVELS) {
+  CONCENTRATION_LOOKUP.set(level.message, level);
+}
+
 /**
  * Match a single ANSI-stripped line against known concentration messages.
  * Handles optional "> " prompt prefix and "Concentration : " prefix.
  */
 export function matchConcentrationLine(line: string): ConcentrationMatch | null {
-  // Strip leading "> " prompts
-  const cleaned = line.replace(/^(?:> )+/, '').trim();
+  const cleaned = cleanLine(line);
   if (!cleaned) return null;
 
-  // Strip optional "Concentration : " prefix (MUD sometimes includes it)
-  const withoutPrefix = cleaned.replace(/^Concentration\s*:\s*/i, '');
-
-  for (const level of CONCENTRATION_LEVELS) {
-    if (withoutPrefix === level.message) {
-      return { level, raw: cleaned };
-    }
-  }
+  const withoutPrefix = stripScorePrefix(cleaned, 'Concentration');
+  const level = CONCENTRATION_LOOKUP.get(withoutPrefix);
+  if (level) return { level, raw: cleaned };
 
   return null;
 }

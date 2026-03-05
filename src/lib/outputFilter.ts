@@ -478,42 +478,50 @@ export class OutputFilter {
         stripped = '';
       }
 
-      // --- Always run matchers and fire callbacks ---
+      // --- Run matchers and fire callbacks ---
+      // Quick pre-check: status lines always start with known prefixes.
+      // Skip all 7 matchers (~95% of lines) when the line can't match.
+      const maybeStatus =
+        stripped.length > 0 &&
+        (stripped.charCodeAt(0) === 89 /* 'Y' — "You are/have/believe", "Your", "You're", "You fall" */ ||
+          stripped.charCodeAt(0) === 78 /* 'N' — "Needs :" */ ||
+          stripped.charCodeAt(0) === 65 /* 'A' — "Aura :" */ ||
+          stripped.charCodeAt(0) === 69 /* 'E' — "Encumbrance :" */ ||
+          stripped.charCodeAt(0) === 67 /* 'C' — "Concentration :" */ ||
+          stripped.charCodeAt(0) === 77 /* 'M' — "Movement :" */);
 
-      const concMatch = matchConcentrationLine(stripped);
-      if (concMatch) {
-        this.callbacks.onConcentration?.(concMatch);
-      }
+      let concMatch: ConcentrationMatch | null = null;
+      let needsMatch: ReturnType<typeof matchNeedsLine> = null;
+      let auraMatch: AuraMatch | null = null;
+      let encumbranceMatch: EncumbranceMatch | null = null;
+      let movementMatch: MovementMatch | null = null;
+      let healthMatch: HealthMatch | null = null;
+      let alignmentMatch: AlignmentMatch | null = null;
 
-      const needsMatch = matchNeedsLine(stripped);
-      if (needsMatch) {
-        if (needsMatch.hunger) this.callbacks.onHunger?.(needsMatch.hunger);
-        if (needsMatch.thirst) this.callbacks.onThirst?.(needsMatch.thirst);
-      }
+      if (maybeStatus) {
+        concMatch = matchConcentrationLine(stripped);
+        if (concMatch) this.callbacks.onConcentration?.(concMatch);
 
-      const auraMatch = matchAuraLine(stripped, seg);
-      if (auraMatch) {
-        this.callbacks.onAura?.(auraMatch);
-      }
+        needsMatch = matchNeedsLine(stripped);
+        if (needsMatch) {
+          if (needsMatch.hunger) this.callbacks.onHunger?.(needsMatch.hunger);
+          if (needsMatch.thirst) this.callbacks.onThirst?.(needsMatch.thirst);
+        }
 
-      const encumbranceMatch = matchEncumbranceLine(stripped);
-      if (encumbranceMatch) {
-        this.callbacks.onEncumbrance?.(encumbranceMatch);
-      }
+        auraMatch = matchAuraLine(stripped, seg);
+        if (auraMatch) this.callbacks.onAura?.(auraMatch);
 
-      const movementMatch = matchMovementLine(stripped);
-      if (movementMatch) {
-        this.callbacks.onMovement?.(movementMatch);
-      }
+        encumbranceMatch = matchEncumbranceLine(stripped);
+        if (encumbranceMatch) this.callbacks.onEncumbrance?.(encumbranceMatch);
 
-      const healthMatch = matchHealthLine(stripped);
-      if (healthMatch) {
-        this.callbacks.onHealth?.(healthMatch);
-      }
+        movementMatch = matchMovementLine(stripped);
+        if (movementMatch) this.callbacks.onMovement?.(movementMatch);
 
-      const alignmentMatch = matchAlignmentLine(stripped);
-      if (alignmentMatch) {
-        this.callbacks.onAlignment?.(alignmentMatch);
+        healthMatch = matchHealthLine(stripped);
+        if (healthMatch) this.callbacks.onHealth?.(healthMatch);
+
+        alignmentMatch = matchAlignmentLine(stripped);
+        if (alignmentMatch) this.callbacks.onAlignment?.(alignmentMatch);
       }
 
       // --- Chat detection (observational — never strips) ---
@@ -586,6 +594,7 @@ export class OutputFilter {
         this.lastLineGagged = true;
         continue; // suppress this line from terminal output
       }
+
       if (lineResult?.highlight) {
         // Flush any pending anti-spam count before the highlighted line
         if (this.repeatCount > 0) {

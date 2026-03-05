@@ -26,9 +26,15 @@ pub struct ProcessedOutput {
 /// Strips Telnet IAC sequences and generates appropriate responses.
 /// Passes ANSI escape sequences through for xterm.js to render.
 /// Returns any trailing partial IAC sequence as `remainder` for reassembly.
+/// Convert display bytes to String, using fast path for valid UTF-8
+fn display_string(bytes: Vec<u8>) -> String {
+    String::from_utf8(bytes)
+        .unwrap_or_else(|e| String::from_utf8_lossy(e.as_bytes()).into_owned())
+}
+
 pub fn process_output(raw: &[u8]) -> ProcessedOutput {
     let mut display_bytes: Vec<u8> = Vec::with_capacity(raw.len());
-    let mut responses: Vec<Vec<u8>> = Vec::new();
+    let mut responses: Vec<Vec<u8>> = Vec::with_capacity(4);
     let mut ga = false;
     let mut i = 0;
 
@@ -37,7 +43,7 @@ pub fn process_output(raw: &[u8]) -> ProcessedOutput {
             // Not enough bytes to determine the IAC command — save as remainder
             if i + 1 >= raw.len() {
                 return ProcessedOutput {
-                    display: String::from_utf8_lossy(&display_bytes).into_owned(),
+                    display: display_string(display_bytes),
                     responses,
                     remainder: raw[i..].to_vec(),
                     ga,
@@ -55,7 +61,7 @@ pub fn process_output(raw: &[u8]) -> ProcessedOutput {
                     if i + 2 >= raw.len() {
                         // Incomplete 3-byte sequence — save as remainder
                         return ProcessedOutput {
-                            display: String::from_utf8_lossy(&display_bytes).into_owned(),
+                            display: display_string(display_bytes),
                             responses,
                             remainder: raw[i..].to_vec(),
                             ga,
@@ -86,7 +92,7 @@ pub fn process_output(raw: &[u8]) -> ProcessedOutput {
                     if !found_se {
                         // Incomplete subnegotiation — save everything from IAC SB onward
                         return ProcessedOutput {
-                            display: String::from_utf8_lossy(&display_bytes).into_owned(),
+                            display: display_string(display_bytes),
                             responses,
                             remainder: raw[i..].to_vec(),
                             ga,
@@ -110,7 +116,7 @@ pub fn process_output(raw: &[u8]) -> ProcessedOutput {
     }
 
     ProcessedOutput {
-        display: String::from_utf8_lossy(&display_bytes).into_owned(),
+        display: display_string(display_bytes),
         responses,
         remainder: Vec::new(),
         ga,

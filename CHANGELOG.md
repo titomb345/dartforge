@@ -13,12 +13,16 @@ The `[Unreleased]` header controls automatic version bumping on merge:
 
 ### Changed
 - Quick buttons are now drag-and-droppable for reordering (replaces right-click Move Left/Right)
-- Allocations panel compacted for narrow pinned widths: cells shrunk from 36px to 26px, null/arcane columns removed (PointBar still shows distribution), limb names abbreviated ("upper left hand" → "UL hand")
+- Allocations panel compacted for narrow pinned widths: cells shrunk from 36px to 26px, null/arcane columns removed (PointBar still shows distribution)
 - Counter panel compacted: merged Total and Elapsed into one line, removed divider, tightened padding throughout
-- Chat panel compacted: merged filter pills and Mine/Muted/Sigs toggles into a single row
+- Chat panel: tightened padding on filter and toggle rows
+- DRY: extracted shared `cleanLine`/`stripScorePrefix` utilities — replaced 11 duplicate prompt-stripping regex patterns across all pattern matchers
+- Performance: memoized regex compilation in variable engine — avoids recompiling on every command
+- Performance: optimized Rust connection hot path — reduced allocations in command sending, TCP read loop, and ANSI processing (fast-path UTF-8 conversion, pre-allocated response buffers, consolidated lock acquisition)
 
 ### Fixed
 - Removed extra blank line the server inserts before the `>` prompt in the terminal
+- Fixed stray newlines from gagged lines: blank lines before AND after gagged content (gag groups, triggers, compact mode, sync) are now suppressed using deferred blank line emission
 
 ### Removed
 - Removed `[timer: <name>]` echo in the terminal each time a timer fires

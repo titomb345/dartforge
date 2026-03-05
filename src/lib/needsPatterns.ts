@@ -1,4 +1,5 @@
 import type { ThemeColorKey } from './defaultTheme';
+import { cleanLine, stripScorePrefix } from './lineUtils';
 
 /** A single hunger or thirst state */
 export interface NeedLevel {
@@ -152,12 +153,10 @@ export interface NeedsMatch {
  * - Individual: "You are hungry." / "You are well fed."
  */
 export function matchNeedsLine(line: string): NeedsMatch | null {
-  // Strip leading "> " prompts
-  let cleaned = line.replace(/^(?:> )+/, '').trim();
+  let cleaned = cleanLine(line);
   if (!cleaned) return null;
 
-  // Strip optional "Needs" prefix (score output: "Needs         : You are ...")
-  cleaned = cleaned.replace(/^Needs\s*:\s*/i, '');
+  cleaned = stripScorePrefix(cleaned, 'Needs');
 
   if (!cleaned.startsWith('You are ')) return null;
   const body = cleaned.slice(8).replace(/\.$/, ''); // strip "You are " and trailing "."

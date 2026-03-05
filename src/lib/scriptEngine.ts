@@ -18,7 +18,7 @@ const delay = (ms: number): Promise<void> => new Promise((resolve) => setTimeout
 
 let _lastUserInputTimeTs = Date.now();
 
-/** Called from handleSend to stamp the last user-typed command time. */
+/** Called from handleSend / quick buttons to stamp the last user-typed command time. */
 export function stampUserInput(): void {
   _lastUserInputTimeTs = Date.now();
 }

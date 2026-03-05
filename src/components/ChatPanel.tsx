@@ -234,7 +234,7 @@ export function ChatPanel({ mode = 'slideout' }: PinnablePanelProps) {
         </div>
       </PanelHeader>
 
-      {/* Filter pills + Mine / Muted / Sigs */}
+      {/* Filter pills */}
       <div
         data-help-id="chat-filters"
         className="flex items-center gap-1 px-2 py-1.5 border-b border-border-subtle flex-wrap shrink-0"
@@ -251,7 +251,10 @@ export function ChatPanel({ mode = 'slideout' }: PinnablePanelProps) {
             onContextMenu={(e) => handleFilterRightClick(e, type)}
           />
         ))}
-        <div className="w-px h-3 bg-border-dim" />
+      </div>
+
+      {/* Mine / Muted / Sigs toggles */}
+      <div className="flex items-center gap-1.5 px-2 py-1 border-b border-border-subtle shrink-0">
         <button
           onClick={toggleHideOwnMessages}
           title={hideOwnMessages ? 'Own messages hidden (click to show)' : 'Own messages shown (click to hide)'}

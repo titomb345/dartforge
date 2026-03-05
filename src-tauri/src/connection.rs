@@ -138,8 +138,10 @@ pub async fn connect(app: AppHandle, mut cmd_rx: mpsc::Receiver<String>) {
     // Forward user commands to the write channel
     let cmd_handle = tokio::spawn(async move {
         while let Some(cmd) = cmd_rx.recv().await {
-            let data = format!("{cmd}\r\n");
-            if write_tx_for_cmds.send(data.into_bytes()).await.is_err() {
+            let mut data = Vec::with_capacity(cmd.len() + 2);
+            data.extend_from_slice(cmd.as_bytes());
+            data.extend_from_slice(b"\r\n");
+            if write_tx_for_cmds.send(data).await.is_err() {
                 break;
             }
         }
@@ -156,7 +158,9 @@ pub async fn connect(app: AppHandle, mut cmd_rx: mpsc::Receiver<String>) {
             }
             Ok(n) => {
                 // Prepend any leftover bytes from the previous read
+                // Reuse remainder's allocation when possible to avoid per-read Vec allocs
                 let input = if remainder.is_empty() {
+                    // Fast path: borrow buf directly via a temporary vec
                     buf[..n].to_vec()
                 } else {
                     let mut combined = std::mem::take(&mut remainder);
