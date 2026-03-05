@@ -125,7 +125,7 @@ export function CounterPanel({ mode = 'slideout' }: CounterPanelProps) {
     <div className={panelRootClass(isPinned)}>
       <PanelHeader icon={<CounterIcon size={12} />} title="Counters" panel="counter" mode={mode} />
       {/* Counter tabs */}
-      <div className="flex items-center gap-1 px-2 py-1.5 border-b border-border-subtle shrink-0">
+      <div className="flex items-center gap-1 px-2 py-1 border-b border-border-subtle shrink-0">
         <div className="flex items-center gap-1 flex-1 min-w-0 overflow-x-auto">
           {counters.map((c) => (
             <button
@@ -155,7 +155,7 @@ export function CounterPanel({ mode = 'slideout' }: CounterPanelProps) {
       {activeCounter ? (
         <div className="flex-1 flex flex-col overflow-hidden min-h-0">
           {/* Controls bar — fixed */}
-          <div className="flex items-center gap-1 px-2 py-1.5 border-b border-border-subtle shrink-0">
+          <div className="flex items-center gap-1 px-2 py-1 border-b border-border-subtle shrink-0">
             {/* Play/Pause */}
             {activeCounter.status === 'running' ? (
               <TinyBtn onClick={() => pauseCounter(activeCounter.id)} title="Pause" accent="amber">
@@ -253,7 +253,7 @@ export function CounterPanel({ mode = 'slideout' }: CounterPanelProps) {
           {/* Scrollable: stats + skills together */}
           <div className="flex-1 overflow-y-auto">
             {/* Stats */}
-            <div className="px-3 py-2 border-b border-border-subtle">
+            <div className="px-2 py-1.5 border-b border-border-subtle">
               <CounterStats
                 counter={activeCounter}
                 elapsed={getElapsedMs(activeCounter)}
@@ -335,18 +335,13 @@ function CounterStats({
     <div className="space-y-1">
       <div className="flex items-baseline justify-between">
         <span className="text-[10px] text-text-dim">Total</span>
-        <span className="text-[12px] font-mono font-semibold text-amber">
-          {counter.totalImps.toLocaleString()}
-          <span className="text-[9px] text-text-dim font-normal ml-1">imps</span>
-        </span>
-      </div>
-      <div className="flex items-baseline justify-between">
-        <span className="text-[10px] text-text-dim">Elapsed</span>
-        <span className="text-[10px] font-mono text-text-label">
+        <span className="text-[11px] font-mono text-text-label">
+          <span className="font-semibold text-amber">{counter.totalImps.toLocaleString()}</span>
+          <span className="text-[9px] text-text-dim ml-0.5">imps</span>
+          <span className="text-text-dim mx-1">·</span>
           {formatCompactDuration(elapsed)}
         </span>
       </div>
-      <div className="h-px bg-border-subtle my-1" />
       <div className="grid grid-cols-3 gap-1 text-center">
         <RateStat label="/min" value={perMinute} />
         <RateStat label={`/${periodLabel}`} value={perPeriod} />

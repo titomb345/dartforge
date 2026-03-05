@@ -9,6 +9,20 @@ The `[Unreleased]` header controls automatic version bumping on merge:
 - `[Unreleased-minor]` → 0.1.0 → 0.2.0
 - `[Unreleased-major]` → 0.1.0 → 1.0.0
 
+## [Unreleased-minor]
+
+### Changed
+- Quick buttons are now drag-and-droppable for reordering (replaces right-click Move Left/Right)
+- Allocations panel compacted for narrow pinned widths: cells shrunk from 36px to 26px, null/arcane columns removed (PointBar still shows distribution), limb names abbreviated ("upper left hand" → "UL hand")
+- Counter panel compacted: merged Total and Elapsed into one line, removed divider, tightened padding throughout
+- Chat panel compacted: merged filter pills and Mine/Muted/Sigs toggles into a single row
+
+### Fixed
+- Removed extra blank line the server inserts before the `>` prompt in the terminal
+
+### Removed
+- Removed `[timer: <name>]` echo in the terminal each time a timer fires
+
 ## [1.4.0] - 2026-03-05
 
 ### Changed

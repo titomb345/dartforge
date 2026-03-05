@@ -1,5 +1,22 @@
 import { useState, useRef, useCallback, useEffect } from 'react';
 import { createPortal } from 'react-dom';
+import {
+  DndContext,
+  closestCenter,
+  PointerSensor,
+  KeyboardSensor,
+  useSensor,
+  useSensors,
+  type DragStartEvent,
+  type DragEndEvent,
+} from '@dnd-kit/core';
+import {
+  SortableContext,
+  horizontalListSortingStrategy,
+  useSortable,
+  arrayMove,
+} from '@dnd-kit/sortable';
+import { CSS } from '@dnd-kit/utilities';
 import type { QuickButton } from '../types';
 import { QuickButtonEditor } from './QuickButtonEditor';
 
@@ -9,7 +26,65 @@ interface QuickButtonBarProps {
   onAdd: (data: Omit<QuickButton, 'id'>) => void;
   onUpdate: (id: string, data: Partial<QuickButton>) => void;
   onDelete: (id: string) => void;
-  onReorder: (id: string, direction: 'left' | 'right') => void;
+  onReorder: (newButtons: QuickButton[]) => void;
+}
+
+function SortableQuickButton({
+  btn,
+  onFire,
+  onContextMenu,
+  isDragging: isAnyDragging,
+}: {
+  btn: QuickButton;
+  onFire: (body: string, bodyMode: 'commands' | 'script') => void;
+  onContextMenu: (e: React.MouseEvent, btn: QuickButton) => void;
+  isDragging: boolean;
+}) {
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    transform,
+    transition,
+    isDragging: isSelfDragging,
+  } = useSortable({ id: btn.id });
+
+  const style: React.CSSProperties = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    zIndex: isSelfDragging ? 50 : undefined,
+    opacity: isSelfDragging ? 0.8 : 1,
+    cursor: isAnyDragging ? 'grabbing' : undefined,
+  };
+
+  return (
+    <div ref={setNodeRef} style={style} {...attributes} {...listeners}>
+      <button
+        data-qb-id={btn.id}
+        onClick={() => {
+          if (btn.enabled) onFire(btn.body, btn.bodyMode);
+        }}
+        onContextMenu={(e) => onContextMenu(e, btn)}
+        className="qb-pill text-[11px] font-mono font-semibold px-2.5 py-0.5 rounded-full border cursor-pointer transition-all duration-150 active:scale-95"
+        style={
+          {
+            '--qb-color': btn.color,
+            borderColor: btn.enabled
+              ? `color-mix(in srgb, ${btn.color} 40%, transparent)`
+              : '#333',
+            color: btn.enabled ? btn.color : '#555',
+            background: btn.enabled
+              ? `color-mix(in srgb, ${btn.color} 6%, transparent)`
+              : 'transparent',
+            opacity: btn.enabled ? 1 : 0.4,
+          } as React.CSSProperties
+        }
+        title={btn.enabled ? btn.body.split('\n')[0] : `${btn.label} (disabled)`}
+      >
+        {btn.label}
+      </button>
+    </div>
+  );
 }
 
 export function QuickButtonBar({
@@ -32,7 +107,14 @@ export function QuickButtonBar({
     y: number;
   } | null>(null);
 
+  const [draggingId, setDraggingId] = useState<string | null>(null);
+
   const addBtnRef = useRef<HTMLButtonElement>(null);
+
+  const sensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
+    useSensor(KeyboardSensor)
+  );
 
   const openAdd = useCallback(() => {
     const rect = addBtnRef.current?.getBoundingClientRect() ?? null;
@@ -54,39 +136,51 @@ export function QuickButtonBar({
 
   const closeContextMenu = useCallback(() => setContextMenu(null), []);
 
+  const handleDragStart = useCallback((event: DragStartEvent) => {
+    setDraggingId(String(event.active.id));
+  }, []);
+
+  const handleDragEnd = useCallback(
+    (event: DragEndEvent) => {
+      setDraggingId(null);
+      const { active, over } = event;
+      if (!over || active.id === over.id) return;
+
+      const oldIndex = buttons.findIndex((b) => b.id === active.id);
+      const newIndex = buttons.findIndex((b) => b.id === over.id);
+      if (oldIndex === -1 || newIndex === -1) return;
+
+      onReorder(arrayMove(buttons, oldIndex, newIndex));
+    },
+    [buttons, onReorder]
+  );
+
+  const buttonIds = buttons.map((b) => b.id);
+
   return (
     <div
       className={`flex flex-wrap items-center shrink-0 ${
         buttons.length > 0 ? 'gap-1 px-2 py-1' : 'px-2 py-px'
       }`}
     >
-      {buttons.map((btn) => (
-        <button
-          key={btn.id}
-          data-qb-id={btn.id}
-          onClick={() => {
-            if (btn.enabled) onFire(btn.body, btn.bodyMode);
-          }}
-          onContextMenu={(e) => handleContextMenu(e, btn)}
-          className="qb-pill text-[11px] font-mono font-semibold px-2.5 py-0.5 rounded-full border cursor-pointer transition-all duration-150 active:scale-95"
-          style={
-            {
-              '--qb-color': btn.color,
-              borderColor: btn.enabled
-                ? `color-mix(in srgb, ${btn.color} 40%, transparent)`
-                : '#333',
-              color: btn.enabled ? btn.color : '#555',
-              background: btn.enabled
-                ? `color-mix(in srgb, ${btn.color} 6%, transparent)`
-                : 'transparent',
-              opacity: btn.enabled ? 1 : 0.4,
-            } as React.CSSProperties
-          }
-          title={btn.enabled ? btn.body.split('\n')[0] : `${btn.label} (disabled)`}
-        >
-          {btn.label}
-        </button>
-      ))}
+      <DndContext
+        sensors={sensors}
+        collisionDetection={closestCenter}
+        onDragStart={handleDragStart}
+        onDragEnd={handleDragEnd}
+      >
+        <SortableContext items={buttonIds} strategy={horizontalListSortingStrategy}>
+          {buttons.map((btn) => (
+            <SortableQuickButton
+              key={btn.id}
+              btn={btn}
+              onFire={onFire}
+              onContextMenu={handleContextMenu}
+              isDragging={draggingId != null}
+            />
+          ))}
+        </SortableContext>
+      </DndContext>
 
       {/* Add button — compact when row is empty */}
       <button
@@ -115,10 +209,6 @@ export function QuickButtonBar({
           }}
           onDelete={onDelete}
           onToggleEnabled={(btn) => onUpdate(btn.id, { enabled: !btn.enabled })}
-          onMoveLeft={(btn) => onReorder(btn.id, 'left')}
-          onMoveRight={(btn) => onReorder(btn.id, 'right')}
-          isFirst={buttons[0]?.id === contextMenu.button.id}
-          isLast={buttons[buttons.length - 1]?.id === contextMenu.button.id}
         />
       )}
 
@@ -152,10 +242,6 @@ interface ContextMenuOverlayProps {
   onEdit: (btn: QuickButton) => void;
   onDelete: (id: string) => void;
   onToggleEnabled: (btn: QuickButton) => void;
-  onMoveLeft: (btn: QuickButton) => void;
-  onMoveRight: (btn: QuickButton) => void;
-  isFirst: boolean;
-  isLast: boolean;
 }
 
 function ContextMenuOverlay({
@@ -166,10 +252,6 @@ function ContextMenuOverlay({
   onEdit,
   onDelete,
   onToggleEnabled,
-  onMoveLeft,
-  onMoveRight,
-  isFirst,
-  isLast,
 }: ContextMenuOverlayProps) {
   const menuRef = useRef<HTMLDivElement>(null);
 
@@ -194,14 +276,13 @@ function ContextMenuOverlay({
   const itemClass =
     'w-full px-3 py-1.5 text-[11px] text-left transition-colors cursor-pointer';
   const activeClass = `${itemClass} text-text-label hover:bg-bg-secondary/60`;
-  const dimClass = `${itemClass} text-text-dim/40 cursor-default`;
   const dangerClass = `${itemClass} text-red hover:bg-red/10`;
 
   // Keep menu in viewport
   const style: React.CSSProperties = {
     position: 'fixed',
     zIndex: 9999,
-    top: Math.min(y, window.innerHeight - 180),
+    top: Math.min(y, window.innerHeight - 140),
     left: Math.min(x, window.innerWidth - 150),
   };
 
@@ -240,27 +321,6 @@ function ContextMenuOverlay({
           className={activeClass}
         >
           {button.enabled ? 'Disable' : 'Enable'}
-        </button>
-        <div className="h-px bg-border-dim mx-1.5 my-0.5" />
-        <button
-          onClick={() => {
-            onMoveLeft(button);
-            onClose();
-          }}
-          disabled={isFirst}
-          className={isFirst ? dimClass : activeClass}
-        >
-          Move Left
-        </button>
-        <button
-          onClick={() => {
-            onMoveRight(button);
-            onClose();
-          }}
-          disabled={isLast}
-          className={isLast ? dimClass : activeClass}
-        >
-          Move Right
         </button>
         <div className="h-px bg-border-dim mx-1.5 my-0.5" />
         <button

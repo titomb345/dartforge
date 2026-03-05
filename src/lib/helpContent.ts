@@ -236,7 +236,7 @@ export const HELP_CATEGORIES: HelpCategory[] = [
       {
         title: 'Quick Button Context Menu',
         description:
-          'Right-click any quick button to edit, delete, enable/disable, or reorder it. Click the "+" button at the end of the row to add a new one.',
+          'Right-click any quick button to edit, delete, or enable/disable it. Drag and drop buttons to reorder them. Click the "+" button at the end of the row to add a new one.',
         interaction: 'right-click',
       },
     ],

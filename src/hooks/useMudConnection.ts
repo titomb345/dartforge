@@ -209,6 +209,8 @@ export function useMudConnection(
               : data;
             if (filtered) {
               let out = debugModeRef.current ? annotateAnsi(filtered) : filtered;
+              // Remove blank line the server inserts before the prompt
+              out = out.replace(/\r?\n(\r?\n> ?$)/, '$1');
               const shouldStrip = outputFilterRef?.current?.stripPrompts ?? true;
               if (payload.ga && shouldStrip) {
                 out = stripPrompt(out);

@@ -25,6 +25,32 @@ import {
 import { ConfirmDeleteButton } from './ConfirmDeleteButton';
 import { cn } from '../lib/cn';
 
+/* ------------------------------------------------------------------ */
+/*  Layout constants                                                    */
+/* ------------------------------------------------------------------ */
+const CELL_W = 26;
+const APPLY_W = 14;
+
+/* ------------------------------------------------------------------ */
+/*  Limb name abbreviation                                              */
+/* ------------------------------------------------------------------ */
+
+/** Shorten common DartMUD limb prefixes so names fit in narrow panels. */
+function abbreviateLimb(name: string): string {
+  let s = name;
+  s = s.replace(/^upper\s+left\b/i, 'UL');
+  s = s.replace(/^upper\s+right\b/i, 'UR');
+  s = s.replace(/^lower\s+left\b/i, 'LL');
+  s = s.replace(/^lower\s+right\b/i, 'LR');
+  s = s.replace(/^upper\b/i, 'Up.');
+  s = s.replace(/^lower\b/i, 'Lo.');
+  return s;
+}
+
+/* ------------------------------------------------------------------ */
+/*  Shared sub-components                                              */
+/* ------------------------------------------------------------------ */
+
 /** Dropdown menu for "Save to Profile" action. */
 function SaveProfileMenu({
   profiles,
@@ -94,10 +120,6 @@ type AllocPanelProps = PinnablePanelProps;
 
 const ACCENT = '#e06c75';
 const MAGIC_ACCENT = '#bd93f9';
-
-/* ------------------------------------------------------------------ */
-/*  Shared sub-components                                              */
-/* ------------------------------------------------------------------ */
 
 /** Compact inline-editable text field. */
 function InlineField({
@@ -232,7 +254,8 @@ function AllocCell({
             setEditing(false);
           }
         }}
-        className="w-[36px] bg-bg-canvas border border-border rounded text-center text-[11px] text-text-primary outline-none px-0 py-0 font-mono"
+        style={{ width: `${CELL_W}px` }}
+        className="bg-bg-canvas border border-border rounded text-center text-[10px] text-text-primary outline-none px-0 py-0 font-mono"
       />
     );
   }
@@ -240,17 +263,18 @@ function AllocCell({
   return (
     <div
       className={cn(
-        'group/cell relative flex items-center justify-center w-[36px] h-[20px] rounded text-[11px] font-mono select-none',
+        'group/cell relative flex items-center justify-center h-[20px] rounded text-[10px] font-mono select-none',
         readOnly
           ? 'text-text-dim bg-transparent'
           : 'text-text-primary bg-bg-canvas/50 cursor-pointer hover:bg-bg-secondary transition-colors duration-100'
       )}
+      style={{ width: `${CELL_W}px` }}
       onClick={handleClick}
     >
       {!readOnly && (
         <button
           onClick={(e) => handleDelta(e, -1)}
-          className="absolute left-[-1px] top-0 bottom-0 w-[12px] flex items-center justify-center opacity-0 group-hover/cell:opacity-100 text-[8px] text-text-dim hover:text-red transition-all duration-100 cursor-pointer"
+          className="absolute left-[-1px] top-0 bottom-0 w-[10px] flex items-center justify-center opacity-0 group-hover/cell:opacity-100 text-[8px] text-text-dim hover:text-red transition-all duration-100 cursor-pointer"
           title="- 1 (shift: - 5)"
         >
           -
@@ -260,7 +284,7 @@ function AllocCell({
       {!readOnly && (
         <button
           onClick={(e) => handleDelta(e, 1)}
-          className="absolute right-[-1px] top-0 bottom-0 w-[12px] flex items-center justify-center opacity-0 group-hover/cell:opacity-100 text-[8px] text-text-dim hover:text-green transition-all duration-100 cursor-pointer"
+          className="absolute right-[-1px] top-0 bottom-0 w-[10px] flex items-center justify-center opacity-0 group-hover/cell:opacity-100 text-[8px] text-text-dim hover:text-green transition-all duration-100 cursor-pointer"
           title="+ 1 (shift: + 5)"
         >
           +
@@ -336,19 +360,14 @@ function GridHeaders() {
       {ALLOC_SLOTS.map((slot) => (
         <div
           key={slot}
-          className="w-[36px] text-center text-[10px] font-bold uppercase tracking-wider text-text-dim"
+          style={{ width: `${CELL_W}px` }}
+          className="text-center text-[9px] font-bold uppercase tracking-wider text-text-dim"
           title={slot}
         >
           {SLOT_SHORT[slot]}
         </div>
       ))}
-      <div
-        className="w-[36px] text-center text-[10px] font-bold uppercase tracking-wider text-text-dim/50"
-        title="null (auto-calculated)"
-      >
-        n
-      </div>
-      <div className="w-[20px]" />
+      <div style={{ width: `${APPLY_W}px` }} />
     </div>
   );
 }
@@ -361,19 +380,14 @@ function MagicGridHeaders() {
       {MAGIC_SLOTS.map((slot) => (
         <div
           key={slot}
-          className="w-[36px] text-center text-[10px] font-bold uppercase tracking-wider text-text-dim"
+          style={{ width: `${CELL_W}px` }}
+          className="text-center text-[9px] font-bold uppercase tracking-wider text-text-dim"
           title={slot}
         >
           {MAGIC_SLOT_SHORT[slot]}
         </div>
       ))}
-      <div
-        className="w-[36px] text-center text-[10px] font-bold uppercase tracking-wider text-text-dim/50"
-        title="arcane (auto-calculated)"
-      >
-        arc
-      </div>
-      <div className="w-[20px]" />
+      <div style={{ width: `${APPLY_W}px` }} />
     </div>
   );
 }
@@ -449,6 +463,10 @@ function TabToggle({ tab, onSetTab }: { tab: AllocTab; onSetTab: (t: AllocTab) =
 /*  Combat: Live View                                                   */
 /* ------------------------------------------------------------------ */
 
+/** Width of the grid area (cells + apply button) for PointBar alignment. */
+const COMBAT_GRID_W = ALLOC_SLOTS.length * CELL_W + APPLY_W;
+const MAGIC_GRID_W = MAGIC_SLOTS.length * CELL_W + APPLY_W;
+
 function LiveView() {
   const {
     data,
@@ -484,7 +502,6 @@ function LiveView() {
             parry: 0,
             control: 0,
           };
-          const nullVal = calcNull(alloc);
           return (
             <div key={limb} className="flex flex-col gap-0">
               <div className="flex items-center gap-0">
@@ -492,7 +509,7 @@ function LiveView() {
                   className="flex-1 min-w-0 text-[10px] text-text-label truncate pr-1"
                   title={limb}
                 >
-                  {limb}
+                  {abbreviateLimb(limb)}
                 </div>
                 {ALLOC_SLOTS.map((slot) => (
                   <AllocCell
@@ -502,16 +519,16 @@ function LiveView() {
                     onDelta={(d) => setLiveLimbSlotDelta(limb, slot, d)}
                   />
                 ))}
-                <AllocCell value={nullVal} readOnly />
                 <button
                   onClick={() => applyLiveLimb(limb)}
-                  className="flex items-center justify-center w-[20px] h-[20px] rounded text-text-dim hover:text-green cursor-pointer transition-colors"
+                  style={{ width: `${APPLY_W}px` }}
+                  className="flex items-center justify-center h-[20px] rounded text-text-dim hover:text-green cursor-pointer transition-colors"
                   title={`Apply ${limb}`}
                 >
-                  <CheckIcon size={10} />
+                  <CheckIcon size={9} />
                 </button>
               </div>
-              <div className="ml-auto" style={{ width: `${(ALLOC_SLOTS.length + 1) * 36 + 20}px` }}>
+              <div className="ml-auto" style={{ width: `${COMBAT_GRID_W}px` }}>
                 <PointBar alloc={alloc} />
               </div>
             </div>
@@ -672,7 +689,6 @@ function ProfileView() {
             {limbNames.map((limb) => {
               const alloc = currentProfile.limbs[limb];
               if (!alloc) return null;
-              const nullVal = calcNull(alloc);
               return (
                 <div key={limb} className="flex flex-col gap-0">
                   <div className="flex items-center gap-0">
@@ -680,7 +696,7 @@ function ProfileView() {
                       className="flex-1 min-w-0 text-[10px] text-text-label truncate pr-1"
                       title={limb}
                     >
-                      {limb}
+                      {abbreviateLimb(limb)}
                     </div>
                     {ALLOC_SLOTS.map((slot) => (
                       <AllocCell
@@ -690,19 +706,16 @@ function ProfileView() {
                         onDelta={(d) => setLimbSlotDelta(currentProfile.id, limb, slot, d)}
                       />
                     ))}
-                    <AllocCell value={nullVal} readOnly />
                     <button
                       onClick={() => applyLimb(currentProfile.id, limb)}
-                      className="flex items-center justify-center w-[20px] h-[20px] rounded text-text-dim hover:text-green cursor-pointer transition-colors"
+                      style={{ width: `${APPLY_W}px` }}
+                      className="flex items-center justify-center h-[20px] rounded text-text-dim hover:text-green cursor-pointer transition-colors"
                       title={`Apply ${limb}`}
                     >
-                      <CheckIcon size={10} />
+                      <CheckIcon size={9} />
                     </button>
                   </div>
-                  <div
-                    className="ml-auto"
-                    style={{ width: `${(ALLOC_SLOTS.length + 1) * 36 + 20}px` }}
-                  >
+                  <div className="ml-auto" style={{ width: `${COMBAT_GRID_W}px` }}>
                     <PointBar alloc={alloc} />
                   </div>
                 </div>
@@ -739,8 +752,7 @@ function MagicLiveView() {
   } = useAllocContext();
 
   const alloc = magicData.liveAllocation;
-  const arcane = calcArcane(alloc);
-  const hasValues = MAGIC_SLOTS.some((s) => alloc[s] > 0) || arcane > 0;
+  const hasValues = MAGIC_SLOTS.some((s) => alloc[s] > 0) || calcArcane(alloc) > 0;
 
   if (!hasValues) {
     return (
@@ -770,16 +782,16 @@ function MagicLiveView() {
                 onDelta={(d) => setMagicLiveSlotDelta(slot, d)}
               />
             ))}
-            <AllocCell value={arcane} readOnly />
             <button
               onClick={() => applyMagicLive()}
-              className="flex items-center justify-center w-[20px] h-[20px] rounded text-text-dim hover:text-green cursor-pointer transition-colors"
+              style={{ width: `${APPLY_W}px` }}
+              className="flex items-center justify-center h-[20px] rounded text-text-dim hover:text-green cursor-pointer transition-colors"
               title="Apply magic allocation"
             >
-              <CheckIcon size={10} />
+              <CheckIcon size={9} />
             </button>
           </div>
-          <div className="ml-auto" style={{ width: `${(MAGIC_SLOTS.length + 1) * 36 + 20}px` }}>
+          <div className="ml-auto" style={{ width: `${MAGIC_GRID_W}px` }}>
             <MagicPointBar alloc={alloc} />
           </div>
         </div>
@@ -953,16 +965,16 @@ function MagicProfileView() {
                     onDelta={(d) => setMagicProfileSlotDelta(currentMagicProfile.id, slot, d)}
                   />
                 ))}
-                <AllocCell value={calcArcane(currentMagicProfile.alloc)} readOnly />
                 <button
                   onClick={() => applyMagic(currentMagicProfile.id)}
-                  className="flex items-center justify-center w-[20px] h-[20px] rounded text-text-dim hover:text-green cursor-pointer transition-colors"
+                  style={{ width: `${APPLY_W}px` }}
+                  className="flex items-center justify-center h-[20px] rounded text-text-dim hover:text-green cursor-pointer transition-colors"
                   title="Apply magic allocation"
                 >
-                  <CheckIcon size={10} />
+                  <CheckIcon size={9} />
                 </button>
               </div>
-              <div className="ml-auto" style={{ width: `${(MAGIC_SLOTS.length + 1) * 36 + 20}px` }}>
+              <div className="ml-auto" style={{ width: `${MAGIC_GRID_W}px` }}>
                 <MagicPointBar alloc={currentMagicProfile.alloc} />
               </div>
             </div>

@@ -1940,16 +1940,10 @@ function AppMain() {
   );
 
   const reorderQuickButton = useCallback(
-    (id: string, direction: 'left' | 'right') => {
-      const idx = quickButtons.findIndex((b) => b.id === id);
-      if (idx < 0) return;
-      const targetIdx = direction === 'left' ? idx - 1 : idx + 1;
-      if (targetIdx < 0 || targetIdx >= quickButtons.length) return;
-      const next = [...quickButtons];
-      [next[idx], next[targetIdx]] = [next[targetIdx], next[idx]];
-      persistButtons(next);
+    (newButtons: QuickButton[]) => {
+      persistButtons(newButtons);
     },
-    [quickButtons, persistButtons]
+    [persistButtons]
   );
 
   const fireQuickButton = useCallback(

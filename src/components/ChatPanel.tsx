@@ -234,10 +234,10 @@ export function ChatPanel({ mode = 'slideout' }: PinnablePanelProps) {
         </div>
       </PanelHeader>
 
-      {/* Filter pills + management badges */}
+      {/* Filter pills + Mine / Muted / Sigs */}
       <div
         data-help-id="chat-filters"
-        className="flex items-center gap-1 px-2 py-2 border-b border-border-subtle flex-wrap shrink-0"
+        className="flex items-center gap-1 px-2 py-1.5 border-b border-border-subtle flex-wrap shrink-0"
       >
         <FilterPill label="All" active={allActive && !exclusiveFilter} onClick={toggleAll} />
         {(Object.keys(CHAT_TYPE_LABELS) as ChatType[]).map((type) => (
@@ -251,10 +251,7 @@ export function ChatPanel({ mode = 'slideout' }: PinnablePanelProps) {
             onContextMenu={(e) => handleFilterRightClick(e, type)}
           />
         ))}
-      </div>
-
-      {/* Mine / Muted / Sigs toggles */}
-      <div className="flex items-center gap-1.5 px-2 py-1.5 border-b border-border-subtle shrink-0">
+        <div className="w-px h-3 bg-border-dim" />
         <button
           onClick={toggleHideOwnMessages}
           title={hideOwnMessages ? 'Own messages hidden (click to show)' : 'Own messages shown (click to hide)'}
