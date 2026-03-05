@@ -1036,6 +1036,24 @@ export function HelpIcon({ size = 16 }: IconProps) {
   );
 }
 
+export function CameraIcon({ size = 16 }: IconProps) {
+  return (
+    <svg
+      width={size}
+      height={size}
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
+      <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z" />
+      <circle cx="12" cy="13" r="4" />
+    </svg>
+  );
+}
+
 export function UserIcon({ size = 16 }: IconProps) {
   return (
     <svg
@@ -1091,6 +1109,64 @@ export function BabelIcon({ size = 16 }: IconProps) {
       {/* "A" letter — language symbol */}
       <path d="M9.5 13L12 7l2.5 6" />
       <line x1="10.2" y1="11.5" x2="13.8" y2="11.5" />
+    </svg>
+  );
+}
+
+export function CodeIcon({ size = 16 }: IconProps) {
+  return (
+    <svg
+      width={size}
+      height={size}
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
+      <polyline points="16 18 22 12 16 6" />
+      <polyline points="8 6 2 12 8 18" />
+    </svg>
+  );
+}
+
+export function ExpandIcon({ size = 12 }: IconProps) {
+  return (
+    <svg
+      width={size}
+      height={size}
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
+      <polyline points="15 3 21 3 21 9" />
+      <polyline points="9 21 3 21 3 15" />
+      <line x1="21" y1="3" x2="14" y2="10" />
+      <line x1="3" y1="21" x2="10" y2="14" />
+    </svg>
+  );
+}
+
+export function CollapseIcon({ size = 12 }: IconProps) {
+  return (
+    <svg
+      width={size}
+      height={size}
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
+      <polyline points="4 14 10 14 10 20" />
+      <polyline points="20 10 14 10 14 4" />
+      <line x1="14" y1="10" x2="21" y2="3" />
+      <line x1="3" y1="21" x2="10" y2="14" />
     </svg>
   );
 }

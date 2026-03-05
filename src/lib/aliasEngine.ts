@@ -102,7 +102,7 @@ const MATCH_MODE_PRIORITY: Record<AliasMatchMode, number> = {
  * so that e.g. an exact "port" fires before a prefix "port".
  * Returns the matched alias and extracted arguments, or null.
  */
-function matchAlias(segment: string, aliases: Alias[]): { alias: Alias; args: string[] } | null {
+export function matchAlias(segment: string, aliases: Alias[]): { alias: Alias; args: string[] } | null {
   const trimmed = segment.trim();
   if (!trimmed) return null;
 
@@ -173,7 +173,8 @@ function expandSegment(
   aliases: Alias[],
   enableSpeedwalk: boolean,
   depth: number,
-  subOptions?: SubstitutionOptions
+  subOptions?: SubstitutionOptions,
+  separator = ';;'
 ): ExpandedCommand[] {
   const trimmed = segment.trim();
   if (!trimmed) return [{ type: 'send', text: '' }];
@@ -201,8 +202,8 @@ function expandSegment(
   // Substitute arguments into alias body (variables expanded at execution time)
   const expanded = substituteArgs(match.alias.body, match.args, subOptions);
 
-  // Split the expanded body on semicolons and recursively expand each part
-  const subSegments = splitCommands(expanded);
+  // Split the expanded body on the separator and recursively expand each part
+  const subSegments = splitCommands(expanded, separator);
   const commands: ExpandedCommand[] = [];
   for (const sub of subSegments) {
     const subTrimmed = sub.trim();
@@ -213,7 +214,9 @@ function expandSegment(
       commands.push(parseDirective(subTrimmed));
     } else {
       // Recursively expand (may hit another alias)
-      commands.push(...expandSegment(subTrimmed, aliases, enableSpeedwalk, depth + 1, subOptions));
+      commands.push(
+        ...expandSegment(subTrimmed, aliases, enableSpeedwalk, depth + 1, subOptions, separator)
+      );
     }
   }
 
@@ -221,18 +224,21 @@ function expandSegment(
 }
 
 /**
- * Find the position of the next unescaped semicolon or newline in the input.
+ * Find the position of the next unescaped separator or newline in the input.
  * Respects /spam and /var which consume the rest of the line.
  * Returns -1 if none found.
  */
-function findNextSplit(input: string): number {
+function findNextSplit(input: string, separator = ';;'): number {
+  const sepLen = separator.length;
   for (let i = 0; i < input.length; i++) {
-    if (input[i] === '\\' && input[i + 1] === ';') {
-      i++; // skip escaped semicolon
-    } else if (input[i] === ';') {
+    // Escaped separator: \ followed by separator → skip
+    if (input[i] === '\\' && input.substring(i + 1, i + 1 + sepLen) === separator) {
+      i += sepLen; // skip past the separator (loop increments past the \)
+    } else if (input.substring(i, i + sepLen) === separator) {
       const before = input.slice(0, i).trim();
-      // /spam and /var consume the rest of the line (semicolons included)
+      // /spam and /var consume the rest of the line (separators included)
       if (/^\/spam\s+\d+\s/i.test(before) || /^\/var\s+(-g\s+)?\S+\s/i.test(before)) {
+        i += sepLen - 1;
         continue;
       }
       return i;
@@ -249,8 +255,8 @@ function findNextSplit(input: string): number {
  * Main entry point: expand raw user input through the alias system.
  *
  * Processes the input left-to-right, trying prefix alias matching BEFORE
- * semicolon splitting so that prefix aliases with $* capture the full
- * argument string (including semicolons). Falls back to semicolon splitting
+ * separator splitting so that prefix aliases with $* capture the full
+ * argument string (including separators). Falls back to separator splitting
  * when no prefix alias matches.
  *
  * Also handles speedwalk expansion, special directives, and nested alias
@@ -259,9 +265,15 @@ function findNextSplit(input: string): number {
 export function expandInput(
   input: string,
   aliases: Alias[],
-  options?: { enableSpeedwalk?: boolean; activeCharacter?: string | null }
+  options?: {
+    enableSpeedwalk?: boolean;
+    activeCharacter?: string | null;
+    separator?: string;
+  }
 ): ExpansionResult {
   const enableSpeedwalk = options?.enableSpeedwalk ?? true;
+  const separator = options?.separator ?? ';;';
+  const sepLen = separator.length;
   const subOptions: SubstitutionOptions = {
     activeCharacter: options?.activeCharacter,
   };
@@ -274,37 +286,44 @@ export function expandInput(
     if (!trimmed) break;
 
     // Try matching the full remaining text against a prefix alias BEFORE
-    // splitting on semicolons. Only consume across semicolons when the
-    // alias arguments start with a directive that itself consumes semicolons
-    // (/spam, /var). Otherwise split normally so that e.g.
-    // "ta scrip;wear scrip" becomes two separate commands.
+    // separator splitting so that prefix aliases with $* capture the full
+    // argument string (including separators). Only consume across separators
+    // when the alias arguments start with a directive that itself consumes
+    // separators (/spam, /var). Otherwise split normally so that e.g.
+    // "ta scrip;;wear scrip" becomes two separate commands.
     const fullMatch = matchAlias(trimmed, aliases);
     const argsStartWithDirective = fullMatch && /^\/(?:spam|var)$/i.test(fullMatch.args[0] ?? '');
     if (
       fullMatch &&
       fullMatch.alias.matchMode === 'prefix' &&
       fullMatch.args.length > 0 &&
-      (findNextSplit(trimmed) === -1 || argsStartWithDirective)
+      (findNextSplit(trimmed, separator) === -1 || argsStartWithDirective)
     ) {
       // Prefix alias consumes the rest of the line
-      commands.push(...expandSegment(trimmed, aliases, enableSpeedwalk, 0, subOptions));
+      commands.push(
+        ...expandSegment(trimmed, aliases, enableSpeedwalk, 0, subOptions, separator)
+      );
       break;
     }
 
     // No prefix alias match on the full remaining text.
-    // Extract the next command up to the first unescaped semicolon/newline.
-    const splitPos = findNextSplit(remaining);
+    // Extract the next command up to the first unescaped separator/newline.
+    const splitPos = findNextSplit(remaining, separator);
     if (splitPos === -1) {
-      // No semicolons — process the rest as a single segment
-      commands.push(...expandSegment(trimmed, aliases, enableSpeedwalk, 0, subOptions));
+      // No separators — process the rest as a single segment
+      commands.push(
+        ...expandSegment(trimmed, aliases, enableSpeedwalk, 0, subOptions, separator)
+      );
       break;
     }
 
     const segment = remaining.slice(0, splitPos).trim();
-    remaining = remaining.slice(splitPos + 1);
+    remaining = remaining.slice(splitPos + sepLen);
 
     if (segment) {
-      commands.push(...expandSegment(segment, aliases, enableSpeedwalk, 0, subOptions));
+      commands.push(
+        ...expandSegment(segment, aliases, enableSpeedwalk, 0, subOptions, separator)
+      );
     }
   }
 

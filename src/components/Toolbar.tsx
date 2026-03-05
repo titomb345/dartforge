@@ -10,6 +10,7 @@ import {
   TriggerIcon,
   TimerIcon,
   VariableIcon,
+  CodeIcon,
   NotesIcon,
   GearIcon,
   CoinIcon,
@@ -18,22 +19,25 @@ import {
   AllocIcon,
   BabelIcon,
   HelpIcon,
+  CameraIcon,
 } from './icons';
 import { getPlatform } from '../lib/platform';
 import { cn } from '../lib/cn';
 import { usePanelContext } from '../contexts/PanelLayoutContext';
+import { StorageModeButton } from './StorageModeButton';
 
 interface ToolbarProps {
   connected: boolean;
   onReconnect: () => void;
   onDisconnect: () => void;
+  onScreenshot: () => void;
 }
 
-export function Toolbar({ connected, onReconnect, onDisconnect }: ToolbarProps) {
+export function Toolbar({ connected, onReconnect, onDisconnect, onScreenshot }: ToolbarProps) {
   const { activePanel, togglePanel, isPinned } = usePanelContext();
 
   return (
-    <div className="flex items-center px-2.5 py-1 bg-bg-primary rounded-lg">
+    <div className="flex items-center px-2.5 py-1 bg-bg-primary rounded-lg shrink-0">
       <button
         onClick={connected ? onDisconnect : onReconnect}
         title={connected ? 'Disconnect' : 'Reconnect'}
@@ -57,7 +61,12 @@ export function Toolbar({ connected, onReconnect, onDisconnect }: ToolbarProps) 
       <div className="flex-1" />
 
       <div className="flex items-center gap-1">
-        {getPlatform() === 'web' && <DropboxButton />}
+        {getPlatform() === 'web' && (
+          <>
+            <DropboxButton />
+            <StorageModeButton />
+          </>
+        )}
         <IconButton
           icon={<WhoIcon />}
           title="Who"
@@ -187,6 +196,15 @@ export function Toolbar({ connected, onReconnect, onDisconnect }: ToolbarProps) 
           toggled={activePanel === 'variables'}
           onClick={() => togglePanel('variables')}
         />
+        <IconButton
+          icon={<CodeIcon />}
+          title="Scripts"
+          accent="#8be9fd"
+          helpId="toolbar-scripts"
+          panelId="scripts"
+          toggled={activePanel === 'scripts'}
+          onClick={() => togglePanel('scripts')}
+        />
         <div className="w-px h-[18px] bg-border-dim mx-1.5" />
         <IconButton
           icon={<PaletteIcon />}
@@ -203,6 +221,13 @@ export function Toolbar({ connected, onReconnect, onDisconnect }: ToolbarProps) 
           panelId="settings"
           toggled={activePanel === 'settings'}
           onClick={() => togglePanel('settings')}
+        />
+        <IconButton
+          icon={<CameraIcon />}
+          title="Screenshot"
+          accent="#f472b6"
+          helpId="toolbar-screenshot"
+          onClick={onScreenshot}
         />
         <div className="w-px h-[18px] bg-border-dim mx-1.5" />
         <IconButton

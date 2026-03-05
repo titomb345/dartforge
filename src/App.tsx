@@ -47,7 +47,7 @@ import { useAlignment } from './hooks/useAlignment';
 import { useDataStore } from './contexts/DataStoreContext';
 import { buildXtermTheme } from './lib/defaultTheme';
 import { OutputProcessor } from './lib/outputProcessor';
-import { expandInput } from './lib/aliasEngine';
+import { expandInput, matchAlias } from './lib/aliasEngine';
 import { executeCommands, type CommandRunner } from './lib/commandUtils';
 import { OutputFilter, DEFAULT_FILTER_FLAGS, type FilterFlags } from './lib/outputFilter';
 import { matchSkillLine } from './lib/skillPatterns';
@@ -72,7 +72,11 @@ import { TimerProvider } from './contexts/TimerContext';
 import { TimerPanel } from './components/TimerPanel';
 import { useSignatureMappings } from './hooks/useSignatureMappings';
 import { matchTriggers, expandTriggerBody, resetTriggerCooldowns } from './lib/triggerEngine';
+import { executeTriggerScript, executeAliasScript, stampUserInput } from './lib/scriptEngine';
+import { useGlobalScript } from './hooks/useGlobalScript';
+import { ScriptPanel } from './components/ScriptPanel';
 import { smartWrite } from './lib/terminalUtils';
+import { captureTerminalScreenshot } from './lib/screenshotCapture';
 import { ActionBlocker, type ActionBlockerState } from './lib/actionBlocker';
 import { AutoInscriber, type AutoInscriberState } from './lib/autoInscriber';
 import { AutoCaster, type AutoCasterState } from './lib/autoCaster';
@@ -122,6 +126,8 @@ import { SpotlightOverlay } from './components/SpotlightOverlay';
 import { HelpPanel } from './components/HelpPanel';
 import { getSpellByAbbr, findSpellFuzzy } from './lib/spellData';
 import { getSkillByAbbr, findSkillFuzzy } from './lib/skillData';
+import { QuickButtonBar } from './components/QuickButtonBar';
+import type { QuickButton } from './types';
 
 /** Commands to send automatically after login */
 const LOGIN_COMMANDS = [
@@ -206,6 +212,8 @@ function AppMain() {
   const [loggedIn, setLoggedIn] = useState(false);
   const statusBarRef = useRef<HTMLDivElement | null>(null);
   const [autoCompact, setAutoCompact] = useState(false);
+  const [quickButtons, setQuickButtons] = useState<QuickButton[]>([]);
+  const quickButtonsLoadedRef = useRef(false);
 
   const appSettings = useAppSettings();
   const {
@@ -314,6 +322,11 @@ function AppMain() {
       if (Array.isArray(savedStatusOrder) && savedStatusOrder.length > 0) {
         setStatusBarOrder(savedStatusOrder);
       }
+      const savedButtons = await dataStore.get<QuickButton[]>('settings.json', 'quickButtons');
+      if (Array.isArray(savedButtons)) {
+        setQuickButtons(savedButtons);
+      }
+      quickButtonsLoadedRef.current = true;
 
       panelLayoutLoadedRef.current = true;
       settingsLoadedRef.current = true;
@@ -601,19 +614,26 @@ function AppMain() {
 
           // Expand and execute trigger body asynchronously
           if (match.trigger.body.trim()) {
-            const raw = expandTriggerBody(match.trigger.body, match, activeCharacterRef.current);
-            // Re-expand send commands through the alias engine so aliases work in trigger bodies
-            const commands = raw.flatMap((cmd) =>
-              cmd.type === 'send' ? triggerRunnerRef.current.expand(cmd.text) : [cmd]
-            );
             triggerFiringRef.current = true;
-            (async () => {
-              try {
-                await executeCommands(commands, triggerRunnerRef.current);
-              } finally {
-                triggerFiringRef.current = false;
-              }
-            })();
+            const work =
+              match.trigger.bodyMode === 'script'
+                ? executeTriggerScript(
+                    match.trigger.body,
+                    match,
+                    activeCharacterRef.current,
+                    triggerRunnerRef.current,
+                    globalScriptRef.current
+                  )
+                : (() => {
+                    const raw = expandTriggerBody(match.trigger.body, match, activeCharacterRef.current, commandSeparatorRef.current);
+                    const commands = raw.flatMap((cmd) =>
+                      cmd.type === 'send' ? triggerRunnerRef.current.expand(cmd.text) : [cmd]
+                    );
+                    return executeCommands(commands, triggerRunnerRef.current);
+                  })();
+            work.finally(() => {
+              triggerFiringRef.current = false;
+            });
           }
         }
 
@@ -836,7 +856,14 @@ function AppMain() {
   const { mergedAliases, enableSpeedwalk } = aliasState;
   const mergedAliasesRef = useLatestRef(mergedAliases);
   const enableSpeedwalkRef = useLatestRef(enableSpeedwalk);
+  // Fast flag: skip matchAlias pre-check when no script aliases exist (common case)
+  const hasScriptAliases = useMemo(
+    () => mergedAliases.some((a) => a.bodyMode === 'script' && a.enabled),
+    [mergedAliases]
+  );
+  const hasScriptAliasesRef = useLatestRef(hasScriptAliases);
   const activeCharacterRef = useLatestRef(activeCharacter);
+  const commandSeparatorRef = useLatestRef(appSettings.commandSeparator);
 
   // Variable system
   const variableState = useVariables(dataStore, activeCharacter);
@@ -858,6 +885,10 @@ function AppMain() {
     convert: () => {},
     getVariables: () => [],
   });
+
+  // Global script system
+  const { script: globalScript, saveScript: saveGlobalScript } = useGlobalScript(dataStore);
+  const globalScriptRef = useLatestRef(globalScript);
 
   // Timer system
   const timerState = useTimers(dataStore, activeCharacter);
@@ -1050,6 +1081,7 @@ function AppMain() {
       expandInput(input, mergedAliasesRef.current, {
         enableSpeedwalk: enableSpeedwalkRef.current,
         activeCharacter: activeCharacterRef.current,
+        separator: commandSeparatorRef.current,
       }).commands,
     setVar: (name, value, scope) => {
       setVarRef.current(name, value, scope);
@@ -1076,6 +1108,7 @@ function AppMain() {
       const result = expandInput(raw, mergedAliasesRef.current, {
         enableSpeedwalk: enableSpeedwalkRef.current,
         activeCharacter: activeCharacterRef.current,
+        separator: commandSeparatorRef.current,
       });
       executeCommands(result.commands, triggerRunnerRef.current);
     };
@@ -1105,6 +1138,8 @@ function AppMain() {
       // Session logging — log sent command
       if (trimmed) logCommandRef.current?.(rawInput);
 
+      // Idle tracking — stamp last user-typed command time (in-memory only)
+      if (trimmed) stampUserInput();
 
 
       // Built-in /block — manually activate action blocking
@@ -1444,6 +1479,7 @@ function AppMain() {
               const result = expandInput(action, mergedAliasesRef.current, {
                 enableSpeedwalk: enableSpeedwalkRef.current,
                 activeCharacter: activeCharacterRef.current,
+                separator: commandSeparatorRef.current,
               });
               await executeCommands(result.commands, triggerRunnerRef.current);
             },
@@ -1717,6 +1753,15 @@ function AppMain() {
           return;
         }
 
+        if (argsLower === 'toggle') {
+          const ac = counters.find((c) => c.id === activeCounterId);
+          if (!ac) { writeToTerm('\x1b[31m[Counter] No active counter.\x1b[0m\r\n'); return; }
+          if (ac.status === 'running') cv.pauseCounter(ac.id);
+          else if (ac.status === 'paused') cv.resumeCounter(ac.id);
+          else cv.startCounter(ac.id);
+          return;
+        }
+
         if (argsLower === 'pause') {
           const ac = counters.find((c) => c.id === activeCounterId);
           if (!ac) { writeToTerm('\x1b[31m[Counter] No active counter.\x1b[0m\r\n'); return; }
@@ -1762,6 +1807,7 @@ function AppMain() {
           '  /counter status          Active counter one-liner\r\n' +
           '  /counter info            Detailed stats for active counter\r\n' +
           '  /counter start           Start/resume active counter\r\n' +
+          '  /counter toggle          Toggle start/pause\r\n' +
           '  /counter pause           Pause active counter\r\n' +
           '  /counter stop            Stop active counter\r\n' +
           '  /counter clear           Clear active counter\r\n' +
@@ -1776,9 +1822,25 @@ function AppMain() {
           ? applyMovementMode(rawInput, movementModeRef.current)
           : rawInput;
 
+      // Check for script-mode alias before text expansion (skip if no script aliases exist)
+      if (hasScriptAliasesRef.current) {
+        const aliasMatch = matchAlias(effectiveInput.trim(), mergedAliasesRef.current);
+        if (aliasMatch?.alias.bodyMode === 'script') {
+          await executeAliasScript(
+            aliasMatch.alias.body,
+            aliasMatch.args,
+            activeCharacterRef.current,
+            triggerRunnerRef.current,
+            globalScriptRef.current
+          );
+          return;
+        }
+      }
+
       const result = expandInput(effectiveInput, mergedAliasesRef.current, {
         enableSpeedwalk: enableSpeedwalkRef.current,
         activeCharacter: activeCharacterRef.current,
+        separator: commandSeparatorRef.current,
       });
       await executeCommands(result.commands, {
         ...triggerRunnerRef.current,
@@ -1846,6 +1908,71 @@ function AppMain() {
     [dataStore]
   );
 
+  // Quick buttons — persist + CRUD
+  const persistButtons = useCallback(
+    (next: QuickButton[]) => {
+      setQuickButtons(next);
+      dataStore.set('settings.json', 'quickButtons', next).catch(console.error);
+    },
+    [dataStore]
+  );
+
+  const addQuickButton = useCallback(
+    (data: Omit<QuickButton, 'id'>) => {
+      const btn: QuickButton = { ...data, id: crypto.randomUUID() };
+      persistButtons([...quickButtons, btn]);
+    },
+    [quickButtons, persistButtons]
+  );
+
+  const updateQuickButton = useCallback(
+    (id: string, data: Partial<QuickButton>) => {
+      persistButtons(quickButtons.map((b) => (b.id === id ? { ...b, ...data } : b)));
+    },
+    [quickButtons, persistButtons]
+  );
+
+  const deleteQuickButton = useCallback(
+    (id: string) => {
+      persistButtons(quickButtons.filter((b) => b.id !== id));
+    },
+    [quickButtons, persistButtons]
+  );
+
+  const reorderQuickButton = useCallback(
+    (id: string, direction: 'left' | 'right') => {
+      const idx = quickButtons.findIndex((b) => b.id === id);
+      if (idx < 0) return;
+      const targetIdx = direction === 'left' ? idx - 1 : idx + 1;
+      if (targetIdx < 0 || targetIdx >= quickButtons.length) return;
+      const next = [...quickButtons];
+      [next[idx], next[targetIdx]] = [next[targetIdx], next[idx]];
+      persistButtons(next);
+    },
+    [quickButtons, persistButtons]
+  );
+
+  const fireQuickButton = useCallback(
+    async (body: string, bodyMode: 'commands' | 'script') => {
+      if (bodyMode === 'script') {
+        await executeAliasScript(
+          body,
+          [],
+          activeCharacterRef.current,
+          triggerRunnerRef.current,
+          globalScriptRef.current
+        );
+      } else {
+        // Send each line through handleSend (gets alias expansion)
+        for (const line of body.split('\n')) {
+          const trimmed = line.trim();
+          if (trimmed) await handleSend(trimmed);
+        }
+      }
+    },
+    [handleSend]
+  );
+
   // Post-sync commands
   const postSyncEnabledRef = useLatestRef(postSyncEnabled);
   const postSyncCommandsRef = useLatestRef(postSyncCommands);
@@ -1882,6 +2009,8 @@ function AppMain() {
     enableSpeedwalkRef,
     activeCharacterRef,
     triggerRunnerRef,
+    globalScriptRef,
+    commandSeparatorRef,
   });
 
   // First-launch: auto-open Guide panel
@@ -2190,6 +2319,19 @@ function AppMain() {
     requestAnimationFrame(() => inputRef.current?.focus());
   }, [disconnect]);
 
+  const handleScreenshot = useCallback(async () => {
+    const term = terminalRef.current;
+    if (!term?.element) return;
+    try {
+      await captureTerminalScreenshot(term.element, xtermTheme.background ?? '#000000');
+      smartWrite(term, '\r\n\x1b[90m[Screenshot copied to clipboard]\x1b[0m\r\n');
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      console.error('Screenshot failed:', err);
+      smartWrite(term, `\r\n\x1b[31m[Screenshot failed: ${msg}]\x1b[0m\r\n`);
+    }
+  }, [xtermTheme.background]);
+
   const appSettingsWithExtras = useMemo(
     () => ({
       ...appSettings,
@@ -2232,11 +2374,12 @@ function AppMain() {
                                   pinPanel={pinPanel}
                                 >
                                   <SpotlightProvider>
-                                    <div className="flex flex-col h-screen bg-bg-canvas text-text-primary relative p-1 gap-1">
+                                    <div className="flex flex-col h-dvh bg-bg-canvas text-text-primary relative p-1 gap-1 overflow-hidden">
                                       <Toolbar
                                         connected={connected}
                                         onReconnect={handleReconnect}
                                         onDisconnect={handleDisconnect}
+                                        onScreenshot={handleScreenshot}
                                       />
                                       <div className="flex-1 overflow-hidden flex flex-row gap-1 relative">
                                         {/* Left pinned region — full, collapsed strip, or hidden */}
@@ -2299,8 +2442,18 @@ function AppMain() {
                                               onAddToTrigger={handleAddToTrigger}
                                               onGagLine={handleGagLine}
                                               onOpenInNotes={handleOpenInNotes}
+                                              onScreenshot={handleScreenshot}
                                             />
                                           </div>
+                                          {/* Quick buttons */}
+                                          <QuickButtonBar
+                                            buttons={quickButtons}
+                                            onFire={fireQuickButton}
+                                            onAdd={addQuickButton}
+                                            onUpdate={updateQuickButton}
+                                            onDelete={deleteQuickButton}
+                                            onReorder={reorderQuickButton}
+                                          />
                                           {/* Status bar + command input */}
                                           <div className="rounded-lg bg-bg-primary overflow-hidden shrink-0">
                                             <div
@@ -2429,6 +2582,13 @@ function AppMain() {
                                         </SlideOut>
                                         <SlideOut panel="variables">
                                           <VariablePanel onClose={closePanel} />
+                                        </SlideOut>
+                                        <SlideOut panel="scripts">
+                                          <ScriptPanel
+                                            script={globalScript}
+                                            onSave={saveGlobalScript}
+                                            onClose={closePanel}
+                                          />
                                         </SlideOut>
                                         {/* Automapper disabled
                                         <SlideOut panel="map" pinnable="map">

@@ -35,8 +35,19 @@ type SetupPhase = 'SETUP' | 'CONNECTING' | 'PICK_FOLDER' | 'SYNCING' | 'READY' |
 export function DropboxDataStoreProvider({ children }: { children: ReactNode }) {
   const { status: dropboxStatus, accessToken, folderPath, connect, disconnect } = useDropbox();
 
-  // Storage mode persisted in localStorage
-  const [storageMode, setStorageModeState] = useState<StorageMode | null>(loadStorageMode);
+  // If ?setup is in the URL, clear storage mode to force the setup screen
+  const [storageMode, setStorageModeState] = useState<StorageMode | null>(() => {
+    const params = new URLSearchParams(window.location.search);
+    if (params.has('setup')) {
+      clearStorageMode();
+      // Clean the URL so refreshing doesn't re-trigger
+      params.delete('setup');
+      const clean = params.toString();
+      window.history.replaceState({}, '', window.location.pathname + (clean ? `?${clean}` : ''));
+      return null;
+    }
+    return loadStorageMode();
+  });
   const [syncComplete, setSyncComplete] = useState(false);
 
   const cacheRef = useRef<Map<string, Record<string, unknown>>>(new Map());
@@ -140,6 +151,15 @@ export function DropboxDataStoreProvider({ children }: { children: ReactNode }) 
         await uploadFile(currentToken, path, content);
       } catch (e) {
         console.error(`Dropbox upload failed for ${filename}:`, e);
+        // Record as pending so it retries on next page load
+        try {
+          const raw = localStorage.getItem(PENDING_UPLOADS_KEY);
+          const pending: string[] = raw ? JSON.parse(raw) : [];
+          if (!pending.includes(filename)) {
+            pending.push(filename);
+            localStorage.setItem(PENDING_UPLOADS_KEY, JSON.stringify(pending));
+          }
+        } catch { /* noop */ }
       }
     }, DROPBOX_DEBOUNCE_MS);
 
@@ -234,7 +254,7 @@ export function DropboxDataStoreProvider({ children }: { children: ReactNode }) 
 
             const localData = loadFromStorage(file.name);
 
-            // Skill files: merge by max count. Everything else: remote wins.
+            // Skill files: merge by max count. Everything else: remote wins entirely.
             if (file.name.startsWith('skills-')) {
               const merged = mergeSkillData(localData, remoteData);
               cacheRef.current.set(file.name, merged);

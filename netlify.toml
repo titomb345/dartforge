@@ -4,6 +4,11 @@
 
 # Serve index.web.html for all paths (SPA fallback).
 # Netlify serves matching static assets first before applying this rewrite.
+[[headers]]
+  for = "/og-image.png"
+  [headers.values]
+    Cache-Control = "public, max-age=86400"
+
 [[redirects]]
   from = "/*"
   to = "/index.web.html"

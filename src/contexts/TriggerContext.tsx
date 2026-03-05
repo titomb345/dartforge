@@ -1,5 +1,6 @@
 import { createContext, useContext } from 'react';
 import type {
+  BodyMode,
   Trigger,
   TriggerId,
   TriggerMatchMode,
@@ -21,6 +22,9 @@ export interface TriggerState {
       gag?: boolean;
       highlight?: string | null;
       soundAlert?: boolean;
+      bodyMode?: BodyMode;
+      multiLine?: boolean;
+      endPattern?: string;
     },
     scope: TriggerScope
   ) => TriggerId;

@@ -1,11 +1,13 @@
 import { useCallback, useRef, useState, useEffect, useMemo } from 'react';
 import { useTriggerContext } from '../contexts/TriggerContext';
+import { useAppSettingsContext } from '../contexts/AppSettingsContext';
 import { useSkillTrackerContext } from '../contexts/SkillTrackerContext';
 import { matchTriggers, expandTriggerBody } from '../lib/triggerEngine';
 import { formatCommandPreview } from '../lib/commandUtils';
 import { useFilteredGroups } from '../lib/useFilteredGroups';
 import { charDisplayName } from '../lib/panelUtils';
 import type {
+  BodyMode,
   Trigger,
   TriggerId,
   TriggerMatchMode,
@@ -17,9 +19,9 @@ import { PanelHeader } from './PanelHeader';
 import { ConfirmDeleteButton } from './ConfirmDeleteButton';
 import { FilterPill } from './FilterPill';
 import { MudInput, MudTextarea, MudButton, MudNumberInput, ToggleSwitch } from './shared';
-import { SyntaxHelpTable } from './SyntaxHelpTable';
+import { ScriptEditor } from './ScriptEditor';
+import { SyntaxHelpTable, SCRIPT_API_HELP_ROWS, SCRIPT_ACCENT } from './SyntaxHelpTable';
 import type { HelpRow } from './SyntaxHelpTable';
-import { useAppSettingsContext } from '../contexts/AppSettingsContext';
 import { GAG_GROUPS } from '../lib/gagPatterns';
 import type { GagGroupId } from '../lib/gagPatterns';
 
@@ -106,6 +108,22 @@ function TriggerRow({
       >
         {trigger.pattern}
       </span>
+      {trigger.multiLine && (
+        <span
+          title="Multi-line trigger"
+          className="text-[8px] font-mono px-1 py-px rounded border border-[#bd93f9]/40 text-[#bd93f9] bg-[#bd93f9]/10 shrink-0"
+        >
+          ML
+        </span>
+      )}
+      {trigger.bodyMode === 'script' && (
+        <span
+          title="JavaScript script mode"
+          className="text-[8px] font-mono px-1 py-px rounded border border-[#8be9fd]/40 text-[#8be9fd] bg-[#8be9fd]/10 shrink-0"
+        >
+          JS
+        </span>
+      )}
       {trigger.gag && (
         <span
           title="Gag (line suppressed)"
@@ -152,15 +170,15 @@ const TRIGGER_HELP_ROWS: HelpRow[] = [
     example: '/var target goblin  \u2192  $target = goblin',
   },
   {
-    token: ';',
-    desc: 'Command separator — sends multiple commands',
-    example: '/echo Alert!;say hello',
+    token: ';; (default)',
+    desc: 'Command separator — sends multiple commands (configurable in Settings)',
+    example: '/echo Alert!;;say hello',
   },
-  { token: '\\;', desc: 'Literal semicolon (not a separator)' },
+  { token: '\\;;', desc: 'Literal separator (escaped with \\)' },
   {
     token: '/delay <ms>',
     desc: 'Pause between commands (milliseconds)',
-    example: '/delay 1000;cast heal',
+    example: '/delay 1000;;cast heal',
   },
   {
     token: '/echo <text>',
@@ -208,6 +226,30 @@ function BodySyntaxHelp() {
   );
 }
 
+const TRIGGER_SCRIPT_HELP_ROWS: HelpRow[] = [
+  ...SCRIPT_API_HELP_ROWS,
+  { token: '$0', desc: 'Full regex match (or matched substring)' },
+  { token: '$1 .. $9', desc: 'Regex capture groups' },
+  { token: '$line', desc: 'Full ANSI-stripped line' },
+  { token: '$me / $Me', desc: 'Character name (lower / Capitalized)' },
+];
+
+function ScriptSyntaxHelp() {
+  return (
+    <SyntaxHelpTable
+      rows={TRIGGER_SCRIPT_HELP_ROWS}
+      accentColor={SCRIPT_ACCENT}
+      footer={
+        <>
+          <span className="text-text-label">Script mode:</span> Body is JavaScript with{' '}
+          <span className="font-mono" style={{ color: SCRIPT_ACCENT }}>await</span> support. Global
+          script functions are available. Errors are printed to the terminal in red.
+        </>
+      }
+    />
+  );
+}
+
 // --- Trigger Editor ---
 
 function TriggerEditor({
@@ -232,6 +274,9 @@ function TriggerEditor({
       gag: boolean;
       highlight: string | null;
       soundAlert: boolean;
+      bodyMode?: BodyMode;
+      multiLine?: boolean;
+      endPattern?: string;
     },
     scope: TriggerScope,
     existingId?: TriggerId
@@ -249,6 +294,12 @@ function TriggerEditor({
   const [gag, setGag] = useState(trigger?.gag ?? prefill?.gag ?? false);
   const [highlight, setHighlight] = useState<string | null>(trigger?.highlight ?? null);
   const [soundAlert, setSoundAlert] = useState(trigger?.soundAlert ?? false);
+  const [bodyMode, setBodyMode] = useState<BodyMode>(
+    trigger?.bodyMode ?? prefill?.bodyMode ?? 'text'
+  );
+  const [multiLine, setMultiLine] = useState(trigger?.multiLine ?? false);
+  const [endPattern, setEndPattern] = useState(trigger?.endPattern ?? '');
+  const { commandSeparator } = useAppSettingsContext();
 
   // Custom highlight color state
   const initCustom =
@@ -292,13 +343,13 @@ function TriggerEditor({
     try {
       const matches = matchTriggers(testInput, testInput, [tempTrigger]);
       if (matches.length === 0) return { matched: false, text: 'No match' };
-      const commands = expandTriggerBody(body, matches[0], activeCharacter);
+      const commands = expandTriggerBody(body, matches[0], activeCharacter, commandSeparator);
       const text = formatCommandPreview(commands).join('\n');
       return { matched: true, text: text || '(no commands)' };
     } catch {
       return { matched: false, text: '[error]' };
     }
-  }, [testInput, pattern, matchMode, body, activeCharacter]);
+  }, [testInput, pattern, matchMode, body, activeCharacter, commandSeparator]);
 
   const canSave = pattern.trim().length > 0;
 
@@ -315,6 +366,8 @@ function TriggerEditor({
           gag,
           highlight,
           soundAlert,
+          bodyMode,
+          ...(multiLine ? { multiLine: true, endPattern: endPattern.trim() } : {}),
         },
         scope,
         trigger?.id
@@ -348,6 +401,8 @@ function TriggerEditor({
                     gag,
                     highlight,
                     soundAlert,
+                    bodyMode,
+                    ...(multiLine ? { multiLine: true, endPattern: endPattern.trim() } : {}),
                   },
                   scope,
                   trigger?.id
@@ -391,28 +446,103 @@ function TriggerEditor({
           </div>
         </div>
 
+        {/* Multi-line toggle + end pattern */}
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={() => setMultiLine(!multiLine)}
+            title={
+              multiLine
+                ? 'Multi-line ON — buffers lines between start and end patterns'
+                : 'Multi-line OFF — matches single lines only'
+            }
+            className={`text-[9px] font-mono px-2 py-1 rounded border cursor-pointer transition-colors duration-150 ${
+              multiLine
+                ? 'text-[#bd93f9] border-[#bd93f9]/40 bg-[#bd93f9]/10'
+                : 'text-text-dim border-border-dim bg-transparent hover:text-text-label'
+            }`}
+          >
+            Multi-line
+          </button>
+          {multiLine && (
+            <div className="flex-1">
+              <MudInput
+                accent="pink"
+                value={endPattern}
+                onChange={(e) => setEndPattern(e.target.value)}
+                onKeyDown={handleFieldKeyDown}
+                placeholder="End pattern regex, e.g. '$"
+                className="w-full"
+              />
+            </div>
+          )}
+        </div>
+
+        {multiLine && (
+          <div className="text-[9px] text-text-dim bg-bg-primary rounded border border-border-dim px-2 py-1.5 leading-relaxed">
+            <span className="text-[#bd93f9]">Multi-line mode:</span> Pattern above is the{' '}
+            <strong>start</strong> pattern. Lines are buffered until the{' '}
+            <strong>end pattern</strong> (regex) matches. The joined text is then matched
+            against the start pattern for captures ($0, $1, etc.). Max 10 lines.
+          </div>
+        )}
+
         {/* Body */}
         <div>
           <div className="flex items-center gap-1 mb-0.5">
             <label className="text-[10px] text-text-dim">Response body</label>
+            <div className="flex gap-0.5 ml-1">
+              <button
+                type="button"
+                onClick={() => setBodyMode('text')}
+                className={`text-[9px] font-mono px-1.5 py-px rounded border cursor-pointer transition-colors duration-150 ${
+                  bodyMode === 'text'
+                    ? 'text-[#ff79c6] border-[#ff79c6]/40 bg-[#ff79c6]/10'
+                    : 'text-text-dim border-border-dim bg-transparent hover:text-text-secondary'
+                }`}
+              >
+                Text
+              </button>
+              <button
+                type="button"
+                onClick={() => setBodyMode('script')}
+                className={`text-[9px] font-mono px-1.5 py-px rounded border cursor-pointer transition-colors duration-150 ${
+                  bodyMode === 'script'
+                    ? 'text-[#8be9fd] border-[#8be9fd]/40 bg-[#8be9fd]/10'
+                    : 'text-text-dim border-border-dim bg-transparent hover:text-text-secondary'
+                }`}
+              >
+                Script
+              </button>
+            </div>
             <button
               type="button"
               onClick={() => setShowHelp((v) => !v)}
-              className="flex items-center gap-0.5 text-[9px] text-[#ff79c6]/70 hover:text-[#ff79c6] cursor-pointer transition-colors duration-150"
+              className="flex items-center gap-0.5 text-[9px] text-[#ff79c6]/70 hover:text-[#ff79c6] cursor-pointer transition-colors duration-150 ml-auto"
             >
               {showHelp ? 'hide help' : 'syntax help'}
               {showHelp ? <ChevronUpIcon size={7} /> : <ChevronDownIcon size={7} />}
             </button>
           </div>
-          {showHelp && <BodySyntaxHelp />}
-          <MudTextarea
-            accent="pink"
-            value={body}
-            onChange={(e) => setBody(e.target.value)}
-            placeholder="/echo [ALERT] $line"
-            rows={5}
-            className="w-full"
-          />
+          {showHelp && (bodyMode === 'script' ? <ScriptSyntaxHelp /> : <BodySyntaxHelp />)}
+          {bodyMode === 'script' ? (
+            <div style={{ height: 150 }}>
+              <ScriptEditor
+                value={body}
+                onChange={setBody}
+                placeholder="// JavaScript — use await for async calls\nawait send('cast heal');\necho('Healing triggered by: ' + $0);"
+              />
+            </div>
+          ) : (
+            <MudTextarea
+              accent="pink"
+              value={body}
+              onChange={(e) => setBody(e.target.value)}
+              placeholder="/echo [ALERT] $line"
+              rows={5}
+              className="w-full"
+            />
+          )}
         </div>
 
         {/* Group + Scope row */}
@@ -653,30 +783,32 @@ function TriggerEditor({
           )}
         </div>
 
-        {/* Live preview */}
-        <div className="border-t border-[#444] pt-2">
-          <label className="text-[10px] text-text-dim mb-0.5 block">Test line</label>
-          <MudInput
-            accent="pink"
-            value={testInput}
-            onChange={(e) => setTestInput(e.target.value)}
-            placeholder={
-              pattern
-                ? `e.g., ${pattern.includes('(') ? 'A sample MUD output line' : pattern}`
-                : 'paste a MUD output line...'
-            }
-            className="w-full"
-          />
-          {preview && (
-            <div className="mt-1 px-2 py-1 rounded bg-bg-primary border border-border-dim">
-              <pre
-                className={`text-[10px] font-mono whitespace-pre-wrap ${preview.matched ? 'text-green' : 'text-text-dim'}`}
-              >
-                {preview.text}
-              </pre>
-            </div>
-          )}
-        </div>
+        {/* Live preview (text mode only — can't safely preview scripts) */}
+        {bodyMode !== 'script' && (
+          <div className="border-t border-[#444] pt-2">
+            <label className="text-[10px] text-text-dim mb-0.5 block">Test line</label>
+            <MudInput
+              accent="pink"
+              value={testInput}
+              onChange={(e) => setTestInput(e.target.value)}
+              placeholder={
+                pattern
+                  ? `e.g., ${pattern.includes('(') ? 'A sample MUD output line' : pattern}`
+                  : 'paste a MUD output line...'
+              }
+              className="w-full"
+            />
+            {preview && (
+              <div className="mt-1 px-2 py-1 rounded bg-bg-primary border border-border-dim">
+                <pre
+                  className={`text-[10px] font-mono whitespace-pre-wrap ${preview.matched ? 'text-green' : 'text-text-dim'}`}
+                >
+                  {preview.text}
+                </pre>
+              </div>
+            )}
+          </div>
+        )}
       </div>
     </div>
   );
@@ -735,6 +867,9 @@ export function TriggerPanel({ onClose }: TriggerPanelProps) {
         gag: boolean;
         highlight: string | null;
         soundAlert: boolean;
+        bodyMode?: BodyMode;
+        multiLine?: boolean;
+        endPattern?: string;
       },
       saveScope: TriggerScope,
       existingId?: TriggerId

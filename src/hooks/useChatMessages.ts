@@ -66,8 +66,6 @@ export function useChatMessages(
   mutedSendersRef.current = mutedSenders;
   const soundAlertsRef = useRef(soundAlerts);
   soundAlertsRef.current = soundAlerts;
-  const hideOwnMessagesRef = useRef(hideOwnMessages);
-  hideOwnMessagesRef.current = hideOwnMessages;
 
   // Load persisted chat settings
   useEffect(() => {
@@ -171,9 +169,6 @@ export function useChatMessages(
     if (n && !msg.isOwn && n[msg.type] && !isMuted && !document.hasFocus()) {
       alertUser(`${msg.sender} (${msg.type})`, msg.message, `dartforge-chat-${msg.type}`);
     }
-
-    // Skip own say/shout/ooc messages when hide-own is active
-    if (msg.isOwn && hideOwnMessagesRef.current) return;
 
     setMessages((prev) => {
       const next = [...prev, msg];

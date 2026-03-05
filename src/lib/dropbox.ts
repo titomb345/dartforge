@@ -202,31 +202,51 @@ export async function downloadFile(
   return { content, rev: meta.rev ?? '' };
 }
 
+const UPLOAD_MAX_RETRIES = 4;
+const UPLOAD_BASE_DELAY_MS = 1_000;
+
 export async function uploadFile(
   accessToken: string,
   path: string,
   content: string
 ): Promise<string> {
-  const resp = await fetch(`${DROPBOX_CONTENT_URL}/files/upload`, {
-    method: 'POST',
-    headers: {
-      Authorization: `Bearer ${accessToken}`,
-      'Dropbox-API-Arg': JSON.stringify({
-        path,
-        mode: 'overwrite',
-        autorename: false,
-        mute: true,
-      }),
-      'Content-Type': 'application/octet-stream',
-    },
-    body: content,
-  });
-  if (!resp.ok) {
+  let lastError: Error | null = null;
+
+  for (let attempt = 0; attempt < UPLOAD_MAX_RETRIES; attempt++) {
+    const resp = await fetch(`${DROPBOX_CONTENT_URL}/files/upload`, {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        'Dropbox-API-Arg': JSON.stringify({
+          path,
+          mode: 'overwrite',
+          autorename: false,
+          mute: true,
+        }),
+        'Content-Type': 'application/octet-stream',
+      },
+      body: content,
+    });
+
+    if (resp.ok) {
+      const data = await resp.json();
+      return data.rev;
+    }
+
     const text = await resp.text();
-    throw new Error(`upload failed (${resp.status}) for ${path}: ${text}`);
+    lastError = new Error(`upload failed (${resp.status}) for ${path}: ${text}`);
+
+    // Only retry on rate limits (429) and server errors (5xx)
+    if (resp.status !== 429 && resp.status < 500) {
+      throw lastError;
+    }
+
+    // Exponential backoff: 1s, 2s, 4s, 8s
+    const delay = UPLOAD_BASE_DELAY_MS * Math.pow(2, attempt);
+    await new Promise((r) => setTimeout(r, delay));
   }
-  const data = await resp.json();
-  return data.rev;
+
+  throw lastError!;
 }
 
 // ---------------------------------------------------------------------------

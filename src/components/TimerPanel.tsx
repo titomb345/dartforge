@@ -1,17 +1,19 @@
 import { useCallback, useRef, useState, useEffect, useMemo } from 'react';
 import { useTimerContext } from '../contexts/TimerContext';
+import { useAppSettingsContext } from '../contexts/AppSettingsContext';
 import { useSkillTrackerContext } from '../contexts/SkillTrackerContext';
 import { expandInput } from '../lib/aliasEngine';
 import { formatCommandPreview } from '../lib/commandUtils';
 import { useFilteredGroups } from '../lib/useFilteredGroups';
 import { charDisplayName } from '../lib/panelUtils';
-import type { Timer, TimerId, TimerScope } from '../types/timer';
+import type { Timer, TimerId, TimerScope, TimerBodyMode } from '../types/timer';
 import { PlusIcon, ChevronDownIcon, ChevronUpIcon, TimerIcon } from './icons';
 import { PanelHeader } from './PanelHeader';
 import { ConfirmDeleteButton } from './ConfirmDeleteButton';
 import { FilterPill } from './FilterPill';
 import { MudInput, MudTextarea, MudButton, MudNumberInput } from './shared';
-import { SyntaxHelpTable } from './SyntaxHelpTable';
+import { ScriptEditor } from './ScriptEditor';
+import { SyntaxHelpTable, SCRIPT_API_HELP_ROWS, SCRIPT_ACCENT } from './SyntaxHelpTable';
 import type { HelpRow } from './SyntaxHelpTable';
 
 interface TimerPanelProps {
@@ -53,6 +55,14 @@ function TimerRow({
       >
         {timer.name}
       </span>
+      {timer.bodyMode === 'script' && (
+        <span
+          title="JavaScript script mode"
+          className="text-[8px] font-mono px-1 py-px rounded border border-[#8be9fd]/40 text-[#8be9fd] bg-[#8be9fd]/10 shrink-0"
+        >
+          JS
+        </span>
+      )}
       <span
         title={`Fires every ${formatInterval(timer.intervalSeconds)}`}
         className="text-[8px] font-mono px-1 py-px rounded border border-[#f97316]/40 text-[#f97316] bg-[#f97316]/10 shrink-0"
@@ -87,12 +97,12 @@ const TIMER_HELP_ROWS: HelpRow[] = [
     desc: 'User-defined variable (set via /var)',
     example: '/var target goblin  \u2192  $target = goblin',
   },
-  { token: ';', desc: 'Command separator \u2014 sends multiple commands', example: 'hp;score' },
-  { token: '\\;', desc: 'Literal semicolon (not a separator)' },
+  { token: ';; (default)', desc: 'Command separator \u2014 sends multiple commands (configurable in Settings)', example: 'hp;;score' },
+  { token: '\\;;', desc: 'Literal separator (escaped with \\)' },
   {
     token: '/delay <ms>',
     desc: 'Pause between commands (milliseconds)',
-    example: '/delay 1000;cast heal',
+    example: '/delay 1000;;cast heal',
   },
   {
     token: '/echo <text>',
@@ -123,6 +133,10 @@ function BodySyntaxHelp() {
   return <SyntaxHelpTable rows={TIMER_HELP_ROWS} accentColor={ACCENT} footer={TIMER_HELP_FOOTER} />;
 }
 
+function ScriptSyntaxHelp() {
+  return <SyntaxHelpTable rows={SCRIPT_API_HELP_ROWS} accentColor={SCRIPT_ACCENT} footer={null} />;
+}
+
 // --- Timer Editor ---
 
 function TimerEditor({
@@ -139,8 +153,10 @@ function TimerEditor({
     data: {
       name: string;
       body: string;
+      bodyMode: TimerBodyMode;
       intervalSeconds: number;
       group: string;
+      showInStatusBar: boolean;
     },
     scope: TimerScope,
     existingId?: TimerId
@@ -149,8 +165,11 @@ function TimerEditor({
 }) {
   const [name, setName] = useState(timer?.name ?? '');
   const [body, setBody] = useState(timer?.body ?? '');
+  const [bodyMode, setBodyMode] = useState<TimerBodyMode>(timer?.bodyMode ?? 'text');
   const [group, setGroup] = useState(timer?.group ?? '');
+  const [showInStatusBar, setShowInStatusBar] = useState(timer?.showInStatusBar !== false);
   const [scope, setScope] = useState<TimerScope>(initialScope);
+  const { commandSeparator } = useAppSettingsContext();
   const [intervalValue, setIntervalValue] = useState(() => {
     if (!timer) return 30;
     return timer.intervalSeconds >= 60 && timer.intervalSeconds % 60 === 0
@@ -170,29 +189,34 @@ function TimerEditor({
 
   const intervalSeconds = intervalUnit === 'minutes' ? intervalValue * 60 : intervalValue;
 
-  // Command preview
+  // Command preview (text mode only — can't safely preview scripts)
   const preview = useMemo(() => {
-    if (!body.trim()) return null;
+    if (bodyMode === 'script' || !body.trim()) return null;
     try {
-      const result = expandInput(body, [], { activeCharacter });
-      const expand = (input: string) => expandInput(input, [], { activeCharacter }).commands;
+      const result = expandInput(body, [], { activeCharacter, separator: commandSeparator });
+      const expand = (input: string) => expandInput(input, [], { activeCharacter, separator: commandSeparator }).commands;
       const text = formatCommandPreview(result.commands, expand).join('\n');
       return text || '(no commands)';
     } catch {
       return '[expansion error]';
     }
-  }, [body, activeCharacter]);
+  }, [body, bodyMode, activeCharacter]);
 
   const canSave = name.trim().length > 0 && intervalSeconds > 0;
+
+  const saveData = () => ({
+    name: name.trim(),
+    body,
+    bodyMode,
+    intervalSeconds,
+    group: group.trim() || 'General',
+    showInStatusBar,
+  });
 
   const handleFieldKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter' && canSave) {
       e.preventDefault();
-      onSave(
-        { name: name.trim(), body, intervalSeconds, group: group.trim() || 'General' },
-        scope,
-        timer?.id
-      );
+      onSave(saveData(), scope, timer?.id);
     }
   };
 
@@ -211,12 +235,7 @@ function TimerEditor({
             accent="orange"
             size="sm"
             onClick={() => {
-              if (canSave)
-                onSave(
-                  { name: name.trim(), body, intervalSeconds, group: group.trim() || 'General' },
-                  scope,
-                  timer?.id
-                );
+              if (canSave) onSave(saveData(), scope, timer?.id);
             }}
             disabled={!canSave}
           >
@@ -267,24 +286,58 @@ function TimerEditor({
         <div>
           <div className="flex items-center gap-1 mb-0.5">
             <label className="text-[10px] text-text-dim">Command body</label>
+            <div className="flex gap-0.5 ml-1">
+              <button
+                type="button"
+                onClick={() => setBodyMode('text')}
+                className={`text-[9px] font-mono px-1.5 py-px rounded border cursor-pointer transition-colors duration-150 ${
+                  bodyMode === 'text'
+                    ? 'text-[#f97316] border-[#f97316]/40 bg-[#f97316]/10'
+                    : 'text-text-dim border-border-dim bg-transparent hover:text-text-secondary'
+                }`}
+              >
+                Text
+              </button>
+              <button
+                type="button"
+                onClick={() => setBodyMode('script')}
+                className={`text-[9px] font-mono px-1.5 py-px rounded border cursor-pointer transition-colors duration-150 ${
+                  bodyMode === 'script'
+                    ? 'text-[#8be9fd] border-[#8be9fd]/40 bg-[#8be9fd]/10'
+                    : 'text-text-dim border-border-dim bg-transparent hover:text-text-secondary'
+                }`}
+              >
+                Script
+              </button>
+            </div>
             <button
               type="button"
               onClick={() => setShowHelp((v) => !v)}
-              className="flex items-center gap-0.5 text-[9px] text-[#f97316]/70 hover:text-[#f97316] cursor-pointer transition-colors duration-150"
+              className="flex items-center gap-0.5 text-[9px] text-[#f97316]/70 hover:text-[#f97316] cursor-pointer transition-colors duration-150 ml-auto"
             >
               {showHelp ? 'hide help' : 'syntax help'}
               {showHelp ? <ChevronUpIcon size={7} /> : <ChevronDownIcon size={7} />}
             </button>
           </div>
-          {showHelp && <BodySyntaxHelp />}
-          <MudTextarea
-            accent="orange"
-            value={body}
-            onChange={(e) => setBody(e.target.value)}
-            placeholder="cast heal $me"
-            rows={3}
-            className="w-full"
-          />
+          {showHelp && (bodyMode === 'script' ? <ScriptSyntaxHelp /> : <BodySyntaxHelp />)}
+          {bodyMode === 'script' ? (
+            <div style={{ height: 150 }}>
+              <ScriptEditor
+                value={body}
+                onChange={setBody}
+                placeholder="// JavaScript — use await for async calls\nawait send('cast heal');\necho('Timer fired!');"
+              />
+            </div>
+          ) : (
+            <MudTextarea
+              accent="orange"
+              value={body}
+              onChange={(e) => setBody(e.target.value)}
+              placeholder="cast heal $me"
+              rows={3}
+              className="w-full"
+            />
+          )}
         </div>
 
         {/* Group + Scope row */}
@@ -327,6 +380,17 @@ function TimerEditor({
           </div>
         </div>
 
+        {/* Show in status bar toggle */}
+        <label className="flex items-center gap-1.5 cursor-pointer select-none">
+          <input
+            type="checkbox"
+            checked={showInStatusBar}
+            onChange={(e) => setShowInStatusBar(e.target.checked)}
+            className="accent-[#f97316] w-3 h-3 cursor-pointer"
+          />
+          <span className="text-[10px] text-text-dim">Show countdown in status bar</span>
+        </label>
+
         {/* Command preview */}
         {preview && (
           <div className="border-t border-[#444] pt-2">
@@ -368,8 +432,10 @@ export function TimerPanel({ onClose }: TimerPanelProps) {
       data: {
         name: string;
         body: string;
+        bodyMode: TimerBodyMode;
         intervalSeconds: number;
         group: string;
+        showInStatusBar: boolean;
       },
       saveScope: TimerScope,
       existingId?: TimerId

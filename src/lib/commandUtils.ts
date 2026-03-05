@@ -3,24 +3,29 @@ import type { Variable } from '../types/variable';
 import { expandVariables } from './variableEngine';
 
 /**
- * Split a raw input string on unescaped semicolons and newlines.
- * `\;` is treated as a literal semicolon (not a separator).
+ * Split a raw input string on the configured separator and newlines.
+ * Prefix the separator with `\` to use it literally (e.g. `\;;` → `;;`).
  */
-export function splitCommands(input: string): string[] {
+export function splitCommands(input: string, separator = ';;'): string[] {
   const parts: string[] = [];
   let current = '';
+  const sepLen = separator.length;
+
   for (let i = 0; i < input.length; i++) {
-    if (input[i] === '\\' && input[i + 1] === ';') {
-      current += ';';
-      i++; // skip escaped semicolon
-    } else if (input[i] === ';') {
+    // Escaped separator: \ followed by the separator → emit separator literally
+    if (input[i] === '\\' && input.substring(i + 1, i + 1 + sepLen) === separator) {
+      current += separator;
+      i += sepLen; // skip past the separator (loop increments past the \)
+    } else if (input.substring(i, i + sepLen) === separator) {
       const ct = current.trim();
-      // /spam and /var consume the rest of the line (semicolons included)
+      // /spam and /var consume the rest of the line (separators included)
       if (/^\/spam\s+\d+\s/i.test(ct) || /^\/var\s+(-g\s+)?\S+\s/i.test(ct)) {
-        current += ';';
+        current += separator;
+        i += sepLen - 1;
       } else {
         parts.push(current);
         current = '';
+        i += sepLen - 1; // -1 because the loop increments
       }
     } else if (input[i] === '\r') {
       // skip carriage returns (handle \r\n as just \n)

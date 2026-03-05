@@ -8,6 +8,7 @@ import type { OutputFilter } from '../lib/outputFilter';
 import type { CommandRunner } from '../lib/commandUtils';
 import { expandInput } from '../lib/aliasEngine';
 import { executeCommands } from '../lib/commandUtils';
+import { executeTimerScript } from '../lib/scriptEngine';
 import { smartWrite } from '../lib/terminalUtils';
 import { DEFAULT_BABEL_PHRASES } from '../lib/babelPhrases';
 
@@ -66,6 +67,8 @@ interface TimerEnginesDeps {
   enableSpeedwalkRef: React.RefObject<boolean>;
   activeCharacterRef: React.RefObject<string | null>;
   triggerRunnerRef: React.RefObject<CommandRunner>;
+  globalScriptRef: React.RefObject<string>;
+  commandSeparatorRef: React.RefObject<string>;
 }
 
 export function useTimerEngines({
@@ -91,6 +94,8 @@ export function useTimerEngines({
   enableSpeedwalkRef,
   activeCharacterRef,
   triggerRunnerRef,
+  globalScriptRef,
+  commandSeparatorRef,
 }: TimerEnginesDeps) {
   // Anti-idle timer — sends command at interval when connected + logged in + enabled
   const antiIdleEnabledRef = useLatestRef(antiIdleEnabled);
@@ -210,12 +215,23 @@ export function useTimerEngines({
           smartWrite(terminalRef.current, `\x1b[90m[timer: ${timer.name}]\x1b[0m\r\n`);
         }
 
-        // Expand body through alias engine, then execute via the shared runner
-        const result = expandInput(timer.body, mergedAliasesRef.current, {
-          enableSpeedwalk: enableSpeedwalkRef.current,
-          activeCharacter: activeCharacterRef.current,
-        });
-        executeCommands(result.commands, triggerRunnerRef.current);
+        if (timer.bodyMode === 'script') {
+          // Execute JavaScript body via script engine
+          executeTimerScript(
+            timer.body,
+            activeCharacterRef.current,
+            triggerRunnerRef.current,
+            globalScriptRef.current
+          );
+        } else {
+          // Expand body through alias engine, then execute via the shared runner
+          const result = expandInput(timer.body, mergedAliasesRef.current, {
+            enableSpeedwalk: enableSpeedwalkRef.current,
+            activeCharacter: activeCharacterRef.current,
+            separator: commandSeparatorRef.current,
+          });
+          executeCommands(result.commands, triggerRunnerRef.current);
+        }
 
         setTimerNextFires((prev) => ({ ...prev, [timer.id]: Date.now() + ms }));
       }, ms);
@@ -235,7 +251,7 @@ export function useTimerEngines({
   const activeTimerBadges = useMemo(
     () =>
       mergedTimers
-        .filter((t) => t.enabled && timerNextFires[t.id])
+        .filter((t) => t.enabled && timerNextFires[t.id] && t.showInStatusBar !== false)
         .map((t) => ({ id: t.id, name: t.name, nextAt: timerNextFires[t.id] }))
         .sort((a, b) => a.nextAt - b.nextAt),
     [mergedTimers, timerNextFires]

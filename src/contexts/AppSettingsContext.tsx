@@ -106,6 +106,9 @@ export interface AppSettingsState {
   updateAutoLoginCharacters: (v: [CharacterProfile | null, CharacterProfile | null]) => void;
   updateLastLoginTimestamp: (v: number | null) => void;
   updateLastLoginSlot: (v: 0 | 1 | null) => void;
+  // Command separator
+  commandSeparator: string;
+  updateCommandSeparator: (v: string) => void;
   // Character switching (provided by App.tsx)
   onSwitchCharacter?: () => void;
   connected?: boolean;

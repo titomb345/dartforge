@@ -17,6 +17,7 @@ interface TerminalProps {
   onAddToTrigger?: (selectedText: string) => void;
   onGagLine?: (selectedText: string) => void;
   onOpenInNotes?: (text: string) => void;
+  onScreenshot?: () => void;
 }
 
 interface CtxMenuState {
@@ -44,6 +45,7 @@ function TerminalContextMenu({
   onAddToTrigger,
   onGagLine,
   onOpenInNotes,
+  onScreenshot,
   onDismiss,
 }: {
   x: number;
@@ -62,6 +64,7 @@ function TerminalContextMenu({
   onAddToTrigger?: (text: string) => void;
   onGagLine?: (text: string) => void;
   onOpenInNotes?: (text: string) => void;
+  onScreenshot?: () => void;
   onDismiss: () => void;
 }) {
   const menuRef = useRef<HTMLDivElement>(null);
@@ -160,6 +163,17 @@ function TerminalContextMenu({
       <button onClick={onClearTerminal} className={activeClass}>
         Clear Terminal
       </button>
+      {onScreenshot && (
+        <button
+          onClick={() => {
+            onScreenshot();
+            onDismiss();
+          }}
+          className={activeClass}
+        >
+          Screenshot to Clipboard
+        </button>
+      )}
       <div className="h-px bg-border-dim mx-1.5 my-0.5" />
       <div className="flex items-center justify-between px-3 py-1">
         <span className="text-[11px] text-text-dim">Font</span>
@@ -198,11 +212,14 @@ export function Terminal({
   onAddToTrigger,
   onGagLine,
   onOpenInNotes,
+  onScreenshot,
 }: TerminalProps) {
   const outerRef = useRef<HTMLDivElement>(null);
   const innerRef = useRef<HTMLDivElement>(null);
   const fitAddonRef = useRef<FitAddon | null>(null);
   const searchAddonRef = useRef<SearchAddon | null>(null);
+  const onScreenshotRef = useRef(onScreenshot);
+  onScreenshotRef.current = onScreenshot;
   const [isScrolledUp, setIsScrolledUp] = useState(false);
   const [ctxMenu, setCtxMenu] = useState<CtxMenuState | null>(null);
   const [searchOpen, setSearchOpen] = useState(false);
@@ -268,6 +285,11 @@ export function Terminal({
           term.clearSelection();
           lastSelection = '';
         }
+        return;
+      }
+      if (e.ctrlKey && e.shiftKey && e.key === 'S') {
+        e.preventDefault();
+        onScreenshotRef.current?.();
         return;
       }
       if (e.ctrlKey && e.key === 'f') {
@@ -571,6 +593,7 @@ export function Terminal({
             onUpdateDisplay('fontSize', next);
             fitAddonRef.current?.fit();
           }}
+          onScreenshot={onScreenshot}
           onDismiss={() => setCtxMenu(null)}
         />
       )}

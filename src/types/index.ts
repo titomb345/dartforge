@@ -12,6 +12,7 @@ export type Panel =
   | 'timers'
   | 'variables'
   | 'notes'
+  | 'scripts'
   | 'settings'
   // | 'map' // automapper disabled
   | 'alloc'
@@ -43,6 +44,7 @@ export interface PinnablePanelProps {
 }
 
 export type { SkillTier, SkillRecord, CharacterSkillFile, SkillMatchResult } from './skills';
+export type { QuickButtonId, QuickButton } from './quickButton';
 
 export interface MudOutputPayload {
   data: string;

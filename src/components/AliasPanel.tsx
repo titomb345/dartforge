@@ -1,17 +1,19 @@
 import { useCallback, useRef, useState, useEffect, useMemo } from 'react';
 import { useAliasContext } from '../contexts/AliasContext';
+import { useAppSettingsContext } from '../contexts/AppSettingsContext';
 import { useSkillTrackerContext } from '../contexts/SkillTrackerContext';
 import { expandInput } from '../lib/aliasEngine';
 import { formatCommandPreview } from '../lib/commandUtils';
 import { useFilteredGroups } from '../lib/useFilteredGroups';
 import { charDisplayName } from '../lib/panelUtils';
-import type { Alias, AliasId, AliasMatchMode, AliasScope } from '../types/alias';
+import type { Alias, AliasBodyMode, AliasId, AliasMatchMode, AliasScope } from '../types/alias';
 import { PlusIcon, ChevronDownIcon, ChevronUpIcon, AliasIcon } from './icons';
 import { PanelHeader } from './PanelHeader';
 import { ConfirmDeleteButton } from './ConfirmDeleteButton';
 import { FilterPill } from './FilterPill';
 import { MudInput, MudTextarea, MudButton } from './shared';
-import { SyntaxHelpTable } from './SyntaxHelpTable';
+import { ScriptEditor } from './ScriptEditor';
+import { SyntaxHelpTable, SCRIPT_API_HELP_ROWS, SCRIPT_ACCENT } from './SyntaxHelpTable';
 import type { HelpRow } from './SyntaxHelpTable';
 
 interface AliasPanelProps {
@@ -55,6 +57,14 @@ function AliasRow({
       >
         {alias.pattern}
       </span>
+      {alias.bodyMode === 'script' && (
+        <span
+          title="JavaScript script mode"
+          className="text-[8px] font-mono px-1 py-px rounded border border-[#8be9fd]/40 text-[#8be9fd] bg-[#8be9fd]/10 shrink-0"
+        >
+          JS
+        </span>
+      )}
       <button
         onClick={(e) => {
           e.stopPropagation();
@@ -99,15 +109,15 @@ const ALIAS_HELP_ROWS: HelpRow[] = [
     example: '/var target goblin  \u2192  $target = goblin',
   },
   {
-    token: ';',
-    desc: 'Command separator \u2014 sends multiple commands',
-    example: 'kill $1;loot corpse',
+    token: ';; (default)',
+    desc: 'Command separator \u2014 sends multiple commands (configurable in Settings)',
+    example: 'kill $1;;loot corpse',
   },
-  { token: '\\;', desc: 'Literal semicolon (not a separator)' },
+  { token: '\\;;', desc: 'Literal separator (escaped with \\)' },
   {
     token: '/delay <ms>',
     desc: 'Pause between commands (milliseconds)',
-    example: 'cast shield;/delay 1500;cast armor',
+    example: 'cast shield;;/delay 1500;;cast armor',
   },
   {
     token: '/echo <text>',
@@ -151,6 +161,30 @@ function BodySyntaxHelp() {
   );
 }
 
+const ALIAS_SCRIPT_HELP_ROWS: HelpRow[] = [
+  ...SCRIPT_API_HELP_ROWS,
+  { token: '$1 .. $9', desc: 'Positional arguments' },
+  { token: 'args', desc: 'Full argument string (like $* in text mode)' },
+  { token: 'argList', desc: 'Arguments as an array' },
+  { token: '$me / $Me', desc: 'Character name (lower / Capitalized)' },
+];
+
+function ScriptSyntaxHelp() {
+  return (
+    <SyntaxHelpTable
+      rows={ALIAS_SCRIPT_HELP_ROWS}
+      accentColor={SCRIPT_ACCENT}
+      footer={
+        <>
+          <span className="text-text-label">Script mode:</span> Body is JavaScript with{' '}
+          <span className="font-mono" style={{ color: SCRIPT_ACCENT }}>await</span> support. Global
+          script functions are available. Errors are printed to the terminal in red.
+        </>
+      }
+    />
+  );
+}
+
 // --- Alias Editor ---
 
 function AliasEditor({
@@ -164,7 +198,7 @@ function AliasEditor({
   scope: AliasScope;
   activeCharacter: string | null;
   onSave: (
-    data: { pattern: string; matchMode: AliasMatchMode; body: string; group: string },
+    data: { pattern: string; matchMode: AliasMatchMode; body: string; group: string; bodyMode?: AliasBodyMode },
     scope: AliasScope,
     existingId?: AliasId
   ) => void;
@@ -175,9 +209,11 @@ function AliasEditor({
   const [body, setBody] = useState(alias?.body ?? '');
   const [group, setGroup] = useState(alias?.group ?? '');
   const [scope, setScope] = useState<AliasScope>(initialScope);
+  const [bodyMode, setBodyMode] = useState<AliasBodyMode>(alias?.bodyMode ?? 'text');
   const [testInput, setTestInput] = useState('');
   const [showHelp, setShowHelp] = useState(false);
   const patternRef = useRef<HTMLInputElement>(null);
+  const { commandSeparator } = useAppSettingsContext();
 
   useEffect(() => {
     patternRef.current?.focus();
@@ -198,14 +234,14 @@ function AliasEditor({
       updatedAt: '',
     };
     try {
-      const opts = { activeCharacter };
+      const opts = { activeCharacter, separator: commandSeparator };
       const result = expandInput(testInput, [tempAlias], opts);
       const expand = (input: string) => expandInput(input, [tempAlias], opts).commands;
       return formatCommandPreview(result.commands, expand).join('\n');
     } catch {
       return '[expansion error]';
     }
-  }, [testInput, pattern, matchMode, body, activeCharacter]);
+  }, [testInput, pattern, matchMode, body, activeCharacter, commandSeparator]);
 
   const canSave = pattern.trim().length > 0 && body.trim().length > 0;
 
@@ -213,7 +249,7 @@ function AliasEditor({
     if (e.key === 'Enter' && canSave) {
       e.preventDefault();
       onSave(
-        { pattern: pattern.trim(), matchMode, body, group: group.trim() || 'General' },
+        { pattern: pattern.trim(), matchMode, body, group: group.trim() || 'General', bodyMode },
         scope,
         alias?.id
       );
@@ -237,7 +273,7 @@ function AliasEditor({
             onClick={() => {
               if (canSave)
                 onSave(
-                  { pattern: pattern.trim(), matchMode, body, group: group.trim() || 'General' },
+                  { pattern: pattern.trim(), matchMode, body, group: group.trim() || 'General', bodyMode },
                   scope,
                   alias?.id
                 );
@@ -284,24 +320,58 @@ function AliasEditor({
         <div>
           <div className="flex items-center gap-1 mb-0.5">
             <label className="text-[10px] text-text-dim">Body</label>
+            <div className="flex gap-0.5 ml-1">
+              <button
+                type="button"
+                onClick={() => setBodyMode('text')}
+                className={`text-[9px] font-mono px-1.5 py-px rounded border cursor-pointer transition-colors duration-150 ${
+                  bodyMode === 'text'
+                    ? 'text-[#a78bfa] border-[#a78bfa]/40 bg-[#a78bfa]/10'
+                    : 'text-text-dim border-border-dim bg-transparent hover:text-text-secondary'
+                }`}
+              >
+                Text
+              </button>
+              <button
+                type="button"
+                onClick={() => setBodyMode('script')}
+                className={`text-[9px] font-mono px-1.5 py-px rounded border cursor-pointer transition-colors duration-150 ${
+                  bodyMode === 'script'
+                    ? 'text-[#8be9fd] border-[#8be9fd]/40 bg-[#8be9fd]/10'
+                    : 'text-text-dim border-border-dim bg-transparent hover:text-text-secondary'
+                }`}
+              >
+                Script
+              </button>
+            </div>
             <button
               type="button"
               onClick={() => setShowHelp((v) => !v)}
-              className="flex items-center gap-0.5 text-[9px] text-[#a78bfa]/70 hover:text-[#a78bfa] cursor-pointer transition-colors duration-150"
+              className="flex items-center gap-0.5 text-[9px] text-[#a78bfa]/70 hover:text-[#a78bfa] cursor-pointer transition-colors duration-150 ml-auto"
             >
               {showHelp ? 'hide help' : 'syntax help'}
               {showHelp ? <ChevronUpIcon size={7} /> : <ChevronDownIcon size={7} />}
             </button>
           </div>
-          {showHelp && <BodySyntaxHelp />}
-          <MudTextarea
-            accent="purple"
-            value={body}
-            onChange={(e) => setBody(e.target.value)}
-            placeholder="attack $1;kill $1"
-            rows={5}
-            className="w-full"
-          />
+          {showHelp && (bodyMode === 'script' ? <ScriptSyntaxHelp /> : <BodySyntaxHelp />)}
+          {bodyMode === 'script' ? (
+            <div style={{ height: 150 }}>
+              <ScriptEditor
+                value={body}
+                onChange={setBody}
+                placeholder={`// JavaScript — use await for async calls\nif ($1 === 'start') {\n  await send('cast shield');\n} else {\n  echo('Usage: ${pattern} start|stop');\n}`}
+              />
+            </div>
+          ) : (
+            <MudTextarea
+              accent="purple"
+              value={body}
+              onChange={(e) => setBody(e.target.value)}
+              placeholder="attack $1;kill $1"
+              rows={5}
+              className="w-full"
+            />
+          )}
         </div>
 
         {/* Group + Scope row */}
@@ -344,28 +414,30 @@ function AliasEditor({
           </div>
         </div>
 
-        {/* Live preview */}
-        <div className="border-t border-[#444] pt-2">
-          <label className="text-[10px] text-text-dim mb-0.5 block">Test expansion</label>
-          <MudInput
-            accent="purple"
-            value={testInput}
-            onChange={(e) => setTestInput(e.target.value)}
-            placeholder={
-              pattern
-                ? matchMode === 'exact'
-                  ? pattern
-                  : `${pattern} goblin`
-                : 'type a test command...'
-            }
-            className="w-full"
-          />
-          {preview && (
-            <div className="mt-1 px-2 py-1 rounded bg-bg-primary border border-border-dim">
-              <pre className="text-[10px] font-mono text-green whitespace-pre-wrap">{preview}</pre>
-            </div>
-          )}
-        </div>
+        {/* Live preview (text mode only — can't safely preview scripts) */}
+        {bodyMode !== 'script' && (
+          <div className="border-t border-[#444] pt-2">
+            <label className="text-[10px] text-text-dim mb-0.5 block">Test expansion</label>
+            <MudInput
+              accent="purple"
+              value={testInput}
+              onChange={(e) => setTestInput(e.target.value)}
+              placeholder={
+                pattern
+                  ? matchMode === 'exact'
+                    ? pattern
+                    : `${pattern} goblin`
+                  : 'type a test command...'
+              }
+              className="w-full"
+            />
+            {preview && (
+              <div className="mt-1 px-2 py-1 rounded bg-bg-primary border border-border-dim">
+                <pre className="text-[10px] font-mono text-green whitespace-pre-wrap">{preview}</pre>
+              </div>
+            )}
+          </div>
+        )}
       </div>
     </div>
   );
@@ -400,7 +472,7 @@ export function AliasPanel({ onClose }: AliasPanelProps) {
 
   const handleSave = useCallback(
     (
-      data: { pattern: string; matchMode: AliasMatchMode; body: string; group: string },
+      data: { pattern: string; matchMode: AliasMatchMode; body: string; group: string; bodyMode?: AliasBodyMode },
       saveScope: AliasScope,
       existingId?: AliasId
     ) => {

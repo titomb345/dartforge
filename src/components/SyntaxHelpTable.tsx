@@ -12,6 +12,19 @@ interface SyntaxHelpTableProps {
 
 export type { HelpRow };
 
+/** Script API rows shared by both TriggerPanel and AliasPanel script help */
+export const SCRIPT_API_HELP_ROWS: HelpRow[] = [
+  { token: 'await send(text)', desc: 'Send command to MUD (goes through alias expansion)' },
+  { token: 'echo(text)', desc: 'Print text locally (not sent to MUD)' },
+  { token: 'await delay(ms)', desc: 'Wait N milliseconds' },
+  { token: 'setVar(name, val)', desc: 'Set a character variable' },
+  { token: "setVar(n, v, 'global')", desc: 'Set a global variable' },
+  { token: 'getVar(name)', desc: 'Get variable value (returns string)' },
+  { token: 'await spam(n, text)', desc: 'Send command n times (max 1000)' },
+];
+
+export const SCRIPT_ACCENT = '#8be9fd';
+
 export function SyntaxHelpTable({ rows, accentColor, footer }: SyntaxHelpTableProps) {
   return (
     <div

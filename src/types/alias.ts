@@ -7,6 +7,9 @@ export type AliasMatchMode = 'exact' | 'prefix' | 'regex';
 /** Alias scope — character-specific or shared across all characters */
 export type AliasScope = 'character' | 'global';
 
+/** Whether the alias body is plain text expansion or JavaScript */
+export type AliasBodyMode = 'text' | 'script';
+
 /** An individual alias definition */
 export interface Alias {
   id: AliasId;
@@ -16,6 +19,8 @@ export interface Alias {
   matchMode: AliasMatchMode;
   /** The expansion body. Supports $1, $2, $*, ;, /delay, /echo, etc. */
   body: string;
+  /** Body interpretation mode: 'text' (default) or 'script' (JavaScript) */
+  bodyMode?: AliasBodyMode;
   /** Whether this alias is active */
   enabled: boolean;
   /** User-assigned group for organization */

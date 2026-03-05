@@ -93,11 +93,12 @@ export function ChatPanel({ mode = 'slideout' }: PinnablePanelProps) {
   const visibleMessages = useMemo(() => {
     const filtered = messages.filter((msg) => {
       if (!filters[msg.type]) return false;
+      if (hideOwnMessages && msg.isOwn) return false;
       if (mutedSenders.some((s) => s.toLowerCase() === msg.sender.toLowerCase())) return false;
       return true;
     });
     return newestFirst ? [...filtered].reverse() : filtered;
-  }, [messages, filters, mutedSenders, newestFirst]);
+  }, [messages, filters, mutedSenders, newestFirst, hideOwnMessages]);
 
   // Split messages into today vs older
   const todayKey = getDayKey(new Date(now));

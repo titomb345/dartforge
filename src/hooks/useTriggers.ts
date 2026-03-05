@@ -1,6 +1,7 @@
 import { useState, useCallback, useEffect, useRef, useMemo } from 'react';
 import type { DataStore } from '../contexts/DataStoreContext';
 import type {
+  BodyMode,
   Trigger,
   TriggerId,
   TriggerMatchMode,
@@ -96,6 +97,9 @@ export function useTriggers(dataStore: DataStore, activeCharacter: string | null
         gag?: boolean;
         highlight?: string | null;
         soundAlert?: boolean;
+        bodyMode?: BodyMode;
+        multiLine?: boolean;
+        endPattern?: string;
       },
       scope: TriggerScope
     ): TriggerId => {
@@ -111,6 +115,9 @@ export function useTriggers(dataStore: DataStore, activeCharacter: string | null
         gag: partial.gag ?? false,
         highlight: partial.highlight ?? null,
         soundAlert: partial.soundAlert ?? false,
+        bodyMode: partial.bodyMode,
+        multiLine: partial.multiLine,
+        endPattern: partial.endPattern,
         createdAt: now,
         updatedAt: now,
       };
@@ -190,6 +197,9 @@ export function useTriggers(dataStore: DataStore, activeCharacter: string | null
           gag: original.gag,
           highlight: original.highlight,
           soundAlert: original.soundAlert,
+          bodyMode: original.bodyMode,
+          multiLine: original.multiLine,
+          endPattern: original.endPattern,
         },
         scope
       );

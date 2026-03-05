@@ -9,6 +9,47 @@ The `[Unreleased]` header controls automatic version bumping on merge:
 - `[Unreleased-minor]` → 0.1.0 → 0.2.0
 - `[Unreleased-major]` → 0.1.0 → 1.0.0
 
+## [Unreleased-minor]
+
+### Changed
+- Web client proxy ported from Fly.io/Rust to a Cloudflare Worker using Durable Objects — eliminates hosting costs by running on Cloudflare's free tier
+- Removed old Fly.io Rust proxy (account expired, code no longer needed)
+- Chat "Mine" filter is now a visual toggle — own messages are always captured and stored; toggling "Mine" instantly shows/hides them without losing history
+
+### Fixed
+- Script editor (Global Script panel) now scrolls with the mouse wheel when content exceeds the panel height
+- Script editor fills the full panel height instead of starting at a fixed 120px minimum
+
+### Added
+- `lastUserInputTime()` script API — returns the epoch timestamp of the last user-typed command (not timers, triggers, or aliases). Resets each session. Enables idle detection via timer scripts
+- Popout script editor — hover over any script editor (triggers, aliases, timers, global scripts, quick buttons) to reveal an expand button; click to open a large centered modal for comfortable editing; includes a Save button, line count, and a syntax help popover with the full script API reference; edits sync in real-time; close with Escape, click outside, or the collapse button
+- Skill panel shows total improvement count at the bottom of the skill list, reflecting the currently selected category
+- Removed character name from the Skills panel header for a cleaner look
+- Configurable command separator — the character(s) used to chain multiple commands is now configurable in Settings > Output (default `;;` for new installs, `;` preserved for existing users). Single semicolons in normal text (e.g. "say hey; how are you?") no longer break into separate commands when using `;;`
+- Quick Buttons — customizable command buttons in a row between the terminal and status bar; click to fire commands or scripts instantly; right-click for edit, delete, enable/disable, and reorder; supports both command mode (with alias expansion) and JavaScript script mode; persists across sessions
+- JavaScript scripting engine for triggers, aliases, and timers — toggle "Script" in the editor to write JS bodies with `send()`, `echo()`, `await delay()`, `spam()`, `setVar()`, `getVar()`, and capture variables (`$0`-`$9`, `$line`, `$me`). Supports `if/else`, loops, `await`, and shared functions via the Global Script panel
+- Per-timer status bar visibility toggle — each timer can be shown or hidden in the command input countdown area via a "Show countdown in status bar" checkbox in the timer editor
+- Global Script panel — define reusable JavaScript functions and constants shared across all script-mode triggers and aliases; accessible from the toolbar Scripts button
+- Multi-line trigger matching — triggers can now buffer lines between a start pattern and an end pattern (regex), then fire with the joined text; ideal for tells and messages that wrap across multiple lines; toggle "Multi-line" in the trigger editor and set an end pattern; max 10 lines safety cap; buffers clear on disconnect
+- CodeMirror 6 editor for all script bodies — syntax highlighting, line numbers, bracket matching, Tab/Shift+Tab indentation, and Ctrl+S save support replaces plain textareas in the Global Script panel, trigger editor, and alias editor
+- `spam(count, text)` scripting API — send a command N times (max 1000), matching `/spam` directive syntax
+- Retry with exponential backoff for Dropbox uploads — up to 4 retries on 429/5xx errors (1s, 2s, 4s, 8s backoff); failed uploads are queued as pending and retried on next page load
+- Allocation panel "Not connected" state — shows a placeholder until the user logs in, matching the Who panel pattern
+- StorageModeButton component for switching storage modes
+- Settings panel storage section showing the current storage mode
+- Web meta tags, favicons, and OG image for the web client
+- Netlify deployment config (`netlify.toml`)
+- Screenshot Mode — capture the visible terminal as a styled PNG with macOS-style window chrome (colored dots, title bar, rounded corners) and copy to clipboard; triggered via toolbar button, context menu, or `Ctrl+Shift+S`; renders directly from xterm's canvas so ANSI colors are fully preserved
+- `/counter toggle` command — smart-toggles the active counter between start and pause
+- Numpad `/`, `*`, `-`, and `.` keys are now configurable in Settings → Numpad Mappings (previously `/` and `*` were hardcoded, `-` and `.` were ignored)
+
+### Fixed
+- Screenshot Mode failing in desktop app — now uses Tauri clipboard plugin for image writing instead of unsupported web Clipboard API
+- Gagged lines leaving orphan blank lines in terminal — empty separator lines adjacent to gagged content (gag groups, triggers, compact mode) are now suppressed so gagging doesn't leave vertical whitespace gaps
+- Dropbox sync overwriting allocations — initial sync now uses remote data entirely for non-skill files instead of shallow-merging with localStorage, preventing stale local data from corrupting allocation profiles
+- Web client disconnect not updating UI — proxy now sends a status message to the client on disconnect
+- Password manager autofill overwriting both character slots with the same credentials — each slot now has unique `name`/`autocomplete` section attributes
+
 ## [1.3.0] - 2026-02-28
 
 ### Changed

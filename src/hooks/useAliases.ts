@@ -1,6 +1,6 @@
 import { useState, useCallback, useEffect, useRef, useMemo } from 'react';
 import type { DataStore } from '../contexts/DataStoreContext';
-import type { Alias, AliasId, AliasMatchMode, AliasScope } from '../types/alias';
+import type { Alias, AliasBodyMode, AliasId, AliasMatchMode, AliasScope } from '../types/alias';
 
 const ALIASES_FILE = 'aliases.json';
 const SETTINGS_FILE = 'settings.json';
@@ -101,6 +101,7 @@ export function useAliases(dataStore: DataStore, activeCharacter: string | null)
         matchMode: AliasMatchMode;
         body: string;
         group: string;
+        bodyMode?: AliasBodyMode;
       },
       scope: AliasScope
     ): AliasId => {
@@ -112,6 +113,7 @@ export function useAliases(dataStore: DataStore, activeCharacter: string | null)
         body: partial.body,
         enabled: true,
         group: partial.group,
+        bodyMode: partial.bodyMode,
         createdAt: now,
         updatedAt: now,
       };
@@ -187,6 +189,7 @@ export function useAliases(dataStore: DataStore, activeCharacter: string | null)
           matchMode: original.matchMode,
           body: original.body,
           group: original.group,
+          bodyMode: original.bodyMode,
         },
         scope
       );

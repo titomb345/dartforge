@@ -22,6 +22,7 @@ import { cn } from '../lib/cn';
 import { useDataStore } from '../contexts/DataStoreContext';
 import { useAppSettingsContext } from '../contexts/AppSettingsContext';
 import { getPlatform } from '../lib/platform';
+import { loadStorageMode } from '../lib/dropbox';
 
 /* ── Tauri imports (lazy) ─────────────────────────────────── */
 
@@ -167,6 +168,8 @@ export function SettingsPanel({ onClose }: { onClose: () => void }) {
     updateAntiSpamEnabled,
     commandEchoEnabled,
     updateCommandEchoEnabled,
+    commandSeparator,
+    updateCommandSeparator,
     showTimerBadges,
     updateShowTimerBadges,
     terminalScrollback,
@@ -530,14 +533,14 @@ export function SettingsPanel({ onClose }: { onClose: () => void }) {
               size="sm"
               value={postSyncCommands}
               onChange={(e) => updatePostSyncCommands(e.target.value)}
-              placeholder="inventory;who;/echo Ready!"
+              placeholder="inventory;;who;;/echo Ready!"
               rows={5}
               className="w-full"
             />
           </div>
           <div className="text-[9px] text-text-dim font-mono leading-relaxed mt-1">
-            Sent automatically after logging in. Supports semicolons, aliases, /delay, /echo, /spam,
-            /var.
+            Sent automatically after logging in. Supports the command separator, aliases, /delay,
+            /echo, /spam, /var.
           </div>
         </SettingsSection>
 
@@ -578,6 +581,23 @@ export function SettingsPanel({ onClose }: { onClose: () => void }) {
           </FieldRow>
           <div className="text-[9px] text-text-dim font-mono leading-relaxed mt-1">
             Show your sent commands as dimmed lines in the terminal.
+          </div>
+          <FieldRow label="Command separator">
+            <MudInput
+              accent="green"
+              value={commandSeparator}
+              onChange={(e) => {
+                const v = e.target.value;
+                if (v.length > 0) updateCommandSeparator(v);
+              }}
+              className="w-[60px] text-center font-mono"
+            />
+          </FieldRow>
+          <div className="text-[9px] text-text-dim font-mono leading-relaxed mt-1">
+            Character(s) used to chain multiple commands (e.g. &quot;kill
+            rat{commandSeparator}loot corpse&quot;). Prefix with \ to use
+            literally. If you change this, update existing alias/trigger bodies
+            to match.
           </div>
           <FieldRow label="Anti-spam">
             <ToggleSwitch
@@ -766,6 +786,14 @@ export function SettingsPanel({ onClose }: { onClose: () => void }) {
           />
         )}
 
+        {/* Data Storage — Web only */}
+        {!isTauri && (
+          <WebStorageSection
+            open={openSection === 'web-storage'}
+            onToggle={() => toggle('web-storage')}
+          />
+        )}
+
         {/* Backups — Tauri only */}
         {isTauri && (
           <BackupsSection open={openSection === 'backups'} onToggle={() => toggle('backups')} />
@@ -777,7 +805,21 @@ export function SettingsPanel({ onClose }: { onClose: () => void }) {
 
 /* ── Numpad Mappings Section ──────────────────────────────── */
 
+/*
+ * Numpad layout (3 cols × 6 rows):
+ *
+ *  [ / ][ * ][ - ]
+ *  [ 7 ][ 8 ][ 9 ]
+ *  [ 4 ][ 5 ][ 6 ]
+ *  [ 1 ][ 2 ][ 3 ]
+ *  [   0   ][ . ][ + ]
+ */
 const NUMPAD_GRID = [
+  [
+    { key: 'NumpadDivide', label: '/' },
+    { key: 'NumpadMultiply', label: '*' },
+    { key: 'NumpadSubtract', label: '-' },
+  ],
   [
     { key: 'Numpad7', label: '7' },
     { key: 'Numpad8', label: '8' },
@@ -795,7 +837,8 @@ const NUMPAD_GRID = [
   ],
 ];
 const NUMPAD_BOTTOM = [
-  { key: 'Numpad0', label: '0', span: 2 },
+  { key: 'Numpad0', label: '0', span: 1 },
+  { key: 'NumpadDecimal', label: '.', span: 1 },
   { key: 'NumpadAdd', label: '+', span: 1 },
 ];
 
@@ -837,12 +880,8 @@ function NumpadSection({
         ))}
       </div>
       <div className="grid grid-cols-3 gap-1 mt-1">
-        {NUMPAD_BOTTOM.map(({ key, label, span }) => (
-          <div
-            key={key}
-            className="flex flex-col items-center gap-0.5"
-            style={{ gridColumn: `span ${span}` }}
-          >
+        {NUMPAD_BOTTOM.map(({ key, label }) => (
+          <div key={key} className="flex flex-col items-center gap-0.5">
             <span className="text-[9px] font-mono text-text-dim">{label}</span>
             <MudInput
               accent="purple"
@@ -1035,6 +1074,47 @@ function CustomSoundsSection({
         Choose custom audio files for chat alert sounds. Supports WAV, MP3, OGG, and WebM (max 5
         MB).
       </div>
+    </SettingsSection>
+  );
+}
+
+/* ── Data Storage Section (Web-only) ──────────────────────── */
+
+function WebStorageSection({ open, onToggle }: { open: boolean; onToggle: () => void }) {
+  const mode = loadStorageMode();
+
+  return (
+    <SettingsSection
+      open={open}
+      onToggle={onToggle}
+      icon={<FolderIcon size={13} />}
+      title="Data Storage"
+      accent="#8be9fd"
+    >
+      <FieldRow label="Current mode">
+        <span className="text-[10px] font-mono text-text-label">
+          {mode === 'dropbox' ? 'Dropbox Sync' : mode === 'local' ? 'Local Storage' : 'Not set'}
+        </span>
+      </FieldRow>
+      <div className="text-[9px] text-text-dim font-mono leading-relaxed mt-1">
+        Change where DartForge stores your settings and skill data. Resetting will reload the page.
+      </div>
+      <button
+        onClick={() => {
+          if (confirm('Reset storage mode? The page will reload and you can choose again.')) {
+            localStorage.removeItem('dartforge:storage_mode');
+            window.location.reload();
+          }
+        }}
+        className={cn(
+          'w-full flex items-center justify-center gap-1.5 px-2 py-1 rounded mt-1',
+          'text-[10px] font-mono text-text-dim border border-border-dim',
+          'hover:text-cyan hover:border-cyan/30 transition-colors cursor-pointer'
+        )}
+      >
+        <RotateCcwIcon size={9} />
+        Change storage mode
+      </button>
     </SettingsSection>
   );
 }

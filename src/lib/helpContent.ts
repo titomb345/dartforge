@@ -137,8 +137,14 @@ export const HELP_CATEGORIES: HelpCategory[] = [
       {
         title: 'Timers Panel',
         description:
-          'Create repeating timers that execute commands at set intervals. Supports full alias/trigger body syntax including semicolons, /delay, /echo, /spam, and /var. Character-scoped or Global.',
+          'Create repeating timers that execute commands at set intervals. Supports text mode (command separator, /delay, /echo, /spam, /var) or JavaScript script mode. Toggle "Show countdown in status bar" per timer to control which countdowns appear next to the command input. Character-scoped or Global.',
         helpId: 'toolbar-timers',
+      },
+      {
+        title: 'Global Script',
+        description:
+          'Define shared JavaScript functions and constants available to all script-mode triggers and aliases. Open via the toolbar Scripts button (</>). Changes apply on next trigger/alias execution.',
+        helpId: 'toolbar-scripts',
       },
     ],
   },
@@ -220,6 +226,19 @@ export const HELP_CATEGORIES: HelpCategory[] = [
         helpId: 'game-clock',
         interaction: 'click',
       },
+      {
+        title: 'Screenshot to Clipboard',
+        description:
+          'Click the camera icon in the toolbar (or press Ctrl+Shift+S) to capture the visible terminal as a styled PNG and copy it to your clipboard. Great for sharing moments on Discord.',
+        helpId: 'toolbar-screenshot',
+        interaction: 'click',
+      },
+      {
+        title: 'Quick Button Context Menu',
+        description:
+          'Right-click any quick button to edit, delete, enable/disable, or reorder it. Click the "+" button at the end of the row to add a new one.',
+        interaction: 'right-click',
+      },
     ],
   },
   {
@@ -237,14 +256,12 @@ export const HELP_CATEGORIES: HelpCategory[] = [
       {
         title: 'Toggle Active Counter',
         description:
-          'Quickly toggle your active improve counter between running and paused states.',
-        kbd: ['Numpad *'],
+          'Toggle your active improve counter between running and paused states. Configurable in Settings → Numpad Mappings (default: Numpad *).',
       },
       {
         title: 'Cycle Movement Mode',
         description:
-          'Cycle through movement modes: Normal → Leading → Rowing. Active mode prefixes all direction commands automatically.',
-        kbd: ['Numpad /'],
+          'Cycle through movement modes: Normal → Leading → Rowing. Configurable in Settings → Numpad Mappings (default: Numpad /).',
       },
       {
         title: 'Tab Completion',
@@ -286,6 +303,12 @@ export const HELP_CATEGORIES: HelpCategory[] = [
         description:
           'Adjust the terminal font size on the fly. Ctrl and + to zoom in, Ctrl and - to zoom out, Ctrl and 0 to reset to default (14px).',
         kbd: ['Ctrl +', 'Ctrl -', 'Ctrl 0'],
+      },
+      {
+        title: 'Screenshot to Clipboard',
+        description:
+          'Capture the visible terminal as a styled PNG with macOS-style window chrome and copy it to your clipboard. Perfect for sharing in Discord.',
+        kbd: ['Ctrl', 'Shift', 'S'],
       },
     ],
   },
@@ -356,7 +379,7 @@ export const HELP_CATEGORIES: HelpCategory[] = [
       {
         title: '/autoconc',
         description:
-          'Auto-execute any command(s) on full concentration (BEBT). "/autoconc <action>" saves the action (does not start). "/autoconc on" starts with the saved action — fires once on BEBT, then waits for conc to drop and recover before firing again. The action supports aliases, /spam, /delay, /echo, /var, and semicolons for multi-command chains. "/autoconc off" stops. "/autoconc status" shows current state. The action persists across sessions. A purple badge appears while active.',
+          'Auto-execute any command(s) on full concentration (BEBT). "/autoconc <action>" saves the action (does not start). "/autoconc on" starts with the saved action — fires once on BEBT, then waits for conc to drop and recover before firing again. The action supports aliases, /spam, /delay, /echo, /var, and the command separator for multi-command chains. "/autoconc off" stops. "/autoconc status" shows current state. The action persists across sessions. A purple badge appears while active.',
       },
       {
         title: '/announce',
@@ -366,7 +389,7 @@ export const HELP_CATEGORIES: HelpCategory[] = [
       {
         title: '/counter',
         description:
-          'Manage improve counters from the command line. "/counter list" shows all counters with status, imps, and elapsed time. "/counter status" shows a quick one-liner for the active counter. "/counter info" shows detailed stats including rates and skills. "/counter start|pause|stop|clear" controls the active counter. "/counter switch <name>" switches the active counter by name (partial match).',
+          'Manage improve counters from the command line. "/counter list" shows all counters with status, imps, and elapsed time. "/counter status" shows a quick one-liner for the active counter. "/counter info" shows detailed stats including rates and skills. "/counter start|toggle|pause|stop|clear" controls the active counter. "/counter toggle" smart-toggles between start and pause. "/counter switch <name>" switches the active counter by name (partial match).',
       },
     ],
   },
@@ -399,7 +422,7 @@ export const HELP_CATEGORIES: HelpCategory[] = [
       {
         title: 'Triggers',
         description:
-          'Auto-react to MUD output. Match patterns with Substring, Exact, or Regex. Supports gag (hide line), highlight (color line), cooldown, and sound alerts.',
+          'Auto-react to MUD output. Match patterns with Substring, Exact, or Regex. Supports gag (hide line), highlight (color line), cooldown, and sound alerts. Multi-line mode buffers lines between a start pattern and an end pattern (regex), then fires with the joined text — ideal for tells and messages that wrap across multiple lines.',
         helpId: 'toolbar-triggers',
       },
       {
@@ -415,7 +438,12 @@ export const HELP_CATEGORIES: HelpCategory[] = [
       {
         title: 'Command Chaining',
         description:
-          'Use semicolons to chain commands: "kill rat;loot corpse". Escape with \\; for a literal semicolon.',
+          'Chain commands with the configured separator (default ";;"), e.g. "kill rat;;loot corpse". Change it in Settings > Output. Prefix with \\ to use the separator literally.',
+      },
+      {
+        title: 'Script Mode',
+        description:
+          'Triggers and aliases can use JavaScript instead of text expansion. Toggle "Script" in the editor to write JS bodies with send(), echo(), delay(), setVar(), getVar(), lastUserInputTime(), and capture variables ($0-$9, $line, $me). Define shared functions in the Global Script panel. Hover over any script editor to reveal an expand button that opens a large popout modal for comfortable editing. Errors appear in red in the terminal.',
       },
     ],
   },

@@ -13,6 +13,8 @@
     "dialog:default",
     "core:app:default",
     "core:window:allow-set-title",
-    "core:window:allow-request-user-attention"
+    "core:window:allow-request-user-attention",
+    "clipboard-manager:default",
+    "clipboard-manager:allow-write-image"
   ]
 }
