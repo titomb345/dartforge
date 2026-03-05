@@ -22,6 +22,7 @@ The `[Unreleased]` header controls automatic version bumping on merge:
 
 ### Added
 - `lastUserInputTime()` script API — returns the epoch timestamp of the last user-typed command (not timers, triggers, or aliases). Resets each session. Enables idle detection via timer scripts
+- Popout script editor — hover over any script editor (triggers, aliases, timers, global scripts, quick buttons) to reveal an expand button; click to open a large centered modal for comfortable editing; includes a Save button, line count, and a syntax help popover with the full script API reference; edits sync in real-time; close with Escape, click outside, or the collapse button
 - Skill panel shows total improvement count at the bottom of the skill list, reflecting the currently selected category
 - Removed character name from the Skills panel header for a cleaner look
 - Configurable command separator — the character(s) used to chain multiple commands is now configurable in Settings > Output (default `;;` for new installs, `;` preserved for existing users). Single semicolons in normal text (e.g. "say hey; how are you?") no longer break into separate commands when using `;;`
