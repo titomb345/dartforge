@@ -12,7 +12,9 @@ The `[Unreleased]` header controls automatic version bumping on merge:
 ## [Unreleased-minor]
 
 ### Added
+- Session Log Viewer panel — browse, search, and filter past session logs from within the app; select a session to view timestamped output, filter by commands vs output, full-text or regex search across all logs with highlighted matches and context, delete old sessions
 - "Select on send" setting: after sending a command, keeps it highlighted in the input instead of clearing — type to replace or press Enter to resend (off by default, toggle in Settings)
+- Macros panel — bind keyboard hotkeys (Ctrl+1, Alt+F5, etc.) to command sequences or JavaScript scripts; supports the same command/script modes as quick buttons, aliases, and triggers
 
 ### Changed
 - Quick buttons are now drag-and-droppable for reordering (replaces right-click Move Left/Right)

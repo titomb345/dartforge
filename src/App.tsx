@@ -124,10 +124,13 @@ import { AppSettingsProvider } from './contexts/AppSettingsContext';
 import { SpotlightProvider } from './contexts/SpotlightContext';
 import { SpotlightOverlay } from './components/SpotlightOverlay';
 import { HelpPanel } from './components/HelpPanel';
+import { LogViewerPanel } from './components/LogViewerPanel';
 import { getSpellByAbbr, findSpellFuzzy } from './lib/spellData';
 import { getSkillByAbbr, findSkillFuzzy } from './lib/skillData';
 import { QuickButtonBar } from './components/QuickButtonBar';
-import type { QuickButton } from './types';
+import { MacroPanel } from './components/MacroPanel';
+import type { QuickButton, Macro } from './types';
+import { hotkeyToString, hotkeyFromEvent, isNumpadKey } from './types';
 
 /** Commands to send automatically after login */
 const LOGIN_COMMANDS = [
@@ -214,6 +217,8 @@ function AppMain() {
   const [autoCompact, setAutoCompact] = useState(false);
   const [quickButtons, setQuickButtons] = useState<QuickButton[]>([]);
   const quickButtonsLoadedRef = useRef(false);
+  const [macros, setMacros] = useState<Macro[]>([]);
+  const macrosLoadedRef = useRef(false);
 
   const appSettings = useAppSettings();
   const {
@@ -327,6 +332,11 @@ function AppMain() {
         setQuickButtons(savedButtons);
       }
       quickButtonsLoadedRef.current = true;
+      const savedMacros = await dataStore.get<Macro[]>('settings.json', 'macros');
+      if (Array.isArray(savedMacros)) {
+        setMacros(savedMacros);
+      }
+      macrosLoadedRef.current = true;
 
       panelLayoutLoadedRef.current = true;
       settingsLoadedRef.current = true;
@@ -1946,6 +1956,37 @@ function AppMain() {
     [persistButtons]
   );
 
+  // Macros — persist + CRUD
+  const persistMacros = useCallback(
+    (next: Macro[]) => {
+      setMacros(next);
+      dataStore.set('settings.json', 'macros', next).catch(console.error);
+    },
+    [dataStore]
+  );
+
+  const addMacro = useCallback(
+    (data: Omit<Macro, 'id'>) => {
+      const m: Macro = { ...data, id: crypto.randomUUID() };
+      persistMacros([...macros, m]);
+    },
+    [macros, persistMacros]
+  );
+
+  const updateMacro = useCallback(
+    (id: string, data: Partial<Macro>) => {
+      persistMacros(macros.map((m) => (m.id === id ? { ...m, ...data } : m)));
+    },
+    [macros, persistMacros]
+  );
+
+  const deleteMacro = useCallback(
+    (id: string) => {
+      persistMacros(macros.filter((m) => m.id !== id));
+    },
+    [macros, persistMacros]
+  );
+
   const fireQuickButton = useCallback(
     async (body: string, bodyMode: 'commands' | 'script') => {
       // Quick button clicks are user activity — stamp idle tracker
@@ -1968,6 +2009,43 @@ function AppMain() {
     },
     [handleSend]
   );
+
+  // Global macro hotkey listener
+  const macrosRef = useLatestRef(macros);
+  const fireQuickButtonRef = useLatestRef(fireQuickButton);
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      // Don't intercept if a modal/editor input is focused (except the command textarea)
+      const target = e.target as HTMLElement | null;
+      if (
+        target &&
+        target.tagName !== 'BODY' &&
+        target.tagName !== 'TEXTAREA' &&
+        target.tagName !== 'CANVAS' &&
+        !target.classList.contains('xterm-helper-textarea')
+      ) {
+        // Allow macros from the command input textarea
+        const isCommandInput = target.closest('[data-help-id="command-input"]');
+        if (!isCommandInput) return;
+      }
+
+      const combo = hotkeyFromEvent(e);
+      if (!combo) return;
+      if (isNumpadKey(combo.key)) return; // numpad handled by CommandInput
+
+      const key = hotkeyToString(combo);
+      const macro = macrosRef.current.find(
+        (m) => m.enabled && hotkeyToString(m.hotkey) === key
+      );
+      if (!macro) return;
+
+      e.preventDefault();
+      e.stopPropagation();
+      fireQuickButtonRef.current(macro.body, macro.bodyMode);
+    };
+    window.addEventListener('keydown', handler, true);
+    return () => window.removeEventListener('keydown', handler, true);
+  }, []);
 
   // Post-sync commands
   const postSyncEnabledRef = useLatestRef(postSyncEnabled);
@@ -2576,6 +2654,15 @@ function AppMain() {
                                         <SlideOut panel="timers">
                                           <TimerPanel onClose={closePanel} />
                                         </SlideOut>
+                                        <SlideOut panel="macros">
+                                          <MacroPanel
+                                            onClose={closePanel}
+                                            macros={macros}
+                                            onAdd={addMacro}
+                                            onUpdate={updateMacro}
+                                            onDelete={deleteMacro}
+                                          />
+                                        </SlideOut>
                                         <SlideOut panel="variables">
                                           <VariablePanel onClose={closePanel} />
                                         </SlideOut>
@@ -2602,6 +2689,9 @@ function AppMain() {
                                         </SlideOut>
                                         <SlideOut panel="who" pinnable="who">
                                           <WhoPanel mode="slideout" />
+                                        </SlideOut>
+                                        <SlideOut panel="logs">
+                                          <LogViewerPanel onClose={closePanel} />
                                         </SlideOut>
                                         <SlideOut panel="help">
                                           <HelpPanel onClose={closePanel} />

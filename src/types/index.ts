@@ -19,6 +19,8 @@ export type Panel =
   | 'currency'
   | 'who'
   | 'babel'
+  | 'logs'
+  | 'macros'
   | 'help';
 
 export type PinnablePanel =
@@ -45,6 +47,8 @@ export interface PinnablePanelProps {
 
 export type { SkillTier, SkillRecord, CharacterSkillFile, SkillMatchResult } from './skills';
 export type { QuickButtonId, QuickButton } from './quickButton';
+export type { MacroId, Macro, HotkeyCombo } from './macro';
+export { formatHotkey, hotkeyToString, hotkeyFromEvent, isReservedHotkey, isNumpadKey } from './macro';
 
 export interface MudOutputPayload {
   data: string;

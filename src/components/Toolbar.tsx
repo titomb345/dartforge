@@ -20,6 +20,8 @@ import {
   BabelIcon,
   HelpIcon,
   CameraIcon,
+  LogIcon,
+  MacroIcon,
 } from './icons';
 import { getPlatform } from '../lib/platform';
 import { cn } from '../lib/cn';
@@ -159,6 +161,15 @@ export function Toolbar({ connected, onReconnect, onDisconnect, onScreenshot }: 
           pinned={isPinned('babel')}
           onClick={() => togglePanel('babel')}
         />
+        <IconButton
+          icon={<LogIcon />}
+          title="Session Logs"
+          accent="#94a3b8"
+          helpId="toolbar-logs"
+          panelId="logs"
+          toggled={activePanel === 'logs'}
+          onClick={() => togglePanel('logs')}
+        />
         <div className="w-px h-[18px] bg-border-dim mx-1.5" />
         <IconButton
           icon={<AliasIcon />}
@@ -195,6 +206,15 @@ export function Toolbar({ connected, onReconnect, onDisconnect, onScreenshot }: 
           panelId="variables"
           toggled={activePanel === 'variables'}
           onClick={() => togglePanel('variables')}
+        />
+        <IconButton
+          icon={<MacroIcon />}
+          title="Macros"
+          accent="#e8a849"
+          helpId="toolbar-macros"
+          panelId="macros"
+          toggled={activePanel === 'macros'}
+          onClick={() => togglePanel('macros')}
         />
         <IconButton
           icon={<CodeIcon />}

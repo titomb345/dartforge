@@ -249,6 +249,9 @@ const MIGRATIONS: MigrationFn[] = [
     // Select-on-send (keep last command selected in input after sending)
     if (!('selectOnSend' in data)) data.selectOnSend = false;
 
+    // Macros (keyboard hotkey → command sequences)
+    if (!('macros' in data)) data.macros = [];
+
     return data;
   },
 ];

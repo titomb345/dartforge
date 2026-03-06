@@ -88,6 +88,12 @@ export const HELP_CATEGORIES: HelpCategory[] = [
           'When the window is too small to fit pinned panels and the terminal, panels automatically collapse into a narrow icon strip. Click an icon to open that panel as an overlay. Your pinned layout is preserved — panels restore to full size when the window grows.',
       },
       {
+        title: 'Session Logs',
+        description:
+          'Browse and search past session logs. Select a session from the dropdown to view it, or search across all logs with text or regex. Filter by commands vs output. Delete old sessions you no longer need.',
+        helpId: 'toolbar-logs',
+      },
+      {
         title: 'Chat Panel',
         description:
           'Filtered chat with color-coded message types (Say, Shout, OOC, Tell, SZ). Mute senders, identify anonymous tells, and toggle sound alerts.',
@@ -139,6 +145,12 @@ export const HELP_CATEGORIES: HelpCategory[] = [
         description:
           'Create repeating timers that execute commands at set intervals. Supports text mode (command separator, /delay, /echo, /spam, /var) or JavaScript script mode. Toggle "Show countdown in status bar" per timer to control which countdowns appear next to the command input. Character-scoped or Global.',
         helpId: 'toolbar-timers',
+      },
+      {
+        title: 'Macros Panel',
+        description:
+          'Bind keyboard hotkeys to command sequences or scripts. Press Ctrl+1, Alt+F5, or any key combo to instantly fire commands without typing. Supports the same command and script modes as quick buttons, aliases, and triggers.',
+        helpId: 'toolbar-macros',
       },
       {
         title: 'Global Script',
@@ -309,6 +321,12 @@ export const HELP_CATEGORIES: HelpCategory[] = [
         description:
           'Capture the visible terminal as a styled PNG with macOS-style window chrome and copy it to your clipboard. Perfect for sharing in Discord.',
         kbd: ['Ctrl', 'Shift', 'S'],
+      },
+      {
+        title: 'Custom Macros',
+        description:
+          'Bind any key combo (Ctrl+1-0, Alt+1-0, F1-F12, etc.) to commands or scripts via the Macros panel. Macros fire from anywhere in the app.',
+        helpId: 'toolbar-macros',
       },
     ],
   },
