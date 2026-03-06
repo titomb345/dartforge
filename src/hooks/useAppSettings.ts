@@ -147,6 +147,9 @@ export function useAppSettings() {
   // Command separator
   const [commandSeparator, setCommandSeparator] = useState(';;');
 
+  // Select-on-send
+  const [selectOnSend, setSelectOnSend] = useState(false);
+
   // Post-sync commands
   const [postSyncEnabled, setPostSyncEnabled] = useState(false);
   const [postSyncCommands, setPostSyncCommands] = useState('');
@@ -317,6 +320,9 @@ export function useAppSettings() {
       if (savedCommandSeparator != null && savedCommandSeparator.length > 0)
         setCommandSeparator(savedCommandSeparator);
 
+      const savedSelectOnSend = await dataStore.get<boolean>(SETTINGS_FILE, 'selectOnSend');
+      if (savedSelectOnSend != null) setSelectOnSend(savedSelectOnSend);
+
       const savedPostSyncEnabled = await dataStore.get<boolean>(SETTINGS_FILE, 'postSyncEnabled');
       if (savedPostSyncEnabled != null) setPostSyncEnabled(savedPostSyncEnabled);
       const savedPostSyncCommands = await dataStore.get<string>(SETTINGS_FILE, 'postSyncCommands');
@@ -448,6 +454,8 @@ export function useAppSettings() {
       updateAutoConcAction: make(setAutoConcAction, 'autoConcAction'),
       // Command separator
       updateCommandSeparator: make(setCommandSeparator, 'commandSeparator'),
+      // Select-on-send
+      updateSelectOnSend: make(setSelectOnSend, 'selectOnSend'),
     };
   }, [persist]);
 
@@ -599,6 +607,8 @@ export function useAppSettings() {
     autoConcAction,
     // Command separator
     commandSeparator,
+    // Select-on-send
+    selectOnSend,
     // Special updaters (have extra logic beyond simple set+persist)
     updateAlignmentTrackingEnabled,
     updateAutoLoginCharacters,

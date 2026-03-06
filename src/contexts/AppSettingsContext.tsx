@@ -109,6 +109,9 @@ export interface AppSettingsState {
   // Command separator
   commandSeparator: string;
   updateCommandSeparator: (v: string) => void;
+  // Select-on-send
+  selectOnSend: boolean;
+  updateSelectOnSend: (v: boolean) => void;
   // Character switching (provided by App.tsx)
   onSwitchCharacter?: () => void;
   connected?: boolean;

@@ -168,6 +168,8 @@ export function SettingsPanel({ onClose }: { onClose: () => void }) {
     updateAntiSpamEnabled,
     commandEchoEnabled,
     updateCommandEchoEnabled,
+    selectOnSend,
+    updateSelectOnSend,
     commandSeparator,
     updateCommandSeparator,
     showTimerBadges,
@@ -581,6 +583,17 @@ export function SettingsPanel({ onClose }: { onClose: () => void }) {
           </FieldRow>
           <div className="text-[9px] text-text-dim font-mono leading-relaxed mt-1">
             Show your sent commands as dimmed lines in the terminal.
+          </div>
+          <FieldRow label="Select on send">
+            <ToggleSwitch
+              checked={selectOnSend}
+              onChange={updateSelectOnSend}
+              accent="#50fa7b"
+            />
+          </FieldRow>
+          <div className="text-[9px] text-text-dim font-mono leading-relaxed mt-1">
+            After sending a command, keep it selected in the input instead of clearing. Type to
+            replace, or press Enter to resend.
           </div>
           <FieldRow label="Command separator">
             <MudInput

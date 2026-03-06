@@ -132,7 +132,8 @@ export const CommandInput = forwardRef<HTMLTextAreaElement, CommandInputProps>(
       announceMode,
       onStopAnnounce,
     } = useCommandInputContext();
-    const { commandHistorySize, numpadMappings, showTimerBadges } = useAppSettingsContext();
+    const { commandHistorySize, numpadMappings, showTimerBadges, selectOnSend } =
+      useAppSettingsContext();
     const { active: spotlightActive } = useSpotlight();
     const numpadRef = useRef(numpadMappings);
     numpadRef.current = numpadMappings;
@@ -232,8 +233,13 @@ export const CommandInput = forwardRef<HTMLTextAreaElement, CommandInputProps>(
       historyIndexRef.current = -1;
       searchPrefixRef.current = '';
       tabStateRef.current = null;
-      setValue('');
-    }, [value, onSend, passwordMode, skipHistory, commandHistorySize]);
+      if (selectOnSend && !passwordMode && !skipHistory) {
+        // Keep text but select it all — typing replaces, Enter resends
+        requestAnimationFrame(() => internalRef.current?.select());
+      } else {
+        setValue('');
+      }
+    }, [value, onSend, passwordMode, skipHistory, commandHistorySize, selectOnSend]);
 
     const handleKeyDown = useCallback(
       (e: KeyboardEvent<HTMLTextAreaElement>) => {

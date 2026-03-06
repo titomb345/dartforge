@@ -7,7 +7,7 @@ import type { DataStore } from '../contexts/DataStoreContext';
  * baseline. Existing beta users (version > 1) are normalized to 1 so
  * future migrations apply correctly to everyone.
  */
-export const CURRENT_VERSION = 16;
+export const CURRENT_VERSION = 17;
 
 /** Raw store contents — all keys are optional since older stores may lack them. */
 export type StoreData = Record<string, unknown>;
@@ -245,6 +245,11 @@ const MIGRATIONS: MigrationFn[] = [
   // v15 → v16: Configurable command separator (existing users keep `;` for backward compat)
   (data) => {
     if (!('commandSeparator' in data)) data.commandSeparator = ';';
+    return data;
+  },
+  // v16 → v17: Select-on-send (keep last command selected in input after sending)
+  (data) => {
+    if (!('selectOnSend' in data)) data.selectOnSend = false;
     return data;
   },
 ];

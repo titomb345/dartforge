@@ -11,6 +11,9 @@ The `[Unreleased]` header controls automatic version bumping on merge:
 
 ## [Unreleased-minor]
 
+### Added
+- "Select on send" setting: after sending a command, keeps it highlighted in the input instead of clearing — type to replace or press Enter to resend (off by default, toggle in Settings)
+
 ### Changed
 - Quick buttons are now drag-and-droppable for reordering (replaces right-click Move Left/Right)
 - Allocations panel compacted for narrow pinned widths: cells shrunk from 36px to 26px, null/arcane columns removed (PointBar still shows distribution)
