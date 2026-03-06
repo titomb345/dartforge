@@ -1,13 +1,18 @@
 import type { DataStore } from '../contexts/DataStoreContext';
 
 /**
- * Settings schema version.
+ * Settings schema version — one version per release.
  *
- * v1.0 launch reset: collapsed 20 pre-release migrations into a single
- * baseline. Existing beta users (version > 1) are normalized to 1 so
- * future migrations apply correctly to everyone.
+ * v0 → v1: v1.0 launch baseline
+ * v1 → v2: v1.3 release (alignment, post-sync, timers, auto-login, action blocking,
+ *           who refresh, gag groups, announce, caster weight, auto-conc, chat, map)
+ * v2 → v3: v1.4 release (numpad operator keys, command separator)
+ * v3 → v4: v1.5 release (select-on-send)
+ *
+ * Prior to this collapse, each feature had its own version bump (up to v17).
+ * normalizeVersion() maps those old version numbers to the collapsed scheme.
  */
-export const CURRENT_VERSION = 17;
+export const CURRENT_VERSION = 4;
 
 /** Raw store contents — all keys are optional since older stores may lack them. */
 export type StoreData = Record<string, unknown>;
@@ -15,11 +20,24 @@ export type StoreData = Record<string, unknown>;
 type MigrationFn = (data: StoreData) => StoreData;
 
 /**
+ * Map old per-feature version numbers to the collapsed per-release scheme.
+ * All migrations use `if (!('key' in data))` guards, so re-running a
+ * collapsed migration on a user who had some (but not all) of its keys
+ * is safe — it only fills in the missing ones.
+ */
+function normalizeVersion(v: number): number {
+  if (v <= 1) return v; // v0 = fresh install, v1 = v1.0 user
+  if (v <= 13) return 1; // dev builds between v1.0–v1.3: re-run v1.3 migration (idempotent)
+  if (v <= 15) return 2; // v14 = v1.3 user, v15 = dev build before v1.4
+  if (v === 16) return 3; // v1.4 user
+  return CURRENT_VERSION; // v17+ = already current or beta normalization
+}
+
+/**
  * Ordered migration functions. MIGRATIONS[n] migrates version n → n+1.
  */
 const MIGRATIONS: MigrationFn[] = [
-  // v0 → v1: Baseline defaults for v1.0 launch
-  // Sets all settings to their default values if not already present.
+  // ── v0 → v1: v1.0 launch baseline ──────────────────────────────────
   (data) => {
     // Skill tracking
     if (!('activeCharacter' in data)) data.activeCharacter = null;
@@ -82,7 +100,6 @@ const MIGRATIONS: MigrationFn[] = [
     // Aliases & triggers
     if (!('enableSpeedwalk' in data)) data.enableSpeedwalk = true;
     if (!('triggersEnabled' in data)) data.triggersEnabled = true;
-    // Clean up legacy key if present
     delete data.globalAliases;
 
     // Anti-idle
@@ -142,48 +159,37 @@ const MIGRATIONS: MigrationFn[] = [
 
     return data;
   },
-  // v1 → v2: Alignment tracking
+
+  // ── v1 → v2: v1.3 release ──────────────────────────────────────────
   (data) => {
+    // Alignment tracking
     if (!('alignmentTrackingEnabled' in data)) data.alignmentTrackingEnabled = false;
     if (!('alignmentTrackingMinutes' in data)) data.alignmentTrackingMinutes = 5;
-    return data;
-  },
-  // v2 → v3: Post-sync commands
-  (data) => {
+
+    // Post-sync commands
     if (!('postSyncEnabled' in data)) data.postSyncEnabled = false;
     if (!('postSyncCommands' in data)) data.postSyncCommands = '';
-    return data;
-  },
-  // v3 → v4: Timers
-  (data) => {
+
+    // Timers
     if (!('timersEnabled' in data)) data.timersEnabled = true;
     if (!('showTimerBadges' in data)) data.showTimerBadges = true;
-    return data;
-  },
-  // v4 → v5: Auto-login character profiles (passwords stored in OS keyring, not here)
-  (data) => {
+
+    // Auto-login character profiles (passwords stored in OS keyring)
     if (!('autoLoginEnabled' in data)) data.autoLoginEnabled = false;
     if (!('autoLoginActiveSlot' in data)) data.autoLoginActiveSlot = 0;
     if (!('autoLoginNames' in data)) data.autoLoginNames = [null, null];
     if (!('lastLoginTimestamp' in data)) data.lastLoginTimestamp = null;
     if (!('lastLoginSlot' in data)) data.lastLoginSlot = null;
-    // Clean up legacy key if it was stored during development
     delete data.autoLoginCharacters;
-    return data;
-  },
-  // v5 → v6: Action blocking / command queueing
-  (data) => {
+
+    // Action blocking / command queueing
     if (!('actionBlockingEnabled' in data)) data.actionBlockingEnabled = true;
-    return data;
-  },
-  // v6 → v7: Who list auto-refresh
-  (data) => {
+
+    // Who list auto-refresh
     if (!('whoAutoRefreshEnabled' in data)) data.whoAutoRefreshEnabled = true;
     if (!('whoRefreshMinutes' in data)) data.whoRefreshMinutes = 5;
-    return data;
-  },
-  // v7 → v8: Gag groups
-  (data) => {
+
+    // Gag groups
     if (!('gagGroups' in data)) {
       data.gagGroups = {
         pets: false,
@@ -195,44 +201,35 @@ const MIGRATIONS: MigrationFn[] = [
         quests: false,
       };
     }
-    return data;
-  },
-  // v8 → v9: Who list font size
-  (data) => {
+
+    // Who list font size
     if (!('whoFontSize' in data)) data.whoFontSize = 11;
-    return data;
-  },
-  // v9 → v10: Announce system
-  (data) => {
+
+    // Announce system
     if (!('announceMode' in data)) data.announceMode = 'off';
     if (!('announcePetMode' in data)) data.announcePetMode = 'off';
-    return data;
-  },
-  // v10 → v11: Auto-caster weight mode settings
-  (data) => {
+
+    // Auto-caster weight mode
     if (!('casterWeightItem' in data)) data.casterWeightItem = 'tallow';
     if (!('casterWeightContainer' in data)) data.casterWeightContainer = 'bin';
     if (!('casterWeightAdjustUp' in data)) data.casterWeightAdjustUp = 10;
     if (!('casterWeightAdjustDown' in data)) data.casterWeightAdjustDown = 5;
-    return data;
-  },
-  // v11 → v12: Auto-conc action
-  (data) => {
+
+    // Auto-conc action
     if (!('autoConcAction' in data)) data.autoConcAction = '';
-    return data;
-  },
-  // v12 → v13: Hide own chat messages
-  (data) => {
+
+    // Hide own chat messages
     if (!('chatHideOwnMessages' in data)) data.chatHideOwnMessages = true;
-    return data;
-  },
-  // v13 → v14: Map fingerprint schema
-  (data) => {
+
+    // Map fingerprint schema upgrade
     data.mapSchemaVersion = 3;
+
     return data;
   },
-  // v14 → v15: Add configurable numpad operator keys
+
+  // ── v2 → v3: v1.4 release ──────────────────────────────────────────
   (data) => {
+    // Add configurable numpad operator keys
     const mappings = data.numpadMappings as Record<string, string> | undefined;
     if (mappings && typeof mappings === 'object') {
       if (!('NumpadDivide' in mappings)) mappings.NumpadDivide = '/counter info';
@@ -240,16 +237,18 @@ const MIGRATIONS: MigrationFn[] = [
       if (!('NumpadSubtract' in mappings)) mappings.NumpadSubtract = '/movemode';
       if (!('NumpadDecimal' in mappings)) mappings.NumpadDecimal = 'survey';
     }
-    return data;
-  },
-  // v15 → v16: Configurable command separator (existing users keep `;` for backward compat)
-  (data) => {
+
+    // Configurable command separator (existing users keep `;` for backward compat)
     if (!('commandSeparator' in data)) data.commandSeparator = ';';
+
     return data;
   },
-  // v16 → v17: Select-on-send (keep last command selected in input after sending)
+
+  // ── v3 → v4: v1.5 release ──────────────────────────────────────────
   (data) => {
+    // Select-on-send (keep last command selected in input after sending)
     if (!('selectOnSend' in data)) data.selectOnSend = false;
+
     return data;
   },
 ];
@@ -261,15 +260,8 @@ const SETTINGS_FILE = 'settings.json';
  * then write the updated `_version` back.
  */
 export async function migrateSettings(dataStore: DataStore): Promise<void> {
-  const version = (await dataStore.get<number>(SETTINGS_FILE, '_version')) ?? 0;
-
-  // v1.0 reset: beta users had version 2–20 from pre-release migrations.
-  // Normalize them to CURRENT_VERSION so future migrations apply correctly.
-  if (version > CURRENT_VERSION) {
-    await dataStore.set(SETTINGS_FILE, '_version', CURRENT_VERSION);
-    await dataStore.save(SETTINGS_FILE);
-    return; // existing user, already has all settings
-  }
+  const rawVersion = (await dataStore.get<number>(SETTINGS_FILE, '_version')) ?? 0;
+  const version = normalizeVersion(rawVersion);
 
   if (version >= CURRENT_VERSION) return;
 

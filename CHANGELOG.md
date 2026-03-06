@@ -20,6 +20,7 @@ The `[Unreleased]` header controls automatic version bumping on merge:
 - Counter panel compacted: merged Total and Elapsed into one line, removed divider, tightened padding throughout
 - Chat panel: tightened padding on filter and toggle rows
 - DRY: extracted shared `cleanLine`/`stripScorePrefix` utilities — replaced 11 duplicate prompt-stripping regex patterns across all pattern matchers
+- Settings migrations collapsed from 17 per-feature steps to 4 per-release steps with version normalization
 - Performance: memoized regex compilation in variable engine — avoids recompiling on every command
 - Performance: optimized Rust connection hot path — reduced allocations in command sending, TCP read loop, and ANSI processing (fast-path UTF-8 conversion, pre-allocated response buffers, consolidated lock acquisition)
 
