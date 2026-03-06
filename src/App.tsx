@@ -116,6 +116,7 @@ import {
 import { useAppSettings } from './hooks/useAppSettings';
 import type { AutoLoginConfig } from './hooks/useMudConnection';
 import { useCommandHistory } from './hooks/useCommandHistory';
+import { usePersistedCRUD } from './hooks/usePersistedCRUD';
 import { useTimerEngines } from './hooks/useTimerEngines';
 import { CommandInputProvider } from './contexts/CommandInputContext';
 import { TerminalThemeProvider } from './contexts/TerminalThemeContext';
@@ -184,7 +185,7 @@ function AppMain() {
   const debugModeRef = useRef(false);
   const [debugMode, setDebugMode] = useState(false);
   const [activePanel, setActivePanel] = useState<Panel | null>(null);
-  const togglePanel = (panel: Panel) => setActivePanel((v) => (v === panel ? null : panel));
+  const togglePanel = useCallback((panel: Panel) => setActivePanel((v) => (v === panel ? null : panel)), []);
   const closePanel = useCallback(() => setActivePanel(null), []);
   const writeToTerm = useCallback(
     (text: string) => {
@@ -214,11 +215,6 @@ function AppMain() {
   const [loggedIn, setLoggedIn] = useState(false);
   const statusBarRef = useRef<HTMLDivElement | null>(null);
   const [autoCompact, setAutoCompact] = useState(false);
-  const [quickButtons, setQuickButtons] = useState<QuickButton[]>([]);
-  const quickButtonsLoadedRef = useRef(false);
-  const [macros, setMacros] = useState<Macro[]>([]);
-  const macrosLoadedRef = useRef(false);
-
   const appSettings = useAppSettings();
   const {
     antiIdleEnabled,
@@ -254,6 +250,8 @@ function AppMain() {
   const dataStore = useDataStore();
   const settingsLoadedRef = useRef(false);
   const { commandHistory, handleHistoryChange } = useCommandHistory(dataStore);
+  const quickButtonsCRUD = usePersistedCRUD<QuickButton>(dataStore, 'quickButtons');
+  const macrosCRUD = usePersistedCRUD<Macro>(dataStore, 'macros');
 
   // Load compact mode + filter flags + panel layout from settings (with validation)
   useEffect(() => {
@@ -326,16 +324,8 @@ function AppMain() {
       if (Array.isArray(savedStatusOrder) && savedStatusOrder.length > 0) {
         setStatusBarOrder(savedStatusOrder);
       }
-      const savedButtons = await dataStore.get<QuickButton[]>('settings.json', 'quickButtons');
-      if (Array.isArray(savedButtons)) {
-        setQuickButtons(savedButtons);
-      }
-      quickButtonsLoadedRef.current = true;
-      const savedMacros = await dataStore.get<Macro[]>('settings.json', 'macros');
-      if (Array.isArray(savedMacros)) {
-        setMacros(savedMacros);
-      }
-      macrosLoadedRef.current = true;
+      await quickButtonsCRUD.load();
+      await macrosCRUD.load();
 
       panelLayoutLoadedRef.current = true;
       settingsLoadedRef.current = true;
@@ -477,7 +467,7 @@ function AppMain() {
 
   const { theme, updateColor, resetColor, display, updateDisplay, resetDisplay, resetAll } =
     useThemeColors();
-  const xtermTheme = buildXtermTheme(theme);
+  const xtermTheme = useMemo(() => buildXtermTheme(theme), [theme]);
 
   // Output processor for skill detection
   const processorRef = useRef<OutputProcessor | null>(null);
@@ -1231,74 +1221,7 @@ function AppMain() {
     [dataStore]
   );
 
-  // Quick buttons — persist + CRUD
-  const persistButtons = useCallback(
-    (next: QuickButton[]) => {
-      setQuickButtons(next);
-      dataStore.set('settings.json', 'quickButtons', next).catch(console.error);
-    },
-    [dataStore]
-  );
-
-  const addQuickButton = useCallback(
-    (data: Omit<QuickButton, 'id'>) => {
-      const btn: QuickButton = { ...data, id: crypto.randomUUID() };
-      persistButtons([...quickButtons, btn]);
-    },
-    [quickButtons, persistButtons]
-  );
-
-  const updateQuickButton = useCallback(
-    (id: string, data: Partial<QuickButton>) => {
-      persistButtons(quickButtons.map((b) => (b.id === id ? { ...b, ...data } : b)));
-    },
-    [quickButtons, persistButtons]
-  );
-
-  const deleteQuickButton = useCallback(
-    (id: string) => {
-      persistButtons(quickButtons.filter((b) => b.id !== id));
-    },
-    [quickButtons, persistButtons]
-  );
-
-  const reorderQuickButton = useCallback(
-    (newButtons: QuickButton[]) => {
-      persistButtons(newButtons);
-    },
-    [persistButtons]
-  );
-
-  // Macros — persist + CRUD
-  const persistMacros = useCallback(
-    (next: Macro[]) => {
-      setMacros(next);
-      dataStore.set('settings.json', 'macros', next).catch(console.error);
-    },
-    [dataStore]
-  );
-
-  const addMacro = useCallback(
-    (data: Omit<Macro, 'id'>) => {
-      const m: Macro = { ...data, id: crypto.randomUUID() };
-      persistMacros([...macros, m]);
-    },
-    [macros, persistMacros]
-  );
-
-  const updateMacro = useCallback(
-    (id: string, data: Partial<Macro>) => {
-      persistMacros(macros.map((m) => (m.id === id ? { ...m, ...data } : m)));
-    },
-    [macros, persistMacros]
-  );
-
-  const deleteMacro = useCallback(
-    (id: string) => {
-      persistMacros(macros.filter((m) => m.id !== id));
-    },
-    [macros, persistMacros]
-  );
+  // Quick buttons and macros CRUD managed by usePersistedCRUD hooks (declared above)
 
   const fireQuickButton = useCallback(
     async (body: string, bodyMode: 'commands' | 'script') => {
@@ -1324,7 +1247,7 @@ function AppMain() {
   );
 
   // Global macro hotkey listener
-  const macrosRef = useLatestRef(macros);
+  const macrosRef = useLatestRef(macrosCRUD.items);
   const fireQuickButtonRef = useLatestRef(fireQuickButton);
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
@@ -1834,12 +1757,12 @@ function AppMain() {
                                           </div>
                                           {/* Quick buttons */}
                                           <QuickButtonBar
-                                            buttons={quickButtons}
+                                            buttons={quickButtonsCRUD.items}
                                             onFire={fireQuickButton}
-                                            onAdd={addQuickButton}
-                                            onUpdate={updateQuickButton}
-                                            onDelete={deleteQuickButton}
-                                            onReorder={reorderQuickButton}
+                                            onAdd={quickButtonsCRUD.add}
+                                            onUpdate={quickButtonsCRUD.update}
+                                            onDelete={quickButtonsCRUD.remove}
+                                            onReorder={quickButtonsCRUD.reorder}
                                           />
                                           {/* Status bar + command input */}
                                           <div className="rounded-lg bg-bg-primary overflow-hidden shrink-0">
@@ -1970,10 +1893,10 @@ function AppMain() {
                                         <SlideOut panel="macros">
                                           <MacroPanel
                                             onClose={closePanel}
-                                            macros={macros}
-                                            onAdd={addMacro}
-                                            onUpdate={updateMacro}
-                                            onDelete={deleteMacro}
+                                            macros={macrosCRUD.items}
+                                            onAdd={macrosCRUD.add}
+                                            onUpdate={macrosCRUD.update}
+                                            onDelete={macrosCRUD.remove}
                                           />
                                         </SlideOut>
                                         <SlideOut panel="variables">

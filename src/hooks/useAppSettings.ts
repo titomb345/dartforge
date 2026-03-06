@@ -182,167 +182,107 @@ export function useAppSettings() {
     }
   }, []);
 
-  // Load from settings
+  // Load from settings — batch-load helper avoids repetitive get→set boilerplate
   useEffect(() => {
     if (!dataStore.ready) return;
     (async () => {
-      // Existing settings
-      const savedAntiIdleEnabled = await dataStore.get<boolean>(SETTINGS_FILE, 'antiIdleEnabled');
-      if (savedAntiIdleEnabled != null) setAntiIdleEnabled(savedAntiIdleEnabled);
-      const savedAntiIdleCommand = await dataStore.get<string>(SETTINGS_FILE, 'antiIdleCommand');
-      if (savedAntiIdleCommand != null) setAntiIdleCommand(savedAntiIdleCommand);
-      const savedAntiIdleMinutes = await dataStore.get<number>(SETTINGS_FILE, 'antiIdleMinutes');
-      if (savedAntiIdleMinutes != null) setAntiIdleMinutes(savedAntiIdleMinutes);
-      const savedAlignmentEnabled = await dataStore.get<boolean>(
-        SETTINGS_FILE,
-        'alignmentTrackingEnabled'
-      );
-      if (savedAlignmentEnabled != null) setAlignmentTrackingEnabled(savedAlignmentEnabled);
-      const savedAlignmentMinutes = await dataStore.get<number>(
-        SETTINGS_FILE,
-        'alignmentTrackingMinutes'
-      );
-      if (savedAlignmentMinutes != null) setAlignmentTrackingMinutes(savedAlignmentMinutes);
-      const savedBoardDates = await dataStore.get<boolean>(SETTINGS_FILE, 'boardDatesEnabled');
-      if (savedBoardDates != null) setBoardDatesEnabled(savedBoardDates);
-      const savedStripPrompts = await dataStore.get<boolean>(SETTINGS_FILE, 'stripPromptsEnabled');
-      if (savedStripPrompts != null) setStripPromptsEnabled(savedStripPrompts);
-      const savedAntiSpam = await dataStore.get<boolean>(SETTINGS_FILE, 'antiSpamEnabled');
-      if (savedAntiSpam != null) setAntiSpamEnabled(savedAntiSpam);
-
-      // New settings
-      const savedScrollback = await dataStore.get<number>(SETTINGS_FILE, 'terminalScrollback');
-      if (savedScrollback != null && savedScrollback >= 1000)
-        setTerminalScrollback(savedScrollback);
-      const savedHistorySize = await dataStore.get<number>(SETTINGS_FILE, 'commandHistorySize');
-      if (savedHistorySize != null && savedHistorySize >= 50)
-        setCommandHistorySize(savedHistorySize);
-      const savedChatHistorySize = await dataStore.get<number>(SETTINGS_FILE, 'chatHistorySize');
-      if (savedChatHistorySize != null && savedChatHistorySize >= 50)
-        setChatHistorySize(savedChatHistorySize);
-      const savedTsFormat = await dataStore.get<TimestampFormat>(SETTINGS_FILE, 'timestampFormat');
-      if (savedTsFormat === '12h' || savedTsFormat === '24h') setTimestampFormat(savedTsFormat);
-      const savedEcho = await dataStore.get<boolean>(SETTINGS_FILE, 'commandEchoEnabled');
-      if (savedEcho != null) setCommandEchoEnabled(savedEcho);
-      const savedTimerBadges = await dataStore.get<boolean>(SETTINGS_FILE, 'showTimerBadges');
-      if (savedTimerBadges != null) setShowTimerBadges(savedTimerBadges);
-      const savedLogging = await dataStore.get<boolean>(SETTINGS_FILE, 'sessionLoggingEnabled');
-      if (savedLogging != null) setSessionLoggingEnabled(savedLogging);
-      const savedNumpad = await dataStore.get<Record<string, string>>(
-        SETTINGS_FILE,
-        'numpadMappings'
-      );
-      if (savedNumpad != null && typeof savedNumpad === 'object' && !Array.isArray(savedNumpad)) {
-        setNumpadMappings(savedNumpad);
+      /** Load a single setting: get from store, apply setter if valid. */
+      async function load<T>(
+        key: string,
+        setter: React.Dispatch<React.SetStateAction<T>>,
+        validate?: (v: T) => boolean,
+      ): Promise<void> {
+        const saved = await dataStore.get<T>(SETTINGS_FILE, key);
+        if (saved != null && (validate ? validate(saved as T) : true)) setter(saved as T);
       }
-      const savedAutoBackup = await dataStore.get<boolean>(SETTINGS_FILE, 'autoBackupEnabled');
-      if (savedAutoBackup != null) setAutoBackupEnabled(savedAutoBackup);
-      const savedNotifications = await dataStore.get<ChatFilters>(
-        SETTINGS_FILE,
-        'chatNotifications'
-      );
-      if (
-        savedNotifications != null &&
-        typeof savedNotifications === 'object' &&
-        !Array.isArray(savedNotifications)
-      ) {
-        setChatNotifications(savedNotifications);
+
+      /** Load a setting where `undefined` means "not set" but `null` is a valid value. */
+      async function loadNullable<T>(
+        key: string,
+        setter: React.Dispatch<React.SetStateAction<T>>,
+      ): Promise<void> {
+        const saved = await dataStore.get<T>(SETTINGS_FILE, key);
+        if (saved !== undefined) setter(saved as T);
       }
-      const savedCustomChime1 = await dataStore.get<string | null>(SETTINGS_FILE, 'customChime1');
-      if (savedCustomChime1 !== undefined) setCustomChime1(savedCustomChime1);
-      const savedCustomChime2 = await dataStore.get<string | null>(SETTINGS_FILE, 'customChime2');
-      if (savedCustomChime2 !== undefined) setCustomChime2(savedCustomChime2);
-      const savedHotThreshold = await dataStore.get<number>(SETTINGS_FILE, 'counterHotThreshold');
-      if (savedHotThreshold != null && savedHotThreshold >= 0)
-        setCounterHotThreshold(savedHotThreshold);
-      const savedColdThreshold = await dataStore.get<number>(SETTINGS_FILE, 'counterColdThreshold');
-      if (savedColdThreshold != null && savedColdThreshold >= 0)
-        setCounterColdThreshold(savedColdThreshold);
-      const savedHasSeenGuide = await dataStore.get<boolean>(SETTINGS_FILE, 'hasSeenGuide');
-      if (savedHasSeenGuide != null) setHasSeenGuide(savedHasSeenGuide);
-      const savedActionBlocking = await dataStore.get<boolean>(
-        SETTINGS_FILE,
-        'actionBlockingEnabled'
-      );
-      if (savedActionBlocking != null) setActionBlockingEnabled(savedActionBlocking);
-      const savedWhoAutoRefresh = await dataStore.get<boolean>(
-        SETTINGS_FILE,
-        'whoAutoRefreshEnabled'
-      );
-      if (savedWhoAutoRefresh != null) setWhoAutoRefreshEnabled(savedWhoAutoRefresh);
-      const savedWhoMinutes = await dataStore.get<number>(SETTINGS_FILE, 'whoRefreshMinutes');
-      if (savedWhoMinutes != null && savedWhoMinutes >= 1) setWhoRefreshMinutes(savedWhoMinutes);
-      const savedWhoFontSize = await dataStore.get<number>(SETTINGS_FILE, 'whoFontSize');
-      if (savedWhoFontSize != null && savedWhoFontSize >= 8 && savedWhoFontSize <= 18)
-        setWhoFontSize(savedWhoFontSize);
-      const savedChatFontSize = await dataStore.get<number>(SETTINGS_FILE, 'chatFontSize');
-      if (savedChatFontSize != null && savedChatFontSize >= 8 && savedChatFontSize <= 18)
-        setChatFontSize(savedChatFontSize);
 
-      const savedGagGroups = await dataStore.get<GagGroupSettings>(SETTINGS_FILE, 'gagGroups');
-      if (savedGagGroups) setGagGroups(savedGagGroups);
+      /** Load an object setting with type guard. */
+      async function loadObject<T extends object>(
+        key: string,
+        setter: React.Dispatch<React.SetStateAction<T>>,
+      ): Promise<void> {
+        const saved = await dataStore.get<T>(SETTINGS_FILE, key);
+        if (saved != null && typeof saved === 'object' && !Array.isArray(saved)) setter(saved);
+      }
 
-      // Announce
-      const savedAnnounceMode = await dataStore.get<AnnounceMode>(SETTINGS_FILE, 'announceMode');
-      if (savedAnnounceMode) setAnnounceMode(savedAnnounceMode);
-      const savedAnnouncePetMode = await dataStore.get<AnnounceMode>(SETTINGS_FILE, 'announcePetMode');
-      if (savedAnnouncePetMode) setAnnouncePetMode(savedAnnouncePetMode);
+      // Boolean settings (no validation needed)
+      await load('antiIdleEnabled', setAntiIdleEnabled);
+      await load('boardDatesEnabled', setBoardDatesEnabled);
+      await load('stripPromptsEnabled', setStripPromptsEnabled);
+      await load('antiSpamEnabled', setAntiSpamEnabled);
+      await load('commandEchoEnabled', setCommandEchoEnabled);
+      await load('showTimerBadges', setShowTimerBadges);
+      await load('sessionLoggingEnabled', setSessionLoggingEnabled);
+      await load('autoBackupEnabled', setAutoBackupEnabled);
+      await load('hasSeenGuide', setHasSeenGuide);
+      await load('actionBlockingEnabled', setActionBlockingEnabled);
+      await load('whoAutoRefreshEnabled', setWhoAutoRefreshEnabled);
+      await load('babelEnabled', setBabelEnabled);
+      await load('selectOnSend', setSelectOnSend);
+      await load('postSyncEnabled', setPostSyncEnabled);
+      await load('autoLoginEnabled', setAutoLoginEnabled);
+      await load('alignmentTrackingEnabled', setAlignmentTrackingEnabled);
 
-      // Auto-caster weight mode
-      const savedCasterWeightItem = await dataStore.get<string | null>(SETTINGS_FILE, 'casterWeightItem');
-      if (savedCasterWeightItem) setCasterWeightItem(savedCasterWeightItem);
-      const savedCasterWeightContainer = await dataStore.get<string>(SETTINGS_FILE, 'casterWeightContainer');
-      if (savedCasterWeightContainer) setCasterWeightContainer(savedCasterWeightContainer);
-      const savedCasterWeightAdjustUp = await dataStore.get<number>(SETTINGS_FILE, 'casterWeightAdjustUp');
-      if (savedCasterWeightAdjustUp != null && savedCasterWeightAdjustUp >= 1)
-        setCasterWeightAdjustUp(savedCasterWeightAdjustUp);
-      const savedCasterWeightAdjustDown = await dataStore.get<number>(SETTINGS_FILE, 'casterWeightAdjustDown');
-      if (savedCasterWeightAdjustDown != null && savedCasterWeightAdjustDown >= 1)
-        setCasterWeightAdjustDown(savedCasterWeightAdjustDown);
+      // String settings
+      await load('antiIdleCommand', setAntiIdleCommand);
+      await load('autoConcAction', setAutoConcAction);
+      await load('babelLanguage', setBabelLanguage);
+      await load('postSyncCommands', setPostSyncCommands);
+      await load('casterWeightItem', setCasterWeightItem);
+      await load('casterWeightContainer', setCasterWeightContainer);
+      await load('announceMode', setAnnounceMode);
+      await load('announcePetMode', setAnnouncePetMode);
+      await load('commandSeparator', setCommandSeparator, (v) => v.length > 0);
+      await load('timestampFormat', setTimestampFormat, (v) => v === '12h' || v === '24h');
 
-      // Auto-conc
-      const savedAutoConcAction = await dataStore.get<string>(SETTINGS_FILE, 'autoConcAction');
-      if (savedAutoConcAction != null) setAutoConcAction(savedAutoConcAction);
+      // Number settings (with min/max validation)
+      await load('antiIdleMinutes', setAntiIdleMinutes);
+      await load('alignmentTrackingMinutes', setAlignmentTrackingMinutes);
+      await load('terminalScrollback', setTerminalScrollback, (v) => v >= 1000);
+      await load('commandHistorySize', setCommandHistorySize, (v) => v >= 50);
+      await load('chatHistorySize', setChatHistorySize, (v) => v >= 50);
+      await load('counterHotThreshold', setCounterHotThreshold, (v) => v >= 0);
+      await load('counterColdThreshold', setCounterColdThreshold, (v) => v >= 0);
+      await load('whoRefreshMinutes', setWhoRefreshMinutes, (v) => v >= 1);
+      await load('whoFontSize', setWhoFontSize, (v) => v >= 8 && v <= 18);
+      await load('chatFontSize', setChatFontSize, (v) => v >= 8 && v <= 18);
+      await load('babelIntervalSeconds', setBabelIntervalSeconds, (v) => v >= 10);
+      await load('casterWeightAdjustUp', setCasterWeightAdjustUp, (v) => v >= 1);
+      await load('casterWeightAdjustDown', setCasterWeightAdjustDown, (v) => v >= 1);
 
-      // Babel
-      const savedBabelEnabled = await dataStore.get<boolean>(SETTINGS_FILE, 'babelEnabled');
-      if (savedBabelEnabled != null) setBabelEnabled(savedBabelEnabled);
-      const savedBabelLanguage = await dataStore.get<string>(SETTINGS_FILE, 'babelLanguage');
-      if (savedBabelLanguage != null) setBabelLanguage(savedBabelLanguage);
-      const savedBabelInterval = await dataStore.get<number>(SETTINGS_FILE, 'babelIntervalSeconds');
-      if (savedBabelInterval != null && savedBabelInterval >= 10)
-        setBabelIntervalSeconds(savedBabelInterval);
-      const savedBabelPhrases = await dataStore.get<string[]>(SETTINGS_FILE, 'babelPhrases');
-      if (Array.isArray(savedBabelPhrases) && savedBabelPhrases.length > 0)
-        setBabelPhrases(savedBabelPhrases);
+      // Object / array settings
+      await loadObject('numpadMappings', setNumpadMappings);
+      await loadObject('chatNotifications', setChatNotifications);
+      await load('gagGroups', setGagGroups);
+      await load('babelPhrases', setBabelPhrases, (v) => Array.isArray(v) && v.length > 0);
 
-      const savedCommandSeparator = await dataStore.get<string>(SETTINGS_FILE, 'commandSeparator');
-      if (savedCommandSeparator != null && savedCommandSeparator.length > 0)
-        setCommandSeparator(savedCommandSeparator);
+      // Nullable settings (null is a valid stored value)
+      await loadNullable('customChime1', setCustomChime1);
+      await loadNullable('customChime2', setCustomChime2);
+      await loadNullable('lastLoginTimestamp', setLastLoginTimestamp);
 
-      const savedSelectOnSend = await dataStore.get<boolean>(SETTINGS_FILE, 'selectOnSend');
-      if (savedSelectOnSend != null) setSelectOnSend(savedSelectOnSend);
+      // Auto-login slot (strict enum validation)
+      await load('autoLoginActiveSlot', setAutoLoginActiveSlot, (v) => v === 0 || v === 1);
+      const savedLastLoginSlot = await dataStore.get<number | null>(SETTINGS_FILE, 'lastLoginSlot');
+      if (savedLastLoginSlot === 0 || savedLastLoginSlot === 1 || savedLastLoginSlot === null) {
+        setLastLoginSlot(savedLastLoginSlot as 0 | 1 | null);
+      }
 
-      const savedPostSyncEnabled = await dataStore.get<boolean>(SETTINGS_FILE, 'postSyncEnabled');
-      if (savedPostSyncEnabled != null) setPostSyncEnabled(savedPostSyncEnabled);
-      const savedPostSyncCommands = await dataStore.get<string>(SETTINGS_FILE, 'postSyncCommands');
-      if (savedPostSyncCommands != null) setPostSyncCommands(savedPostSyncCommands);
-
-      // Auto-login (names from settings, passwords from OS keyring)
-      const savedAutoLoginEnabled = await dataStore.get<boolean>(SETTINGS_FILE, 'autoLoginEnabled');
-      if (savedAutoLoginEnabled != null) setAutoLoginEnabled(savedAutoLoginEnabled);
-      const savedAutoLoginActiveSlot = await dataStore.get<number>(
-        SETTINGS_FILE,
-        'autoLoginActiveSlot'
-      );
-      if (savedAutoLoginActiveSlot === 0 || savedAutoLoginActiveSlot === 1)
-        setAutoLoginActiveSlot(savedAutoLoginActiveSlot);
+      // Auto-login characters (names from settings, passwords from OS keyring)
       const savedNames = await dataStore.get<[string | null, string | null]>(
         SETTINGS_FILE,
         'autoLoginNames'
       );
       if (Array.isArray(savedNames) && savedNames.length === 2) {
-        // Load passwords from keyring for each slot that has a name
         const profiles: [CharacterProfile | null, CharacterProfile | null] = [null, null];
         for (const slot of [0, 1] as const) {
           const name = savedNames[slot];
@@ -361,15 +301,6 @@ export function useAppSettings() {
           }
         }
         setAutoLoginCharacters(profiles);
-      }
-      const savedLastLoginTimestamp = await dataStore.get<number | null>(
-        SETTINGS_FILE,
-        'lastLoginTimestamp'
-      );
-      if (savedLastLoginTimestamp !== undefined) setLastLoginTimestamp(savedLastLoginTimestamp);
-      const savedLastLoginSlot = await dataStore.get<number | null>(SETTINGS_FILE, 'lastLoginSlot');
-      if (savedLastLoginSlot === 0 || savedLastLoginSlot === 1 || savedLastLoginSlot === null) {
-        setLastLoginSlot(savedLastLoginSlot as 0 | 1 | null);
       }
 
       loaded.current = true;
@@ -474,23 +405,18 @@ export function useAppSettings() {
     [persist]
   );
 
-  const updateWhoFontSize = useCallback(
-    (v: number) => {
-      const clamped = Math.max(8, Math.min(18, v));
-      setWhoFontSize(clamped);
-      persist('whoFontSize', clamped);
-    },
+  // Clamped font-size updater factory (shared logic for who/chat font sizes)
+  const makeFontSizeUpdater = useCallback(
+    (setter: React.Dispatch<React.SetStateAction<number>>, key: string) =>
+      (v: number) => {
+        const clamped = Math.max(8, Math.min(18, v));
+        setter(clamped);
+        persist(key, clamped);
+      },
     [persist]
   );
-
-  const updateChatFontSize = useCallback(
-    (v: number) => {
-      const clamped = Math.max(8, Math.min(18, v));
-      setChatFontSize(clamped);
-      persist('chatFontSize', clamped);
-    },
-    [persist]
-  );
+  const updateWhoFontSize = useMemo(() => makeFontSizeUpdater(setWhoFontSize, 'whoFontSize'), [makeFontSizeUpdater]);
+  const updateChatFontSize = useMemo(() => makeFontSizeUpdater(setChatFontSize, 'chatFontSize'), [makeFontSizeUpdater]);
 
   const updateAutoLoginCharacters = useCallback(
     (v: [CharacterProfile | null, CharacterProfile | null]) => {
@@ -531,7 +457,7 @@ export function useAppSettings() {
     [persist]
   );
 
-  return {
+  return useMemo(() => ({
     // Anti-idle
     antiIdleEnabled,
     antiIdleCommand,
@@ -614,5 +540,26 @@ export function useAppSettings() {
     updateAutoLoginCharacters,
     // All simple updaters from factory
     ...updaters,
-  };
+  }), [
+    antiIdleEnabled, antiIdleCommand, antiIdleMinutes,
+    alignmentTrackingEnabled, alignmentTrackingMinutes,
+    boardDatesEnabled, stripPromptsEnabled, antiSpamEnabled,
+    terminalScrollback, commandHistorySize, chatHistorySize,
+    timestampFormat, commandEchoEnabled, showTimerBadges, sessionLoggingEnabled,
+    numpadMappings, autoBackupEnabled,
+    chatNotifications, toggleChatNotification,
+    customChime1, customChime2,
+    counterHotThreshold, counterColdThreshold,
+    hasSeenGuide, actionBlockingEnabled,
+    whoAutoRefreshEnabled, whoRefreshMinutes, whoFontSize, updateWhoFontSize,
+    chatFontSize, updateChatFontSize,
+    gagGroups, announceMode, announcePetMode,
+    babelEnabled, babelLanguage, babelIntervalSeconds, babelPhrases,
+    postSyncEnabled, postSyncCommands,
+    autoLoginEnabled, autoLoginActiveSlot, autoLoginCharacters,
+    lastLoginTimestamp, lastLoginSlot,
+    casterWeightItem, casterWeightContainer, casterWeightAdjustUp, casterWeightAdjustDown,
+    autoConcAction, commandSeparator, selectOnSend,
+    updateAlignmentTrackingEnabled, updateAutoLoginCharacters, updaters,
+  ]);
 }
