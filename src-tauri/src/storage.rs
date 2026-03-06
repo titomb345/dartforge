@@ -4,6 +4,7 @@ use std::path::{Path, PathBuf};
 use std::sync::Mutex;
 
 use base64::Engine as _;
+use regex::Regex;
 use serde::{Deserialize, Serialize};
 use tauri::Manager;
 
@@ -549,6 +550,214 @@ pub fn remove_custom_sound(
     if let Some(path) = find_custom_sound(&sounds_dir, &chime_id) {
         fs::remove_file(&path)
             .map_err(|e| format!("Failed to remove custom sound: {e}"))?;
+    }
+    Ok(())
+}
+
+/* ── Session log viewer ──────────────────────────────────── */
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SessionLogEntry {
+    pub filename: String,
+    pub size: u64,
+    pub modified: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SessionLogPage {
+    pub lines: Vec<String>,
+    pub total_lines: usize,
+    pub has_more: bool,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SearchMatch {
+    pub filename: String,
+    pub line_number: usize,
+    pub line: String,
+    pub context_before: Vec<String>,
+    pub context_after: Vec<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SearchResult {
+    pub matches: Vec<SearchMatch>,
+    pub total_matches: usize,
+    pub truncated: bool,
+}
+
+#[tauri::command]
+pub fn list_session_logs(state: tauri::State<'_, StorageState>) -> Vec<SessionLogEntry> {
+    let sessions_dir = state.get_dir().join("sessions");
+    let Ok(entries) = fs::read_dir(&sessions_dir) else {
+        return vec![];
+    };
+
+    let mut logs: Vec<SessionLogEntry> = entries
+        .filter_map(|e| e.ok())
+        .filter(|e| {
+            e.path().is_file()
+                && e.path().extension().is_some_and(|ext| ext == "log")
+                && e.path()
+                    .file_name()
+                    .is_some_and(|n| n.to_string_lossy().starts_with("session_"))
+        })
+        .filter_map(|e| {
+            let meta = e.metadata().ok()?;
+            let modified = meta.modified().ok()?;
+            let datetime: chrono::DateTime<chrono::Local> = modified.into();
+            Some(SessionLogEntry {
+                filename: e.file_name().to_string_lossy().to_string(),
+                size: meta.len(),
+                modified: datetime.to_rfc3339(),
+            })
+        })
+        .collect();
+
+    logs.sort_by(|a, b| b.modified.cmp(&a.modified));
+    logs
+}
+
+#[tauri::command]
+pub fn read_session_log(
+    filename: String,
+    offset: usize,
+    limit: usize,
+    state: tauri::State<'_, StorageState>,
+) -> Result<SessionLogPage, String> {
+    validate_filename(&filename)?;
+    let path = state.get_dir().join("sessions").join(&filename);
+    let content =
+        fs::read_to_string(&path).map_err(|e| format!("Failed to read log: {e}"))?;
+    let all_lines: Vec<&str> = content.lines().collect();
+    let total = all_lines.len();
+    let clamped = limit.min(5000);
+    let page: Vec<String> = all_lines
+        .iter()
+        .skip(offset)
+        .take(clamped)
+        .map(|s| s.to_string())
+        .collect();
+    let has_more = offset + clamped < total;
+    Ok(SessionLogPage {
+        lines: page,
+        total_lines: total,
+        has_more,
+    })
+}
+
+#[tauri::command]
+pub fn search_session_logs(
+    query: String,
+    is_regex: bool,
+    context_lines: usize,
+    max_results: usize,
+    state: tauri::State<'_, StorageState>,
+) -> Result<SearchResult, String> {
+    if query.is_empty() {
+        return Ok(SearchResult {
+            matches: vec![],
+            total_matches: 0,
+            truncated: false,
+        });
+    }
+
+    let ctx = context_lines.min(10);
+    let cap = max_results.min(500);
+    let query_lower = query.to_lowercase();
+
+    let re = if is_regex {
+        Some(Regex::new(&query).map_err(|e| format!("Invalid regex: {e}"))?)
+    } else {
+        None
+    };
+
+    let sessions_dir = state.get_dir().join("sessions");
+    let Ok(dir_entries) = fs::read_dir(&sessions_dir) else {
+        return Ok(SearchResult {
+            matches: vec![],
+            total_matches: 0,
+            truncated: false,
+        });
+    };
+
+    // Collect and sort files newest-first
+    let mut files: Vec<_> = dir_entries
+        .filter_map(|e| e.ok())
+        .filter(|e| {
+            e.path().is_file()
+                && e.path().extension().is_some_and(|ext| ext == "log")
+                && e.path()
+                    .file_name()
+                    .is_some_and(|n| n.to_string_lossy().starts_with("session_"))
+        })
+        .collect();
+    files.sort_by(|a, b| {
+        b.file_name()
+            .to_string_lossy()
+            .cmp(&a.file_name().to_string_lossy())
+    });
+
+    let mut results = Vec::new();
+    let mut total = 0usize;
+
+    'outer: for entry in &files {
+        let Ok(content) = fs::read_to_string(entry.path()) else {
+            continue;
+        };
+        let lines: Vec<&str> = content.lines().collect();
+        let fname = entry.file_name().to_string_lossy().to_string();
+
+        for (i, line) in lines.iter().enumerate() {
+            let matched = match &re {
+                Some(r) => r.is_match(line),
+                None => line.to_lowercase().contains(&query_lower),
+            };
+            if !matched {
+                continue;
+            }
+            total += 1;
+            if results.len() < cap {
+                let before_start = i.saturating_sub(ctx);
+                let after_end = (i + 1 + ctx).min(lines.len());
+                results.push(SearchMatch {
+                    filename: fname.clone(),
+                    line_number: i + 1,
+                    line: line.to_string(),
+                    context_before: lines[before_start..i]
+                        .iter()
+                        .map(|s| s.to_string())
+                        .collect(),
+                    context_after: lines[i + 1..after_end]
+                        .iter()
+                        .map(|s| s.to_string())
+                        .collect(),
+                });
+            }
+            // Stop counting after a reasonable amount to avoid scanning forever
+            if total >= 10_000 {
+                break 'outer;
+            }
+        }
+    }
+
+    let truncated = results.len() < total;
+    Ok(SearchResult {
+        matches: results,
+        total_matches: total,
+        truncated,
+    })
+}
+
+#[tauri::command]
+pub fn delete_session_log(
+    filename: String,
+    state: tauri::State<'_, StorageState>,
+) -> Result<(), String> {
+    validate_filename(&filename)?;
+    let path = state.get_dir().join("sessions").join(&filename);
+    if path.exists() {
+        fs::remove_file(&path).map_err(|e| format!("Failed to delete log: {e}"))?;
     }
     Ok(())
 }
