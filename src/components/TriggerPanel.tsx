@@ -857,6 +857,14 @@ export function TriggerPanel({ onClose }: TriggerPanelProps) {
   const [expandedGagGroup, setExpandedGagGroup] = useState<GagGroupId | null>(null);
   const [npcGagInput, setNpcGagInput] = useState('');
   const [npcPatternsExpanded, setNpcPatternsExpanded] = useState(false);
+
+  const addNpcGag = useCallback(() => {
+    const name = npcGagInput.trim();
+    if (name && !gaggedNpcs.some((n) => n.toLowerCase() === name.toLowerCase())) {
+      updateGaggedNpcs([...gaggedNpcs, name]);
+    }
+    setNpcGagInput('');
+  }, [npcGagInput, gaggedNpcs, updateGaggedNpcs]);
   const [groupFilter, setGroupFilter] = useState<string | null>(null);
   const [searchText, setSearchText] = useState('');
   const [editingId, setEditingId] = useState<TriggerId | null>(null);
@@ -1064,26 +1072,12 @@ export function TriggerPanel({ onClose }: TriggerPanelProps) {
                   type="text"
                   value={npcGagInput}
                   onChange={(e) => setNpcGagInput(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter') {
-                      const name = npcGagInput.trim();
-                      if (name && !gaggedNpcs.some((n) => n.toLowerCase() === name.toLowerCase())) {
-                        updateGaggedNpcs([...gaggedNpcs, name]);
-                      }
-                      setNpcGagInput('');
-                    }
-                  }}
+                  onKeyDown={(e) => { if (e.key === 'Enter') addNpcGag(); }}
                   placeholder="NPC name..."
                   className="flex-1 min-w-0 text-[11px] font-mono bg-bg-input border border-border-dim rounded px-1.5 py-0.5 text-text-primary placeholder:text-text-dim outline-none focus:border-pink/50"
                 />
                 <button
-                  onClick={() => {
-                    const name = npcGagInput.trim();
-                    if (name && !gaggedNpcs.some((n) => n.toLowerCase() === name.toLowerCase())) {
-                      updateGaggedNpcs([...gaggedNpcs, name]);
-                    }
-                    setNpcGagInput('');
-                  }}
+                  onClick={addNpcGag}
                   disabled={!npcGagInput.trim()}
                   className="text-[10px] font-mono px-2 py-0.5 rounded border border-pink/40 text-pink cursor-pointer hover:bg-pink/10 transition-colors disabled:opacity-30 disabled:cursor-default"
                 >

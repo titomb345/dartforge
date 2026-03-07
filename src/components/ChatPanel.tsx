@@ -98,9 +98,10 @@ export function ChatPanel({ mode = 'slideout' }: PinnablePanelProps) {
     const filtered = messages.filter((msg) => {
       if (!filters[msg.type]) return false;
       if (hideOwnMessages && msg.isOwn) return false;
-      if (mutedSenders.some((s) => s.toLowerCase() === msg.sender.toLowerCase())) return false;
-      if (gaggedNpcs.some((s) => s.toLowerCase() === msg.sender.toLowerCase())) return false;
-      if (q && !msg.message.toLowerCase().includes(q) && !msg.sender.toLowerCase().includes(q))
+      const senderLower = msg.sender.toLowerCase();
+      if (mutedSenders.some((s) => s.toLowerCase() === senderLower)) return false;
+      if (gaggedNpcs.some((s) => s.toLowerCase() === senderLower)) return false;
+      if (q && !msg.message.toLowerCase().includes(q) && !senderLower.includes(q))
         return false;
       return true;
     });

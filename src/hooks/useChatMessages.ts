@@ -151,10 +151,11 @@ export function useChatMessages(
   }, [hideOwnMessages]);
 
   const handleChatMessage = useCallback((msg: ChatMessage) => {
+    const senderLower = msg.sender.toLowerCase();
     const m = mutedSendersRef.current;
-    const isMuted = m.some((name) => name.toLowerCase() === msg.sender.toLowerCase());
+    const isMuted = m.some((name) => name.toLowerCase() === senderLower);
     const isGaggedNpc = gaggedNpcsRef?.current?.some(
-      (name) => name.toLowerCase() === msg.sender.toLowerCase()
+      (name) => name.toLowerCase() === senderLower
     ) ?? false;
 
     // Sound alert

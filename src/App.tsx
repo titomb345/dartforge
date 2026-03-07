@@ -594,7 +594,7 @@ function AppMain() {
         }
 
         // Gag groups + NPC gags — suppress line before trigger evaluation
-        if (shouldGagLine(stripped, gagGroupsRef.current, npcGagTrackerRef.current, gaggedNpcsRef.current)) {
+        if (shouldGagLine(stripped, gagGroupsRef.current, npcGagTrackerRef.current, chatGaggedNpcsRef.current)) {
           return { gag: true, highlight: null };
         }
 
@@ -745,7 +745,6 @@ function AppMain() {
   const [actionBlockerRef, blockerState] = useEngineRef(() => new ActionBlocker());
   const actionBlockingEnabledRef = useLatestRef(appSettings.actionBlockingEnabled);
   const gagGroupsRef = useLatestRef(appSettings.gagGroups);
-  const gaggedNpcsRef = useLatestRef(appSettings.gaggedNpcs);
   const npcGagTrackerRef = useRef(new NpcGagTracker());
   const showSkillCountsRef = useLatestRef(appSettings.showSkillCounts);
 
