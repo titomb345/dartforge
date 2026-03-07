@@ -9,7 +9,7 @@ The `[Unreleased]` header controls automatic version bumping on merge:
 - `[Unreleased-minor]` → 0.1.0 → 0.2.0
 - `[Unreleased-major]` → 0.1.0 → 1.0.0
 
-## [Unreleased-minor]
+## [1.5.0] - 2026-03-07
 
 ### Added
 - Programmatic skill data access — query skill info from aliases, triggers, timers, and macros in both text and script modes
