@@ -90,7 +90,7 @@ export const HELP_CATEGORIES: HelpCategory[] = [
       {
         title: 'Session Logs',
         description:
-          'Browse and search past session logs. Select a session from the dropdown to view it, or search across all logs with text or regex. Filter by commands vs output. Delete old sessions you no longer need.',
+          'Full-screen log viewer for browsing past sessions. Select a session from the sidebar, search across all logs with text or regex, and filter by your commands vs game output. Your typed commands are logged with a >> prefix for easy identification. Delete old sessions you no longer need.',
         helpId: 'toolbar-logs',
       },
       {
@@ -405,6 +405,11 @@ export const HELP_CATEGORIES: HelpCategory[] = [
           'Auto-broadcast skill improvements via OOC. "/announce on" sends "skillname+", "/announce brief" sends just "+", "/announce verbose" sends "skillname+ (count)". "/announce pet on|brief|verbose" controls pet announcements separately. "/announce off" disables. An orange badge shows when active.',
       },
       {
+        title: '/powercast',
+        description:
+          'Powercast lirrin\'s glow at your spell casting level. "/powercast" casts at (spell_casting_count * 100). "/powercast -5" subtracts 5 from your count before multiplying. Flows through the normal command pipeline (action blocking, aliases, etc.).',
+      },
+      {
         title: '/counter',
         description:
           'Manage improve counters from the command line. "/counter list" shows all counters with status, imps, and elapsed time. "/counter status" shows a quick one-liner for the active counter. "/counter info" shows detailed stats including rates and skills. "/counter start|toggle|pause|stop|clear" controls the active counter. "/counter toggle" smart-toggles between start and pause. "/counter switch <name>" switches the active counter by name (partial match).',
@@ -461,7 +466,17 @@ export const HELP_CATEGORIES: HelpCategory[] = [
       {
         title: 'Script Mode',
         description:
-          'Triggers and aliases can use JavaScript instead of text expansion. Toggle "Script" in the editor to write JS bodies with send(), echo(), delay(), setVar(), getVar(), lastUserInputTime(), and capture variables ($0-$9, $line, $me). Define shared functions in the Global Script panel. Hover over any script editor to reveal an expand button that opens a large popout modal for comfortable editing. Errors appear in red in the terminal.',
+          'Triggers and aliases can use JavaScript instead of text expansion. Toggle "Script" in the editor to write JS bodies with send(), echo(), delay(), setVar(), getVar(), lastUserInputTime(), getSkill(), getSkillCount(), getSkillLevel(), getSkillTier(), getSkillNext(), getSkillGroup(), and capture variables ($0-$9, $line, $me). Define shared functions in the Global Script panel. Hover over any script editor to reveal an expand button that opens a large popout modal for comfortable editing. Errors appear in red in the terminal.',
+      },
+      {
+        title: 'Skill Functions (Text Mode)',
+        description:
+          'Access skill data in text-mode alias/trigger bodies: $skillCount(name) for improve count, $skillLevel(name) for tier name (e.g. "a master"), $skillTier(name) for tier number (1-29), $skillNext(name) for improves until next tier, $skillGroup(name) for category (combat, magic, etc.). Works with captures — $skillCount($1) resolves $1 first, then looks up the skill.',
+      },
+      {
+        title: 'Skill Functions (Script Mode)',
+        description:
+          'Access skill data in script-mode bodies: getSkill("parry") returns { level, count, tier, next, group }. Individual accessors: getSkillCount("parry") → number, getSkillLevel("parry") → tier name, getSkillTier("parry") → tier number, getSkillNext("parry") → improves to next tier, getSkillGroup("parry") → category.',
       },
     ],
   },

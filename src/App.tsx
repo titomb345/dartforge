@@ -828,6 +828,7 @@ function AppMain() {
     setVar: () => {},
     convert: () => {},
     getVariables: () => [],
+    getSkillCount: () => 0,
   });
 
   // Global script system
@@ -1039,6 +1040,10 @@ function AppMain() {
       }
     },
     getVariables: () => mergedVariablesRef.current,
+    getSkillCount: (name: string) => {
+      const record = skillDataRef.current.skills[name.toLowerCase()];
+      return record?.count ?? 0;
+    },
   };
 
   // Post-sync commands — fire user-configured commands after login sync completes
@@ -1926,9 +1931,9 @@ function AppMain() {
                                         <SlideOut panel="who" pinnable="who">
                                           <WhoPanel mode="slideout" />
                                         </SlideOut>
-                                        <SlideOut panel="logs">
+                                        {activePanel === 'logs' && (
                                           <LogViewerPanel onClose={closePanel} />
-                                        </SlideOut>
+                                        )}
                                         <SlideOut panel="help">
                                           <HelpPanel onClose={closePanel} />
                                         </SlideOut>

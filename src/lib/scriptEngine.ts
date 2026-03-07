@@ -1,6 +1,8 @@
 import type { TriggerMatch } from '../types/trigger';
 import type { CommandRunner } from './commandUtils';
 import { executeCommands } from './commandUtils';
+import { getTierForCount, getImprovesToNextTier } from './skillTiers';
+import { getSkillCategory } from './skillCategories';
 
 /**
  * AsyncFunction constructor — allows `await` inside dynamically created functions.
@@ -82,7 +84,34 @@ function buildApi(runner: CommandRunner) {
   /** Returns the epoch ms of the last user-typed command (0 = none this session). */
   const lastUserInputTime = (): number => _lastUserInputTimeTs;
 
-  return { send, echo, setVar, getVar, spam, lastUserInputTime };
+  // ── Skill accessors ──────────────────────────────────────────────
+
+  const getSkillCount = (name: string): number => runner.getSkillCount(String(name));
+
+  const getSkillLevel = (name: string): string => {
+    return getTierForCount(runner.getSkillCount(String(name))).name;
+  };
+
+  const getSkillTier = (name: string): number => {
+    return getTierForCount(runner.getSkillCount(String(name))).level;
+  };
+
+  const getSkillNext = (name: string): number => {
+    return getImprovesToNextTier(runner.getSkillCount(String(name)));
+  };
+
+  const getSkillGroup = (name: string): string => {
+    return getSkillCategory(String(name))[0];
+  };
+
+  const getSkill = (name: string): { level: string; count: number; tier: number; next: number; group: string } => {
+    const n = String(name);
+    const count = runner.getSkillCount(n);
+    const t = getTierForCount(count);
+    return { level: t.name, count, tier: t.level, next: getImprovesToNextTier(count), group: getSkillCategory(n)[0] };
+  };
+
+  return { send, echo, setVar, getVar, spam, lastUserInputTime, getSkillCount, getSkillLevel, getSkillTier, getSkillNext, getSkillGroup, getSkill };
 }
 
 function charNames(activeCharacter: string | null) {
@@ -94,6 +123,7 @@ function charNames(activeCharacter: string | null) {
 
 const TRIGGER_PARAM_NAMES: string[] = [
   'send', 'echo', 'delay', 'setVar', 'getVar', 'spam', 'lastUserInputTime',
+  'getSkillCount', 'getSkillLevel', 'getSkillTier', 'getSkillNext', 'getSkillGroup', 'getSkill',
   '$0', '$1', '$2', '$3', '$4', '$5', '$6', '$7', '$8', '$9',
   '$line', '$me', '$Me',
 ];
@@ -113,6 +143,7 @@ export async function executeTriggerScript(
 
   const paramValues: unknown[] = [
     api.send, api.echo, delay, api.setVar, api.getVar, api.spam, api.lastUserInputTime,
+    api.getSkillCount, api.getSkillLevel, api.getSkillTier, api.getSkillNext, api.getSkillGroup, api.getSkill,
     match.captures[0] ?? '', match.captures[1] ?? '', match.captures[2] ?? '',
     match.captures[3] ?? '', match.captures[4] ?? '', match.captures[5] ?? '',
     match.captures[6] ?? '', match.captures[7] ?? '', match.captures[8] ?? '',
@@ -133,6 +164,7 @@ export async function executeTriggerScript(
 
 const TIMER_PARAM_NAMES: string[] = [
   'send', 'echo', 'delay', 'setVar', 'getVar', 'spam', 'lastUserInputTime',
+  'getSkillCount', 'getSkillLevel', 'getSkillTier', 'getSkillNext', 'getSkillGroup', 'getSkill',
   '$me', '$Me',
 ];
 
@@ -150,6 +182,7 @@ export async function executeTimerScript(
 
   const paramValues: unknown[] = [
     api.send, api.echo, delay, api.setVar, api.getVar, api.spam, api.lastUserInputTime,
+    api.getSkillCount, api.getSkillLevel, api.getSkillTier, api.getSkillNext, api.getSkillGroup, api.getSkill,
     ch.name, ch.cap,
   ];
 
@@ -166,6 +199,7 @@ export async function executeTimerScript(
 
 const ALIAS_PARAM_NAMES: string[] = [
   'send', 'echo', 'delay', 'setVar', 'getVar', 'spam', 'lastUserInputTime',
+  'getSkillCount', 'getSkillLevel', 'getSkillTier', 'getSkillNext', 'getSkillGroup', 'getSkill',
   '$1', '$2', '$3', '$4', '$5', '$6', '$7', '$8', '$9',
   'args', 'argList', '$me', '$Me',
 ];
@@ -185,6 +219,7 @@ export async function executeAliasScript(
 
   const paramValues: unknown[] = [
     api.send, api.echo, delay, api.setVar, api.getVar, api.spam, api.lastUserInputTime,
+    api.getSkillCount, api.getSkillLevel, api.getSkillTier, api.getSkillNext, api.getSkillGroup, api.getSkill,
     matchedArgs[0] ?? '', matchedArgs[1] ?? '', matchedArgs[2] ?? '',
     matchedArgs[3] ?? '', matchedArgs[4] ?? '', matchedArgs[5] ?? '',
     matchedArgs[6] ?? '', matchedArgs[7] ?? '', matchedArgs[8] ?? '',

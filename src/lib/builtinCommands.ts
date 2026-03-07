@@ -693,6 +693,38 @@ const handleCounter: Handler = async (trimmed, ctx) => {
   return true;
 };
 
+const handlePowercast: Handler = async (trimmed, ctx) => {
+  if (!/^\/powercast\b/i.test(trimmed)) return false;
+  const arg = trimmed.slice(10).trim();
+
+  // Parse adjustment (default 0)
+  let adjustment = 0;
+  if (arg) {
+    adjustment = parseInt(arg, 10);
+    if (isNaN(adjustment)) {
+      error(ctx, '[Powercast] Adjustment must be a number (e.g. /powercast -5, /powercast +3, /powercast 0).');
+      return true;
+    }
+  }
+
+  // Look up spell casting skill count
+  const scCount = ctx.skillData().skills['spell casting']?.count ?? 0;
+  if (scCount === 0) {
+    error(ctx, '[Powercast] No spell casting data tracked. Improve spell casting first so DartForge can track it.');
+    return true;
+  }
+
+  const power = (scCount + adjustment) * 100;
+  if (power <= 0) {
+    error(ctx, `[Powercast] Computed power ${power} is invalid (spell casting: ${scCount}, adjustment: ${adjustment}).`);
+    return true;
+  }
+
+  echo(ctx, `[Powercast: spell casting ${scCount} + ${adjustment} = @${power}]`);
+  await ctx.expandAndExecute(`cast ! lg @${power}`);
+  return true;
+};
+
 /** Ordered list of built-in command handlers. Returns true if command was handled. */
 const BUILTIN_HANDLERS: Handler[] = [
   handleBlock,
@@ -707,6 +739,7 @@ const BUILTIN_HANDLERS: Handler[] = [
   handleApt,
   handleSkill,
   handleCounter,
+  handlePowercast,
 ];
 
 /**
