@@ -161,15 +161,6 @@ export function Toolbar({ connected, onReconnect, onDisconnect, onScreenshot }: 
           pinned={isPinned('babel')}
           onClick={() => togglePanel('babel')}
         />
-        <IconButton
-          icon={<LogIcon />}
-          title="Session Logs"
-          accent="#94a3b8"
-          helpId="toolbar-logs"
-          panelId="logs"
-          toggled={activePanel === 'logs'}
-          onClick={() => togglePanel('logs')}
-        />
         <div className="w-px h-[18px] bg-border-dim mx-1.5" />
         <IconButton
           icon={<AliasIcon />}
@@ -224,6 +215,15 @@ export function Toolbar({ connected, onReconnect, onDisconnect, onScreenshot }: 
           panelId="scripts"
           toggled={activePanel === 'scripts'}
           onClick={() => togglePanel('scripts')}
+        />
+        <IconButton
+          icon={<LogIcon />}
+          title="Session Logs"
+          accent="#94a3b8"
+          helpId="toolbar-logs"
+          panelId="logs"
+          toggled={activePanel === 'logs'}
+          onClick={() => togglePanel('logs')}
         />
         <div className="w-px h-[18px] bg-border-dim mx-1.5" />
         <IconButton
