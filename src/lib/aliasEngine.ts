@@ -289,15 +289,17 @@ export function expandInput(
     // separator splitting so that prefix aliases with $* capture the full
     // argument string (including separators). Only consume across separators
     // when the alias arguments start with a directive that itself consumes
-    // separators (/spam, /var). Otherwise split normally so that e.g.
+    // separators (/spam, /var), or when the alias body starts with a greedy
+    // directive (so $* captures separators too). Otherwise split normally so that e.g.
     // "ta scrip;;wear scrip" becomes two separate commands.
     const fullMatch = matchAlias(trimmed, aliases);
     const argsStartWithDirective = fullMatch && /^\/(?:spam|var)$/i.test(fullMatch.args[0] ?? '');
+    const bodyStartsWithGreedy = fullMatch && /^\/(?:spam|var)\s/i.test(fullMatch.alias.body.trim());
     if (
       fullMatch &&
       fullMatch.alias.matchMode === 'prefix' &&
       fullMatch.args.length > 0 &&
-      (findNextSplit(trimmed, separator) === -1 || argsStartWithDirective)
+      (findNextSplit(trimmed, separator) === -1 || argsStartWithDirective || bodyStartsWithGreedy)
     ) {
       // Prefix alias consumes the rest of the line
       commands.push(
