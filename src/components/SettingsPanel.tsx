@@ -248,6 +248,8 @@ export function SettingsPanel({ onClose }: { onClose: () => void }) {
     updateStripPromptsEnabled: onStripPromptsEnabledChange,
     antiSpamEnabled,
     updateAntiSpamEnabled,
+    showSkillCounts,
+    updateShowSkillCounts,
     commandEchoEnabled,
     updateCommandEchoEnabled,
     selectOnSend,
@@ -586,6 +588,11 @@ export function SettingsPanel({ onClose }: { onClose: () => void }) {
           <ToggleRow label="Anti-spam" checked={antiSpamEnabled} onChange={updateAntiSpamEnabled} accent="#50fa7b" />
           <div className="text-[9px] text-text-dim font-mono leading-relaxed mt-1">
             Collapse consecutive identical lines with a repeat count.
+          </div>
+          <ToggleRow label="Show skill counts" checked={showSkillCounts} onChange={updateShowSkillCounts} accent="#50fa7b" />
+          <div className="text-[9px] text-text-dim font-mono leading-relaxed mt-1">
+            Append tracked improve counts to &quot;show skills&quot; and &quot;show quick
+            skills&quot; readouts.
           </div>
         </SettingsSection>
 

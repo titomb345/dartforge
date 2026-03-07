@@ -14,6 +14,7 @@ export interface TriggerState {
   mergedTriggers: Trigger[];
   createTrigger: (
     partial: {
+      name?: string;
       pattern: string;
       matchMode: TriggerMatchMode;
       body: string;

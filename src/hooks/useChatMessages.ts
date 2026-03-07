@@ -49,7 +49,8 @@ function deserializeMessages(
 export function useChatMessages(
   maxMessages = MAX_MESSAGES,
   notificationsRef?: React.RefObject<ChatFilters | null>,
-  chimesRef?: React.RefObject<Chimes>
+  chimesRef?: React.RefObject<Chimes>,
+  gaggedNpcsRef?: React.RefObject<string[]>,
 ) {
   const dataStore = useDataStore();
   const [messages, setMessages] = useState<ChatMessage[]>([]);
@@ -152,10 +153,13 @@ export function useChatMessages(
   const handleChatMessage = useCallback((msg: ChatMessage) => {
     const m = mutedSendersRef.current;
     const isMuted = m.some((name) => name.toLowerCase() === msg.sender.toLowerCase());
+    const isGaggedNpc = gaggedNpcsRef?.current?.some(
+      (name) => name.toLowerCase() === msg.sender.toLowerCase()
+    ) ?? false;
 
     // Sound alert
     const s = soundAlertsRef.current;
-    if (!msg.isOwn && s[msg.type] && !isMuted && chimesRef?.current) {
+    if (!msg.isOwn && s[msg.type] && !isMuted && !isGaggedNpc && chimesRef?.current) {
       const audio =
         msg.type === 'tell' || msg.type === 'sz'
           ? chimesRef.current.chime2
@@ -166,7 +170,7 @@ export function useChatMessages(
 
     // Desktop notification when window is unfocused
     const n = notificationsRef?.current;
-    if (n && !msg.isOwn && n[msg.type] && !isMuted && !document.hasFocus()) {
+    if (n && !msg.isOwn && n[msg.type] && !isMuted && !isGaggedNpc && !document.hasFocus()) {
       alertUser(`${msg.sender} (${msg.type})`, msg.message, `dartforge-chat-${msg.type}`);
     }
 

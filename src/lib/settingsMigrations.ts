@@ -8,11 +8,12 @@ import type { DataStore } from '../contexts/DataStoreContext';
  *           who refresh, gag groups, announce, caster weight, auto-conc, chat, map)
  * v2 → v3: v1.4 release (numpad operator keys, command separator)
  * v3 → v4: v1.5 release (select-on-send)
+ * v4 → v5: v1.6 release (show skill counts, NPC gags)
  *
  * Prior to this collapse, each feature had its own version bump (up to v17).
  * normalizeVersion() maps those old version numbers to the collapsed scheme.
  */
-export const CURRENT_VERSION = 4;
+export const CURRENT_VERSION = 5;
 
 /** Raw store contents — all keys are optional since older stores may lack them. */
 export type StoreData = Record<string, unknown>;
@@ -251,6 +252,21 @@ const MIGRATIONS: MigrationFn[] = [
 
     // Macros (keyboard hotkey → command sequences)
     if (!('macros' in data)) data.macros = [];
+
+    // Collapsed panel groups
+    if (!('collapsedTriggerGroups' in data)) data.collapsedTriggerGroups = ['Gags'];
+    if (!('collapsedAliasGroups' in data)) data.collapsedAliasGroups = [];
+
+    return data;
+  },
+
+  // ── v4 → v5: v1.6 release ──────────────────────────────────────────
+  (data) => {
+    // Show skill counts on readouts
+    if (!('showSkillCounts' in data)) data.showSkillCounts = false;
+
+    // NPC speech gags (user-managed name list)
+    if (!('gaggedNpcs' in data)) data.gaggedNpcs = [];
 
     return data;
   },

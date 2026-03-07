@@ -4,7 +4,7 @@ import { useSignatureContext } from '../contexts/SignatureContext';
 import type { ChatType, ChatMessage } from '../types/chat';
 import type { PinnablePanelProps } from '../types';
 import { panelRootClass } from '../lib/panelUtils';
-import { SortAscIcon, SortDescIcon, ChatIcon, ClockIcon } from './icons';
+import { SortAscIcon, SortDescIcon, ChatIcon, ClockIcon, SearchIcon } from './icons';
 import { FilterPill } from './FilterPill';
 import { PanelHeader } from './PanelHeader';
 import { ChatMessageRow } from './ChatMessageRow';
@@ -72,13 +72,16 @@ export function ChatPanel({ mode = 'slideout' }: PinnablePanelProps) {
     updateSender,
   } = useChatContext();
   const { sortedMappings, createMapping } = useSignatureContext();
-  const { chatFontSize, updateChatFontSize, timestampFormat, updateTimestampFormat } = useAppSettingsContext();
+  const { chatFontSize, updateChatFontSize, timestampFormat, updateTimestampFormat, gaggedNpcs } = useAppSettingsContext();
   const scrollRef = useRef<HTMLDivElement | null>(null);
   const isNearEdgeRef = useRef(true);
   const [exclusiveFilter, setExclusiveFilter] = useState<ChatType | null>(null);
   const [identifyingMsgId, setIdentifyingMsgId] = useState<number | null>(null);
   const [showMuted, setShowMuted] = useState(false);
   const [showSigs, setShowSigs] = useState(false);
+  const [searchOpen, setSearchOpen] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
+  const searchInputRef = useRef<HTMLInputElement | null>(null);
 
   const isPinned = mode === 'pinned';
 
@@ -91,14 +94,18 @@ export function ChatPanel({ mode = 'slideout' }: PinnablePanelProps) {
 
   // Filter and sort messages
   const visibleMessages = useMemo(() => {
+    const q = searchQuery.toLowerCase();
     const filtered = messages.filter((msg) => {
       if (!filters[msg.type]) return false;
       if (hideOwnMessages && msg.isOwn) return false;
       if (mutedSenders.some((s) => s.toLowerCase() === msg.sender.toLowerCase())) return false;
+      if (gaggedNpcs.some((s) => s.toLowerCase() === msg.sender.toLowerCase())) return false;
+      if (q && !msg.message.toLowerCase().includes(q) && !msg.sender.toLowerCase().includes(q))
+        return false;
       return true;
     });
     return newestFirst ? [...filtered].reverse() : filtered;
-  }, [messages, filters, mutedSenders, newestFirst, hideOwnMessages]);
+  }, [messages, filters, mutedSenders, gaggedNpcs, newestFirst, hideOwnMessages, searchQuery]);
 
   // Split messages into today vs older
   const todayKey = getDayKey(new Date(now));
@@ -185,14 +192,34 @@ export function ChatPanel({ mode = 'slideout' }: PinnablePanelProps) {
     [createMapping, updateSender]
   );
 
+  const toggleSearch = useCallback(() => {
+    setSearchOpen((v) => {
+      if (v) setSearchQuery('');
+      else {
+        setShowMuted(false);
+        setShowSigs(false);
+      }
+      return !v;
+    });
+  }, []);
+
+  // Focus input when search opens
+  useEffect(() => {
+    if (searchOpen) searchInputRef.current?.focus();
+  }, [searchOpen]);
+
   const toggleMutedSection = useCallback(() => {
     setShowMuted((v) => !v);
     setShowSigs(false);
+    setSearchOpen(false);
+    setSearchQuery('');
   }, []);
 
   const toggleSigsSection = useCallback(() => {
     setShowSigs((v) => !v);
     setShowMuted(false);
+    setSearchOpen(false);
+    setSearchQuery('');
   }, []);
 
   const identifyingMsg =
@@ -253,39 +280,79 @@ export function ChatPanel({ mode = 'slideout' }: PinnablePanelProps) {
         ))}
       </div>
 
-      {/* Mine / Muted / Sigs toggles */}
-      <div className="flex items-center gap-1.5 px-2 py-1 border-b border-border-subtle shrink-0">
-        <button
-          onClick={toggleHideOwnMessages}
-          title={hideOwnMessages ? 'Own messages hidden (click to show)' : 'Own messages shown (click to hide)'}
-          className={`text-[10px] font-mono px-1.5 py-0.5 rounded border cursor-pointer transition-colors duration-150 whitespace-nowrap ${
-            !hideOwnMessages
-              ? 'bg-green/15 border-green/30 text-green'
-              : 'border-transparent text-text-dim hover:text-green/70'
-          }`}
-        >
-          Mine
-        </button>
-        <button
-          onClick={toggleMutedSection}
-          className={`text-[10px] font-mono px-1.5 py-0.5 rounded border cursor-pointer transition-colors duration-150 whitespace-nowrap ${
-            showMuted
-              ? 'bg-red/15 border-red/30 text-red'
-              : 'border-transparent text-text-dim hover:text-red/70'
-          }`}
-        >
-          Muted{mutedSenders.length > 0 ? ` (${mutedSenders.length})` : ''}
-        </button>
-        <button
-          onClick={toggleSigsSection}
-          className={`text-[10px] font-mono px-1.5 py-0.5 rounded border cursor-pointer transition-colors duration-150 whitespace-nowrap ${
-            showSigs
-              ? 'bg-cyan/15 border-cyan/30 text-cyan'
-              : 'border-transparent text-text-dim hover:text-cyan/70'
-          }`}
-        >
-          Sigs{sortedMappings.length > 0 ? ` (${sortedMappings.length})` : ''}
-        </button>
+      {/* Mine / Muted / Sigs toggles + Search */}
+      <div className="flex items-center gap-1.5 px-2 border-b border-border-subtle shrink-0 h-7">
+        {!searchOpen && (
+          <>
+            <button
+              onClick={toggleHideOwnMessages}
+              title={hideOwnMessages ? 'Own messages hidden (click to show)' : 'Own messages shown (click to hide)'}
+              className={`text-[10px] font-mono px-1.5 py-0.5 rounded border cursor-pointer transition-colors duration-150 whitespace-nowrap ${
+                !hideOwnMessages
+                  ? 'bg-green/15 border-green/30 text-green'
+                  : 'border-transparent text-text-dim hover:text-green/70'
+              }`}
+            >
+              Mine
+            </button>
+            <button
+              onClick={toggleMutedSection}
+              className={`text-[10px] font-mono px-1.5 py-0.5 rounded border cursor-pointer transition-colors duration-150 whitespace-nowrap ${
+                showMuted
+                  ? 'bg-red/15 border-red/30 text-red'
+                  : 'border-transparent text-text-dim hover:text-red/70'
+              }`}
+            >
+              Muted{mutedSenders.length > 0 ? ` (${mutedSenders.length})` : ''}
+            </button>
+            <button
+              onClick={toggleSigsSection}
+              className={`text-[10px] font-mono px-1.5 py-0.5 rounded border cursor-pointer transition-colors duration-150 whitespace-nowrap ${
+                showSigs
+                  ? 'bg-cyan/15 border-cyan/30 text-cyan'
+                  : 'border-transparent text-text-dim hover:text-cyan/70'
+              }`}
+            >
+              Sigs{sortedMappings.length > 0 ? ` (${sortedMappings.length})` : ''}
+            </button>
+          </>
+        )}
+
+        {searchOpen && (
+          <div className="flex-1 flex items-center gap-1.5 min-w-0">
+            <SearchIcon size={10} />
+            <input
+              ref={searchInputRef}
+              type="text"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Escape') toggleSearch();
+              }}
+              placeholder="Search messages..."
+              className="flex-1 min-w-0 bg-transparent text-[11px] font-mono text-text-primary placeholder:text-text-dim outline-none"
+            />
+            {searchQuery && (
+              <span className="text-[9px] font-mono text-text-dim whitespace-nowrap">
+                {visibleMessages.length} found
+              </span>
+            )}
+          </div>
+        )}
+
+        <div className="ml-auto">
+          <button
+            onClick={toggleSearch}
+            title={searchOpen ? 'Close search' : 'Search messages'}
+            className={`flex items-center justify-center w-5 h-5 rounded-[3px] cursor-pointer transition-colors duration-150 ${
+              searchOpen
+                ? 'text-pink'
+                : 'text-text-dim hover:text-text-label'
+            }`}
+          >
+            {searchOpen ? <span className="text-[13px] leading-none">×</span> : <SearchIcon size={10} />}
+          </button>
+        </div>
       </div>
 
       {/* Inline muted senders editor */}

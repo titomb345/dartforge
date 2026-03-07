@@ -96,7 +96,7 @@ export const HELP_CATEGORIES: HelpCategory[] = [
       {
         title: 'Chat Panel',
         description:
-          'Filtered chat with color-coded message types (Say, Shout, OOC, Tell, SZ). Mute senders, identify anonymous tells, and toggle sound alerts.',
+          'Filtered chat with color-coded message types (Say, Shout, OOC, Tell, SZ). Mute senders, identify anonymous tells, toggle sound alerts, and search through message history.',
         helpId: 'toolbar-chat',
       },
       {
@@ -454,6 +454,11 @@ export const HELP_CATEGORIES: HelpCategory[] = [
           'Built-in pattern sets that suppress noisy MUD output. Toggle groups on/off in the Triggers panel: Pets, Creatures, Citizens, Trainers, Sparring, Channels, and Quests.',
       },
       {
+        title: 'NPC Gag',
+        description:
+          'Gag all speech (say/ask/exclaim) and emotes (blinks, bows, grins, etc.) from specific NPCs. Add NPC names in the Triggers panel under Gag Groups. Gagged output is suppressed from both the terminal and chat panel, including multi-line messages.',
+      },
+      {
         title: 'Anti-Spam',
         description:
           'Collapses consecutive identical lines into a single line with a dim repeat count (e.g. "x5"). Enable in Settings > Output.',
@@ -503,6 +508,12 @@ export const HELP_CATEGORIES: HelpCategory[] = [
         title: 'Signature Mapping',
         description:
           'DartMUD anonymizes some senders. The "Sigs" section in Chat maps message signatures to known player names, so future messages show the real name.',
+      },
+      {
+        title: 'Search Messages',
+        description:
+          'Click the magnifying glass icon in the chat toolbar to search through message history. Matches sender names and message text. Press Escape to close.',
+        interaction: 'click',
       },
       {
         title: 'Taskbar Alerts',

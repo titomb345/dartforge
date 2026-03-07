@@ -13,6 +13,8 @@ export type BodyMode = 'text' | 'script';
 /** An individual trigger definition */
 export interface Trigger {
   id: TriggerId;
+  /** Optional user-friendly label for display (falls back to pattern if empty) */
+  name?: string;
   /** The pattern to match against incoming MUD output lines (ANSI-stripped) */
   pattern: string;
   /** How pattern is matched against output lines */

@@ -462,6 +462,8 @@ export function AliasPanel({ onClose }: AliasPanelProps) {
   const [searchText, setSearchText] = useState('');
   const [editingId, setEditingId] = useState<AliasId | null>(null);
   const [creating, setCreating] = useState(false);
+  const { collapsedAliasGroups, updateCollapsedAliasGroups } = useAppSettingsContext();
+  const collapsedGroups = useMemo(() => new Set(collapsedAliasGroups), [collapsedAliasGroups]);
 
   const aliases = scope === 'character' ? characterAliases : globalAliases;
   const aliasList = useMemo(() => Object.values(aliases), [aliases]);
@@ -611,26 +613,50 @@ export function AliasPanel({ onClose }: AliasPanelProps) {
           </div>
         )}
 
-        {groupedAliases.map(([groupName, groupAliases]) => (
-          <div key={groupName} className="mb-3">
-            {groupFilter === null && groups.length > 1 && (
-              <div className="text-[10px] font-semibold uppercase tracking-[0.08em] text-[#555] mb-1 px-2">
-                {groupName}
-              </div>
-            )}
-            {groupAliases.map((alias) => (
-              <AliasRow
-                key={alias.id}
-                alias={alias}
-                scope={scope}
-                onEdit={(id) => {
-                  setEditingId(editingId === id ? null : id);
-                  setCreating(false);
-                }}
-              />
-            ))}
-          </div>
-        ))}
+        {groupedAliases.map(([groupName, groupAliases]) => {
+          const isCollapsed = collapsedGroups.has(groupName);
+          const showHeader = groupFilter === null && groups.length > 1;
+          return (
+            <div key={groupName} className="mb-3">
+              {showHeader && (
+                <button
+                  onClick={() => {
+                    const next = new Set(collapsedGroups);
+                    if (next.has(groupName)) next.delete(groupName);
+                    else next.add(groupName);
+                    updateCollapsedAliasGroups([...next]);
+                  }}
+                  className="flex items-center gap-1 w-full text-left text-[10px] font-semibold uppercase tracking-[0.08em] text-[#555] mb-1 px-2 cursor-pointer hover:text-text-label transition-colors duration-150"
+                >
+                  <span
+                    className="shrink-0 transition-transform duration-200"
+                    style={{ transform: isCollapsed ? 'rotate(-90deg)' : 'rotate(0deg)' }}
+                  >
+                    <ChevronDownIcon size={8} />
+                  </span>
+                  {groupName}
+                  {isCollapsed && (
+                    <span className="text-[9px] font-normal normal-case tracking-normal text-text-dim ml-1">
+                      ({groupAliases.length})
+                    </span>
+                  )}
+                </button>
+              )}
+              {(!showHeader || !isCollapsed) &&
+                groupAliases.map((alias) => (
+                  <AliasRow
+                    key={alias.id}
+                    alias={alias}
+                    scope={scope}
+                    onEdit={(id) => {
+                      setEditingId(editingId === id ? null : id);
+                      setCreating(false);
+                    }}
+                  />
+                ))}
+            </div>
+          );
+        })}
       </div>
     </div>
   );

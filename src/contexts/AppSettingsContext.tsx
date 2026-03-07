@@ -71,6 +71,9 @@ export interface AppSettingsState {
   // Gag groups
   gagGroups: GagGroupSettings;
   updateGagGroups: (v: GagGroupSettings) => void;
+  // NPC gags
+  gaggedNpcs: string[];
+  updateGaggedNpcs: (v: string[]) => void;
   // Babel language trainer
   babelEnabled: boolean;
   babelLanguage: string;
@@ -112,6 +115,14 @@ export interface AppSettingsState {
   // Select-on-send
   selectOnSend: boolean;
   updateSelectOnSend: (v: boolean) => void;
+  // Skill counts on readouts
+  showSkillCounts: boolean;
+  updateShowSkillCounts: (v: boolean) => void;
+  // Collapsed panel groups
+  collapsedTriggerGroups: string[];
+  collapsedAliasGroups: string[];
+  updateCollapsedTriggerGroups: (v: string[]) => void;
+  updateCollapsedAliasGroups: (v: string[]) => void;
   // Character switching (provided by App.tsx)
   onSwitchCharacter?: () => void;
   connected?: boolean;

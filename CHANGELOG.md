@@ -9,6 +9,18 @@ The `[Unreleased]` header controls automatic version bumping on merge:
 - `[Unreleased-minor]` → 0.1.0 → 0.2.0
 - `[Unreleased-major]` → 0.1.0 → 1.0.0
 
+## [Unreleased-minor]
+
+### Added
+- Optional name field for triggers — label triggers with a custom name for easier identification in the list (falls back to pattern display when not set)
+- Collapsible groups in trigger and alias panels — click group headers to collapse/expand; trigger "Gags" group starts collapsed by default to reduce clutter
+- "Show skill counts" setting — appends tracked improve counts to `show skills` and `show quick skills` readouts inline (cyan-colored, e.g. `fighting: Mythic. (12345)`)
+- Chat search — click the magnifying glass icon in the chat toolbar to filter messages by sender name or message text; shows match count, press Escape to close
+- NPC gag — add NPC names to automatically gag all their speech (say/ask/exclaim) and emotes (blinks, bows, grins, etc.) from both the terminal and chat panel; supports multi-line messages; managed in the Triggers panel under Gag Groups
+
+### Fixed
+- Added missing "grins" emote to Morrigan sparring gag pattern
+
 ## [1.5.1] - 2026-03-07
 
 ### Fixed

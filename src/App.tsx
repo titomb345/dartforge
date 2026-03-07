@@ -82,7 +82,8 @@ import { AutoCaster } from './lib/autoCaster';
 import { AutoConc } from './lib/autoConc';
 import { useEngineRef } from './hooks/useEngineRef';
 import { type MovementMode, getNextMode, applyMovementMode, movementModeLabel } from './lib/movementMode';
-import { shouldGagLine } from './lib/gagPatterns';
+import { shouldGagLine, NpcGagTracker } from './lib/gagPatterns';
+import { transformSkillReadout } from './lib/skillReadoutTransform';
 import { stripAnsi } from './lib/ansiUtils';
 import { SignatureProvider } from './contexts/SignatureContext';
 import { parseConvertCommand, formatMultiConversion } from './lib/currency';
@@ -482,6 +483,8 @@ function AppMain() {
   // Chat messages hook
   const chatNotificationsRef = useRef(appSettings.chatNotifications);
   chatNotificationsRef.current = appSettings.chatNotifications;
+  const chatGaggedNpcsRef = useRef(appSettings.gaggedNpcs);
+  chatGaggedNpcsRef.current = appSettings.gaggedNpcs;
   const {
     messages: chatMessages,
     filters: chatFilters,
@@ -498,7 +501,7 @@ function AppMain() {
     muteSender,
     unmuteSender,
     updateSender,
-  } = useChatMessages(appSettings.chatHistorySize, chatNotificationsRef, chimesRef);
+  } = useChatMessages(appSettings.chatHistorySize, chatNotificationsRef, chimesRef, chatGaggedNpcsRef);
   const handleChatMessageRef = useLatestRef(handleChatMessage);
 
   // Status trackers
@@ -590,14 +593,29 @@ function AppMain() {
           handleMagicParseRef.current(magicResult);
         }
 
-        // Gag groups — suppress line before trigger evaluation
-        if (shouldGagLine(stripped, gagGroupsRef.current)) {
+        // Gag groups + NPC gags — suppress line before trigger evaluation
+        if (shouldGagLine(stripped, gagGroupsRef.current, npcGagTrackerRef.current, gaggedNpcsRef.current)) {
           return { gag: true, highlight: null };
         }
 
-        if (triggerFiringRef.current) return;
+        // Skill count injection — transform skill readout lines
+        let replacement: string | undefined;
+        if (showSkillCountsRef.current) {
+          const transformed = transformSkillReadout(
+            stripped,
+            raw,
+            skillDataRef.current.skills,
+          );
+          if (transformed) replacement = transformed;
+        }
+
+        if (triggerFiringRef.current) {
+          return replacement ? { gag: false, highlight: null, replacement } : undefined;
+        }
         const matches = matchTriggers(stripped, raw, mergedTriggersRef.current);
-        if (matches.length === 0) return;
+        if (matches.length === 0) {
+          return replacement ? { gag: false, highlight: null, replacement } : undefined;
+        }
 
         let gag = false;
         let highlight: string | null = null;
@@ -636,7 +654,7 @@ function AppMain() {
           }
         }
 
-        return { gag, highlight };
+        return { gag, highlight, replacement };
       },
     });
   }
@@ -727,6 +745,9 @@ function AppMain() {
   const [actionBlockerRef, blockerState] = useEngineRef(() => new ActionBlocker());
   const actionBlockingEnabledRef = useLatestRef(appSettings.actionBlockingEnabled);
   const gagGroupsRef = useLatestRef(appSettings.gagGroups);
+  const gaggedNpcsRef = useLatestRef(appSettings.gaggedNpcs);
+  const npcGagTrackerRef = useRef(new NpcGagTracker());
+  const showSkillCountsRef = useLatestRef(appSettings.showSkillCounts);
 
   // Auto-inscriber — automated inscription practice loop
   const [autoInscriberRef, inscriberState] = useEngineRef(() => new AutoInscriber());
@@ -1203,6 +1224,7 @@ function AppMain() {
       autoInscriberRef.current.reset();
       autoCasterRef.current.reset();
       autoConcRef.current.reset();
+      npcGagTrackerRef.current.reset();
       setMovementMode('normal');
       setWhoSnapshot(null);
     }

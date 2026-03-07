@@ -1,6 +1,7 @@
 import { useMemo } from 'react';
 
 interface Groupable {
+  name?: string;
   pattern: string;
   body: string;
   group: string;
@@ -34,7 +35,11 @@ export function useFilteredGroups<T extends Groupable>(
       list = list.filter((item) => capitalize(item.group || 'General') === groupFilter);
     if (searchText) {
       const lower = searchText.toLowerCase();
-      list = list.filter((item) => item.pattern.toLowerCase().includes(lower));
+      list = list.filter(
+        (item) =>
+          item.pattern.toLowerCase().includes(lower) ||
+          (item.name && item.name.toLowerCase().includes(lower))
+      );
     }
     return list.sort((a, b) => a.pattern.localeCompare(b.pattern));
   }, [items, groupFilter, searchText]);

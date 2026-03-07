@@ -89,6 +89,7 @@ export function useTriggers(dataStore: DataStore, activeCharacter: string | null
   const createTrigger = useCallback(
     (
       partial: {
+        name?: string;
         pattern: string;
         matchMode: TriggerMatchMode;
         body: string;
@@ -106,6 +107,7 @@ export function useTriggers(dataStore: DataStore, activeCharacter: string | null
       const now = new Date().toISOString();
       const trigger: Trigger = {
         id: generateId(),
+        name: partial.name || undefined,
         pattern: partial.pattern,
         matchMode: partial.matchMode,
         body: partial.body,
@@ -189,6 +191,7 @@ export function useTriggers(dataStore: DataStore, activeCharacter: string | null
 
       return createTrigger(
         {
+          name: original.name,
           pattern: `${original.pattern}_copy`,
           matchMode: original.matchMode,
           body: original.body,

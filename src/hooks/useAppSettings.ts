@@ -130,6 +130,7 @@ export function useAppSettings() {
 
   // Gag groups
   const [gagGroups, setGagGroups] = useState<GagGroupSettings>({ ...DEFAULT_GAG_GROUPS });
+  const [gaggedNpcs, setGaggedNpcs] = useState<string[]>([]);
 
   // Announce system
   const [announceMode, setAnnounceMode] = useState<AnnounceMode>('off');
@@ -149,6 +150,13 @@ export function useAppSettings() {
 
   // Select-on-send
   const [selectOnSend, setSelectOnSend] = useState(false);
+
+  // Show skill counts on readouts
+  const [showSkillCounts, setShowSkillCounts] = useState(false);
+
+  // Collapsed groups in trigger/alias panels
+  const [collapsedTriggerGroups, setCollapsedTriggerGroups] = useState<string[]>(['Gags']);
+  const [collapsedAliasGroups, setCollapsedAliasGroups] = useState<string[]>([]);
 
   // Post-sync commands
   const [postSyncEnabled, setPostSyncEnabled] = useState(false);
@@ -228,6 +236,7 @@ export function useAppSettings() {
       await load('whoAutoRefreshEnabled', setWhoAutoRefreshEnabled);
       await load('babelEnabled', setBabelEnabled);
       await load('selectOnSend', setSelectOnSend);
+      await load('showSkillCounts', setShowSkillCounts);
       await load('postSyncEnabled', setPostSyncEnabled);
       await load('autoLoginEnabled', setAutoLoginEnabled);
       await load('alignmentTrackingEnabled', setAlignmentTrackingEnabled);
@@ -263,7 +272,10 @@ export function useAppSettings() {
       await loadObject('numpadMappings', setNumpadMappings);
       await loadObject('chatNotifications', setChatNotifications);
       await load('gagGroups', setGagGroups);
+      await load('gaggedNpcs', setGaggedNpcs, (v) => Array.isArray(v));
       await load('babelPhrases', setBabelPhrases, (v) => Array.isArray(v) && v.length > 0);
+      await load('collapsedTriggerGroups', setCollapsedTriggerGroups, (v) => Array.isArray(v));
+      await load('collapsedAliasGroups', setCollapsedAliasGroups, (v) => Array.isArray(v));
 
       // Nullable settings (null is a valid stored value)
       await loadNullable('customChime1', setCustomChime1);
@@ -360,6 +372,7 @@ export function useAppSettings() {
       updateWhoRefreshMinutes: make(setWhoRefreshMinutes, 'whoRefreshMinutes'),
       // Gag groups
       updateGagGroups: make(setGagGroups, 'gagGroups'),
+      updateGaggedNpcs: make(setGaggedNpcs, 'gaggedNpcs'),
       // Announce
       updateAnnounceMode: make<AnnounceMode>(setAnnounceMode, 'announceMode'),
       updateAnnouncePetMode: make<AnnounceMode>(setAnnouncePetMode, 'announcePetMode'),
@@ -387,6 +400,9 @@ export function useAppSettings() {
       updateCommandSeparator: make(setCommandSeparator, 'commandSeparator'),
       // Select-on-send
       updateSelectOnSend: make(setSelectOnSend, 'selectOnSend'),
+      updateShowSkillCounts: make(setShowSkillCounts, 'showSkillCounts'),
+      updateCollapsedTriggerGroups: make(setCollapsedTriggerGroups, 'collapsedTriggerGroups'),
+      updateCollapsedAliasGroups: make(setCollapsedAliasGroups, 'collapsedAliasGroups'),
     };
   }, [persist]);
 
@@ -507,6 +523,7 @@ export function useAppSettings() {
     updateChatFontSize,
     // Gag groups
     gagGroups,
+    gaggedNpcs,
     // Announce
     announceMode,
     announcePetMode,
@@ -535,6 +552,11 @@ export function useAppSettings() {
     commandSeparator,
     // Select-on-send
     selectOnSend,
+    // Skill counts on readouts
+    showSkillCounts,
+    // Collapsed panel groups
+    collapsedTriggerGroups,
+    collapsedAliasGroups,
     // Special updaters (have extra logic beyond simple set+persist)
     updateAlignmentTrackingEnabled,
     updateAutoLoginCharacters,
@@ -553,13 +575,14 @@ export function useAppSettings() {
     hasSeenGuide, actionBlockingEnabled,
     whoAutoRefreshEnabled, whoRefreshMinutes, whoFontSize, updateWhoFontSize,
     chatFontSize, updateChatFontSize,
-    gagGroups, announceMode, announcePetMode,
+    gagGroups, gaggedNpcs, announceMode, announcePetMode,
     babelEnabled, babelLanguage, babelIntervalSeconds, babelPhrases,
     postSyncEnabled, postSyncCommands,
     autoLoginEnabled, autoLoginActiveSlot, autoLoginCharacters,
     lastLoginTimestamp, lastLoginSlot,
     casterWeightItem, casterWeightContainer, casterWeightAdjustUp, casterWeightAdjustDown,
-    autoConcAction, commandSeparator, selectOnSend,
+    autoConcAction, commandSeparator, selectOnSend, showSkillCounts,
+    collapsedTriggerGroups, collapsedAliasGroups,
     updateAlignmentTrackingEnabled, updateAutoLoginCharacters, updaters,
   ]);
 }
