@@ -1,4 +1,5 @@
 import type { ThemeColorKey } from './defaultTheme';
+import { cleanLine } from './lineUtils';
 
 /** A single health state with display metadata */
 export interface HealthLevel {
@@ -115,8 +116,7 @@ const DEAD_LEVEL = HEALTH_LEVELS.find((l) => l.key === 'dead')!;
  * Handles "You are <state>.", "You are now <state>.", and "You have died!".
  */
 export function matchHealthLine(line: string): HealthMatch | null {
-  // Strip leading "> " prompts
-  const cleaned = line.replace(/^(?:> )+/, '').trim();
+  const cleaned = cleanLine(line);
   if (!cleaned) return null;
 
   // Death

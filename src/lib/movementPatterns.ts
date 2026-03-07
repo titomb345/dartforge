@@ -1,4 +1,5 @@
 import type { ThemeColorKey } from './defaultTheme';
+import { cleanLine, stripScorePrefix } from './lineUtils';
 
 /** A single movement state with display metadata */
 export interface MovementLevel {
@@ -103,15 +104,10 @@ MOVEMENT_LOOKUP.set('You are too exhausted.', MOVEMENT_LEVELS[MOVEMENT_LEVELS.le
  * - "You are too exhausted." (gameplay block message)
  */
 export function matchMovementLine(line: string): MovementMatch | null {
-  const cleaned = line.replace(/^(?:> )+/, '').trim();
+  const cleaned = cleanLine(line);
   if (!cleaned) return null;
 
-  // Strip optional "Movement : " prefix (score output)
-  let text = cleaned;
-  const prefixMatch = cleaned.match(/^Movement\s*:\s*(.+)$/i);
-  if (prefixMatch) {
-    text = prefixMatch[1].trim();
-  }
+  const text = stripScorePrefix(cleaned, 'Movement');
 
   const level = MOVEMENT_LOOKUP.get(text);
   if (level) return { level, raw: cleaned };

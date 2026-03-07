@@ -71,10 +71,16 @@ Settings are persisted via `@tauri-apps/plugin-store` in `settings.json` (Tauri 
 - Sequential migration functions (`MIGRATIONS[0]` = v0→v1, `MIGRATIONS[1]` = v1→v2, ...) run to reach `CURRENT_VERSION`
 - After migrations, the existing spread-defaults pattern (`{ ...DEFAULTS, ...saved }`) acts as a final safety net
 
-**Adding a new migration:**
+**Adding a setting to the current unreleased version:**
+1. Add the `if (!('key' in data))` default to the *last* migration function in the array (the one for the current unreleased release)
+2. That's it — no version bump needed for additions within the same release
+
+**Adding a migration for a new release:**
 1. Bump `CURRENT_VERSION` to N+1 in `src/lib/settingsMigrations.ts`
-2. Add `MIGRATIONS[N]` function that transforms the store data
-3. That's it — existing users' stores get migrated on next launch
+2. Add `MIGRATIONS[N]` function with all new settings for that release
+3. Add a mapping entry in `normalizeVersion()` so users on the old version number get routed correctly
+
+Migrations are collapsed to **one per release** (not one per feature). The `normalizeVersion()` function maps old per-feature version numbers from prior releases to the collapsed scheme.
 
 ## Changelog & Releases
 Versioning is automated via CHANGELOG.md bump hints and GitHub Actions.

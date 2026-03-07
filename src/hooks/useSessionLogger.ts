@@ -107,7 +107,9 @@ export function useSessionLogger(
       const stripped = stripAnsi(toStrip);
       const lines = stripped.split(/\r?\n/);
       for (const line of lines) {
-        if (line.trim()) {
+        // Skip empty lines and bare MUD prompts (just "> " with nothing after)
+        const trimmed = line.trim();
+        if (trimmed && trimmed !== '>') {
           bufferRef.current.push(`[${formatTimestamp(formatRef.current)}] ${line}\n`);
         }
       }
@@ -119,7 +121,7 @@ export function useSessionLogger(
   const logCommand = useCallback(
     (command: string) => {
       if (!enabled || !filenameRef.current || passwordModeRef.current) return;
-      bufferRef.current.push(`[${formatTimestamp(formatRef.current)}] > ${command}\n`);
+      bufferRef.current.push(`[${formatTimestamp(formatRef.current)}] >> ${command}\n`);
       scheduleFlush();
     },
     [enabled, scheduleFlush]

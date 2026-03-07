@@ -209,6 +209,7 @@ export function useMudConnection(
               : data;
             if (filtered) {
               let out = debugModeRef.current ? annotateAnsi(filtered) : filtered;
+
               const shouldStrip = outputFilterRef?.current?.stripPrompts ?? true;
               if (payload.ga && shouldStrip) {
                 out = stripPrompt(out);

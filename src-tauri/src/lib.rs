@@ -13,14 +13,10 @@ struct ConnectionState {
 }
 
 fn spawn_connection(app: &tauri::AppHandle, state: &ConnectionState, startup_delay: bool) {
-    // Drop old sender to signal the old connection to stop
+    // Drop old sender and abort old task
     {
         let mut tx = state.cmd_tx.lock().unwrap_or_else(|e| e.into_inner());
         *tx = None;
-    }
-
-    // Abort old task if still running
-    {
         let mut handle = state.task_handle.lock().unwrap_or_else(|e| e.into_inner());
         if let Some(h) = handle.take() {
             h.abort();
@@ -151,6 +147,10 @@ pub fn run() {
             storage::restore_backup,
             storage::prune_backups,
             storage::append_to_log,
+            storage::list_session_logs,
+            storage::read_session_log,
+            storage::search_session_logs,
+            storage::delete_session_log,
             storage::import_sound_file,
             storage::get_sound_base64,
             storage::remove_custom_sound,

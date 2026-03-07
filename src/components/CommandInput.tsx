@@ -3,12 +3,15 @@ import {
   useCallback,
   useEffect,
   useLayoutEffect,
+  useMemo,
   useRef,
   KeyboardEvent,
   forwardRef,
 } from 'react';
 import { cn } from '../lib/cn';
+import { formatCountdown } from '../lib/panelUtils';
 import { TimerIcon, AlignmentIcon, WhoIcon } from './icons';
+import { StatusBadge } from './StatusBadge';
 import { useAppSettingsContext } from '../contexts/AppSettingsContext';
 import { useCommandInputContext } from '../contexts/CommandInputContext';
 import { useSpotlight } from '../contexts/SpotlightContext';
@@ -70,15 +73,6 @@ function findTabMatches(lines: string[], prefix: string): string[] {
   return matches;
 }
 
-/** Format remaining ms as "M:SS" countdown string. */
-function formatCountdown(remainingMs: number): string {
-  if (remainingMs <= 0) return '0:00';
-  const totalSec = Math.ceil(remainingMs / 1000);
-  const min = Math.floor(totalSec / 60);
-  const sec = totalSec % 60;
-  return `${min}:${sec.toString().padStart(2, '0')}`;
-}
-
 export const CommandInput = forwardRef<HTMLTextAreaElement, CommandInputProps>(
   ({ onSend, onReconnect }, ref) => {
     const {
@@ -132,7 +126,8 @@ export const CommandInput = forwardRef<HTMLTextAreaElement, CommandInputProps>(
       announceMode,
       onStopAnnounce,
     } = useCommandInputContext();
-    const { commandHistorySize, numpadMappings, showTimerBadges } = useAppSettingsContext();
+    const { commandHistorySize, numpadMappings, showTimerBadges, selectOnSend } =
+      useAppSettingsContext();
     const { active: spotlightActive } = useSpotlight();
     const numpadRef = useRef(numpadMappings);
     numpadRef.current = numpadMappings;
@@ -208,7 +203,7 @@ export const CommandInput = forwardRef<HTMLTextAreaElement, CommandInputProps>(
       }
     }, [value]);
 
-    const lineCount = value.split('\n').length;
+    const lineCount = useMemo(() => value.split('\n').length, [value]);
     const isMultiLine = lineCount > 1;
 
     const submit = useCallback(() => {
@@ -232,8 +227,13 @@ export const CommandInput = forwardRef<HTMLTextAreaElement, CommandInputProps>(
       historyIndexRef.current = -1;
       searchPrefixRef.current = '';
       tabStateRef.current = null;
-      setValue('');
-    }, [value, onSend, passwordMode, skipHistory, commandHistorySize]);
+      if (selectOnSend && !passwordMode && !skipHistory) {
+        // Keep text but select it all — typing replaces, Enter resends
+        requestAnimationFrame(() => internalRef.current?.select());
+      } else {
+        setValue('');
+      }
+    }, [value, onSend, passwordMode, skipHistory, commandHistorySize, selectOnSend]);
 
     const handleKeyDown = useCallback(
       (e: KeyboardEvent<HTMLTextAreaElement>) => {
@@ -393,119 +393,108 @@ export const CommandInput = forwardRef<HTMLTextAreaElement, CommandInputProps>(
 
         {/* Action blocking badge */}
         {actionBlocked && (
-          <span
+          <StatusBadge
+            color="#f59e0b"
             title={`Blocked: ${actionBlockLabel ?? 'action'} — ${actionQueueLength} command(s) queued. /unblock to release`}
-            className="flex items-center gap-1 px-1.5 py-1 rounded border text-[9px] font-mono self-center shrink-0 ml-1 text-[#f59e0b] border-[#f59e0b]/30 bg-[#f59e0b]/8 select-none animate-pulse"
-            style={{ filter: 'drop-shadow(0 0 3px rgba(245, 158, 11, 0.25))' }}
           >
             <span>{actionBlockLabel ?? 'BLOCKED'}</span>
             {actionQueueLength > 0 && <span>({actionQueueLength})</span>}
-          </span>
+          </StatusBadge>
         )}
 
         {/* Movement mode badge (only when not normal) */}
         {movementMode !== 'normal' && (
-          <span
+          <StatusBadge
+            color="#2dd4bf"
             title={`Movement mode: ${movementMode} — Numpad / or /movemode to cycle`}
             onClick={onToggleMovementMode}
-            className="flex items-center gap-1 px-1.5 py-1 rounded border text-[9px] font-mono self-center shrink-0 ml-1 text-[#2dd4bf] border-[#2dd4bf]/30 bg-[#2dd4bf]/8 cursor-pointer select-none animate-pulse-slow"
-            style={{ filter: 'drop-shadow(0 0 3px rgba(45, 212, 191, 0.25))' }}
+            animate
           >
             <span>{movementMode.charAt(0).toUpperCase() + movementMode.slice(1)}</span>
-          </span>
+          </StatusBadge>
         )}
 
         {/* Babel language trainer badge */}
         {babelEnabled && babelLanguage && (
-          <span
+          <StatusBadge
+            color="#e879f9"
             title={`Babel: training ${babelLanguage} — click to stop`}
             onClick={onToggleBabel}
-            className="flex items-center gap-1 px-1.5 py-1 rounded border text-[9px] font-mono self-center shrink-0 ml-1 text-[#e879f9] border-[#e879f9]/30 bg-[#e879f9]/8 cursor-pointer select-none animate-pulse-slow"
-            style={{ filter: 'drop-shadow(0 0 3px rgba(232, 121, 249, 0.25))' }}
+            animate
           >
             <span>Babel</span>
             {babelNextAt && (
               <span className="opacity-70">{formatCountdown(babelNextAt - Date.now())}</span>
             )}
-          </span>
+          </StatusBadge>
         )}
 
         {/* Auto-inscriber badge */}
         {inscriberActive && (
-          <span
+          <StatusBadge
+            color="#60a5fa"
             title={`Autoinscribe: ${inscriberSpell ?? '?'} — click to stop`}
             onClick={onStopInscriber}
-            className="flex items-center gap-1 px-1.5 py-1 rounded border text-[9px] font-mono self-center shrink-0 ml-1 text-[#60a5fa] border-[#60a5fa]/30 bg-[#60a5fa]/8 cursor-pointer select-none animate-pulse-slow"
-            style={{ filter: 'drop-shadow(0 0 3px rgba(96, 165, 250, 0.25))' }}
+            animate
           >
             <span>Autoinscribe</span>
             {inscriberCycleCount > 0 && (
               <span className="opacity-70">x{inscriberCycleCount}</span>
             )}
-          </span>
+          </StatusBadge>
         )}
 
         {/* Auto-caster badge */}
         {casterActive && (
-          <span
+          <StatusBadge
+            color={casterWeightMode ? '#fbbf24' : '#34d399'}
             title={
               casterWeightMode
                 ? `Autocast: ${casterSpell ?? '?'} @${casterPower ?? '?'} — carrying ${casterCarriedWeight} ${casterWeightItem} — click to stop`
                 : `Autocast: ${casterSpell ?? '?'} @${casterPower ?? '?'} — click to stop`
             }
             onClick={onStopCaster}
-            className={`flex items-center gap-1 px-1.5 py-1 rounded border text-[9px] font-mono self-center shrink-0 ml-1 cursor-pointer select-none animate-pulse-slow ${
-              casterWeightMode
-                ? 'text-[#fbbf24] border-[#fbbf24]/30 bg-[#fbbf24]/8'
-                : 'text-[#34d399] border-[#34d399]/30 bg-[#34d399]/8'
-            }`}
-            style={{
-              filter: casterWeightMode
-                ? 'drop-shadow(0 0 3px rgba(251, 191, 36, 0.25))'
-                : 'drop-shadow(0 0 3px rgba(52, 211, 153, 0.25))',
-            }}
+            animate
           >
             <span>{casterWeightMode ? 'Autocast+Wt' : 'Autocast'}</span>
             {casterCycleCount > 0 && (
               <span className="opacity-70">x{casterCycleCount}</span>
             )}
-          </span>
+          </StatusBadge>
         )}
 
         {/* Auto-conc badge */}
         {concActive && (
-          <span
+          <StatusBadge
+            color="#c084fc"
             title={`Autoconc: ${concAction ?? '?'} — click to stop`}
             onClick={onStopConc}
-            className="flex items-center gap-1 px-1.5 py-1 rounded border text-[9px] font-mono self-center shrink-0 ml-1 text-[#c084fc] border-[#c084fc]/30 bg-[#c084fc]/8 cursor-pointer select-none animate-pulse-slow"
-            style={{ filter: 'drop-shadow(0 0 3px rgba(192, 132, 252, 0.25))' }}
+            animate
           >
             <span>Autoconc</span>
             {concCycleCount > 0 && (
               <span className="opacity-70">x{concCycleCount}</span>
             )}
-          </span>
+          </StatusBadge>
         )}
 
         {/* Announce badge */}
         {announceMode !== 'off' && (
-          <span
+          <StatusBadge
+            color="#fb923c"
             title={`Announce: ${announceMode} — click to stop`}
             onClick={onStopAnnounce}
-            className="flex items-center gap-1 px-1.5 py-1 rounded border text-[9px] font-mono self-center shrink-0 ml-1 text-[#fb923c] border-[#fb923c]/30 bg-[#fb923c]/8 cursor-pointer select-none"
-            style={{ filter: 'drop-shadow(0 0 3px rgba(251, 146, 60, 0.25))' }}
           >
             <span>Announce: {announceMode}</span>
-          </span>
+          </StatusBadge>
         )}
 
         {/* Alignment tracking badge (only when active) */}
         {showTimerBadges && alignmentTrackingEnabled && (
-          <span
+          <StatusBadge
+            color="#80e080"
             title={`Alignment tracking: every ${alignmentTrackingMinutes}m (double-click to stop)`}
             onDoubleClick={onToggleAlignmentTracking}
-            className="flex items-center gap-1 px-1.5 py-1 rounded border text-[9px] font-mono self-center shrink-0 ml-1 text-[#80e080] border-[#80e080]/30 bg-[#80e080]/8 cursor-pointer select-none"
-            style={{ filter: 'drop-shadow(0 0 3px rgba(128, 224, 128, 0.25))' }}
           >
             <AlignmentIcon size={9} />
             <span>
@@ -513,31 +502,29 @@ export const CommandInput = forwardRef<HTMLTextAreaElement, CommandInputProps>(
                 ? formatCountdown(alignmentNextAt - Date.now())
                 : `${alignmentTrackingMinutes}m`}
             </span>
-          </span>
+          </StatusBadge>
         )}
 
         {/* Who auto-refresh badge (only when active) */}
         {showTimerBadges && whoAutoRefreshEnabled && (
-          <span
+          <StatusBadge
+            color="#61afef"
             title={`Who auto-refresh: every ${whoRefreshMinutes}m (double-click to stop)`}
             onDoubleClick={onToggleWhoAutoRefresh}
-            className="flex items-center gap-1 px-1.5 py-1 rounded border text-[9px] font-mono self-center shrink-0 ml-1 text-[#61afef] border-[#61afef]/30 bg-[#61afef]/8 cursor-pointer select-none"
-            style={{ filter: 'drop-shadow(0 0 3px rgba(97, 175, 239, 0.25))' }}
           >
             <WhoIcon size={9} />
             <span>
               {whoNextAt ? formatCountdown(whoNextAt - Date.now()) : `${whoRefreshMinutes}m`}
             </span>
-          </span>
+          </StatusBadge>
         )}
 
         {/* Anti-idle badge (only when active, hidden when alignment tracking supersedes) */}
         {showTimerBadges && antiIdleEnabled && !alignmentTrackingEnabled && (
-          <span
+          <StatusBadge
+            color="#bd93f9"
             title={`Anti-idle: "${antiIdleCommand}" every ${antiIdleMinutes}m (double-click to stop)`}
             onDoubleClick={onToggleAntiIdle}
-            className="flex items-center gap-1 px-1.5 py-1 rounded border text-[9px] font-mono self-center shrink-0 ml-1 text-[#bd93f9] border-[#bd93f9]/30 bg-[#bd93f9]/8 cursor-pointer select-none"
-            style={{ filter: 'drop-shadow(0 0 3px rgba(189, 147, 249, 0.25))' }}
           >
             <TimerIcon size={9} />
             <span>
@@ -545,7 +532,7 @@ export const CommandInput = forwardRef<HTMLTextAreaElement, CommandInputProps>(
                 ? formatCountdown(antiIdleNextAt - Date.now())
                 : `${antiIdleMinutes}m`}
             </span>
-          </span>
+          </StatusBadge>
         )}
 
         {/* Custom timer countdown badges (sorted soonest-first) */}
@@ -560,17 +547,16 @@ export const CommandInput = forwardRef<HTMLTextAreaElement, CommandInputProps>(
             return (
               <>
                 {visible.map((t) => (
-                  <span
+                  <StatusBadge
                     key={t.id}
+                    color="#f97316"
                     title={`Timer: ${t.name} (double-click to stop)`}
                     onDoubleClick={() => onToggleTimer?.(t.id)}
-                    className="flex items-center gap-1 px-1.5 py-1 rounded border text-[9px] font-mono self-center shrink-0 ml-1 text-[#f97316] border-[#f97316]/30 bg-[#f97316]/8 cursor-pointer select-none"
-                    style={{ filter: 'drop-shadow(0 0 3px rgba(249, 115, 22, 0.25))' }}
                   >
                     <TimerIcon size={8} />
                     <span className="max-w-[50px] truncate">{t.name}</span>
                     <span>{formatCountdown(t.nextAt - Date.now())}</span>
-                  </span>
+                  </StatusBadge>
                 ))}
                 {overflow.length > 0 && (
                   <div className="relative self-center shrink-0 ml-1">
@@ -618,14 +604,11 @@ export const CommandInput = forwardRef<HTMLTextAreaElement, CommandInputProps>(
               !antiIdleEnabled &&
               !alignmentTrackingEnabled &&
               !whoAutoRefreshEnabled)) && (
-            <span
-              className="flex items-center gap-1 px-1.5 py-1 rounded border text-[9px] font-mono self-center shrink-0 ml-1 text-[#f97316] border-[#f97316]/30 bg-[#f97316]/8 opacity-75"
-              style={{ filter: 'drop-shadow(0 0 3px rgba(249, 115, 22, 0.25))' }}
-            >
+            <StatusBadge color="#f97316" title="Demo timer badge">
               <TimerIcon size={8} />
               <span>heal</span>
               <span>0:25</span>
-            </span>
+            </StatusBadge>
           )}
       </div>
     );

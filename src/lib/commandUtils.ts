@@ -1,6 +1,6 @@
 import type { ExpandedCommand } from '../types/alias';
 import type { Variable } from '../types/variable';
-import { expandVariables } from './variableEngine';
+import { expandVariables, expandSkillFunctions } from './variableEngine';
 
 /**
  * Split a raw input string on the configured separator and newlines.
@@ -150,6 +150,7 @@ export interface CommandRunner {
   setVar: (name: string, value: string, scope: 'character' | 'global') => void;
   convert: (args: string) => void;
   getVariables: () => Variable[];
+  getSkillCount: (skillName: string) => number;
 }
 
 /**
@@ -168,7 +169,10 @@ export async function executeCommands(
   // Local overrides accumulate /var sets during this execution.
   // Placed BEFORE runner vars so they win on name collisions.
   const overrides = localVars ?? [];
-  const ev = (text: string) => expandVariables(text, [...overrides, ...runner.getVariables()]);
+  const ev = (text: string) => {
+    const withVars = expandVariables(text, [...overrides, ...runner.getVariables()]);
+    return expandSkillFunctions(withVars, runner.getSkillCount);
+  };
 
   for (const cmd of commands) {
     switch (cmd.type) {

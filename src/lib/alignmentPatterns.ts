@@ -1,4 +1,5 @@
 import type { ThemeColorKey } from './defaultTheme';
+import { cleanLine } from './lineUtils';
 
 /** Parsed alignment state with conviction strength and display metadata */
 export interface AlignmentLevel {
@@ -162,8 +163,7 @@ function buildLevel(def: ConvictionDef, alignment: string): AlignmentLevel {
  * Specific patterns are tried before the catch-all verb pattern.
  */
 export function matchAlignmentLine(line: string): AlignmentMatch | null {
-  // Strip leading "> " prompts
-  const cleaned = line.replace(/^(?:> )+/, '').trim();
+  const cleaned = cleanLine(line);
   if (!cleaned) return null;
 
   // "You don't feel strongly about anything."

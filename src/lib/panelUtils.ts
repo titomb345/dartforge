@@ -1,3 +1,12 @@
+/** Format remaining ms as "M:SS" countdown string. */
+export function formatCountdown(remainingMs: number): string {
+  if (remainingMs <= 0) return '0:00';
+  const totalSec = Math.ceil(remainingMs / 1000);
+  const min = Math.floor(totalSec / 60);
+  const sec = totalSec % 60;
+  return `${min}:${sec.toString().padStart(2, '0')}`;
+}
+
 /** CSS class for the root div of pinnable panels. */
 export function panelRootClass(isPinned: boolean): string {
   return isPinned

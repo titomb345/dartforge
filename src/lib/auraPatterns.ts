@@ -1,5 +1,6 @@
 import type { ThemeColorKey } from './defaultTheme';
 import { extractAnsiColor, extractAnsiColorSegments } from './ansiColorExtract';
+import { cleanLine, stripScorePrefix } from './lineUtils';
 import type { AnsiColorSegment } from './ansiColorExtract';
 
 /** A single aura state with display metadata */
@@ -266,8 +267,7 @@ for (const level of AURA_LEVELS) {
  * actual color for the aura descriptor text.
  */
 export function matchAuraLine(line: string, rawLine?: string): AuraMatch | null {
-  // Strip leading "> " prompts
-  const cleaned = line.replace(/^(?:> )+/, '').trim();
+  const cleaned = cleanLine(line);
   if (!cleaned) return null;
 
   // "You have no aura." / "You appear to have no aura."
@@ -277,10 +277,8 @@ export function matchAuraLine(line: string, rawLine?: string): AuraMatch | null 
   }
 
   // Strip optional "Aura : " prefix (score output keeps the full sentence after it)
-  let text = cleaned;
-  const prefixMatch = cleaned.match(/^Aura\s*:\s*(.+)$/i);
-  if (prefixMatch) {
-    text = prefixMatch[1].trim();
+  let text = stripScorePrefix(cleaned, 'Aura');
+  if (text !== cleaned) {
     // "Aura : None." / "Aura : You have no aura." / "Aura : You appear to have no aura."
     const lower = text.replace(/\.$/, '').toLowerCase();
     if (

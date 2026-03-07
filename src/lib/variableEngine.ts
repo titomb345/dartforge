@@ -1,4 +1,6 @@
 import type { Variable } from '../types/variable';
+import { getTierForCount, getImprovesToNextTier } from './skillTiers';
+import { getSkillCategory } from './skillCategories';
 
 /**
  * Reserved $ tokens that must NOT be replaced by user variables.
@@ -9,6 +11,20 @@ const RESERVED_PREFIXES = [
   'line', // $line (trigger)
   'me', // $me
 ];
+
+/** Cache compiled regex patterns keyed by the sorted variable name list */
+let cachedPatternKey = '';
+let cachedPattern: RegExp | null = null;
+
+function getVariablePattern(safeNames: string[]): RegExp {
+  const key = safeNames.join('|');
+  if (key === cachedPatternKey && cachedPattern) return cachedPattern;
+
+  const escaped = safeNames.map((n) => n.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'));
+  cachedPattern = new RegExp(`\\$(${escaped.join('|')})(?![a-zA-Z0-9_])`, 'gi');
+  cachedPatternKey = key;
+  return cachedPattern;
+}
 
 /**
  * Expand user-defined $variables in a text string.
@@ -48,11 +64,37 @@ export function expandVariables(text: string, variables: Variable[]): string {
 
   if (safeNames.length === 0) return text;
 
-  // Escape regex special characters in variable names
-  const escaped = safeNames.map((n) => n.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'));
-  const pattern = new RegExp(`\\$(${escaped.join('|')})(?![a-zA-Z0-9_])`, 'gi');
+  const pattern = getVariablePattern(safeNames);
+  // Reset lastIndex since the regex has the 'g' flag and is cached
+  pattern.lastIndex = 0;
 
   return text.replace(pattern, (_, name) => {
     return varMap.get(name.toLowerCase()) ?? `$${name}`;
+  });
+}
+
+// ── Skill function expansion ─────────────────────────────────────────
+// Expands $skillCount(name), $skillLevel(name), $skillTier(name),
+// $skillNext(name), $skillGroup(name) in text-mode bodies.
+// Runs AFTER positional arg substitution so $skillCount($1) works.
+
+const SKILL_FN_PATTERN = /\$skill(Count|Level|Tier|Next|Group)\(([^)]+)\)/gi;
+
+export function expandSkillFunctions(
+  text: string,
+  getSkillCount: (name: string) => number
+): string {
+  if (!text.includes('$skill')) return text;
+  return text.replace(SKILL_FN_PATTERN, (full, fn, name) => {
+    const key = name.trim().toLowerCase();
+    const count = getSkillCount(key);
+    switch (fn.toLowerCase()) {
+      case 'count': return String(count);
+      case 'level': return getTierForCount(count).name;
+      case 'tier': return String(getTierForCount(count).level);
+      case 'next': return String(getImprovesToNextTier(count));
+      case 'group': return getSkillCategory(key)[0];
+      default: return full;
+    }
   });
 }

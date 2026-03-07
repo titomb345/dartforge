@@ -21,6 +21,7 @@ import { MudInput, MudTextarea, MudNumberInput, ToggleSwitch } from './shared';
 import { cn } from '../lib/cn';
 import { useDataStore } from '../contexts/DataStoreContext';
 import { useAppSettingsContext } from '../contexts/AppSettingsContext';
+import { formatCountdown } from '../lib/panelUtils';
 import { getPlatform } from '../lib/platform';
 import { loadStorageMode } from '../lib/dropbox';
 
@@ -127,6 +128,87 @@ function FieldRow({
   );
 }
 
+/** FieldRow + ToggleSwitch shorthand for boolean settings. */
+function ToggleRow({
+  label,
+  checked,
+  onChange,
+  accent,
+  dimmed,
+  disabled,
+}: {
+  label: string;
+  checked: boolean;
+  onChange: (v: boolean) => void;
+  accent: string;
+  dimmed?: boolean;
+  disabled?: boolean;
+}) {
+  return (
+    <FieldRow label={label} dimmed={dimmed}>
+      <ToggleSwitch checked={checked} onChange={onChange} accent={accent} disabled={disabled} />
+    </FieldRow>
+  );
+}
+
+type InputAccent = 'red' | 'green' | 'cyan' | 'orange' | 'pink' | 'purple';
+
+/** FieldRow + MudNumberInput + unit suffix shorthand. */
+function NumberRow({
+  label,
+  value,
+  onChange,
+  accent,
+  min,
+  max,
+  step,
+  parse,
+  unit,
+  width = 'w-[48px]',
+  dimmed,
+}: {
+  label: string;
+  value: number;
+  onChange: (v: number) => void;
+  accent: InputAccent;
+  min: number;
+  max: number;
+  step?: number;
+  parse?: (v: string) => number;
+  unit: string;
+  width?: string;
+  dimmed?: boolean;
+}) {
+  return (
+    <FieldRow label={label} dimmed={dimmed}>
+      <div className="flex items-center gap-1.5">
+        <MudNumberInput
+          accent={accent}
+          size="sm"
+          min={min}
+          max={max}
+          step={step}
+          parse={parse}
+          value={value}
+          onChange={onChange}
+          className={`${width} text-center`}
+        />
+        <span className="text-[10px] font-mono text-text-dim">{unit}</span>
+      </div>
+    </FieldRow>
+  );
+}
+
+/** Timed status message hook — shows a message for 3 seconds. */
+function useFlashStatus(): [string | null, (msg: string) => void] {
+  const [status, setStatus] = useState<string | null>(null);
+  const showStatus = (msg: string) => {
+    setStatus(msg);
+    setTimeout(() => setStatus(null), 3000);
+  };
+  return [status, showStatus];
+}
+
 /* ── Backup Entry ─────────────────────────────────────────── */
 
 interface BackupEntry {
@@ -168,6 +250,8 @@ export function SettingsPanel({ onClose }: { onClose: () => void }) {
     updateAntiSpamEnabled,
     commandEchoEnabled,
     updateCommandEchoEnabled,
+    selectOnSend,
+    updateSelectOnSend,
     commandSeparator,
     updateCommandSeparator,
     showTimerBadges,
@@ -240,12 +324,7 @@ export function SettingsPanel({ onClose }: { onClose: () => void }) {
 
   const switchCooldownActive = otherSlotNeedsCooldown && cooldownRemaining > 0;
 
-  const formatCooldown = (ms: number) => {
-    const totalSec = Math.ceil(ms / 1000);
-    const min = Math.floor(totalSec / 60);
-    const sec = totalSec % 60;
-    return `${min}:${sec.toString().padStart(2, '0')}`;
-  };
+  const formatCooldown = formatCountdown;
 
   const updateCharacterField = (slot: 0 | 1, field: 'name' | 'password', value: string) => {
     const updated = [...autoLoginCharacters] as [
@@ -271,13 +350,7 @@ export function SettingsPanel({ onClose }: { onClose: () => void }) {
           open={openSection === 'characters'}
           onToggle={() => toggle('characters')}
         >
-          <FieldRow label="Auto-login">
-            <ToggleSwitch
-              checked={autoLoginEnabled}
-              onChange={updateAutoLoginEnabled}
-              accent="#56b6c2"
-            />
-          </FieldRow>
+          <ToggleRow label="Auto-login" checked={autoLoginEnabled} onChange={updateAutoLoginEnabled} accent="#56b6c2" />
 
           {([0, 1] as const).map((slot) => {
             const char1Set = !!(autoLoginCharacters[0]?.name && autoLoginCharacters[0]?.password);
@@ -377,27 +450,8 @@ export function SettingsPanel({ onClose }: { onClose: () => void }) {
           <div className="text-[10px] font-semibold text-text-muted tracking-wide uppercase mb-1">
             Alignment Tracking
           </div>
-          <FieldRow label="Enabled">
-            <ToggleSwitch
-              checked={alignmentTrackingEnabled}
-              onChange={updateAlignmentTrackingEnabled}
-              accent="#80e080"
-            />
-          </FieldRow>
-          <FieldRow label="Interval" dimmed={!alignmentTrackingEnabled}>
-            <div className="flex items-center gap-1.5">
-              <MudNumberInput
-                accent="green"
-                size="sm"
-                min={1}
-                max={14}
-                value={alignmentTrackingMinutes}
-                onChange={updateAlignmentTrackingMinutes}
-                className="w-[48px] text-center"
-              />
-              <span className="text-[10px] font-mono text-text-dim">min</span>
-            </div>
-          </FieldRow>
+          <ToggleRow label="Enabled" checked={alignmentTrackingEnabled} onChange={updateAlignmentTrackingEnabled} accent="#80e080" />
+          <NumberRow label="Interval" value={alignmentTrackingMinutes} onChange={updateAlignmentTrackingMinutes} accent="green" min={1} max={14} unit="min" dimmed={!alignmentTrackingEnabled} />
           <div className="text-[9px] text-text-dim font-mono leading-relaxed mt-1 mb-3">
             Polls alignment at the configured interval. Also prevents idle disconnect.
           </div>
@@ -406,27 +460,8 @@ export function SettingsPanel({ onClose }: { onClose: () => void }) {
           <div className="text-[10px] font-semibold text-text-muted tracking-wide uppercase mb-1">
             Who List
           </div>
-          <FieldRow label="Auto-refresh">
-            <ToggleSwitch
-              checked={whoAutoRefreshEnabled}
-              onChange={updateWhoAutoRefreshEnabled}
-              accent="#61afef"
-            />
-          </FieldRow>
-          <FieldRow label="Interval" dimmed={!whoAutoRefreshEnabled}>
-            <div className="flex items-center gap-1.5">
-              <MudNumberInput
-                accent="cyan"
-                size="sm"
-                min={1}
-                max={30}
-                value={whoRefreshMinutes}
-                onChange={updateWhoRefreshMinutes}
-                className="w-[48px] text-center"
-              />
-              <span className="text-[10px] font-mono text-text-dim">min</span>
-            </div>
-          </FieldRow>
+          <ToggleRow label="Auto-refresh" checked={whoAutoRefreshEnabled} onChange={updateWhoAutoRefreshEnabled} accent="#61afef" />
+          <NumberRow label="Interval" value={whoRefreshMinutes} onChange={updateWhoRefreshMinutes} accent="cyan" min={1} max={30} unit="min" dimmed={!whoAutoRefreshEnabled} />
           <div className="text-[9px] text-text-dim font-mono leading-relaxed mt-1 mb-3">
             Silently refreshes the who list in the background.
           </div>
@@ -440,14 +475,7 @@ export function SettingsPanel({ onClose }: { onClose: () => void }) {
               Disabled — alignment tracking is active.
             </div>
           )}
-          <FieldRow label="Enabled" dimmed={alignmentTrackingEnabled}>
-            <ToggleSwitch
-              checked={antiIdleEnabled}
-              onChange={onAntiIdleEnabledChange}
-              accent="#bd93f9"
-              disabled={alignmentTrackingEnabled}
-            />
-          </FieldRow>
+          <ToggleRow label="Enabled" checked={antiIdleEnabled} onChange={onAntiIdleEnabledChange} accent="#bd93f9" dimmed={alignmentTrackingEnabled} disabled={alignmentTrackingEnabled} />
           <FieldRow label="Command" dimmed={!antiIdleEnabled || alignmentTrackingEnabled}>
             <MudInput
               accent="purple"
@@ -458,20 +486,7 @@ export function SettingsPanel({ onClose }: { onClose: () => void }) {
               className="w-[120px] text-right"
             />
           </FieldRow>
-          <FieldRow label="Interval" dimmed={!antiIdleEnabled || alignmentTrackingEnabled}>
-            <div className="flex items-center gap-1.5">
-              <MudNumberInput
-                accent="purple"
-                size="sm"
-                min={1}
-                max={14}
-                value={antiIdleMinutes}
-                onChange={onAntiIdleMinutesChange}
-                className="w-[48px] text-center"
-              />
-              <span className="text-[10px] font-mono text-text-dim">min</span>
-            </div>
-          </FieldRow>
+          <NumberRow label="Interval" value={antiIdleMinutes} onChange={onAntiIdleMinutesChange} accent="purple" min={1} max={14} unit="min" dimmed={!antiIdleEnabled || alignmentTrackingEnabled} />
           <div className="text-[9px] text-text-dim font-mono leading-relaxed mt-1 mb-3">
             Sends the command at the configured interval to prevent idle disconnect.
           </div>
@@ -480,13 +495,7 @@ export function SettingsPanel({ onClose }: { onClose: () => void }) {
           <div className="text-[10px] font-semibold text-text-muted tracking-wide uppercase mb-1">
             Action Blocking
           </div>
-          <FieldRow label="Enabled">
-            <ToggleSwitch
-              checked={actionBlockingEnabled}
-              onChange={updateActionBlockingEnabled}
-              accent="#f59e0b"
-            />
-          </FieldRow>
+          <ToggleRow label="Enabled" checked={actionBlockingEnabled} onChange={updateActionBlockingEnabled} accent="#f59e0b" />
           <div className="text-[9px] text-text-dim font-mono leading-relaxed mt-1 mb-3">
             Queues commands during channeled actions (cast, study, hunt, etc.) to prevent
             interruption. Use /block and /unblock for manual control.
@@ -496,13 +505,7 @@ export function SettingsPanel({ onClose }: { onClose: () => void }) {
           <div className="text-[10px] font-semibold text-text-muted tracking-wide uppercase mb-1">
             Display
           </div>
-          <FieldRow label="Timer countdowns">
-            <ToggleSwitch
-              checked={showTimerBadges}
-              onChange={updateShowTimerBadges}
-              accent="#f97316"
-            />
-          </FieldRow>
+          <ToggleRow label="Timer countdowns" checked={showTimerBadges} onChange={updateShowTimerBadges} accent="#f97316" />
           <div className="text-[9px] text-text-dim font-mono leading-relaxed mt-1">
             Show timer countdowns (anti-idle, alignment, and custom timers) next to the command
             input.
@@ -517,13 +520,7 @@ export function SettingsPanel({ onClose }: { onClose: () => void }) {
           open={openSection === 'post-sync'}
           onToggle={() => toggle('post-sync')}
         >
-          <FieldRow label="Enabled">
-            <ToggleSwitch
-              checked={postSyncEnabled}
-              onChange={updatePostSyncEnabled}
-              accent="#ff79c6"
-            />
-          </FieldRow>
+          <ToggleRow label="Enabled" checked={postSyncEnabled} onChange={updatePostSyncEnabled} accent="#ff79c6" />
           <FieldRow label="Commands" dimmed={!postSyncEnabled}>
             <div className="w-full" />
           </FieldRow>
@@ -552,35 +549,22 @@ export function SettingsPanel({ onClose }: { onClose: () => void }) {
           open={openSection === 'output'}
           onToggle={() => toggle('output')}
         >
-          <FieldRow label="Convert board dates">
-            <ToggleSwitch
-              checked={boardDatesEnabled}
-              onChange={onBoardDatesEnabledChange}
-              accent="#50fa7b"
-            />
-          </FieldRow>
+          <ToggleRow label="Convert board dates" checked={boardDatesEnabled} onChange={onBoardDatesEnabledChange} accent="#50fa7b" />
           <div className="text-[9px] text-text-dim font-mono leading-relaxed mt-1">
             Replace in-game bulletin board dates with real-world dates.
           </div>
-          <FieldRow label="Strip prompts">
-            <ToggleSwitch
-              checked={stripPromptsEnabled}
-              onChange={onStripPromptsEnabledChange}
-              accent="#50fa7b"
-            />
-          </FieldRow>
+          <ToggleRow label="Strip prompts" checked={stripPromptsEnabled} onChange={onStripPromptsEnabledChange} accent="#50fa7b" />
           <div className="text-[9px] text-text-dim font-mono leading-relaxed mt-1">
             Remove the server prompt (&gt;) from terminal output.
           </div>
-          <FieldRow label="Command echo">
-            <ToggleSwitch
-              checked={commandEchoEnabled}
-              onChange={updateCommandEchoEnabled}
-              accent="#50fa7b"
-            />
-          </FieldRow>
+          <ToggleRow label="Command echo" checked={commandEchoEnabled} onChange={updateCommandEchoEnabled} accent="#50fa7b" />
           <div className="text-[9px] text-text-dim font-mono leading-relaxed mt-1">
             Show your sent commands as dimmed lines in the terminal.
+          </div>
+          <ToggleRow label="Select on send" checked={selectOnSend} onChange={updateSelectOnSend} accent="#50fa7b" />
+          <div className="text-[9px] text-text-dim font-mono leading-relaxed mt-1">
+            After sending a command, keep it selected in the input instead of clearing. Type to
+            replace, or press Enter to resend.
           </div>
           <FieldRow label="Command separator">
             <MudInput
@@ -599,13 +583,7 @@ export function SettingsPanel({ onClose }: { onClose: () => void }) {
             literally. If you change this, update existing alias/trigger bodies
             to match.
           </div>
-          <FieldRow label="Anti-spam">
-            <ToggleSwitch
-              checked={antiSpamEnabled}
-              onChange={updateAntiSpamEnabled}
-              accent="#50fa7b"
-            />
-          </FieldRow>
+          <ToggleRow label="Anti-spam" checked={antiSpamEnabled} onChange={updateAntiSpamEnabled} accent="#50fa7b" />
           <div className="text-[9px] text-text-dim font-mono leading-relaxed mt-1">
             Collapse consecutive identical lines with a repeat count.
           </div>
@@ -619,41 +597,11 @@ export function SettingsPanel({ onClose }: { onClose: () => void }) {
           open={openSection === 'counters'}
           onToggle={() => toggle('counters')}
         >
-          <FieldRow label="Hot threshold">
-            <div className="flex items-center gap-1.5">
-              <MudNumberInput
-                accent="purple"
-                size="sm"
-                min={0}
-                max={99}
-                step={0.5}
-                parse={parseFloat}
-                value={counterHotThreshold}
-                onChange={updateCounterHotThreshold}
-                className="w-[56px] text-center"
-              />
-              <span className="text-[10px] font-mono text-text-dim">/pd</span>
-            </div>
-          </FieldRow>
+          <NumberRow label="Hot threshold" value={counterHotThreshold} onChange={updateCounterHotThreshold} accent="purple" min={0} max={99} step={0.5} parse={parseFloat} unit="/pd" width="w-[56px]" />
           <div className="text-[9px] text-text-dim font-mono leading-relaxed mt-1">
             Skills at or above this rate glow warm. Set to 0 to disable.
           </div>
-          <FieldRow label="Cold threshold">
-            <div className="flex items-center gap-1.5">
-              <MudNumberInput
-                accent="cyan"
-                size="sm"
-                min={0}
-                max={99}
-                step={0.5}
-                parse={parseFloat}
-                value={counterColdThreshold}
-                onChange={updateCounterColdThreshold}
-                className="w-[56px] text-center"
-              />
-              <span className="text-[10px] font-mono text-text-dim">/pd</span>
-            </div>
-          </FieldRow>
+          <NumberRow label="Cold threshold" value={counterColdThreshold} onChange={updateCounterColdThreshold} accent="cyan" min={0} max={99} step={0.5} parse={parseFloat} unit="/pd" width="w-[56px]" />
           <div className="text-[9px] text-text-dim font-mono leading-relaxed mt-1">
             Skills at or below this rate (but &gt; 0) glow cool. Set to 0 to disable.
           </div>
@@ -667,51 +615,12 @@ export function SettingsPanel({ onClose }: { onClose: () => void }) {
           open={openSection === 'buffers'}
           onToggle={() => toggle('buffers')}
         >
-          <FieldRow label="Scrollback">
-            <div className="flex items-center gap-1.5">
-              <MudNumberInput
-                accent="cyan"
-                size="sm"
-                min={1000}
-                max={100000}
-                value={terminalScrollback}
-                onChange={updateTerminalScrollback}
-                className="w-[72px] text-center"
-              />
-              <span className="text-[10px] font-mono text-text-dim">lines</span>
-            </div>
-          </FieldRow>
+          <NumberRow label="Scrollback" value={terminalScrollback} onChange={updateTerminalScrollback} accent="cyan" min={1000} max={100000} unit="lines" width="w-[72px]" />
           <div className="text-[9px] text-text-dim font-mono leading-relaxed mt-1">
             Terminal scrollback history. Takes effect on next session.
           </div>
-          <FieldRow label="Command history">
-            <div className="flex items-center gap-1.5">
-              <MudNumberInput
-                accent="cyan"
-                size="sm"
-                min={50}
-                max={5000}
-                value={commandHistorySize}
-                onChange={updateCommandHistorySize}
-                className="w-[72px] text-center"
-              />
-              <span className="text-[10px] font-mono text-text-dim">cmds</span>
-            </div>
-          </FieldRow>
-          <FieldRow label="Chat history">
-            <div className="flex items-center gap-1.5">
-              <MudNumberInput
-                accent="cyan"
-                size="sm"
-                min={50}
-                max={5000}
-                value={chatHistorySize}
-                onChange={updateChatHistorySize}
-                className="w-[72px] text-center"
-              />
-              <span className="text-[10px] font-mono text-text-dim">msgs</span>
-            </div>
-          </FieldRow>
+          <NumberRow label="Command history" value={commandHistorySize} onChange={updateCommandHistorySize} accent="cyan" min={50} max={5000} unit="cmds" width="w-[72px]" />
+          <NumberRow label="Chat history" value={chatHistorySize} onChange={updateChatHistorySize} accent="cyan" min={50} max={5000} unit="msgs" width="w-[72px]" />
         </SettingsSection>
 
 
@@ -723,13 +632,7 @@ export function SettingsPanel({ onClose }: { onClose: () => void }) {
           open={openSection === 'logging'}
           onToggle={() => toggle('logging')}
         >
-          <FieldRow label="Enable logging">
-            <ToggleSwitch
-              checked={sessionLoggingEnabled}
-              onChange={updateSessionLoggingEnabled}
-              accent="#f1fa8c"
-            />
-          </FieldRow>
+          <ToggleRow label="Enable logging" checked={sessionLoggingEnabled} onChange={updateSessionLoggingEnabled} accent="#f1fa8c" />
           <div className="text-[9px] text-text-dim font-mono leading-relaxed mt-1">
             Logs session output (ANSI stripped) and your commands to the sessions/ folder in your
             data directory.
@@ -765,13 +668,7 @@ export function SettingsPanel({ onClose }: { onClose: () => void }) {
           onToggle={() => toggle('notifications')}
         >
           {(['say', 'shout', 'ooc', 'tell', 'sz'] as const).map((type) => (
-            <FieldRow key={type} label={type.toUpperCase()}>
-              <ToggleSwitch
-                checked={chatNotifications[type]}
-                onChange={() => toggleChatNotification(type)}
-                accent="#ffb86c"
-              />
-            </FieldRow>
+            <ToggleRow key={type} label={type.toUpperCase()} checked={chatNotifications[type]} onChange={() => toggleChatNotification(type)} accent="#ffb86c" />
           ))}
           <div className="text-[9px] text-text-dim font-mono leading-relaxed mt-1">
             Flashes the taskbar icon when a message arrives while DartForge is unfocused.
@@ -1124,7 +1021,7 @@ function WebStorageSection({ open, onToggle }: { open: boolean; onToggle: () => 
 function DataLocationSection({ open, onToggle }: { open: boolean; onToggle: () => void }) {
   const dataStore = useDataStore();
   const [candidates, setCandidates] = useState<string[]>([]);
-  const [status, setStatus] = useState<string | null>(null);
+  const [status, showStatus] = useFlashStatus();
 
   useEffect(() => {
     (async () => {
@@ -1181,11 +1078,6 @@ function DataLocationSection({ open, onToggle }: { open: boolean; onToggle: () =
     const localStore = await loadStore(LOCAL_CONFIG_FILE);
     await localStore.set(DATA_DIRS_KEY, dirs);
     await localStore.save();
-  }
-
-  function showStatus(msg: string) {
-    setStatus(msg);
-    setTimeout(() => setStatus(null), 3000);
   }
 
   return (
@@ -1262,7 +1154,7 @@ function BackupsSection({ open, onToggle }: { open: boolean; onToggle: () => voi
   const { autoBackupEnabled, updateAutoBackupEnabled } = useAppSettingsContext();
   const dataStore = useDataStore();
   const [backups, setBackups] = useState<BackupEntry[]>([]);
-  const [status, setStatus] = useState<string | null>(null);
+  const [status, showStatus] = useFlashStatus();
   const loadedRef = useRef(false);
   const [candidates, setCandidates] = useState<string[]>([]);
 
@@ -1310,11 +1202,6 @@ function BackupsSection({ open, onToggle }: { open: boolean; onToggle: () => voi
     }
   }
 
-  function showStatus(msg: string) {
-    setStatus(msg);
-    setTimeout(() => setStatus(null), 3000);
-  }
-
   function formatTimestamp(ts: string): string {
     return ts.replace(/T/, ' ').replace(/-/g, (m, offset: number) => (offset > 6 ? ':' : m));
   }
@@ -1339,13 +1226,7 @@ function BackupsSection({ open, onToggle }: { open: boolean; onToggle: () => voi
       title="Backups"
       accent="#f59e0b"
     >
-      <FieldRow label="Auto-backup">
-        <ToggleSwitch
-          checked={autoBackupEnabled}
-          onChange={updateAutoBackupEnabled}
-          accent="#f59e0b"
-        />
-      </FieldRow>
+      <ToggleRow label="Auto-backup" checked={autoBackupEnabled} onChange={updateAutoBackupEnabled} accent="#f59e0b" />
       <div className="text-[9px] text-text-dim font-mono leading-relaxed mt-1">
         Automatically creates backups at session start and every hour.
       </div>

@@ -211,10 +211,6 @@ export function useTimerEngines({
       const intervalId = setInterval(() => {
         if (!sendCommandRef.current) return;
 
-        if (terminalRef.current) {
-          smartWrite(terminalRef.current, `\x1b[90m[timer: ${timer.name}]\x1b[0m\r\n`);
-        }
-
         if (timer.bodyMode === 'script') {
           // Execute JavaScript body via script engine
           executeTimerScript(

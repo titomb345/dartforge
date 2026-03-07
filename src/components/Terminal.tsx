@@ -8,6 +8,21 @@ import { getStartupSplash } from '../lib/splash';
 import type { DisplaySettings } from '../hooks/useThemeColors';
 import { useAppSettingsContext } from '../contexts/AppSettingsContext';
 
+/** Read terminal buffer lines and copy to clipboard. visibleOnly=true copies viewport only. */
+function copyBufferLines(term: XTerm | null, visibleOnly: boolean): void {
+  if (!term) return;
+  const buf = term.buffer.active;
+  const count = visibleOnly ? term.rows : buf.baseY + term.rows;
+  const startRow = visibleOnly ? buf.viewportY : 0;
+  const lines: string[] = [];
+  for (let i = 0; i < count; i++) {
+    const line = buf.getLine(startRow + i);
+    if (line) lines.push(line.translateToString(true));
+  }
+  while (lines.length > 0 && lines[lines.length - 1].trim() === '') lines.pop();
+  navigator.clipboard.writeText(lines.join('\n'));
+}
+
 interface TerminalProps {
   terminalRef: React.MutableRefObject<XTerm | null>;
   inputRef: React.RefObject<HTMLTextAreaElement | null>;
@@ -305,23 +320,21 @@ export function Terminal({
         });
         return;
       }
+      const setFontSize = (size: number) => {
+        const clamped = Math.max(8, Math.min(28, size));
+        term.options.fontSize = clamped;
+        onUpdateDisplay('fontSize', clamped);
+        fitAddon.fit();
+      };
       if (e.ctrlKey && (e.key === '=' || e.key === '+')) {
         e.preventDefault();
-        const next = Math.min((term.options.fontSize || 14) + 1, 28);
-        term.options.fontSize = next;
-        onUpdateDisplay('fontSize', next);
-        fitAddon.fit();
+        setFontSize((term.options.fontSize || 14) + 1);
       } else if (e.ctrlKey && e.key === '-') {
         e.preventDefault();
-        const next = Math.max((term.options.fontSize || 14) - 1, 8);
-        term.options.fontSize = next;
-        onUpdateDisplay('fontSize', next);
-        fitAddon.fit();
+        setFontSize((term.options.fontSize || 14) - 1);
       } else if (e.ctrlKey && e.key === '0') {
         e.preventDefault();
-        term.options.fontSize = 14;
-        onUpdateDisplay('fontSize', 14);
-        fitAddon.fit();
+        setFontSize(14);
       }
     };
     window.addEventListener('keydown', handleKeyboard);
@@ -508,82 +521,27 @@ export function Terminal({
           selectedText={ctxMenu.selectedText}
           clickedLine={ctxMenu.clickedLine}
           onCopy={() => {
-            if (ctxMenu.selectedText) {
-              navigator.clipboard.writeText(ctxMenu.selectedText);
-            }
+            if (ctxMenu.selectedText) navigator.clipboard.writeText(ctxMenu.selectedText);
             setCtxMenu(null);
           }}
           onCopyLine={() => {
-            if (ctxMenu.clickedLine) {
-              navigator.clipboard.writeText(ctxMenu.clickedLine);
-            }
+            if (ctxMenu.clickedLine) navigator.clipboard.writeText(ctxMenu.clickedLine);
             setCtxMenu(null);
           }}
           onCopyVisible={() => {
-            const term = terminalRef.current;
-            if (term) {
-              const buf = term.buffer.active;
-              const lines: string[] = [];
-              for (let i = 0; i < term.rows; i++) {
-                const line = buf.getLine(buf.viewportY + i);
-                if (line) lines.push(line.translateToString(true));
-              }
-              while (lines.length > 0 && lines[lines.length - 1].trim() === '') lines.pop();
-              navigator.clipboard.writeText(lines.join('\n'));
-            }
+            copyBufferLines(terminalRef.current, true);
             setCtxMenu(null);
           }}
           onCopyAll={() => {
-            const term = terminalRef.current;
-            if (term) {
-              const buf = term.buffer.active;
-              const totalRows = buf.baseY + term.rows;
-              const lines: string[] = [];
-              for (let i = 0; i < totalRows; i++) {
-                const line = buf.getLine(i);
-                if (line) lines.push(line.translateToString(true));
-              }
-              while (lines.length > 0 && lines[lines.length - 1].trim() === '') lines.pop();
-              navigator.clipboard.writeText(lines.join('\n'));
-            }
+            copyBufferLines(terminalRef.current, false);
             setCtxMenu(null);
           }}
-          onAddToTrigger={
-            onAddToTrigger
-              ? (text) => {
-                  onAddToTrigger(text);
-                  setCtxMenu(null);
-                }
-              : undefined
-          }
-          onGagLine={
-            onGagLine
-              ? (text) => {
-                  onGagLine(text);
-                  setCtxMenu(null);
-                }
-              : undefined
-          }
-          onOpenInNotes={
-            onOpenInNotes
-              ? (text) => {
-                  onOpenInNotes(text);
-                  setCtxMenu(null);
-                }
-              : undefined
-          }
-          onScrollToBottom={() => {
-            terminalRef.current?.scrollToBottom();
-            setCtxMenu(null);
-          }}
-          onClearTerminal={() => {
-            terminalRef.current?.clear();
-            setCtxMenu(null);
-          }}
-          onSearch={() => {
-            setCtxMenu(null);
-            setSearchOpen(true);
-          }}
+          onAddToTrigger={onAddToTrigger ? (text) => { onAddToTrigger(text); setCtxMenu(null); } : undefined}
+          onGagLine={onGagLine ? (text) => { onGagLine(text); setCtxMenu(null); } : undefined}
+          onOpenInNotes={onOpenInNotes ? (text) => { onOpenInNotes(text); setCtxMenu(null); } : undefined}
+          onScrollToBottom={() => { terminalRef.current?.scrollToBottom(); setCtxMenu(null); }}
+          onClearTerminal={() => { terminalRef.current?.clear(); setCtxMenu(null); }}
+          onSearch={() => { setCtxMenu(null); setSearchOpen(true); }}
           fontSize={display.fontSize}
           onFontSize={(delta) => {
             const term = terminalRef.current;

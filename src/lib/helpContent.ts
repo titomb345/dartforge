@@ -88,6 +88,12 @@ export const HELP_CATEGORIES: HelpCategory[] = [
           'When the window is too small to fit pinned panels and the terminal, panels automatically collapse into a narrow icon strip. Click an icon to open that panel as an overlay. Your pinned layout is preserved — panels restore to full size when the window grows.',
       },
       {
+        title: 'Session Logs',
+        description:
+          'Full-screen log viewer for browsing past sessions. Select a session from the sidebar, search across all logs with text or regex, and filter by your commands vs game output. Your typed commands are logged with a >> prefix for easy identification. Delete old sessions you no longer need.',
+        helpId: 'toolbar-logs',
+      },
+      {
         title: 'Chat Panel',
         description:
           'Filtered chat with color-coded message types (Say, Shout, OOC, Tell, SZ). Mute senders, identify anonymous tells, and toggle sound alerts.',
@@ -139,6 +145,12 @@ export const HELP_CATEGORIES: HelpCategory[] = [
         description:
           'Create repeating timers that execute commands at set intervals. Supports text mode (command separator, /delay, /echo, /spam, /var) or JavaScript script mode. Toggle "Show countdown in status bar" per timer to control which countdowns appear next to the command input. Character-scoped or Global.',
         helpId: 'toolbar-timers',
+      },
+      {
+        title: 'Macros Panel',
+        description:
+          'Bind keyboard hotkeys to command sequences or scripts. Press Ctrl+1, Alt+F5, or any key combo to instantly fire commands without typing. Supports the same command and script modes as quick buttons, aliases, and triggers.',
+        helpId: 'toolbar-macros',
       },
       {
         title: 'Global Script',
@@ -236,7 +248,7 @@ export const HELP_CATEGORIES: HelpCategory[] = [
       {
         title: 'Quick Button Context Menu',
         description:
-          'Right-click any quick button to edit, delete, enable/disable, or reorder it. Click the "+" button at the end of the row to add a new one.',
+          'Right-click any quick button to edit, delete, or enable/disable it. Drag and drop buttons to reorder them. Click the "+" button at the end of the row to add a new one.',
         interaction: 'right-click',
       },
     ],
@@ -309,6 +321,12 @@ export const HELP_CATEGORIES: HelpCategory[] = [
         description:
           'Capture the visible terminal as a styled PNG with macOS-style window chrome and copy it to your clipboard. Perfect for sharing in Discord.',
         kbd: ['Ctrl', 'Shift', 'S'],
+      },
+      {
+        title: 'Custom Macros',
+        description:
+          'Bind any key combo (Ctrl+1-0, Alt+1-0, F1-F12, etc.) to commands or scripts via the Macros panel. Macros fire from anywhere in the app.',
+        helpId: 'toolbar-macros',
       },
     ],
   },
@@ -387,6 +405,11 @@ export const HELP_CATEGORIES: HelpCategory[] = [
           'Auto-broadcast skill improvements via OOC. "/announce on" sends "skillname+", "/announce brief" sends just "+", "/announce verbose" sends "skillname+ (count)". "/announce pet on|brief|verbose" controls pet announcements separately. "/announce off" disables. An orange badge shows when active.',
       },
       {
+        title: '/powercast',
+        description:
+          'Powercast lirrin\'s glow at your spell casting level. "/powercast" casts at (spell_casting_count * 100). "/powercast -5" subtracts 5 from your count before multiplying. Flows through the normal command pipeline (action blocking, aliases, etc.).',
+      },
+      {
         title: '/counter',
         description:
           'Manage improve counters from the command line. "/counter list" shows all counters with status, imps, and elapsed time. "/counter status" shows a quick one-liner for the active counter. "/counter info" shows detailed stats including rates and skills. "/counter start|toggle|pause|stop|clear" controls the active counter. "/counter toggle" smart-toggles between start and pause. "/counter switch <name>" switches the active counter by name (partial match).',
@@ -443,7 +466,17 @@ export const HELP_CATEGORIES: HelpCategory[] = [
       {
         title: 'Script Mode',
         description:
-          'Triggers and aliases can use JavaScript instead of text expansion. Toggle "Script" in the editor to write JS bodies with send(), echo(), delay(), setVar(), getVar(), lastUserInputTime(), and capture variables ($0-$9, $line, $me). Define shared functions in the Global Script panel. Hover over any script editor to reveal an expand button that opens a large popout modal for comfortable editing. Errors appear in red in the terminal.',
+          'Triggers and aliases can use JavaScript instead of text expansion. Toggle "Script" in the editor to write JS bodies with send(), echo(), delay(), setVar(), getVar(), lastUserInputTime(), getSkill(), getSkillCount(), getSkillLevel(), getSkillTier(), getSkillNext(), getSkillGroup(), and capture variables ($0-$9, $line, $me). Define shared functions in the Global Script panel. Hover over any script editor to reveal an expand button that opens a large popout modal for comfortable editing. Errors appear in red in the terminal.',
+      },
+      {
+        title: 'Skill Functions (Text Mode)',
+        description:
+          'Access skill data in text-mode alias/trigger bodies: $skillCount(name) for improve count, $skillLevel(name) for tier name (e.g. "a master"), $skillTier(name) for tier number (1-29), $skillNext(name) for improves until next tier, $skillGroup(name) for category (combat, magic, etc.). Works with captures — $skillCount($1) resolves $1 first, then looks up the skill.',
+      },
+      {
+        title: 'Skill Functions (Script Mode)',
+        description:
+          'Access skill data in script-mode bodies: getSkill("parry") returns { level, count, tier, next, group }. Individual accessors: getSkillCount("parry") → number, getSkillLevel("parry") → tier name, getSkillTier("parry") → tier number, getSkillNext("parry") → improves to next tier, getSkillGroup("parry") → category.',
       },
     ],
   },

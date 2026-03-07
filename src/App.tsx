@@ -51,7 +51,6 @@ import { expandInput, matchAlias } from './lib/aliasEngine';
 import { executeCommands, type CommandRunner } from './lib/commandUtils';
 import { OutputFilter, DEFAULT_FILTER_FLAGS, type FilterFlags } from './lib/outputFilter';
 import { matchSkillLine } from './lib/skillPatterns';
-import { getTierForCount, getImprovesToNextTier } from './lib/skillTiers';
 import type { Panel, PanelLayout, PinnablePanel, DockSide } from './types';
 import { PinnedRegion } from './components/PinnedRegion';
 import { CollapsedPanelStrip } from './components/CollapsedPanelStrip';
@@ -77,15 +76,17 @@ import { useGlobalScript } from './hooks/useGlobalScript';
 import { ScriptPanel } from './components/ScriptPanel';
 import { smartWrite } from './lib/terminalUtils';
 import { captureTerminalScreenshot } from './lib/screenshotCapture';
-import { ActionBlocker, type ActionBlockerState } from './lib/actionBlocker';
-import { AutoInscriber, type AutoInscriberState } from './lib/autoInscriber';
-import { AutoCaster, type AutoCasterState } from './lib/autoCaster';
-import { AutoConc, type AutoConcState } from './lib/autoConc';
+import { ActionBlocker } from './lib/actionBlocker';
+import { AutoInscriber } from './lib/autoInscriber';
+import { AutoCaster } from './lib/autoCaster';
+import { AutoConc } from './lib/autoConc';
+import { useEngineRef } from './hooks/useEngineRef';
 import { type MovementMode, getNextMode, applyMovementMode, movementModeLabel } from './lib/movementMode';
 import { shouldGagLine } from './lib/gagPatterns';
 import { stripAnsi } from './lib/ansiUtils';
 import { SignatureProvider } from './contexts/SignatureContext';
 import { parseConvertCommand, formatMultiConversion } from './lib/currency';
+import { dispatchBuiltinCommand, type BuiltinContext } from './lib/builtinCommands';
 // Automapper disabled
 // import { useMapTracker } from './hooks/useMapTracker';
 // import { MapProvider } from './contexts/MapContext';
@@ -115,6 +116,7 @@ import {
 import { useAppSettings } from './hooks/useAppSettings';
 import type { AutoLoginConfig } from './hooks/useMudConnection';
 import { useCommandHistory } from './hooks/useCommandHistory';
+import { usePersistedCRUD } from './hooks/usePersistedCRUD';
 import { useTimerEngines } from './hooks/useTimerEngines';
 import { CommandInputProvider } from './contexts/CommandInputContext';
 import { TerminalThemeProvider } from './contexts/TerminalThemeContext';
@@ -124,10 +126,11 @@ import { AppSettingsProvider } from './contexts/AppSettingsContext';
 import { SpotlightProvider } from './contexts/SpotlightContext';
 import { SpotlightOverlay } from './components/SpotlightOverlay';
 import { HelpPanel } from './components/HelpPanel';
-import { getSpellByAbbr, findSpellFuzzy } from './lib/spellData';
-import { getSkillByAbbr, findSkillFuzzy } from './lib/skillData';
+import { LogViewerPanel } from './components/LogViewerPanel';
 import { QuickButtonBar } from './components/QuickButtonBar';
-import type { QuickButton } from './types';
+import { MacroPanel } from './components/MacroPanel';
+import type { QuickButton, Macro } from './types';
+import { hotkeyToString, hotkeyFromEvent, isNumpadKey } from './types';
 
 /** Commands to send automatically after login */
 const LOGIN_COMMANDS = [
@@ -182,7 +185,7 @@ function AppMain() {
   const debugModeRef = useRef(false);
   const [debugMode, setDebugMode] = useState(false);
   const [activePanel, setActivePanel] = useState<Panel | null>(null);
-  const togglePanel = (panel: Panel) => setActivePanel((v) => (v === panel ? null : panel));
+  const togglePanel = useCallback((panel: Panel) => setActivePanel((v) => (v === panel ? null : panel)), []);
   const closePanel = useCallback(() => setActivePanel(null), []);
   const writeToTerm = useCallback(
     (text: string) => {
@@ -212,9 +215,6 @@ function AppMain() {
   const [loggedIn, setLoggedIn] = useState(false);
   const statusBarRef = useRef<HTMLDivElement | null>(null);
   const [autoCompact, setAutoCompact] = useState(false);
-  const [quickButtons, setQuickButtons] = useState<QuickButton[]>([]);
-  const quickButtonsLoadedRef = useRef(false);
-
   const appSettings = useAppSettings();
   const {
     antiIdleEnabled,
@@ -250,6 +250,8 @@ function AppMain() {
   const dataStore = useDataStore();
   const settingsLoadedRef = useRef(false);
   const { commandHistory, handleHistoryChange } = useCommandHistory(dataStore);
+  const quickButtonsCRUD = usePersistedCRUD<QuickButton>(dataStore, 'quickButtons');
+  const macrosCRUD = usePersistedCRUD<Macro>(dataStore, 'macros');
 
   // Load compact mode + filter flags + panel layout from settings (with validation)
   useEffect(() => {
@@ -322,11 +324,8 @@ function AppMain() {
       if (Array.isArray(savedStatusOrder) && savedStatusOrder.length > 0) {
         setStatusBarOrder(savedStatusOrder);
       }
-      const savedButtons = await dataStore.get<QuickButton[]>('settings.json', 'quickButtons');
-      if (Array.isArray(savedButtons)) {
-        setQuickButtons(savedButtons);
-      }
-      quickButtonsLoadedRef.current = true;
+      await quickButtonsCRUD.load();
+      await macrosCRUD.load();
 
       panelLayoutLoadedRef.current = true;
       settingsLoadedRef.current = true;
@@ -468,7 +467,7 @@ function AppMain() {
 
   const { theme, updateColor, resetColor, display, updateDisplay, resetDisplay, resetAll } =
     useThemeColors();
-  const xtermTheme = buildXtermTheme(theme);
+  const xtermTheme = useMemo(() => buildXtermTheme(theme), [theme]);
 
   // Output processor for skill detection
   const processorRef = useRef<OutputProcessor | null>(null);
@@ -642,36 +641,18 @@ function AppMain() {
     });
   }
 
-  // Keep filter flags in sync with OutputFilter + persist
+  // Keep OutputFilter properties in sync with settings + persist filter flags
   useEffect(() => {
-    if (outputFilterRef.current) {
-      outputFilterRef.current.filterFlags = { ...filterFlags };
-    }
+    const filter = outputFilterRef.current;
+    if (!filter) return;
+    filter.filterFlags = { ...filterFlags };
+    filter.boardDatesEnabled = boardDatesEnabled;
+    filter.stripPrompts = stripPromptsEnabled;
+    filter.antiSpamEnabled = antiSpamEnabled;
     // Don't persist until settings are loaded — prevents defaults from overwriting synced values
     if (!settingsLoadedRef.current) return;
     dataStore.set('settings.json', 'filteredStatuses', filterFlags).catch(console.error);
-  }, [filterFlags]);
-
-  // Keep board date conversion in sync with OutputFilter
-  useEffect(() => {
-    if (outputFilterRef.current) {
-      outputFilterRef.current.boardDatesEnabled = boardDatesEnabled;
-    }
-  }, [boardDatesEnabled]);
-
-  // Keep prompt stripping in sync with OutputFilter
-  useEffect(() => {
-    if (outputFilterRef.current) {
-      outputFilterRef.current.stripPrompts = stripPromptsEnabled;
-    }
-  }, [stripPromptsEnabled]);
-
-  // Keep anti-spam in sync with OutputFilter
-  useEffect(() => {
-    if (outputFilterRef.current) {
-      outputFilterRef.current.antiSpamEnabled = antiSpamEnabled;
-    }
-  }, [antiSpamEnabled]);
+  }, [filterFlags, boardDatesEnabled, stripPromptsEnabled, antiSpamEnabled]);
 
   // Wire anti-spam flush callback so the timer can write to the terminal
   useEffect(() => {
@@ -743,43 +724,15 @@ function AppMain() {
   }, []);
 
   // Action blocker — command queueing for channeled actions
-  const actionBlockerRef = useRef(new ActionBlocker());
-  const [blockerState, setBlockerState] = useState<ActionBlockerState>(() =>
-    actionBlockerRef.current.getState()
-  );
-  useEffect(() => {
-    actionBlockerRef.current.onChange = () => setBlockerState(actionBlockerRef.current.getState());
-    return () => {
-      actionBlockerRef.current.onChange = null;
-    };
-  }, []);
+  const [actionBlockerRef, blockerState] = useEngineRef(() => new ActionBlocker());
   const actionBlockingEnabledRef = useLatestRef(appSettings.actionBlockingEnabled);
   const gagGroupsRef = useLatestRef(appSettings.gagGroups);
 
   // Auto-inscriber — automated inscription practice loop
-  const autoInscriberRef = useRef(new AutoInscriber());
-  const [inscriberState, setInscriberState] = useState<AutoInscriberState>(() =>
-    autoInscriberRef.current.getState()
-  );
-  useEffect(() => {
-    autoInscriberRef.current.onChange = () =>
-      setInscriberState(autoInscriberRef.current.getState());
-    return () => {
-      autoInscriberRef.current.onChange = null;
-    };
-  }, []);
+  const [autoInscriberRef, inscriberState] = useEngineRef(() => new AutoInscriber());
 
   // Auto-caster — automated spell practice loop
-  const autoCasterRef = useRef(new AutoCaster());
-  const [casterState, setCasterState] = useState<AutoCasterState>(() =>
-    autoCasterRef.current.getState()
-  );
-  useEffect(() => {
-    autoCasterRef.current.onChange = () => setCasterState(autoCasterRef.current.getState());
-    return () => {
-      autoCasterRef.current.onChange = null;
-    };
-  }, []);
+  const [autoCasterRef, casterState] = useEngineRef(() => new AutoCaster());
 
   // Sync persisted weight config to auto-caster when settings load
   useEffect(() => {
@@ -797,16 +750,7 @@ function AppMain() {
   ]);
 
   // Auto-conc — auto-execute on full concentration
-  const autoConcRef = useRef(new AutoConc());
-  const [concState, setConcState] = useState<AutoConcState>(() =>
-    autoConcRef.current.getState()
-  );
-  useEffect(() => {
-    autoConcRef.current.onChange = () => setConcState(autoConcRef.current.getState());
-    return () => {
-      autoConcRef.current.onChange = null;
-    };
-  }, []);
+  const [autoConcRef, concState] = useEngineRef(() => new AutoConc());
 
   // Sync persisted action to auto-conc when settings load
   useEffect(() => {
@@ -884,6 +828,7 @@ function AppMain() {
     setVar: () => {},
     convert: () => {},
     getVariables: () => [],
+    getSkillCount: () => 0,
   });
 
   // Global script system
@@ -1095,6 +1040,10 @@ function AppMain() {
       }
     },
     getVariables: () => mergedVariablesRef.current,
+    getSkillCount: (name: string) => {
+      const record = skillDataRef.current.skills[name.toLowerCase()];
+      return record?.count ?? 0;
+    },
   };
 
   // Post-sync commands — fire user-configured commands after login sync completes
@@ -1121,6 +1070,46 @@ function AppMain() {
   const commandEchoRef = useLatestRef(appSettings.commandEchoEnabled);
   const passwordModeRef = useLatestRef(passwordMode);
 
+  // Built-in command context — avoids closing over dozens of refs in handleSend
+  const builtinCtxRef = useRef<BuiltinContext>(null!);
+  builtinCtxRef.current = {
+    writeToTerm,
+    sendCommand,
+    sendCommandViaRef: async () => sendCommandRef.current!,
+    actionBlocker: actionBlockerRef.current,
+    actionBlockingEnabled: () => actionBlockingEnabledRef.current,
+    autoInscriber: autoInscriberRef.current,
+    autoCaster: autoCasterRef.current,
+    autoConc: autoConcRef.current,
+    cycleMovementMode,
+    appSettings: {
+      announceMode: appSettings.announceMode,
+      announcePetMode: appSettings.announcePetMode,
+      autoConcAction: appSettings.autoConcAction,
+      updateAnnounceMode: appSettings.updateAnnounceMode,
+      updateAnnouncePetMode: appSettings.updateAnnouncePetMode,
+      updateAutoConcAction: appSettings.updateAutoConcAction,
+      updateCasterWeightItem: appSettings.updateCasterWeightItem,
+      updateCasterWeightContainer: appSettings.updateCasterWeightContainer,
+      updateCasterWeightAdjustUp: appSettings.updateCasterWeightAdjustUp,
+      updateCasterWeightAdjustDown: appSettings.updateCasterWeightAdjustDown,
+    },
+    mergedVariables: () => mergedVariablesRef.current,
+    setVar: (name, value, scope) => setVarRef.current(name, value, scope),
+    deleteVariableByName: (name) => deleteVariableByNameRef.current(name),
+    skillData: () => skillDataRef.current,
+    improveCounters: () => improveCountersRef.current,
+    counterValue: () => counterValueRef.current,
+    expandAndExecute: async (action) => {
+      const result = expandInput(action, mergedAliasesRef.current, {
+        enableSpeedwalk: enableSpeedwalkRef.current,
+        activeCharacter: activeCharacterRef.current,
+        separator: commandSeparatorRef.current,
+      });
+      await executeCommands(result.commands, triggerRunnerRef.current);
+    },
+  };
+
   // Alias-expanded send: preprocesses input through the alias engine
   const handleSend = useCallback(
     async (rawInput: string) => {
@@ -1138,683 +1127,12 @@ function AppMain() {
       // Session logging — log sent command
       if (trimmed) logCommandRef.current?.(rawInput);
 
-      // Idle tracking — stamp last user-typed command time (in-memory only)
-      if (trimmed) stampUserInput();
+      // Idle tracking — stamp on any keypress-driven send (even empty Enter)
+      stampUserInput();
 
 
-      // Built-in /block — manually activate action blocking
-      if (/^\/block\b/i.test(trimmed)) {
-        const blocker = actionBlockerRef.current;
-        if (blocker.blocked) {
-          writeToTerm(`\x1b[33m[Already blocked: ${blocker.blockLabel}]\x1b[0m\r\n`);
-        } else {
-          blocker.block({ key: 'manual', label: 'Manual', pattern: /^$/ });
-          writeToTerm('\x1b[33m[BLOCKED — manual]\x1b[0m\r\n');
-        }
-        return;
-      }
-
-      // Built-in /unblock — manually release block and flush queue
-      if (/^\/unblock\b/i.test(trimmed)) {
-        const blocker = actionBlockerRef.current;
-        const queued = blocker.forceUnblock();
-        writeToTerm(
-          `\x1b[32m[UNBLOCKED — ${queued.length} queued command(s) released]\x1b[0m\r\n`
-        );
-        // Send queued commands via raw sendCommand (bypasses blocker)
-        (async () => {
-          for (const cmd of queued) {
-            await sendCommand(cmd);
-          }
-        })();
-        return;
-      }
-
-      // Built-in /movemode — cycle movement mode
-      if (/^\/movemode\b/i.test(trimmed)) {
-        cycleMovementMode();
-        return;
-      }
-
-      // Built-in /autoinscribe — automated inscription practice loop
-      if (/^\/autoinscribe\b/i.test(trimmed)) {
-        const args = trimmed.slice(14).trim();
-        const argsLower = args.toLowerCase();
-        const inscriber = autoInscriberRef.current;
-
-        if (argsLower === 'off' || argsLower === 'stop') {
-          inscriber.stop((msg) => writeToTerm(`\x1b[36m${msg}\x1b[0m\r\n`));
-          return;
-        }
-
-        if (argsLower.startsWith('power ')) {
-          const p = parseInt(argsLower.slice(6).trim().replace(/^@/, ''), 10);
-          if (isNaN(p) || p < 1) {
-            writeToTerm('\x1b[31m[Autoinscribe] Usage: /autoinscribe power @<number>\x1b[0m\r\n');
-          } else {
-            inscriber.setPower(p, (msg) => writeToTerm(`\x1b[36m${msg}\x1b[0m\r\n`));
-          }
-          return;
-        }
-
-        if (argsLower === 'status') {
-          const s = inscriber.getState();
-          const cyan = '\x1b[36m';
-          const reset = '\x1b[0m';
-          const line = (text: string) => writeToTerm(`${cyan}${text}${reset}\r\n`);
-
-          if (!s.active) {
-            line('[Autoinscribe: OFF]');
-          } else {
-            line(`[Autoinscribe: ${s.spell} @${s.power}]`);
-            line(`  Phase: ${s.phase} | Cycles: ${s.cycleCount}`);
-          }
-          return;
-        }
-
-        // /autoinscribe <spell> @<power>
-        const parts = args.split(/\s+/);
-        if (parts.length < 2) {
-          writeToTerm(
-            '\x1b[31m[Autoinscribe] Usage:\r\n' +
-            '  /autoinscribe <spell> @<power>  Start inscribe loop\r\n' +
-            '  /autoinscribe off               Stop inscribing\r\n' +
-            '  /autoinscribe status             Show current state\r\n' +
-            '  /autoinscribe power @<n>         Adjust power mid-loop\x1b[0m\r\n'
-          );
-          return;
-        }
-
-        const spellArg = parts[0];
-        const powerRaw = parts[1].replace(/^@/, '');
-        const powerArg = parseInt(powerRaw, 10);
-        if (isNaN(powerArg) || powerArg < 1) {
-          writeToTerm('\x1b[31m[Autoinscribe] Power must be a positive number (e.g. @200).\x1b[0m\r\n');
-          return;
-        }
-
-        // Resolve abbreviation for display only — MUD gets the raw input
-        const spellLookup = getSpellByAbbr(spellArg) ?? findSpellFuzzy(spellArg);
-        const displaySpell = spellLookup ? spellLookup.name : spellArg;
-
-        inscriber.start(
-          spellArg,
-          powerArg,
-          async (cmd) => await sendCommand(cmd),
-          (msg) => writeToTerm(`\x1b[36m${msg.replace(spellArg, displaySpell)}\x1b[0m\r\n`),
-          (key, label) => {
-            if (actionBlockingEnabledRef.current) {
-              actionBlockerRef.current.block({ key, label, pattern: /(?!)/ });
-            }
-          }
-        );
-        return;
-      }
-
-      // Built-in /autocast — automated spell practice loop
-      if (/^\/autocast\b/i.test(trimmed)) {
-        const args = trimmed.slice(9).trim();
-        const argsLower = args.toLowerCase();
-        const caster = autoCasterRef.current;
-
-        if (argsLower === 'off' || argsLower === 'stop') {
-          caster.stop((msg) => writeToTerm(`\x1b[36m${msg}\x1b[0m\r\n`));
-          return;
-        }
-
-        if (argsLower.startsWith('adjust ')) {
-          const adjustRest = argsLower.slice(7).trim();
-
-          if (adjustRest.startsWith('power ')) {
-            const adjustParts = adjustRest.slice(6).trim().replace(/^@/, '').split(/\s+/);
-            if (adjustParts.length === 1) {
-              // /autocast adjust power @<n> — set power directly
-              const p = parseInt(adjustParts[0], 10);
-              if (isNaN(p) || p < 1) {
-                writeToTerm('\x1b[31m[Autocast] Usage: /autocast adjust power @<n> | /autocast adjust power <up> <down>\x1b[0m\r\n');
-              } else {
-                caster.setPower(p, (msg) => writeToTerm(`\x1b[36m${msg}\x1b[0m\r\n`));
-              }
-            } else {
-              // /autocast adjust power <up> <down> — set adjustment amounts
-              const up = parseInt(adjustParts[0], 10);
-              const down = parseInt(adjustParts[1], 10);
-              if (isNaN(up) || isNaN(down) || up < 1 || down < 1) {
-                writeToTerm('\x1b[31m[Autocast] Usage: /autocast adjust power @<n> | /autocast adjust power <up> <down>\x1b[0m\r\n');
-              } else {
-                caster.setAdjust(up, down, (msg) => writeToTerm(`\x1b[36m${msg}\x1b[0m\r\n`));
-              }
-            }
-            return;
-          }
-
-          if (adjustRest.startsWith('weight ')) {
-            const adjustParts = adjustRest.slice(7).trim().split(/\s+/);
-            if (adjustParts.length === 1) {
-              // /autocast adjust weight <n> — force-set carried weight
-              const w = parseInt(adjustParts[0], 10);
-              if (isNaN(w) || w < 0) {
-                writeToTerm('\x1b[31m[Autocast] Usage: /autocast adjust weight <n> | /autocast adjust weight <up> <down>\x1b[0m\r\n');
-              } else {
-                caster.setCarriedWeight(w, (msg) => writeToTerm(`\x1b[36m${msg}\x1b[0m\r\n`));
-              }
-            } else {
-              // /autocast adjust weight <up> <down> — set adjustment amounts
-              const up = parseInt(adjustParts[0], 10);
-              const down = parseInt(adjustParts[1], 10);
-              if (isNaN(up) || isNaN(down) || up < 1 || down < 1) {
-                writeToTerm('\x1b[31m[Autocast] Usage: /autocast adjust weight <n> | /autocast adjust weight <up> <down>\x1b[0m\r\n');
-              } else {
-                caster.setWeightAdjust(up, down, (msg) => writeToTerm(`\x1b[36m${msg}\x1b[0m\r\n`));
-                appSettings.updateCasterWeightAdjustUp(up);
-                appSettings.updateCasterWeightAdjustDown(down);
-              }
-            }
-            return;
-          }
-
-          writeToTerm(
-            '\x1b[31m[Autocast] Usage:\r\n  /autocast adjust power @<n>\r\n  /autocast adjust power <up> <down>\r\n  /autocast adjust weight <n>\r\n  /autocast adjust weight <up> <down>\x1b[0m\r\n'
-          );
-          return;
-        }
-
-        if (argsLower.startsWith('set ')) {
-          const setRest = args.slice(4).trim();
-          const setRestLower = setRest.toLowerCase();
-
-          if (setRestLower.startsWith('item ')) {
-            const itemName = setRest.slice(5).trim();
-            if (!itemName) {
-              writeToTerm('\x1b[31m[Autocast] Usage: /autocast set item <item>\x1b[0m\r\n');
-            } else {
-              caster.setWeightItem(itemName, (msg) => writeToTerm(`\x1b[36m${msg}\x1b[0m\r\n`));
-              appSettings.updateCasterWeightItem(itemName);
-            }
-            return;
-          }
-
-          if (setRestLower.startsWith('container ')) {
-            const containerName = setRest.slice(10).trim();
-            if (!containerName) {
-              writeToTerm('\x1b[31m[Autocast] Usage: /autocast set container <name> | /autocast clear container\r\n  Use "none" or "clear" to remove the container.\x1b[0m\r\n');
-            } else {
-              const val = /^(none|null|clear)$/i.test(containerName) ? null : containerName;
-              caster.setWeightContainer(
-                val,
-                (msg) => writeToTerm(`\x1b[36m${msg}\x1b[0m\r\n`)
-              );
-              appSettings.updateCasterWeightContainer(val ?? '');
-            }
-            return;
-          }
-
-          writeToTerm(
-            '\x1b[31m[Autocast] Usage:\r\n  /autocast set item <item>\r\n  /autocast set container <name>\x1b[0m\r\n'
-          );
-          return;
-        }
-
-        // /autocast clear container
-        if (argsLower === 'clear container') {
-          caster.setWeightContainer(null, (msg) => writeToTerm(`\x1b[36m${msg}\x1b[0m\r\n`));
-          appSettings.updateCasterWeightContainer('');
-          return;
-        }
-
-        if (argsLower === 'status') {
-          const s = caster.getState();
-          const cyan = '\x1b[36m';
-          const reset = '\x1b[0m';
-          const line = (text: string) => writeToTerm(`${cyan}${text}${reset}\r\n`);
-
-          if (!s.active) {
-            line('[Autocast: OFF]');
-            line(`  Power adjust: +${s.adjustUp} on fail / -${s.adjustDown} on success`);
-            if (s.weightItem) {
-              const loc = s.weightContainer ? ` from ${s.weightContainer}` : '';
-              line(`  Weight item:  ${s.weightItem}${loc}`);
-              line(`  Weight adjust: take ${s.weightAdjustUp} on success, put ${s.weightAdjustDown} on fail`);
-            } else {
-              line('  Weight: not configured');
-            }
-          } else {
-            const argsStr = s.args ? ` ${s.args}` : '';
-            line(`[Autocast: ${s.spell} @${s.power}${argsStr}]`);
-            line(`  Phase: ${s.phase} | Cycles: ${s.cycleCount} | Success: ${s.successCount} | Fail: ${s.failCount}`);
-            line(`  Power adjust: +${s.adjustUp} on fail / -${s.adjustDown} on success`);
-            if (s.weightMode) {
-              line(`  WEIGHT MODE: carrying ${s.carriedWeight} ${s.weightItem}`);
-            }
-            if (s.weightItem) {
-              const loc = s.weightContainer ? ` from ${s.weightContainer}` : '';
-              line(`  Weight item:  ${s.weightItem}${loc}`);
-              line(`  Weight adjust: take ${s.weightAdjustUp} on success, put ${s.weightAdjustDown} on fail`);
-            }
-          }
-          return;
-        }
-
-        // /autocast <spell> @<power> [args]
-        const parts = args.split(/\s+/);
-        if (parts.length < 2) {
-          writeToTerm(
-            '\x1b[31m[Autocast] Usage:\r\n' +
-            '  /autocast <spell> @<power> [args]   Start casting\r\n' +
-            '  /autocast off                       Stop casting\r\n' +
-            '  /autocast status                    Show current state\r\n' +
-            '  /autocast adjust power @<n>         Set power directly\r\n' +
-            '  /autocast adjust power <up> <down>  Set power adjust steps\r\n' +
-            '  /autocast adjust weight <n>         Set carried weight\r\n' +
-            '  /autocast adjust weight <up> <down> Set weight adjust steps\r\n' +
-            '  /autocast set item <item>        Set weight item\r\n' +
-            '  /autocast set container <name>      Set weight container\r\n' +
-            '  /autocast clear container            Clear container (ground)\x1b[0m\r\n'
-          );
-          return;
-        }
-
-        const spellArg = parts[0];
-        const powerRaw = parts[1].replace(/^@/, '');
-        const powerArg = parseInt(powerRaw, 10);
-        if (isNaN(powerArg) || powerArg < 1) {
-          writeToTerm('\x1b[31m[Autocast] Power must be a positive number (e.g. @200).\x1b[0m\r\n');
-          return;
-        }
-
-        const extraArgs = parts.slice(2).join(' ') || null;
-
-        // Resolve abbreviation for display only — MUD gets the raw input
-        const spellLookup = getSpellByAbbr(spellArg) ?? findSpellFuzzy(spellArg);
-        const displaySpell = spellLookup ? spellLookup.name : spellArg;
-
-        caster.start(
-          spellArg,
-          powerArg,
-          extraArgs,
-          async (cmd) => await sendCommand(cmd),
-          (msg) => writeToTerm(`\x1b[36m${msg.replace(spellArg, displaySpell)}\x1b[0m\r\n`),
-          (key, label) => {
-            if (actionBlockingEnabledRef.current) {
-              actionBlockerRef.current.block({ key, label, pattern: /(?!)/ });
-            }
-          },
-          async (cmd) => await sendCommandRef.current!(cmd)
-        );
-        return;
-      }
-
-      // Built-in /autoconc — auto-execute on full concentration
-      if (/^\/autoconc\b/i.test(trimmed)) {
-        const args = trimmed.slice(9).trim();
-        const argsLower = args.toLowerCase();
-        const conc = autoConcRef.current;
-
-        if (argsLower === 'off' || argsLower === 'stop') {
-          conc.stop((msg) => writeToTerm(`\x1b[36m${msg}\x1b[0m\r\n`));
-          return;
-        }
-
-        if (argsLower === 'status') {
-          const s = conc.getState();
-          const cyan = '\x1b[36m';
-          const reset = '\x1b[0m';
-          const line = (text: string) => writeToTerm(`${cyan}${text}${reset}\r\n`);
-
-          if (!s.active) {
-            line(`[Autoconc: OFF${s.action ? ` | Action: ${s.action}` : ''}]`);
-          } else {
-            line(`[Autoconc: ${s.action}]`);
-            line(`  Phase: ${s.phase} | Cycles: ${s.cycleCount}`);
-          }
-          return;
-        }
-
-        // Start helpers
-        const startConc = (action: string) => {
-          conc.start(
-            action,
-            async (cmd) => await sendCommand(cmd),
-            async (action) => {
-              const result = expandInput(action, mergedAliasesRef.current, {
-                enableSpeedwalk: enableSpeedwalkRef.current,
-                activeCharacter: activeCharacterRef.current,
-                separator: commandSeparatorRef.current,
-              });
-              await executeCommands(result.commands, triggerRunnerRef.current);
-            },
-            (msg) => writeToTerm(`\x1b[36m${msg}\x1b[0m\r\n`)
-          );
-        };
-
-        if (argsLower === 'on' || argsLower === 'start') {
-          const saved = conc.action || appSettings.autoConcAction;
-          if (!saved) {
-            writeToTerm(
-              '\x1b[31m[Autoconc] No action set. Use /autoconc <action> to set one first.\x1b[0m\r\n'
-            );
-          } else {
-            startConc(saved);
-          }
-          return;
-        }
-
-        if (!args) {
-          writeToTerm(
-            '\x1b[31m[Autoconc] Usage:\r\n' +
-            '  /autoconc <action>    Set action (does not start)\r\n' +
-            '  /autoconc on          Start with saved action\r\n' +
-            '  /autoconc off         Stop the loop\r\n' +
-            '  /autoconc status      Show current state\x1b[0m\r\n'
-          );
-          return;
-        }
-
-        // Anything else = save action only (user must /autoconc on to start)
-        conc.setAction(args);
-        appSettings.updateAutoConcAction(args);
-        const verb = conc.active ? 'updated' : 'set';
-        writeToTerm(`\x1b[36m[Autoconc: action ${verb} to "${args}"]\x1b[0m\r\n`);
-        return;
-      }
-
-      // Built-in /announce — toggle skill improvement OOC announcements
-      if (/^\/announce\b/i.test(trimmed)) {
-        const args = trimmed.slice(9).trim().toLowerCase();
-        const VALID_MODES = ['on', 'off', 'brief', 'verbose'] as const;
-        type Mode = (typeof VALID_MODES)[number];
-        const isValidMode = (s: string): s is Mode => (VALID_MODES as readonly string[]).includes(s);
-
-        if (!args || args === 'status') {
-          writeToTerm(
-            `\x1b[36m[Announce: ${appSettings.announceMode} | Pets: ${appSettings.announcePetMode}]\x1b[0m\r\n`
-          );
-          return;
-        }
-
-        if (args.startsWith('pet ')) {
-          const petArg = args.slice(4).trim();
-          if (isValidMode(petArg)) {
-            appSettings.updateAnnouncePetMode(petArg);
-            writeToTerm(`\x1b[36m[Announce pets: ${petArg}]\x1b[0m\r\n`);
-          } else {
-            writeToTerm('\x1b[31m[Announce] Usage: /announce pet on|off|brief|verbose\x1b[0m\r\n');
-          }
-          return;
-        }
-
-        if (isValidMode(args)) {
-          appSettings.updateAnnounceMode(args);
-          writeToTerm(`\x1b[36m[Announce: ${args}]\x1b[0m\r\n`);
-          return;
-        }
-
-        writeToTerm(
-          '\x1b[31m[Announce] Usage: /announce on|off|brief|verbose | /announce pet on|off|brief|verbose | /announce status\x1b[0m\r\n'
-        );
-        return;
-      }
-
-      // Built-in /convert command — intercept before alias expansion
-      if (/^\/convert\b/i.test(trimmed)) {
-        const parsed = parseConvertCommand(trimmed);
-        if (typeof parsed === 'string') {
-          writeToTerm(`\x1b[31m[Convert] ${parsed}\x1b[0m\r\n`);
-        } else {
-          writeToTerm(`${formatMultiConversion(parsed)}\r\n`);
-        }
-        return;
-      }
-
-      // Built-in /var command — manage user variables
-      if (/^\/var\b/i.test(trimmed)) {
-        const varInput = trimmed.slice(4).trim();
-        if (!varInput) {
-          // /var — list all variables
-          const vars = mergedVariablesRef.current.filter((v) => v.enabled);
-          if (vars.length === 0) {
-            writeToTerm('\x1b[36mNo variables set.\x1b[0m\r\n');
-          } else {
-            writeToTerm('\x1b[36m--- Variables ---\x1b[0m\r\n');
-            for (const v of vars) {
-              writeToTerm(`\x1b[36m  $${v.name} = ${v.value}\x1b[0m\r\n`);
-            }
-          }
-        } else if (varInput.startsWith('-d ')) {
-          // /var -d <name> — delete variable
-          const name = varInput.slice(3).trim();
-          if (deleteVariableByNameRef.current(name)) {
-            writeToTerm(`\x1b[36mDeleted variable $${name}\x1b[0m\r\n`);
-          } else {
-            writeToTerm(`\x1b[31m[Var] Variable "$${name}" not found.\x1b[0m\r\n`);
-          }
-        } else {
-          // /var <name> <value> or /var -g <name> <value>
-          let scope: 'character' | 'global' = 'character';
-          let rest = varInput;
-          if (rest.startsWith('-g ')) {
-            scope = 'global';
-            rest = rest.slice(3).trim();
-          }
-          const spaceIdx = rest.indexOf(' ');
-          if (spaceIdx === -1) {
-            // /var <name> — search variables by name (regex)
-            const query = rest;
-            let re: RegExp;
-            try {
-              re = new RegExp(query, 'i');
-            } catch {
-              re = new RegExp(query.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i');
-            }
-            const matches = mergedVariablesRef.current.filter(
-              (v) => v.enabled && re.test(v.name)
-            );
-            if (matches.length === 0) {
-              writeToTerm(`\x1b[36mNo variables matching "${query}".\x1b[0m\r\n`);
-            } else {
-              writeToTerm(`\x1b[36m--- Variables matching "${query}" ---\x1b[0m\r\n`);
-              for (const v of matches) {
-                writeToTerm(`\x1b[36m  $${v.name} = ${v.value}\x1b[0m\r\n`);
-              }
-            }
-          } else {
-            const name = rest.slice(0, spaceIdx);
-            const value = rest.slice(spaceIdx + 1);
-            setVarRef.current(name, value, scope);
-            writeToTerm(`\x1b[36m$${name} = ${value} (${scope})\x1b[0m\r\n`);
-          }
-        }
-        return;
-      }
-
-      // Built-in /apt — show aptitude for a spell or skill (abbreviation or full name)
-      if (/^\/apt\b/i.test(trimmed)) {
-        const arg = trimmed.slice(4).trim();
-        if (!arg) {
-          writeToTerm('\x1b[31m[Apt] Usage: /apt <abbreviation or name>\x1b[0m\r\n');
-          return;
-        }
-        // Try abbreviation first, then fuzzy name match, fall back to raw input
-        const spell = getSpellByAbbr(arg) ?? findSpellFuzzy(arg);
-        const skill = !spell ? (getSkillByAbbr(arg) ?? findSkillFuzzy(arg)) : null;
-        const resolved = spell ? spell.name : skill ?? arg;
-        writeToTerm(`\x1b[36m[Aptitude: ${resolved}]\x1b[0m\r\n`);
-        await sendCommand(`show aptitude:${resolved}`);
-        return;
-      }
-
-      // Built-in /skill — show skills for a spell or skill (abbreviation or full name)
-      if (/^\/skill\b/i.test(trimmed)) {
-        const arg = trimmed.slice(6).trim();
-        if (!arg) {
-          writeToTerm('\x1b[31m[Skill] Usage: /skill <abbreviation or name>\x1b[0m\r\n');
-          return;
-        }
-        // Try abbreviation first, then fuzzy name match, fall back to raw input
-        const skill = getSkillByAbbr(arg) ?? findSkillFuzzy(arg);
-        const spell = !skill ? (getSpellByAbbr(arg) ?? findSpellFuzzy(arg)) : null;
-        const resolved = skill ?? (spell ? spell.name : arg);
-        const known = !!(skill || spell);
-        if (known) {
-          const rec = skillDataRef.current.skills[resolved];
-          if (rec) {
-            const tier = getTierForCount(rec.count);
-            const toNext = getImprovesToNextTier(rec.count);
-            const nextStr = toNext > 0 ? ` | next: ${toNext}` : '';
-            writeToTerm(
-              `\x1b[36m[Skill: ${resolved} | count: ${rec.count} | level: ${tier.name}${nextStr}]\x1b[0m\r\n`
-            );
-          } else {
-            writeToTerm(`\x1b[36m[Skill: ${resolved} | no data tracked]\x1b[0m\r\n`);
-          }
-        } else {
-          writeToTerm(`\x1b[36m[Skill: unknown]\x1b[0m\r\n`);
-        }
-        await sendCommand(`show skills ${resolved}`);
-        return;
-      }
-
-      // Built-in /counter — manage improve counters
-      if (/^\/counter\b/i.test(trimmed)) {
-        const args = trimmed.slice(8).trim();
-        const argsLower = args.toLowerCase();
-        const ic = improveCountersRef.current;
-        const cv = counterValueRef.current;
-        const { counters, activeCounterId, getElapsedMs, getPerMinuteRate, getPerPeriodRate, getPerHourRate, getSkillsSorted, periodLengthMinutes } = ic;
-
-        const fmtDur = (ms: number) => {
-          const s = Math.floor(ms / 1000);
-          const h = Math.floor(s / 3600);
-          const m = Math.floor((s % 3600) / 60);
-          const sec = s % 60;
-          if (h > 0) return `${h}h ${m}m ${sec}s`;
-          return `${m}m ${sec}s`;
-        };
-
-        const statusIcon = (st: string) =>
-          st === 'running' ? '\x1b[32m●\x1b[36m' : st === 'paused' ? '\x1b[33m❚❚\x1b[36m' : '\x1b[90m■\x1b[36m';
-
-        if (argsLower === 'list') {
-          if (counters.length === 0) {
-            writeToTerm('\x1b[31m[Counter] No counters created.\x1b[0m\r\n');
-          } else {
-            let out = '\x1b[36m[Counters]\r\n';
-            for (const c of counters) {
-              const active = c.id === activeCounterId ? ' \x1b[33m*\x1b[36m' : '';
-              out += `  ${statusIcon(c.status)} ${c.name}${active}  ${c.status}  ${c.totalImps} imps  ${fmtDur(getElapsedMs(c))}\r\n`;
-            }
-            writeToTerm(`${out}\x1b[0m`);
-          }
-          return;
-        }
-
-        if (argsLower === 'status') {
-          const ac = counters.find((c) => c.id === activeCounterId);
-          if (!ac) {
-            writeToTerm('\x1b[31m[Counter] No active counter.\x1b[0m\r\n');
-            return;
-          }
-          const perMin = getPerMinuteRate(ac).toFixed(2);
-          const perHr = getPerHourRate(ac).toFixed(1);
-          writeToTerm(`\x1b[36m[${statusIcon(ac.status)} ${ac.name}]  ${ac.status}  ${ac.totalImps} imps  ${fmtDur(getElapsedMs(ac))}  ${perMin}/min  ${perHr}/hr\x1b[0m\r\n`);
-          return;
-        }
-
-        if (argsLower === 'info') {
-          const ac = counters.find((c) => c.id === activeCounterId);
-          if (!ac) {
-            writeToTerm('\x1b[31m[Counter] No active counter.\x1b[0m\r\n');
-            return;
-          }
-          const skills = getSkillsSorted(ac);
-          const skillStr = skills.length > 0
-            ? skills.map((s) => `${s.skill} (${s.count})`).join(', ')
-            : 'none';
-          const perMin = getPerMinuteRate(ac).toFixed(2);
-          const perPer = getPerPeriodRate(ac).toFixed(1);
-          const perHr = getPerHourRate(ac).toFixed(1);
-          let out = `\x1b[36m[Counter "${ac.name}"]\r\n`;
-          out += `  Status:   ${ac.status}\r\n`;
-          out += `  Imps:     ${ac.totalImps}\r\n`;
-          out += `  Elapsed:  ${fmtDur(getElapsedMs(ac))}\r\n`;
-          out += `  Rate:     ${perMin}/min  |  ${perPer}/${periodLengthMinutes}m  |  ${perHr}/hr\r\n`;
-          out += `  Skills:   ${skillStr}\r\n`;
-          if (ac.startedAt) out += `  Started:  ${ac.startedAt}\r\n`;
-          writeToTerm(`${out}\x1b[0m`);
-          return;
-        }
-
-        if (argsLower === 'start') {
-          const ac = counters.find((c) => c.id === activeCounterId);
-          if (!ac) { writeToTerm('\x1b[31m[Counter] No active counter.\x1b[0m\r\n'); return; }
-          if (ac.status === 'running') { writeToTerm(`\x1b[36m[Counter "${ac.name}" already running]\x1b[0m\r\n`); return; }
-          if (ac.status === 'paused') cv.resumeCounter(ac.id);
-          else cv.startCounter(ac.id);
-          return;
-        }
-
-        if (argsLower === 'toggle') {
-          const ac = counters.find((c) => c.id === activeCounterId);
-          if (!ac) { writeToTerm('\x1b[31m[Counter] No active counter.\x1b[0m\r\n'); return; }
-          if (ac.status === 'running') cv.pauseCounter(ac.id);
-          else if (ac.status === 'paused') cv.resumeCounter(ac.id);
-          else cv.startCounter(ac.id);
-          return;
-        }
-
-        if (argsLower === 'pause') {
-          const ac = counters.find((c) => c.id === activeCounterId);
-          if (!ac) { writeToTerm('\x1b[31m[Counter] No active counter.\x1b[0m\r\n'); return; }
-          if (ac.status !== 'running') { writeToTerm(`\x1b[36m[Counter "${ac.name}" not running]\x1b[0m\r\n`); return; }
-          cv.pauseCounter(ac.id);
-          return;
-        }
-
-        if (argsLower === 'stop') {
-          const ac = counters.find((c) => c.id === activeCounterId);
-          if (!ac) { writeToTerm('\x1b[31m[Counter] No active counter.\x1b[0m\r\n'); return; }
-          if (ac.status === 'stopped') { writeToTerm(`\x1b[36m[Counter "${ac.name}" already stopped]\x1b[0m\r\n`); return; }
-          cv.stopCounter(ac.id);
-          return;
-        }
-
-        if (argsLower === 'clear') {
-          const ac = counters.find((c) => c.id === activeCounterId);
-          if (!ac) { writeToTerm('\x1b[31m[Counter] No active counter.\x1b[0m\r\n'); return; }
-          cv.clearCounter(ac.id);
-          return;
-        }
-
-        if (argsLower.startsWith('switch ')) {
-          const name = args.slice(7).trim();
-          if (!name) { writeToTerm('\x1b[31m[Counter] Usage: /counter switch <name>\x1b[0m\r\n'); return; }
-          const nameLower = name.toLowerCase();
-          const match = counters.find((c) => c.name.toLowerCase() === nameLower)
-            ?? counters.find((c) => c.name.toLowerCase().includes(nameLower));
-          if (!match) {
-            writeToTerm(`\x1b[31m[Counter] No counter matching "${name}".\x1b[0m\r\n`);
-          } else {
-            ic.setActiveCounterId(match.id);
-            writeToTerm(`\x1b[36m[Counter switched to "${match.name}"]\x1b[0m\r\n`);
-          }
-          return;
-        }
-
-        // No args or unrecognized — show usage
-        writeToTerm(
-          '\x1b[31m[Counter] Usage:\r\n' +
-          '  /counter list            List all counters\r\n' +
-          '  /counter status          Active counter one-liner\r\n' +
-          '  /counter info            Detailed stats for active counter\r\n' +
-          '  /counter start           Start/resume active counter\r\n' +
-          '  /counter toggle          Toggle start/pause\r\n' +
-          '  /counter pause           Pause active counter\r\n' +
-          '  /counter stop            Stop active counter\r\n' +
-          '  /counter clear           Clear active counter\r\n' +
-          '  /counter switch <name>   Switch active counter by name\x1b[0m\r\n'
-        );
-        return;
-      }
+      // Dispatch built-in slash commands (/block, /autocast, /var, etc.)
+      if (await dispatchBuiltinCommand(trimmed, builtinCtxRef.current)) return;
 
       // Movement mode — prepend direction prefix if active
       const effectiveInput =
@@ -1908,52 +1226,12 @@ function AppMain() {
     [dataStore]
   );
 
-  // Quick buttons — persist + CRUD
-  const persistButtons = useCallback(
-    (next: QuickButton[]) => {
-      setQuickButtons(next);
-      dataStore.set('settings.json', 'quickButtons', next).catch(console.error);
-    },
-    [dataStore]
-  );
-
-  const addQuickButton = useCallback(
-    (data: Omit<QuickButton, 'id'>) => {
-      const btn: QuickButton = { ...data, id: crypto.randomUUID() };
-      persistButtons([...quickButtons, btn]);
-    },
-    [quickButtons, persistButtons]
-  );
-
-  const updateQuickButton = useCallback(
-    (id: string, data: Partial<QuickButton>) => {
-      persistButtons(quickButtons.map((b) => (b.id === id ? { ...b, ...data } : b)));
-    },
-    [quickButtons, persistButtons]
-  );
-
-  const deleteQuickButton = useCallback(
-    (id: string) => {
-      persistButtons(quickButtons.filter((b) => b.id !== id));
-    },
-    [quickButtons, persistButtons]
-  );
-
-  const reorderQuickButton = useCallback(
-    (id: string, direction: 'left' | 'right') => {
-      const idx = quickButtons.findIndex((b) => b.id === id);
-      if (idx < 0) return;
-      const targetIdx = direction === 'left' ? idx - 1 : idx + 1;
-      if (targetIdx < 0 || targetIdx >= quickButtons.length) return;
-      const next = [...quickButtons];
-      [next[idx], next[targetIdx]] = [next[targetIdx], next[idx]];
-      persistButtons(next);
-    },
-    [quickButtons, persistButtons]
-  );
+  // Quick buttons and macros CRUD managed by usePersistedCRUD hooks (declared above)
 
   const fireQuickButton = useCallback(
     async (body: string, bodyMode: 'commands' | 'script') => {
+      // Quick button clicks are user activity — stamp idle tracker
+      stampUserInput();
       if (bodyMode === 'script') {
         await executeAliasScript(
           body,
@@ -1972,6 +1250,43 @@ function AppMain() {
     },
     [handleSend]
   );
+
+  // Global macro hotkey listener
+  const macrosRef = useLatestRef(macrosCRUD.items);
+  const fireQuickButtonRef = useLatestRef(fireQuickButton);
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      // Don't intercept if a modal/editor input is focused (except the command textarea)
+      const target = e.target as HTMLElement | null;
+      if (
+        target &&
+        target.tagName !== 'BODY' &&
+        target.tagName !== 'TEXTAREA' &&
+        target.tagName !== 'CANVAS' &&
+        !target.classList.contains('xterm-helper-textarea')
+      ) {
+        // Allow macros from the command input textarea
+        const isCommandInput = target.closest('[data-help-id="command-input"]');
+        if (!isCommandInput) return;
+      }
+
+      const combo = hotkeyFromEvent(e);
+      if (!combo) return;
+      if (isNumpadKey(combo.key)) return; // numpad handled by CommandInput
+
+      const key = hotkeyToString(combo);
+      const macro = macrosRef.current.find(
+        (m) => m.enabled && hotkeyToString(m.hotkey) === key
+      );
+      if (!macro) return;
+
+      e.preventDefault();
+      e.stopPropagation();
+      fireQuickButtonRef.current(macro.body, macro.bodyMode);
+    };
+    window.addEventListener('keydown', handler, true);
+    return () => window.removeEventListener('keydown', handler, true);
+  }, []);
 
   // Post-sync commands
   const postSyncEnabledRef = useLatestRef(postSyncEnabled);
@@ -2429,7 +1744,7 @@ function AppMain() {
 
                                         {/* Center: Terminal + bottom controls */}
                                         <div
-                                          className="flex-1 overflow-hidden flex flex-col gap-1"
+                                          className="flex-1 overflow-hidden flex flex-col"
                                           style={{ minWidth: MIN_TERMINAL_WIDTH }}
                                         >
                                           <div className="flex-1 overflow-hidden rounded-lg flex flex-col">
@@ -2447,12 +1762,12 @@ function AppMain() {
                                           </div>
                                           {/* Quick buttons */}
                                           <QuickButtonBar
-                                            buttons={quickButtons}
+                                            buttons={quickButtonsCRUD.items}
                                             onFire={fireQuickButton}
-                                            onAdd={addQuickButton}
-                                            onUpdate={updateQuickButton}
-                                            onDelete={deleteQuickButton}
-                                            onReorder={reorderQuickButton}
+                                            onAdd={quickButtonsCRUD.add}
+                                            onUpdate={quickButtonsCRUD.update}
+                                            onDelete={quickButtonsCRUD.remove}
+                                            onReorder={quickButtonsCRUD.reorder}
                                           />
                                           {/* Status bar + command input */}
                                           <div className="rounded-lg bg-bg-primary overflow-hidden shrink-0">
@@ -2580,6 +1895,15 @@ function AppMain() {
                                         <SlideOut panel="timers">
                                           <TimerPanel onClose={closePanel} />
                                         </SlideOut>
+                                        <SlideOut panel="macros">
+                                          <MacroPanel
+                                            onClose={closePanel}
+                                            macros={macrosCRUD.items}
+                                            onAdd={macrosCRUD.add}
+                                            onUpdate={macrosCRUD.update}
+                                            onDelete={macrosCRUD.remove}
+                                          />
+                                        </SlideOut>
                                         <SlideOut panel="variables">
                                           <VariablePanel onClose={closePanel} />
                                         </SlideOut>
@@ -2607,6 +1931,9 @@ function AppMain() {
                                         <SlideOut panel="who" pinnable="who">
                                           <WhoPanel mode="slideout" />
                                         </SlideOut>
+                                        {activePanel === 'logs' && (
+                                          <LogViewerPanel onClose={closePanel} />
+                                        )}
                                         <SlideOut panel="help">
                                           <HelpPanel onClose={closePanel} />
                                         </SlideOut>
