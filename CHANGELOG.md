@@ -9,7 +9,7 @@ The `[Unreleased]` header controls automatic version bumping on merge:
 - `[Unreleased-minor]` → 0.1.0 → 0.2.0
 - `[Unreleased-major]` → 0.1.0 → 1.0.0
 
-## [Unreleased-patch]
+## [1.5.1] - 2026-03-07
 
 ### Fixed
 - Fixed aliases whose body starts with `/var` or `/spam` not capturing command separators (`;;`) in `$*` — e.g. alias `rea` → `/var reattackAction $*` now correctly sets the variable to `k demon;;sf` instead of splitting on `;;`
