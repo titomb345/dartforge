@@ -14,7 +14,7 @@ const cooldownMap = new Map<string, number>();
 
 /** Global rate limiter: timestamps of recent trigger fires */
 let recentFires: number[] = [];
-const MAX_FIRES_PER_SECOND = 20;
+const MAX_FIRES_PER_SECOND = 50;
 
 /** Cache compiled regex patterns to avoid re-compiling on every match */
 const regexCache = new Map<string, RegExp | null>();

@@ -33,8 +33,10 @@ export interface Trigger {
   gag: boolean;
   /** Optional highlight color for matched line (ANSI color code, e.g. "33" for yellow) */
   highlight: string | null;
-  /** Play a sound alert when this trigger fires */
-  soundAlert: boolean;
+  /** @deprecated Use soundName instead. Kept for backward compat migration. */
+  soundAlert?: boolean;
+  /** Name of the sound to play when this trigger fires (null = no sound) */
+  soundName?: string | null;
   /** Enable multi-line buffering (start pattern + end pattern) */
   multiLine?: boolean;
   /** Regex pattern that signals the end of a multi-line buffer */

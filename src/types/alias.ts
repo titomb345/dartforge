@@ -13,6 +13,8 @@ export type AliasBodyMode = 'text' | 'script';
 /** An individual alias definition */
 export interface Alias {
   id: AliasId;
+  /** Display label (used by enableAlias/disableAlias for lookup) */
+  name?: string;
   /** The trigger pattern — what the user types */
   pattern: string;
   /** How pattern is matched: exact word, prefix (allows arguments), or regex */

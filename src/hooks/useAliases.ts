@@ -97,6 +97,7 @@ export function useAliases(dataStore: DataStore, activeCharacter: string | null)
   const createAlias = useCallback(
     (
       partial: {
+        name?: string;
         pattern: string;
         matchMode: AliasMatchMode;
         body: string;
@@ -108,6 +109,7 @@ export function useAliases(dataStore: DataStore, activeCharacter: string | null)
       const now = new Date().toISOString();
       const alias: Alias = {
         id: generateId(),
+        ...(partial.name ? { name: partial.name } : {}),
         pattern: partial.pattern,
         matchMode: partial.matchMode,
         body: partial.body,

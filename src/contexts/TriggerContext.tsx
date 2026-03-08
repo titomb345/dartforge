@@ -23,6 +23,7 @@ export interface TriggerState {
       gag?: boolean;
       highlight?: string | null;
       soundAlert?: boolean;
+      soundName?: string | null;
       bodyMode?: BodyMode;
       multiLine?: boolean;
       endPattern?: string;

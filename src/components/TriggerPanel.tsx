@@ -280,7 +280,7 @@ function TriggerEditor({
       cooldownMs: number;
       gag: boolean;
       highlight: string | null;
-      soundAlert: boolean;
+      soundName?: string | null;
       bodyMode?: BodyMode;
       multiLine?: boolean;
       endPattern?: string;
@@ -301,7 +301,17 @@ function TriggerEditor({
   const [cooldownMs, setCooldownMs] = useState(trigger?.cooldownMs ?? 0);
   const [gag, setGag] = useState(trigger?.gag ?? prefill?.gag ?? false);
   const [highlight, setHighlight] = useState<string | null>(trigger?.highlight ?? null);
-  const [soundAlert, setSoundAlert] = useState(trigger?.soundAlert ?? false);
+  const [soundName, setSoundName] = useState<string | null>(
+    trigger?.soundName ?? (trigger?.soundAlert ? 'chime1' : null)
+  );
+  const { customSounds } = useAppSettingsContext();
+  const soundNames = useMemo(() => {
+    const names = ['chime1', 'chime2'];
+    for (const s of customSounds) {
+      if (s.name !== 'chime1' && s.name !== 'chime2') names.push(s.name);
+    }
+    return names;
+  }, [customSounds]);
   const [bodyMode, setBodyMode] = useState<BodyMode>(
     trigger?.bodyMode ?? prefill?.bodyMode ?? 'text'
   );
@@ -344,7 +354,6 @@ function TriggerEditor({
       cooldownMs: 0,
       gag: false,
       highlight: null,
-      soundAlert: false,
       createdAt: '',
       updatedAt: '',
     };
@@ -374,7 +383,7 @@ function TriggerEditor({
           cooldownMs,
           gag,
           highlight,
-          soundAlert,
+          soundName,
           bodyMode,
           ...(multiLine ? { multiLine: true, endPattern: endPattern.trim() } : {}),
         },
@@ -410,7 +419,7 @@ function TriggerEditor({
                     cooldownMs,
                     gag,
                     highlight,
-                    soundAlert,
+                    soundName,
                     bodyMode,
                     ...(multiLine ? { multiLine: true, endPattern: endPattern.trim() } : {}),
                   },
@@ -637,17 +646,23 @@ function TriggerEditor({
             >
               Gag
             </button>
-            <button
-              onClick={() => setSoundAlert(!soundAlert)}
-              title={soundAlert ? 'Sound alert ON' : 'Sound alert OFF'}
-              className={`text-[9px] font-mono px-2 py-1 rounded border cursor-pointer transition-colors duration-150 ${
-                soundAlert
+            <select
+              value={soundName ?? ''}
+              onChange={(e) => setSoundName(e.target.value || null)}
+              title="Sound to play when trigger fires"
+              className={`text-[9px] font-mono px-2 py-1 rounded border cursor-pointer transition-colors duration-150 bg-transparent ${
+                soundName
                   ? 'text-[#8be9fd] border-[#8be9fd]/40 bg-[#8be9fd]/10'
-                  : 'text-text-dim border-border-dim bg-transparent hover:text-text-label'
+                  : 'text-text-dim border-border-dim'
               }`}
             >
-              Sound
-            </button>
+              <option value="">No Sound</option>
+              {soundNames.map((name) => (
+                <option key={name} value={name}>
+                  {name}
+                </option>
+              ))}
+            </select>
           </div>
         </div>
 
@@ -902,7 +917,7 @@ export function TriggerPanel({ onClose }: TriggerPanelProps) {
         cooldownMs: number;
         gag: boolean;
         highlight: string | null;
-        soundAlert: boolean;
+        soundName?: string | null;
         bodyMode?: BodyMode;
         multiLine?: boolean;
         endPattern?: string;

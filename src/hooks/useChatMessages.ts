@@ -3,7 +3,7 @@ import { useDataStore } from '../contexts/DataStoreContext';
 import { alertUser } from '../lib/platform';
 import { setChatIdCounter } from '../lib/chatPatterns';
 import type { ChatMessage, ChatType, ChatFilters } from '../types/chat';
-import type { Chimes } from './useCustomChimes';
+import type { SoundLibrary } from './useSoundLibrary';
 
 const SETTINGS_FILE = 'settings.json';
 const CHAT_HISTORY_FILE = 'chat-history.json';
@@ -49,7 +49,7 @@ function deserializeMessages(
 export function useChatMessages(
   maxMessages = MAX_MESSAGES,
   notificationsRef?: React.RefObject<ChatFilters | null>,
-  chimesRef?: React.RefObject<Chimes>,
+  soundLibraryRef?: React.RefObject<SoundLibrary>,
   gaggedNpcsRef?: React.RefObject<string[]>,
 ) {
   const dataStore = useDataStore();
@@ -160,13 +160,9 @@ export function useChatMessages(
 
     // Sound alert
     const s = soundAlertsRef.current;
-    if (!msg.isOwn && s[msg.type] && !isMuted && !isGaggedNpc && chimesRef?.current) {
-      const audio =
-        msg.type === 'tell' || msg.type === 'sz'
-          ? chimesRef.current.chime2
-          : chimesRef.current.chime1;
-      audio.currentTime = 0;
-      audio.play().catch(() => {});
+    if (!msg.isOwn && s[msg.type] && !isMuted && !isGaggedNpc && soundLibraryRef?.current) {
+      const soundName = msg.type === 'tell' || msg.type === 'sz' ? 'chime2' : 'chime1';
+      soundLibraryRef.current.play(soundName);
     }
 
     // Desktop notification when window is unfocused

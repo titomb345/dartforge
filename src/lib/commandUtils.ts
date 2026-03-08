@@ -151,6 +151,23 @@ export interface CommandRunner {
   convert: (args: string) => void;
   getVariables: () => Variable[];
   getSkillCount: (skillName: string) => number;
+  readFile: (path: string) => Promise<string>;
+  writeFile: (path: string, content: string) => Promise<void>;
+  playSound: (id: number | string) => void;
+  enableTimer: (name: string) => void;
+  disableTimer: (name: string) => void;
+  enableTrigger: (name: string) => void;
+  disableTrigger: (name: string) => void;
+  enableAlias: (name: string) => void;
+  disableAlias: (name: string) => void;
+  getGameTime: () => { hour: number; timeOfDay: string; date: string; holiday: string | null };
+  getCounter: (name: string) => {
+    status: string; totalImps: number; elapsedMs: number;
+    perMinute: number; perHour: number;
+    skills: { skill: string; count: number }[];
+  } | null;
+  getMovementMode: () => string;
+  setMovementMode: (mode: string) => void;
 }
 
 /**

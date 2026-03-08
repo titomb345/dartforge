@@ -52,11 +52,13 @@ export interface AppSettingsState {
   chatNotifications: ChatFilters;
   updateChatNotifications: (v: ChatFilters) => void;
   toggleChatNotification: (type: keyof ChatFilters) => void;
-  // Custom chimes
+  // Custom chimes / sound library
   customChime1: string | null;
   customChime2: string | null;
+  customSounds: import('../hooks/useSoundLibrary').CustomSoundEntry[];
   updateCustomChime1: (v: string | null) => void;
   updateCustomChime2: (v: string | null) => void;
+  updateCustomSounds: (v: import('../hooks/useSoundLibrary').CustomSoundEntry[]) => void;
   // Counter thresholds
   counterHotThreshold: number;
   counterColdThreshold: number;

@@ -25,6 +25,9 @@ The `[Unreleased]` header controls automatic version bumping on merge:
 - `getGameTime()` script API — returns `{ hour, timeOfDay, date, holiday }` for the current in-game DartMUD clock
 - `getCounter(name)` script API — query improve counter state: `{ status, totalImps, elapsedMs, perMinute, perHour, skills }`
 - `getMovementMode()` and `setMovementMode(mode)` script APIs — read/change movement mode (normal/leading/rowing/sneaking) from scripts
+- `enableTrigger(name)` and `disableTrigger(name)` script APIs — enable/disable triggers by name from scripts (mirrors `startTimer`/`stopTimer` pattern)
+- `enableAlias(name)` and `disableAlias(name)` script APIs — enable/disable aliases by name from scripts
+- Optional name field for aliases — label aliases with a custom name for easier identification and for use with `enableAlias`/`disableAlias` (falls back to pattern display when not set)
 
 ### Fixed
 - "Show quick skills" count injection — two-column format now correctly detected and parsed (was blocked by overly strict prefix regex and underscore-to-space conversion breaking skill lookups)

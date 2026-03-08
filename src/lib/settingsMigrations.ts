@@ -268,6 +268,9 @@ const MIGRATIONS: MigrationFn[] = [
     // NPC speech gags (user-managed name list)
     if (!('gaggedNpcs' in data)) data.gaggedNpcs = [];
 
+    // Custom sound library
+    if (!('customSounds' in data)) data.customSounds = [];
+
     return data;
   },
 ];

@@ -98,6 +98,7 @@ export function useTriggers(dataStore: DataStore, activeCharacter: string | null
         gag?: boolean;
         highlight?: string | null;
         soundAlert?: boolean;
+        soundName?: string | null;
         bodyMode?: BodyMode;
         multiLine?: boolean;
         endPattern?: string;
@@ -117,6 +118,7 @@ export function useTriggers(dataStore: DataStore, activeCharacter: string | null
         gag: partial.gag ?? false,
         highlight: partial.highlight ?? null,
         soundAlert: partial.soundAlert ?? false,
+        soundName: partial.soundName ?? null,
         bodyMode: partial.bodyMode,
         multiLine: partial.multiLine,
         endPattern: partial.endPattern,
@@ -200,6 +202,7 @@ export function useTriggers(dataStore: DataStore, activeCharacter: string | null
           gag: original.gag,
           highlight: original.highlight,
           soundAlert: original.soundAlert,
+          soundName: original.soundName,
           bodyMode: original.bodyMode,
           multiLine: original.multiLine,
           endPattern: original.endPattern,

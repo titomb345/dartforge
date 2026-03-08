@@ -21,6 +21,10 @@ export const SCRIPT_API_HELP_ROWS: HelpRow[] = [
   { token: "setVar(n, v, 'global')", desc: 'Set a global variable' },
   { token: 'getVar(name)', desc: 'Get variable value (returns string)' },
   { token: 'await spam(n, text)', desc: 'Send command n times (max 1000)' },
+  { token: 'enableTrigger(name)', desc: 'Enable a trigger by name' },
+  { token: 'disableTrigger(name)', desc: 'Disable a trigger by name' },
+  { token: 'enableAlias(name)', desc: 'Enable an alias by name' },
+  { token: 'disableAlias(name)', desc: 'Disable an alias by name' },
 ];
 
 export const SCRIPT_ACCENT = '#8be9fd';

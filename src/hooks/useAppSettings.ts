@@ -4,6 +4,7 @@ import { getPlatform } from '../lib/platform';
 import type { ChatFilters } from '../types/chat';
 import { DEFAULT_GAG_GROUPS, type GagGroupSettings } from '../lib/gagPatterns';
 import type { AnnounceMode } from '../types';
+import type { CustomSoundEntry } from './useSoundLibrary';
 
 let invoke: ((cmd: string, args?: Record<string, unknown>) => Promise<unknown>) | null = null;
 if (getPlatform() === 'tauri') {
@@ -105,6 +106,9 @@ export function useAppSettings() {
   // Custom chime sounds (original filename for display, null = default)
   const [customChime1, setCustomChime1] = useState<string | null>(null);
   const [customChime2, setCustomChime2] = useState<string | null>(null);
+
+  // Custom sound library (user-uploaded sounds beyond the built-in chimes)
+  const [customSounds, setCustomSounds] = useState<CustomSoundEntry[]>([]);
 
   // Counter thresholds
   const [counterHotThreshold, setCounterHotThreshold] = useState(5.0);
@@ -280,6 +284,9 @@ export function useAppSettings() {
       // Nullable settings (null is a valid stored value)
       await loadNullable('customChime1', setCustomChime1);
       await loadNullable('customChime2', setCustomChime2);
+
+      // Custom sounds
+      await load('customSounds', setCustomSounds, (v) => Array.isArray(v));
       await loadNullable('lastLoginTimestamp', setLastLoginTimestamp);
 
       // Auto-login slot (strict enum validation)
@@ -361,6 +368,7 @@ export function useAppSettings() {
       updateChatNotifications: make(setChatNotifications, 'chatNotifications'),
       updateCustomChime1: make(setCustomChime1, 'customChime1'),
       updateCustomChime2: make(setCustomChime2, 'customChime2'),
+      updateCustomSounds: make(setCustomSounds, 'customSounds'),
       // Counter thresholds
       updateCounterHotThreshold: make(setCounterHotThreshold, 'counterHotThreshold'),
       updateCounterColdThreshold: make(setCounterColdThreshold, 'counterColdThreshold'),
@@ -504,9 +512,10 @@ export function useAppSettings() {
     // Notifications
     chatNotifications,
     toggleChatNotification,
-    // Custom chimes
+    // Custom chimes / sound library
     customChime1,
     customChime2,
+    customSounds,
     // Counter thresholds
     counterHotThreshold,
     counterColdThreshold,
@@ -570,7 +579,7 @@ export function useAppSettings() {
     timestampFormat, commandEchoEnabled, showTimerBadges, sessionLoggingEnabled,
     numpadMappings, autoBackupEnabled,
     chatNotifications, toggleChatNotification,
-    customChime1, customChime2,
+    customChime1, customChime2, customSounds,
     counterHotThreshold, counterColdThreshold,
     hasSeenGuide, actionBlockingEnabled,
     whoAutoRefreshEnabled, whoRefreshMinutes, whoFontSize, updateWhoFontSize,
