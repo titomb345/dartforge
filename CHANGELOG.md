@@ -17,8 +17,21 @@ The `[Unreleased]` header controls automatic version bumping on merge:
 - "Show skill counts" setting — appends tracked improve counts to `show skills` and `show quick skills` readouts inline (cyan-colored, e.g. `fighting: Mythic. (12345)`)
 - Chat search — click the magnifying glass icon in the chat toolbar to filter messages by sender name or message text; shows match count, press Escape to close
 - NPC gag — add NPC names to automatically gag all their speech (say/ask/exclaim) and emotes (blinks, bows, grins, etc.) from both the terminal and chat panel; supports multi-line messages; managed in the Triggers panel under Gag Groups
+- `readFile(path)` and `writeFile(path, content)` script APIs — read/write any file from the local filesystem in script-mode triggers, timers, and aliases (desktop app only)
+- **Sound Library** — upload custom sounds with names (e.g. "deathAlert") alongside the built-in chime1/chime2; manage in Settings > Sound Library
+- `playSound(id)` script API — play sounds by 1-based index (playSound(1) = first sound) or by name (playSound('deathAlert')); built-in chime1/chime2 are always indices 1 and 2, custom sounds start at 3
+- Trigger sound selector — triggers can now play any sound from the library via a dropdown (replaces the old boolean toggle); existing triggers with sound alerts auto-migrate to chime1
+- `startTimer(name)` and `stopTimer(name)` script APIs — enable/disable timers by name from scripts
+- `getGameTime()` script API — returns `{ hour, timeOfDay, date, holiday }` for the current in-game DartMUD clock
+- `getCounter(name)` script API — query improve counter state: `{ status, totalImps, elapsedMs, perMinute, perHour, skills }`
+- `getMovementMode()` and `setMovementMode(mode)` script APIs — read/change movement mode (normal/leading/rowing/sneaking) from scripts
 
 ### Fixed
+- "Show quick skills" count injection — two-column format now correctly detected and parsed (was blocked by overly strict prefix regex and underscore-to-space conversion breaking skill lookups)
+- Quick skills offset mapping — re-strips ANSI from raw text internally so character positions align correctly (the pre-stripped text had .trim() applied, shifting offsets)
+- Quick skills column alignment — fixed-width count injection keeps column 2 properly positioned
+- Quick skills single-skill last line — color guard now accepts one color (last row with odd skill count only has one)
+- Count padding — all injected counts right-padded to consistent width (derived from highest tracked skill count) for clean column alignment in both formats
 - Added missing "grins" emote to Morrigan sparring gag pattern
 
 ## [1.5.1] - 2026-03-07
