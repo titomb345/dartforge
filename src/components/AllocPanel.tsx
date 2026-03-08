@@ -336,8 +336,14 @@ function MagicPointBar({ alloc }: { alloc: MagicAllocation }) {
   );
 }
 
-/** Column headers for the combat allocation grid. */
-function GridHeaders() {
+/** Column headers for the combat allocation grid with +/- bulk buttons. */
+function GridHeaders({ onSlotDelta }: { onSlotDelta?: (slot: (typeof ALLOC_SLOTS)[number], delta: number) => void }) {
+  const handleDelta = (e: React.MouseEvent, slot: (typeof ALLOC_SLOTS)[number], delta: number) => {
+    e.stopPropagation();
+    const mult = e.shiftKey ? 5 : 1;
+    onSlotDelta?.(slot, delta * mult);
+  };
+
   return (
     <div className="flex items-center gap-0">
       <div className="flex-1 min-w-0" />
@@ -345,10 +351,28 @@ function GridHeaders() {
         <div
           key={slot}
           style={{ width: `${CELL_W}px` }}
-          className="text-center text-[9px] font-bold uppercase tracking-wider text-text-dim"
+          className="group/hdr relative text-center text-[9px] font-bold uppercase tracking-wider text-text-dim"
           title={slot}
         >
+          {onSlotDelta && (
+            <button
+              onClick={(e) => handleDelta(e, slot, -1)}
+              className="absolute left-[-1px] top-0 bottom-0 w-[10px] flex items-center justify-center opacity-0 group-hover/hdr:opacity-100 text-[8px] text-text-dim hover:text-red transition-all duration-100 cursor-pointer"
+              title={`All limbs - 1 (shift: - 5)`}
+            >
+              -
+            </button>
+          )}
           {SLOT_SHORT[slot]}
+          {onSlotDelta && (
+            <button
+              onClick={(e) => handleDelta(e, slot, 1)}
+              className="absolute right-[-1px] top-0 bottom-0 w-[10px] flex items-center justify-center opacity-0 group-hover/hdr:opacity-100 text-[8px] text-text-dim hover:text-green transition-all duration-100 cursor-pointer"
+              title={`All limbs + 1 (shift: + 5)`}
+            >
+              +
+            </button>
+          )}
         </div>
       ))}
       <div style={{ width: `${APPLY_W}px` }} />
@@ -356,8 +380,14 @@ function GridHeaders() {
   );
 }
 
-/** Column headers for the magic allocation grid. */
-function MagicGridHeaders() {
+/** Column headers for the magic allocation grid with +/- bulk buttons. */
+function MagicGridHeaders({ onSlotDelta }: { onSlotDelta?: (slot: (typeof MAGIC_SLOTS)[number], delta: number) => void }) {
+  const handleDelta = (e: React.MouseEvent, slot: (typeof MAGIC_SLOTS)[number], delta: number) => {
+    e.stopPropagation();
+    const mult = e.shiftKey ? 5 : 1;
+    onSlotDelta?.(slot, delta * mult);
+  };
+
   return (
     <div className="flex items-center gap-0">
       <div className="flex-1 min-w-0" />
@@ -365,10 +395,28 @@ function MagicGridHeaders() {
         <div
           key={slot}
           style={{ width: `${CELL_W}px` }}
-          className="text-center text-[9px] font-bold uppercase tracking-wider text-text-dim"
+          className="group/hdr relative text-center text-[9px] font-bold uppercase tracking-wider text-text-dim"
           title={slot}
         >
+          {onSlotDelta && (
+            <button
+              onClick={(e) => handleDelta(e, slot, -1)}
+              className="absolute left-[-1px] top-0 bottom-0 w-[10px] flex items-center justify-center opacity-0 group-hover/hdr:opacity-100 text-[8px] text-text-dim hover:text-red transition-all duration-100 cursor-pointer"
+              title={`All elements - 1 (shift: - 5)`}
+            >
+              -
+            </button>
+          )}
           {MAGIC_SLOT_SHORT[slot]}
+          {onSlotDelta && (
+            <button
+              onClick={(e) => handleDelta(e, slot, 1)}
+              className="absolute right-[-1px] top-0 bottom-0 w-[10px] flex items-center justify-center opacity-0 group-hover/hdr:opacity-100 text-[8px] text-text-dim hover:text-green transition-all duration-100 cursor-pointer"
+              title={`All elements + 1 (shift: + 5)`}
+            >
+              +
+            </button>
+          )}
         </div>
       ))}
       <div style={{ width: `${APPLY_W}px` }} />
@@ -456,6 +504,7 @@ function LiveView() {
     data,
     updateLiveLimbSlot,
     setLiveLimbSlotDelta,
+    setLiveAllLimbsSlotDelta,
     applyLiveLimb,
     applyLiveAll,
     createProfileFromLive,
@@ -476,7 +525,7 @@ function LiveView() {
   return (
     <div className="flex-1 overflow-auto px-2 py-1">
       <div className="flex flex-col gap-0.5">
-        <GridHeaders />
+        <GridHeaders onSlotDelta={(slot, delta) => setLiveAllLimbsSlotDelta(slot, delta)} />
         {limbNames.map((limb) => {
           const alloc = live[limb] ?? {
             bonus: 0,
@@ -555,6 +604,7 @@ function ProfileView() {
     renameProfile,
     updateLimbSlot,
     setLimbSlotDelta,
+    setAllLimbsSlotDelta,
     applyLimb,
     applyAll,
     loadProfileToLive,
@@ -669,7 +719,7 @@ function ProfileView() {
           </div>
         ) : (
           <div className="flex flex-col gap-0.5">
-            <GridHeaders />
+            <GridHeaders onSlotDelta={currentProfile ? (slot, delta) => setAllLimbsSlotDelta(currentProfile.id, slot, delta) : undefined} />
             {limbNames.map((limb) => {
               const alloc = currentProfile.limbs[limb];
               if (!alloc) return null;

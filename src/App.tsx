@@ -834,6 +834,17 @@ function AppMain() {
   const setVarRef = useLatestRef(setVar);
   const deleteVariableByNameRef = useLatestRef(deleteVariableByName);
 
+  /** Look up a variable value by name (returns '' if not found or disabled). */
+  const getVariableByName = useCallback(
+    (name: string): string => {
+      const found = mergedVariables.find(
+        (v) => v.name.toLowerCase() === name.toLowerCase() && v.enabled
+      );
+      return found?.value ?? '';
+    },
+    [mergedVariables]
+  );
+
   // Trigger system
   const triggerState = useTriggers(dataStore, activeCharacter);
   const { mergedTriggers } = triggerState;
@@ -855,6 +866,12 @@ function AppMain() {
     disableTrigger: () => {},
     enableAlias: () => {},
     disableAlias: () => {},
+    enableTriggerGroup: () => {},
+    disableTriggerGroup: () => {},
+    enableAliasGroup: () => {},
+    disableAliasGroup: () => {},
+    enableTimerGroup: () => {},
+    disableTimerGroup: () => {},
     getGameTime: () => ({ hour: 0, timeOfDay: '', date: '', holiday: null }),
     getCounter: () => null,
     getMovementMode: () => 'normal',
@@ -1160,6 +1177,66 @@ function AppMain() {
         }
       }
     },
+    enableTriggerGroup: (group: string) => {
+      const ts = triggerStateRef.current;
+      const lower = group.toLowerCase();
+      for (const t of ts.mergedTriggers) {
+        if ((t.group ?? '').toLowerCase() === lower && !t.enabled) {
+          const scope = ts.characterTriggers[t.id] ? 'character' : 'global';
+          ts.toggleTrigger(t.id, scope as 'character' | 'global');
+        }
+      }
+    },
+    disableTriggerGroup: (group: string) => {
+      const ts = triggerStateRef.current;
+      const lower = group.toLowerCase();
+      for (const t of ts.mergedTriggers) {
+        if ((t.group ?? '').toLowerCase() === lower && t.enabled) {
+          const scope = ts.characterTriggers[t.id] ? 'character' : 'global';
+          ts.toggleTrigger(t.id, scope as 'character' | 'global');
+        }
+      }
+    },
+    enableAliasGroup: (group: string) => {
+      const as_ = aliasStateRef.current;
+      const lower = group.toLowerCase();
+      for (const a of as_.mergedAliases) {
+        if ((a.group ?? '').toLowerCase() === lower && !a.enabled) {
+          const scope = as_.characterAliases[a.id] ? 'character' : 'global';
+          as_.toggleAlias(a.id, scope as 'character' | 'global');
+        }
+      }
+    },
+    disableAliasGroup: (group: string) => {
+      const as_ = aliasStateRef.current;
+      const lower = group.toLowerCase();
+      for (const a of as_.mergedAliases) {
+        if ((a.group ?? '').toLowerCase() === lower && a.enabled) {
+          const scope = as_.characterAliases[a.id] ? 'character' : 'global';
+          as_.toggleAlias(a.id, scope as 'character' | 'global');
+        }
+      }
+    },
+    enableTimerGroup: (group: string) => {
+      const ts = timerStateRef.current;
+      const lower = group.toLowerCase();
+      for (const t of ts.mergedTimers) {
+        if ((t.group ?? '').toLowerCase() === lower && !t.enabled) {
+          const scope = ts.characterTimers[t.id] ? 'character' : 'global';
+          ts.toggleTimer(t.id, scope as 'character' | 'global');
+        }
+      }
+    },
+    disableTimerGroup: (group: string) => {
+      const ts = timerStateRef.current;
+      const lower = group.toLowerCase();
+      for (const t of ts.mergedTimers) {
+        if ((t.group ?? '').toLowerCase() === lower && t.enabled) {
+          const scope = ts.characterTimers[t.id] ? 'character' : 'global';
+          ts.toggleTimer(t.id, scope as 'character' | 'global');
+        }
+      }
+    },
     getGameTime: () => {
       const hour = queryHour();
       return {
@@ -1391,9 +1468,42 @@ function AppMain() {
   // Quick buttons and macros CRUD managed by usePersistedCRUD hooks (declared above)
 
   const fireQuickButton = useCallback(
-    async (body: string, bodyMode: 'commands' | 'script') => {
+    async (body: string, bodyMode: 'commands' | 'script', toggleBtn?: QuickButton) => {
       // Quick button clicks are user activity — stamp idle tracker
       stampUserInput();
+
+      // Handle toggle buttons: read variable, flip state, execute the appropriate body
+      if (toggleBtn?.toggle) {
+        const t = toggleBtn.toggle;
+        const currentVal = mergedVariablesRef.current.find(
+          (v) => v.name.toLowerCase() === t.variable.toLowerCase() && v.enabled
+        );
+        const isOn = !!currentVal?.value && currentVal.value !== '0';
+
+        // Toggle the variable
+        setVarRef.current(t.variable, isOn ? '0' : '1', 'character');
+
+        // Execute the appropriate body (turning ON if was off, turning OFF if was on)
+        const execBody = isOn ? t.offBody : t.onBody;
+        const execMode = isOn ? t.offBodyMode : t.onBodyMode;
+
+        if (execMode === 'script') {
+          await executeAliasScript(
+            execBody,
+            [],
+            activeCharacterRef.current,
+            triggerRunnerRef.current,
+            globalScriptRef.current
+          );
+        } else {
+          for (const line of execBody.split('\n')) {
+            const trimmed = line.trim();
+            if (trimmed) await handleSend(trimmed);
+          }
+        }
+        return;
+      }
+
       if (bodyMode === 'script') {
         await executeAliasScript(
           body,
@@ -1930,6 +2040,7 @@ function AppMain() {
                                             onUpdate={quickButtonsCRUD.update}
                                             onDelete={quickButtonsCRUD.remove}
                                             onReorder={quickButtonsCRUD.reorder}
+                                            getVariable={getVariableByName}
                                           />
                                           {/* Status bar + command input */}
                                           <div className="rounded-lg bg-bg-primary overflow-hidden shrink-0">

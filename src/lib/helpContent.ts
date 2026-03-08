@@ -251,6 +251,12 @@ export const HELP_CATEGORIES: HelpCategory[] = [
           'Right-click any quick button to edit, delete, or enable/disable it. Drag and drop buttons to reorder them. Click the "+" button at the end of the row to add a new one.',
         interaction: 'right-click',
       },
+      {
+        title: 'Toggle Buttons',
+        description:
+          'Create buttons that switch between ON and OFF states. Click the "Toggle" badge in the button editor to enable toggle mode. Each state has its own label, color, and body. Toggle state is stored as a user variable (accessible via $variable_name in scripts and triggers).',
+        interaction: 'click',
+      },
     ],
   },
   {
@@ -471,7 +477,7 @@ export const HELP_CATEGORIES: HelpCategory[] = [
       {
         title: 'Script Mode',
         description:
-          'Triggers and aliases can use JavaScript instead of text expansion. Toggle "Script" in the editor to write JS bodies with: send(), echo(), delay(), setVar(), getVar(), spam(), lastUserInputTime(), getSkill/Count/Level/Tier/Next/Group(), readFile(path), writeFile(path, content), playSound(indexOrName) — e.g. playSound(1) or playSound("deathAlert"), startTimer(name), stopTimer(name), enableTrigger(name), disableTrigger(name), enableAlias(name), disableAlias(name), getGameTime(), getCounter(name), getMovementMode(), setMovementMode(mode), and capture variables ($0-$9, $line, $me). Define shared functions in the Global Script panel. Hover over any script editor to reveal an expand button that opens a large popout modal for comfortable editing. Errors appear in red in the terminal.',
+          'Triggers and aliases can use JavaScript instead of text expansion. Toggle "Script" in the editor to write JS bodies with: send(), echo(), delay(), setVar(), getVar(), spam(), lastUserInputTime(), getSkill/Count/Level/Tier/Next/Group(), readFile(path), writeFile(path, content), playSound(indexOrName) — e.g. playSound(1) or playSound("deathAlert"), startTimer(name), stopTimer(name), enableTrigger(name), disableTrigger(name), enableAlias(name), disableAlias(name), enableTriggerGroup(group), disableTriggerGroup(group), enableAliasGroup(group), disableAliasGroup(group), enableTimerGroup(group), disableTimerGroup(group), getGameTime(), getCounter(name), getMovementMode(), setMovementMode(mode), and capture variables ($0-$9, $line, $me). Define shared functions in the Global Script panel. Hover over any script editor to reveal an expand button that opens a large popout modal for comfortable editing. Errors appear in red in the terminal.',
       },
       {
         title: 'Skill Functions (Text Mode)',

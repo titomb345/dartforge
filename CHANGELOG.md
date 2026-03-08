@@ -12,6 +12,7 @@ The `[Unreleased]` header controls automatic version bumping on merge:
 ## [Unreleased-minor]
 
 ### Added
+- Toggle buttons — quick buttons can now switch between ON and OFF states, each with its own label, color, and body (commands or script); toggle state is stored as a user variable, accessible via `$variable_name` in scripts and triggers
 - Optional name field for triggers — label triggers with a custom name for easier identification in the list (falls back to pattern display when not set)
 - Collapsible groups in trigger and alias panels — click group headers to collapse/expand; trigger "Gags" group starts collapsed by default to reduce clutter
 - "Show skill counts" setting — appends tracked improve counts to `show skills` and `show quick skills` readouts inline (cyan-colored, e.g. `fighting: Mythic. (12345)`)
@@ -28,6 +29,8 @@ The `[Unreleased]` header controls automatic version bumping on merge:
 - `enableTrigger(name)` and `disableTrigger(name)` script APIs — enable/disable triggers by name from scripts (mirrors `startTimer`/`stopTimer` pattern)
 - `enableAlias(name)` and `disableAlias(name)` script APIs — enable/disable aliases by name from scripts
 - Optional name field for aliases — label aliases with a custom name for easier identification and for use with `enableAlias`/`disableAlias` (falls back to pattern display when not set)
+- `enableTriggerGroup(group)` / `disableTriggerGroup(group)`, `enableAliasGroup(group)` / `disableAliasGroup(group)`, `enableTimerGroup(group)` / `disableTimerGroup(group)` script APIs — enable/disable all items in a named group with a single call
+- Allocation panel bulk adjust — hover column headers to reveal +/- buttons that adjust all limbs at once (hold Shift for ±5)
 
 ### Fixed
 - "Show quick skills" count injection — two-column format now correctly detected and parsed (was blocked by overly strict prefix regex and underscore-to-space conversion breaking skill lookups)

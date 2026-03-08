@@ -63,6 +63,8 @@ export interface AllocState {
   setLimbSlotDelta: (profileId: string, limb: string, slot: AllocSlot, delta: number) => void;
   updateLiveLimbSlot: (limb: string, slot: AllocSlot, value: number) => void;
   setLiveLimbSlotDelta: (limb: string, slot: AllocSlot, delta: number) => void;
+  setLiveAllLimbsSlotDelta: (slot: AllocSlot, delta: number) => void;
+  setAllLimbsSlotDelta: (profileId: string, slot: AllocSlot, delta: number) => void;
   setProfileActive: (id: string, active: boolean) => void;
   handleAllocParse: (result: AllocParseResult) => void;
   navigateProfile: (direction: 'prev' | 'next') => void;
@@ -367,6 +369,35 @@ export function useAllocations(
       };
     });
   }, []);
+
+  const setLiveAllLimbsSlotDelta = useCallback((slot: AllocSlot, delta: number) => {
+    setData((prev) => {
+      const updated = { ...prev.liveAllocations };
+      for (const limb of prev.detectedLimbs) {
+        const limbAlloc = updated[limb] ?? { ...EMPTY_LIMB };
+        updated[limb] = updateSlot(limbAlloc, slot, limbAlloc[slot] + delta);
+      }
+      return { ...prev, liveAllocations: updated };
+    });
+  }, []);
+
+  const setAllLimbsSlotDelta = useCallback(
+    (profileId: string, slot: AllocSlot, delta: number) => {
+      setData((prev) => ({
+        ...prev,
+        profiles: prev.profiles.map((p) => {
+          if (p.id !== profileId) return p;
+          const updatedLimbs = { ...p.limbs };
+          for (const limb of Object.keys(updatedLimbs)) {
+            const limbAlloc = updatedLimbs[limb];
+            updatedLimbs[limb] = updateSlot(limbAlloc, slot, limbAlloc[slot] + delta);
+          }
+          return { ...p, limbs: updatedLimbs };
+        }),
+      }));
+    },
+    []
+  );
 
   const setProfileActive = useCallback((id: string, active: boolean) => {
     setData((prev) => ({
@@ -706,6 +737,8 @@ export function useAllocations(
       setLimbSlotDelta,
       updateLiveLimbSlot,
       setLiveLimbSlotDelta,
+      setLiveAllLimbsSlotDelta,
+      setAllLimbsSlotDelta,
       setProfileActive,
       handleAllocParse,
       navigateProfile,

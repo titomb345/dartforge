@@ -160,6 +160,12 @@ export interface CommandRunner {
   disableTrigger: (name: string) => void;
   enableAlias: (name: string) => void;
   disableAlias: (name: string) => void;
+  enableTriggerGroup: (group: string) => void;
+  disableTriggerGroup: (group: string) => void;
+  enableAliasGroup: (group: string) => void;
+  disableAliasGroup: (group: string) => void;
+  enableTimerGroup: (group: string) => void;
+  disableTimerGroup: (group: string) => void;
   getGameTime: () => { hour: number; timeOfDay: string; date: string; holiday: string | null };
   getCounter: (name: string) => {
     status: string; totalImps: number; elapsedMs: number;

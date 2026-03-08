@@ -340,10 +340,10 @@ const NPC_SPEECH_VERBS = 'says|asks|exclaims';
  */
 const NPC_EMOTE_VERBS =
   NPC_SPEECH_VERBS + '|' +
-  'barks|blinks|bows|chuckles|coughs|cries|dozes|fixes|flees|frowns|giggles|' +
+  'barks|blinks|bows|cackles|chuckles|coughs|cries|dozes|fixes|flees|frowns|giggles|' +
   'glares|grins|growls|grunts|hums|inhales|kicks|laughs|looks|messes|nods|' +
   'nudges|peers|picks|points|pokes|ponders|rocks|screams|scowls|shakes|sighs|' +
-  'slouches|smiles|smirks|snarls|sneers|sniffs|spits|stares|straightens|' +
+  'slobbers|slouches|smiles|smirks|snarls|sneers|sniffs|spits|stares|straightens|' +
   'stretches|swings|taunts|twiddles|wanders|waves|weeps|whistles|winks|wipes|' +
   'yawns|yips';
 
