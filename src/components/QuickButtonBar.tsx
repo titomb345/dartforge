@@ -22,11 +22,12 @@ import { QuickButtonEditor } from './QuickButtonEditor';
 
 interface QuickButtonBarProps {
   buttons: QuickButton[];
-  onFire: (body: string, bodyMode: 'commands' | 'script') => void;
+  onFire: (body: string, bodyMode: 'commands' | 'script', toggleBtn?: QuickButton) => void;
   onAdd: (data: Omit<QuickButton, 'id'>) => void;
   onUpdate: (id: string, data: Partial<QuickButton>) => void;
   onDelete: (id: string) => void;
   onReorder: (newButtons: QuickButton[]) => void;
+  getVariable: (name: string) => string;
 }
 
 function SortableQuickButton({
@@ -34,11 +35,13 @@ function SortableQuickButton({
   onFire,
   onContextMenu,
   isDragging: isAnyDragging,
+  getVariable,
 }: {
   btn: QuickButton;
-  onFire: (body: string, bodyMode: 'commands' | 'script') => void;
+  onFire: (body: string, bodyMode: 'commands' | 'script', toggleBtn?: QuickButton) => void;
   onContextMenu: (e: React.MouseEvent, btn: QuickButton) => void;
   isDragging: boolean;
+  getVariable: (name: string) => string;
 }) {
   const {
     attributes,
@@ -48,6 +51,13 @@ function SortableQuickButton({
     transition,
     isDragging: isSelfDragging,
   } = useSortable({ id: btn.id });
+
+  // Resolve toggle state for display
+  const isToggle = !!btn.toggle;
+  const varVal = isToggle ? getVariable(btn.toggle!.variable) : '';
+  const isOn = !!varVal && varVal !== '0';
+  const displayLabel = isToggle ? (isOn ? btn.toggle!.onLabel : btn.toggle!.offLabel) : btn.label;
+  const displayColor = isToggle ? (isOn ? btn.toggle!.onColor : btn.toggle!.offColor) : btn.color;
 
   const style: React.CSSProperties = {
     transform: CSS.Transform.toString(transform),
@@ -62,26 +72,38 @@ function SortableQuickButton({
       <button
         data-qb-id={btn.id}
         onClick={() => {
-          if (btn.enabled) onFire(btn.body, btn.bodyMode);
+          if (btn.enabled) {
+            if (isToggle) {
+              onFire('', 'commands', btn);
+            } else {
+              onFire(btn.body, btn.bodyMode);
+            }
+          }
         }}
         onContextMenu={(e) => onContextMenu(e, btn)}
         className="qb-pill text-[11px] font-mono font-semibold px-2.5 py-0.5 rounded-full border cursor-pointer transition-all duration-150 active:scale-95"
         style={
           {
-            '--qb-color': btn.color,
+            '--qb-color': displayColor,
             borderColor: btn.enabled
-              ? `color-mix(in srgb, ${btn.color} 40%, transparent)`
+              ? `color-mix(in srgb, ${displayColor} 40%, transparent)`
               : '#333',
-            color: btn.enabled ? btn.color : '#555',
+            color: btn.enabled ? displayColor : '#555',
             background: btn.enabled
-              ? `color-mix(in srgb, ${btn.color} 6%, transparent)`
+              ? `color-mix(in srgb, ${displayColor} 6%, transparent)`
               : 'transparent',
             opacity: btn.enabled ? 1 : 0.4,
           } as React.CSSProperties
         }
-        title={btn.enabled ? btn.body.split('\n')[0] : `${btn.label} (disabled)`}
+        title={
+          btn.enabled
+            ? isToggle
+              ? `Toggle: ${btn.toggle!.variable} (${isOn ? 'ON' : 'OFF'})`
+              : btn.body.split('\n')[0]
+            : `${displayLabel} (disabled)`
+        }
       >
-        {btn.label}
+        {displayLabel}
       </button>
     </div>
   );
@@ -94,6 +116,7 @@ export function QuickButtonBar({
   onUpdate,
   onDelete,
   onReorder,
+  getVariable,
 }: QuickButtonBarProps) {
   const [editorState, setEditorState] = useState<{
     mode: 'add' | 'edit';
@@ -177,6 +200,7 @@ export function QuickButtonBar({
               onFire={onFire}
               onContextMenu={handleContextMenu}
               isDragging={draggingId != null}
+              getVariable={getVariable}
             />
           ))}
         </SortableContext>

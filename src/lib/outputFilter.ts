@@ -51,6 +51,8 @@ export interface LineCallbackResult {
   gag: boolean;
   /** If set, wrap the line in this ANSI color code (e.g. "33" for yellow) */
   highlight: string | null;
+  /** If set, replace the display segment with this string (preserves line ending) */
+  replacement?: string;
 }
 
 export interface OutputFilterCallbacks {
@@ -588,6 +590,10 @@ export class OutputFilter {
       if (this.boardDatesEnabled) {
         const transformed = transformBoardDateLine(stripped, seg);
         if (transformed !== null) displaySegment = transformed;
+      }
+      // --- onLine replacement (e.g. skill count injection) ---
+      if (lineResult?.replacement) {
+        displaySegment = lineResult.replacement;
       }
       if (lineResult?.gag) {
         output += '\x1b[0m'; // reset color state so gagged line doesn't bleed

@@ -89,6 +89,7 @@ export function useTriggers(dataStore: DataStore, activeCharacter: string | null
   const createTrigger = useCallback(
     (
       partial: {
+        name?: string;
         pattern: string;
         matchMode: TriggerMatchMode;
         body: string;
@@ -97,6 +98,7 @@ export function useTriggers(dataStore: DataStore, activeCharacter: string | null
         gag?: boolean;
         highlight?: string | null;
         soundAlert?: boolean;
+        soundName?: string | null;
         bodyMode?: BodyMode;
         multiLine?: boolean;
         endPattern?: string;
@@ -106,6 +108,7 @@ export function useTriggers(dataStore: DataStore, activeCharacter: string | null
       const now = new Date().toISOString();
       const trigger: Trigger = {
         id: generateId(),
+        name: partial.name || undefined,
         pattern: partial.pattern,
         matchMode: partial.matchMode,
         body: partial.body,
@@ -115,6 +118,7 @@ export function useTriggers(dataStore: DataStore, activeCharacter: string | null
         gag: partial.gag ?? false,
         highlight: partial.highlight ?? null,
         soundAlert: partial.soundAlert ?? false,
+        soundName: partial.soundName ?? null,
         bodyMode: partial.bodyMode,
         multiLine: partial.multiLine,
         endPattern: partial.endPattern,
@@ -189,6 +193,7 @@ export function useTriggers(dataStore: DataStore, activeCharacter: string | null
 
       return createTrigger(
         {
+          name: original.name,
           pattern: `${original.pattern}_copy`,
           matchMode: original.matchMode,
           body: original.body,
@@ -197,6 +202,7 @@ export function useTriggers(dataStore: DataStore, activeCharacter: string | null
           gag: original.gag,
           highlight: original.highlight,
           soundAlert: original.soundAlert,
+          soundName: original.soundName,
           bodyMode: original.bodyMode,
           multiLine: original.multiLine,
           endPattern: original.endPattern,

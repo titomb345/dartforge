@@ -233,7 +233,7 @@ const SPARRING_PATTERNS: RegExp[] = [
   /^Luthien angrily swings/,
   /^Luthien exclaims in elvish, 'This is my home/,
   /^Luthien exclaims in elvish, 'You don't like it/,
-  /^Morrigan (executes|kicks|punches|pushes)/,
+  /^Morrigan (executes|gives|grins|kicks|punches|pushes)/,
   /^Morrigan lets out a warcry/,
   /^Pelidor exclaims in common, 'I shall have/,
   /^Pelidor says in common, 'I have a craving/,
@@ -327,15 +327,131 @@ export const GAG_GROUPS: GagGroup[] = [
 ];
 
 // ---------------------------------------------------------------------------
+// NPC gag — user-managed list of NPC names to gag speech + emotes from
+// ---------------------------------------------------------------------------
+
+/** Speech verbs — matched with the `in <language>, '...'` suffix for multi-line tracking. */
+const NPC_SPEECH_VERBS = 'says|asks|exclaims';
+
+/**
+ * All NPC verbs — emotes + speech. Used for the broad single-line fallback pattern.
+ * Speech verbs are included so informal speech (without `in <lang>, '...'` format)
+ * is still caught even when the stricter speech pattern doesn't match.
+ */
+const NPC_EMOTE_VERBS =
+  NPC_SPEECH_VERBS + '|' +
+  'barks|blinks|bows|cackles|chuckles|coughs|cries|dozes|fixes|flees|frowns|giggles|' +
+  'glares|grins|growls|grunts|hums|inhales|kicks|laughs|looks|messes|nods|' +
+  'nudges|peers|picks|points|pokes|ponders|rocks|screams|scowls|shakes|sighs|' +
+  'slobbers|slouches|smiles|smirks|snarls|sneers|sniffs|spits|stares|straightens|' +
+  'stretches|swings|taunts|twiddles|wanders|waves|weeps|whistles|winks|wipes|' +
+  'yawns|yips';
+
+/**
+ * Display patterns shown in the UI — not used at runtime.
+ */
+export const NPC_GAG_DISPLAY_PATTERNS = [
+  `^<Name> (${NPC_SPEECH_VERBS})( to \\w+)? in \\w+, '...'`,
+  `^<Name> (${NPC_EMOTE_VERBS})`,
+];
+
+/** Escape special regex characters in a string. */
+function escapeRe(s: string): string {
+  return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+/**
+ * Tracks multi-line NPC gag state. When an NPC speech line doesn't end with
+ * a closing quote, subsequent continuation lines are gagged until the quote
+ * is found (or a safety limit is hit).
+ *
+ * Caches compiled regexes per NPC name to avoid recompilation on every line.
+ */
+export class NpcGagTracker {
+  private continuationRemaining = 0;
+  /** Max continuation lines before we stop gagging (safety limit). */
+  private static readonly MAX_CONTINUATION = 5;
+
+  /** Cached regex pair per NPC name: [speechRe, emoteRe] */
+  private cache = new Map<string, [RegExp, RegExp]>();
+
+  /** Get or build the cached regex pair for a given NPC name. */
+  private getPatterns(name: string): [RegExp, RegExp] {
+    let pair = this.cache.get(name);
+    if (!pair) {
+      const escaped = escapeRe(name);
+      pair = [
+        new RegExp(`^${escaped} (?:${NPC_SPEECH_VERBS})(?: (?:to )?\\w+)? in \\w+, '`),
+        new RegExp(`^${escaped} (?:${NPC_EMOTE_VERBS})`),
+      ];
+      this.cache.set(name, pair);
+    }
+    return pair;
+  }
+
+  /**
+   * Check if a line should be gagged as NPC speech or emote.
+   * Must be called once per line in order, as it tracks multi-line state.
+   */
+  check(cleaned: string, gaggedNpcs: string[]): boolean {
+    // Currently in a multi-line continuation — gag until closing quote
+    if (this.continuationRemaining > 0) {
+      this.continuationRemaining--;
+      if (cleaned.endsWith("'")) {
+        this.continuationRemaining = 0;
+      }
+      return true;
+    }
+
+    if (gaggedNpcs.length === 0) return false;
+
+    for (const name of gaggedNpcs) {
+      const [speechRe, emoteRe] = this.getPatterns(name);
+
+      // Speech pattern (multi-line aware): "Name says in lang, 'message'"
+      if (speechRe.test(cleaned)) {
+        if (cleaned.endsWith("'")) return true;
+        this.continuationRemaining = NpcGagTracker.MAX_CONTINUATION;
+        return true;
+      }
+
+      // Emote pattern (single-line): "Name blinks.", "Name looks around.", etc.
+      if (emoteRe.test(cleaned)) return true;
+    }
+    return false;
+  }
+
+  /** Invalidate the regex cache (call when the gagged NPC list changes). */
+  invalidateCache(): void {
+    this.cache.clear();
+  }
+
+  /** Reset continuation state (call on disconnect/reconnect). */
+  reset(): void {
+    this.continuationRemaining = 0;
+  }
+}
+
+// ---------------------------------------------------------------------------
 // Runtime check
 // ---------------------------------------------------------------------------
 
 const PROMPT_PREFIX_RE = /^(?:> )+/;
 
-/** Test a stripped line against all enabled gag groups. */
-export function shouldGagLine(stripped: string, enabled: GagGroupSettings): boolean {
+/** Test a stripped line against all enabled gag groups and NPC gags. */
+export function shouldGagLine(
+  stripped: string,
+  enabled: GagGroupSettings,
+  npcTracker?: NpcGagTracker,
+  gaggedNpcs?: string[],
+): boolean {
   const cleaned = stripped.replace(PROMPT_PREFIX_RE, '');
   if (!cleaned) return false;
+
+  // NPC speech gag (must run every call to maintain multi-line state)
+  if (npcTracker && gaggedNpcs && npcTracker.check(cleaned, gaggedNpcs)) {
+    return true;
+  }
 
   for (const group of GAG_GROUPS) {
     if (!enabled[group.id]) continue;

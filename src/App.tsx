@@ -82,7 +82,9 @@ import { AutoCaster } from './lib/autoCaster';
 import { AutoConc } from './lib/autoConc';
 import { useEngineRef } from './hooks/useEngineRef';
 import { type MovementMode, getNextMode, applyMovementMode, movementModeLabel } from './lib/movementMode';
-import { shouldGagLine } from './lib/gagPatterns';
+import { queryHour, getTimeOfDay, formatDate, getHoliday, Reckoning } from './lib/dartDate';
+import { shouldGagLine, NpcGagTracker } from './lib/gagPatterns';
+import { transformSkillReadout } from './lib/skillReadoutTransform';
 import { stripAnsi } from './lib/ansiUtils';
 import { SignatureProvider } from './contexts/SignatureContext';
 import { parseConvertCommand, formatMultiConversion } from './lib/currency';
@@ -121,7 +123,7 @@ import { useTimerEngines } from './hooks/useTimerEngines';
 import { CommandInputProvider } from './contexts/CommandInputContext';
 import { TerminalThemeProvider } from './contexts/TerminalThemeContext';
 import { useSessionLogger } from './hooks/useSessionLogger';
-import { useCustomChimes } from './hooks/useCustomChimes';
+import { useSoundLibrary } from './hooks/useSoundLibrary';
 import { AppSettingsProvider } from './contexts/AppSettingsContext';
 import { SpotlightProvider } from './contexts/SpotlightContext';
 import { SpotlightOverlay } from './components/SpotlightOverlay';
@@ -476,12 +478,17 @@ function AppMain() {
     processorRef.current.registerMatcher(matchSkillLine);
   }
 
-  // Custom chime sounds
-  const { chimesRef } = useCustomChimes(appSettings.customChime1, appSettings.customChime2);
-
+  // Sound library (built-in chimes + custom sounds)
+  const { libraryRef: soundLibraryRef } = useSoundLibrary(
+    appSettings.customChime1,
+    appSettings.customChime2,
+    appSettings.customSounds
+  );
   // Chat messages hook
   const chatNotificationsRef = useRef(appSettings.chatNotifications);
   chatNotificationsRef.current = appSettings.chatNotifications;
+  const chatGaggedNpcsRef = useRef(appSettings.gaggedNpcs);
+  chatGaggedNpcsRef.current = appSettings.gaggedNpcs;
   const {
     messages: chatMessages,
     filters: chatFilters,
@@ -498,7 +505,7 @@ function AppMain() {
     muteSender,
     unmuteSender,
     updateSender,
-  } = useChatMessages(appSettings.chatHistorySize, chatNotificationsRef, chimesRef);
+  } = useChatMessages(appSettings.chatHistorySize, chatNotificationsRef, soundLibraryRef, chatGaggedNpcsRef);
   const handleChatMessageRef = useLatestRef(handleChatMessage);
 
   // Status trackers
@@ -590,14 +597,26 @@ function AppMain() {
           handleMagicParseRef.current(magicResult);
         }
 
-        // Gag groups — suppress line before trigger evaluation
-        if (shouldGagLine(stripped, gagGroupsRef.current)) {
+        // Gag groups + NPC gags — suppress line before trigger evaluation
+        if (shouldGagLine(stripped, gagGroupsRef.current, npcGagTrackerRef.current, chatGaggedNpcsRef.current)) {
           return { gag: true, highlight: null };
         }
 
-        if (triggerFiringRef.current) return;
+        // Skill count injection — transform skill readout lines
+        let replacement: string | undefined;
+        if (showSkillCountsRef.current) {
+          const transformed = transformSkillReadout(
+            stripped,
+            raw,
+            skillDataRef.current.skills,
+          );
+          if (transformed) replacement = transformed;
+        }
+
         const matches = matchTriggers(stripped, raw, mergedTriggersRef.current);
-        if (matches.length === 0) return;
+        if (matches.length === 0) {
+          return replacement ? { gag: false, highlight: null, replacement } : undefined;
+        }
 
         let gag = false;
         let highlight: string | null = null;
@@ -605,15 +624,14 @@ function AppMain() {
         for (const match of matches) {
           if (match.trigger.gag) gag = true;
           if (match.trigger.highlight) highlight = match.trigger.highlight;
-          if (match.trigger.soundAlert && chimesRef.current) {
-            const audio = chimesRef.current.chime1;
-            audio.currentTime = 0;
-            audio.play().catch(() => {});
+          // Play sound: new soundName field takes priority, fall back to legacy soundAlert
+          const soundToPlay = match.trigger.soundName ?? (match.trigger.soundAlert ? 'chime1' : null);
+          if (soundToPlay) {
+            soundLibraryRef.current.play(soundToPlay);
           }
 
           // Expand and execute trigger body asynchronously
           if (match.trigger.body.trim()) {
-            triggerFiringRef.current = true;
             const work =
               match.trigger.bodyMode === 'script'
                 ? executeTriggerScript(
@@ -630,13 +648,11 @@ function AppMain() {
                     );
                     return executeCommands(commands, triggerRunnerRef.current);
                   })();
-            work.finally(() => {
-              triggerFiringRef.current = false;
-            });
+            work.catch(() => {});
           }
         }
 
-        return { gag, highlight };
+        return { gag, highlight, replacement };
       },
     });
   }
@@ -727,6 +743,8 @@ function AppMain() {
   const [actionBlockerRef, blockerState] = useEngineRef(() => new ActionBlocker());
   const actionBlockingEnabledRef = useLatestRef(appSettings.actionBlockingEnabled);
   const gagGroupsRef = useLatestRef(appSettings.gagGroups);
+  const npcGagTrackerRef = useRef(new NpcGagTracker());
+  const showSkillCountsRef = useLatestRef(appSettings.showSkillCounts);
 
   // Auto-inscriber — automated inscription practice loop
   const [autoInscriberRef, inscriberState] = useEngineRef(() => new AutoInscriber());
@@ -816,11 +834,21 @@ function AppMain() {
   const setVarRef = useLatestRef(setVar);
   const deleteVariableByNameRef = useLatestRef(deleteVariableByName);
 
+  /** Look up a variable value by name (returns '' if not found or disabled). */
+  const getVariableByName = useCallback(
+    (name: string): string => {
+      const found = mergedVariables.find(
+        (v) => v.name.toLowerCase() === name.toLowerCase() && v.enabled
+      );
+      return found?.value ?? '';
+    },
+    [mergedVariables]
+  );
+
   // Trigger system
   const triggerState = useTriggers(dataStore, activeCharacter);
   const { mergedTriggers } = triggerState;
   const mergedTriggersRef = useLatestRef(mergedTriggers);
-  const triggerFiringRef = useRef(false);
   const triggerRunnerRef = useRef<CommandRunner>({
     send: async () => {},
     echo: () => {},
@@ -829,6 +857,25 @@ function AppMain() {
     convert: () => {},
     getVariables: () => [],
     getSkillCount: () => 0,
+    readFile: async () => '',
+    writeFile: async () => {},
+    playSound: () => {},
+    enableTimer: () => {},
+    disableTimer: () => {},
+    enableTrigger: () => {},
+    disableTrigger: () => {},
+    enableAlias: () => {},
+    disableAlias: () => {},
+    enableTriggerGroup: () => {},
+    disableTriggerGroup: () => {},
+    enableAliasGroup: () => {},
+    disableAliasGroup: () => {},
+    enableTimerGroup: () => {},
+    disableTimerGroup: () => {},
+    getGameTime: () => ({ hour: 0, timeOfDay: '', date: '', holiday: null }),
+    getCounter: () => null,
+    getMovementMode: () => 'normal',
+    setMovementMode: () => {},
   });
 
   // Global script system
@@ -838,6 +885,9 @@ function AppMain() {
   // Timer system
   const timerState = useTimers(dataStore, activeCharacter);
   const { mergedTimers } = timerState;
+  const timerStateRef = useLatestRef(timerState);
+  const triggerStateRef = useLatestRef(triggerState);
+  const aliasStateRef = useLatestRef(aliasState);
 
   // Context menu → trigger panel integration
   const handleAddToTrigger = useCallback(
@@ -1044,6 +1094,180 @@ function AppMain() {
       const record = skillDataRef.current.skills[name.toLowerCase()];
       return record?.count ?? 0;
     },
+    readFile: async (path: string) => {
+      if (!('__TAURI_INTERNALS__' in window)) {
+        throw new Error('readFile is only available in the desktop app');
+      }
+      const { invoke } = await import('@tauri-apps/api/core');
+      return invoke<string>('read_system_file', { path });
+    },
+    writeFile: async (path: string, content: string) => {
+      if (!('__TAURI_INTERNALS__' in window)) {
+        throw new Error('writeFile is only available in the desktop app');
+      }
+      const { invoke } = await import('@tauri-apps/api/core');
+      await invoke('write_system_file', { path, content });
+    },
+    playSound: (id: number | string) => {
+      soundLibraryRef.current.play(id);
+    },
+    enableTimer: (name: string) => {
+      const ts = timerStateRef.current;
+      const lower = name.toLowerCase();
+      for (const t of ts.mergedTimers) {
+        if (t.name.toLowerCase() === lower && !t.enabled) {
+          const scope = ts.characterTimers[t.id] ? 'character' : 'global';
+          ts.toggleTimer(t.id, scope as 'character' | 'global');
+          return;
+        }
+      }
+    },
+    disableTimer: (name: string) => {
+      const ts = timerStateRef.current;
+      const lower = name.toLowerCase();
+      for (const t of ts.mergedTimers) {
+        if (t.name.toLowerCase() === lower && t.enabled) {
+          const scope = ts.characterTimers[t.id] ? 'character' : 'global';
+          ts.toggleTimer(t.id, scope as 'character' | 'global');
+          return;
+        }
+      }
+    },
+    enableTrigger: (name: string) => {
+      const ts = triggerStateRef.current;
+      const lower = name.toLowerCase();
+      for (const t of ts.mergedTriggers) {
+        if ((t.name ?? '').toLowerCase() === lower && !t.enabled) {
+          const scope = ts.characterTriggers[t.id] ? 'character' : 'global';
+          ts.toggleTrigger(t.id, scope as 'character' | 'global');
+          return;
+        }
+      }
+    },
+    disableTrigger: (name: string) => {
+      const ts = triggerStateRef.current;
+      const lower = name.toLowerCase();
+      for (const t of ts.mergedTriggers) {
+        if ((t.name ?? '').toLowerCase() === lower && t.enabled) {
+          const scope = ts.characterTriggers[t.id] ? 'character' : 'global';
+          ts.toggleTrigger(t.id, scope as 'character' | 'global');
+          return;
+        }
+      }
+    },
+    enableAlias: (name: string) => {
+      const as_ = aliasStateRef.current;
+      const lower = name.toLowerCase();
+      for (const a of as_.mergedAliases) {
+        if ((a.name ?? '').toLowerCase() === lower && !a.enabled) {
+          const scope = as_.characterAliases[a.id] ? 'character' : 'global';
+          as_.toggleAlias(a.id, scope as 'character' | 'global');
+          return;
+        }
+      }
+    },
+    disableAlias: (name: string) => {
+      const as_ = aliasStateRef.current;
+      const lower = name.toLowerCase();
+      for (const a of as_.mergedAliases) {
+        if ((a.name ?? '').toLowerCase() === lower && a.enabled) {
+          const scope = as_.characterAliases[a.id] ? 'character' : 'global';
+          as_.toggleAlias(a.id, scope as 'character' | 'global');
+          return;
+        }
+      }
+    },
+    enableTriggerGroup: (group: string) => {
+      const ts = triggerStateRef.current;
+      const lower = group.toLowerCase();
+      for (const t of ts.mergedTriggers) {
+        if ((t.group ?? '').toLowerCase() === lower && !t.enabled) {
+          const scope = ts.characterTriggers[t.id] ? 'character' : 'global';
+          ts.toggleTrigger(t.id, scope as 'character' | 'global');
+        }
+      }
+    },
+    disableTriggerGroup: (group: string) => {
+      const ts = triggerStateRef.current;
+      const lower = group.toLowerCase();
+      for (const t of ts.mergedTriggers) {
+        if ((t.group ?? '').toLowerCase() === lower && t.enabled) {
+          const scope = ts.characterTriggers[t.id] ? 'character' : 'global';
+          ts.toggleTrigger(t.id, scope as 'character' | 'global');
+        }
+      }
+    },
+    enableAliasGroup: (group: string) => {
+      const as_ = aliasStateRef.current;
+      const lower = group.toLowerCase();
+      for (const a of as_.mergedAliases) {
+        if ((a.group ?? '').toLowerCase() === lower && !a.enabled) {
+          const scope = as_.characterAliases[a.id] ? 'character' : 'global';
+          as_.toggleAlias(a.id, scope as 'character' | 'global');
+        }
+      }
+    },
+    disableAliasGroup: (group: string) => {
+      const as_ = aliasStateRef.current;
+      const lower = group.toLowerCase();
+      for (const a of as_.mergedAliases) {
+        if ((a.group ?? '').toLowerCase() === lower && a.enabled) {
+          const scope = as_.characterAliases[a.id] ? 'character' : 'global';
+          as_.toggleAlias(a.id, scope as 'character' | 'global');
+        }
+      }
+    },
+    enableTimerGroup: (group: string) => {
+      const ts = timerStateRef.current;
+      const lower = group.toLowerCase();
+      for (const t of ts.mergedTimers) {
+        if ((t.group ?? '').toLowerCase() === lower && !t.enabled) {
+          const scope = ts.characterTimers[t.id] ? 'character' : 'global';
+          ts.toggleTimer(t.id, scope as 'character' | 'global');
+        }
+      }
+    },
+    disableTimerGroup: (group: string) => {
+      const ts = timerStateRef.current;
+      const lower = group.toLowerCase();
+      for (const t of ts.mergedTimers) {
+        if ((t.group ?? '').toLowerCase() === lower && t.enabled) {
+          const scope = ts.characterTimers[t.id] ? 'character' : 'global';
+          ts.toggleTimer(t.id, scope as 'character' | 'global');
+        }
+      }
+    },
+    getGameTime: () => {
+      const hour = queryHour();
+      return {
+        hour,
+        timeOfDay: getTimeOfDay(hour),
+        date: formatDate(null, Reckoning.Common),
+        holiday: getHoliday(null, Reckoning.Common),
+      };
+    },
+    getCounter: (name: string) => {
+      const ic = improveCountersRef.current;
+      const lower = name.toLowerCase();
+      const counter = ic.counters.find((c) => c.name.toLowerCase() === lower);
+      if (!counter) return null;
+      return {
+        status: counter.status,
+        totalImps: counter.totalImps,
+        elapsedMs: ic.getElapsedMs(counter),
+        perMinute: ic.getPerMinuteRate(counter),
+        perHour: ic.getPerHourRate(counter),
+        skills: ic.getSkillsSorted(counter),
+      };
+    },
+    getMovementMode: () => movementModeRef.current,
+    setMovementMode: (mode: string) => {
+      const valid: MovementMode[] = ['normal', 'leading', 'rowing', 'sneaking'];
+      if (valid.includes(mode as MovementMode)) {
+        setMovementMode(mode as MovementMode);
+        writeToTerm(`\x1b[36m[Movement mode: ${movementModeLabel(mode as MovementMode)}]\x1b[0m\r\n`);
+      }
+    },
   };
 
   // Post-sync commands — fire user-configured commands after login sync completes
@@ -1144,11 +1368,25 @@ function AppMain() {
       if (hasScriptAliasesRef.current) {
         const aliasMatch = matchAlias(effectiveInput.trim(), mergedAliasesRef.current);
         if (aliasMatch?.alias.bodyMode === 'script') {
+          // Exclude the matched alias from expansion within its own script
+          // to prevent recursion (e.g., alias "e" calling send("door e") which
+          // expands to ";;e;;" which would re-match alias "e")
+          const excludeIds = new Set([aliasMatch.alias.id]);
+          const runner: typeof triggerRunnerRef.current = {
+            ...triggerRunnerRef.current,
+            expand: (input) =>
+              expandInput(input, mergedAliasesRef.current, {
+                enableSpeedwalk: enableSpeedwalkRef.current,
+                activeCharacter: activeCharacterRef.current,
+                separator: commandSeparatorRef.current,
+                excludeAliasIds: excludeIds,
+              }).commands,
+          };
           await executeAliasScript(
             aliasMatch.alias.body,
             aliasMatch.args,
             activeCharacterRef.current,
-            triggerRunnerRef.current,
+            runner,
             globalScriptRef.current
           );
           return;
@@ -1203,6 +1441,7 @@ function AppMain() {
       autoInscriberRef.current.reset();
       autoCasterRef.current.reset();
       autoConcRef.current.reset();
+      npcGagTrackerRef.current.reset();
       setMovementMode('normal');
       setWhoSnapshot(null);
     }
@@ -1229,9 +1468,42 @@ function AppMain() {
   // Quick buttons and macros CRUD managed by usePersistedCRUD hooks (declared above)
 
   const fireQuickButton = useCallback(
-    async (body: string, bodyMode: 'commands' | 'script') => {
+    async (body: string, bodyMode: 'commands' | 'script', toggleBtn?: QuickButton) => {
       // Quick button clicks are user activity — stamp idle tracker
       stampUserInput();
+
+      // Handle toggle buttons: read variable, flip state, execute the appropriate body
+      if (toggleBtn?.toggle) {
+        const t = toggleBtn.toggle;
+        const currentVal = mergedVariablesRef.current.find(
+          (v) => v.name.toLowerCase() === t.variable.toLowerCase() && v.enabled
+        );
+        const isOn = !!currentVal?.value && currentVal.value !== '0';
+
+        // Toggle the variable
+        setVarRef.current(t.variable, isOn ? '0' : '1', 'character');
+
+        // Execute the appropriate body (turning ON if was off, turning OFF if was on)
+        const execBody = isOn ? t.offBody : t.onBody;
+        const execMode = isOn ? t.offBodyMode : t.onBodyMode;
+
+        if (execMode === 'script') {
+          await executeAliasScript(
+            execBody,
+            [],
+            activeCharacterRef.current,
+            triggerRunnerRef.current,
+            globalScriptRef.current
+          );
+        } else {
+          for (const line of execBody.split('\n')) {
+            const trimmed = line.trim();
+            if (trimmed) await handleSend(trimmed);
+          }
+        }
+        return;
+      }
+
       if (bodyMode === 'script') {
         await executeAliasScript(
           body,
@@ -1768,6 +2040,7 @@ function AppMain() {
                                             onUpdate={quickButtonsCRUD.update}
                                             onDelete={quickButtonsCRUD.remove}
                                             onReorder={quickButtonsCRUD.reorder}
+                                            getVariable={getVariableByName}
                                           />
                                           {/* Status bar + command input */}
                                           <div className="rounded-lg bg-bg-primary overflow-hidden shrink-0">

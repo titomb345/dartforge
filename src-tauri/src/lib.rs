@@ -83,6 +83,23 @@ async fn disconnect(app: tauri::AppHandle, state: tauri::State<'_, ConnectionSta
     Ok(())
 }
 
+#[tauri::command]
+fn read_system_file(path: String) -> Result<String, String> {
+    std::fs::read_to_string(&path)
+        .map_err(|e| format!("Failed to read {path}: {e}"))
+}
+
+#[tauri::command]
+fn write_system_file(path: String, content: String) -> Result<(), String> {
+    // Ensure parent directory exists
+    if let Some(parent) = std::path::Path::new(&path).parent() {
+        std::fs::create_dir_all(parent)
+            .map_err(|e| format!("Failed to create directory for {path}: {e}"))?;
+    }
+    std::fs::write(&path, &content)
+        .map_err(|e| format!("Failed to write {path}: {e}"))
+}
+
 const KEYRING_SERVICE: &str = "dartforge";
 
 #[tauri::command]
@@ -154,6 +171,9 @@ pub fn run() {
             storage::import_sound_file,
             storage::get_sound_base64,
             storage::remove_custom_sound,
+            storage::list_custom_sounds,
+            read_system_file,
+            write_system_file,
             store_credential,
             get_credential,
             delete_credential,

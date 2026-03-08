@@ -47,15 +47,21 @@ function AliasRow({
       <ConfirmDeleteButton onDelete={() => deleteAlias(alias.id, scope)} />
       <span
         className={`text-[11px] font-mono flex-1 truncate ${
-          alias.matchMode === 'exact'
-            ? 'text-[#a78bfa]'
-            : alias.matchMode === 'prefix'
-              ? 'text-[#f59e0b]'
-              : 'text-[#22d3ee]'
+          alias.name
+            ? 'text-text-primary'
+            : alias.matchMode === 'exact'
+              ? 'text-[#a78bfa]'
+              : alias.matchMode === 'prefix'
+                ? 'text-[#f59e0b]'
+                : 'text-[#22d3ee]'
         }`}
-        title={`${alias.pattern}\n${alias.matchMode} match`}
+        title={
+          alias.name
+            ? `${alias.name}\nPattern: ${alias.pattern}\n${alias.matchMode} match`
+            : `${alias.pattern}\n${alias.matchMode} match`
+        }
       >
-        {alias.pattern}
+        {alias.name || alias.pattern}
       </span>
       {alias.bodyMode === 'script' && (
         <span
@@ -198,12 +204,13 @@ function AliasEditor({
   scope: AliasScope;
   activeCharacter: string | null;
   onSave: (
-    data: { pattern: string; matchMode: AliasMatchMode; body: string; group: string; bodyMode?: AliasBodyMode },
+    data: { name?: string; pattern: string; matchMode: AliasMatchMode; body: string; group: string; bodyMode?: AliasBodyMode },
     scope: AliasScope,
     existingId?: AliasId
   ) => void;
   onCancel: () => void;
 }) {
+  const [name, setName] = useState(alias?.name ?? '');
   const [pattern, setPattern] = useState(alias?.pattern ?? '');
   const [matchMode, setMatchMode] = useState<AliasMatchMode>(alias?.matchMode ?? 'prefix');
   const [body, setBody] = useState(alias?.body ?? '');
@@ -249,7 +256,7 @@ function AliasEditor({
     if (e.key === 'Enter' && canSave) {
       e.preventDefault();
       onSave(
-        { pattern: pattern.trim(), matchMode, body, group: group.trim() || 'General', bodyMode },
+        { name: name.trim() || undefined, pattern: pattern.trim(), matchMode, body, group: group.trim() || 'General', bodyMode },
         scope,
         alias?.id
       );
@@ -273,7 +280,7 @@ function AliasEditor({
             onClick={() => {
               if (canSave)
                 onSave(
-                  { pattern: pattern.trim(), matchMode, body, group: group.trim() || 'General', bodyMode },
+                  { name: name.trim() || undefined, pattern: pattern.trim(), matchMode, body, group: group.trim() || 'General', bodyMode },
                   scope,
                   alias?.id
                 );
@@ -286,6 +293,19 @@ function AliasEditor({
       </div>
 
       <div className="p-3 flex flex-col gap-2.5">
+        {/* Name */}
+        <div>
+          <label className="text-[10px] text-text-dim mb-0.5 block">Name (optional)</label>
+          <MudInput
+            accent="purple"
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            onKeyDown={handleFieldKeyDown}
+            placeholder="e.g., e (auto-door)"
+            className="w-full"
+          />
+        </div>
+
         {/* Pattern + Match mode */}
         <div className="flex gap-2">
           <div className="flex-1">
@@ -462,6 +482,8 @@ export function AliasPanel({ onClose }: AliasPanelProps) {
   const [searchText, setSearchText] = useState('');
   const [editingId, setEditingId] = useState<AliasId | null>(null);
   const [creating, setCreating] = useState(false);
+  const { collapsedAliasGroups, updateCollapsedAliasGroups } = useAppSettingsContext();
+  const collapsedGroups = useMemo(() => new Set(collapsedAliasGroups), [collapsedAliasGroups]);
 
   const aliases = scope === 'character' ? characterAliases : globalAliases;
   const aliasList = useMemo(() => Object.values(aliases), [aliases]);
@@ -472,7 +494,7 @@ export function AliasPanel({ onClose }: AliasPanelProps) {
 
   const handleSave = useCallback(
     (
-      data: { pattern: string; matchMode: AliasMatchMode; body: string; group: string; bodyMode?: AliasBodyMode },
+      data: { name?: string; pattern: string; matchMode: AliasMatchMode; body: string; group: string; bodyMode?: AliasBodyMode },
       saveScope: AliasScope,
       existingId?: AliasId
     ) => {
@@ -611,26 +633,50 @@ export function AliasPanel({ onClose }: AliasPanelProps) {
           </div>
         )}
 
-        {groupedAliases.map(([groupName, groupAliases]) => (
-          <div key={groupName} className="mb-3">
-            {groupFilter === null && groups.length > 1 && (
-              <div className="text-[10px] font-semibold uppercase tracking-[0.08em] text-[#555] mb-1 px-2">
-                {groupName}
-              </div>
-            )}
-            {groupAliases.map((alias) => (
-              <AliasRow
-                key={alias.id}
-                alias={alias}
-                scope={scope}
-                onEdit={(id) => {
-                  setEditingId(editingId === id ? null : id);
-                  setCreating(false);
-                }}
-              />
-            ))}
-          </div>
-        ))}
+        {groupedAliases.map(([groupName, groupAliases]) => {
+          const isCollapsed = collapsedGroups.has(groupName);
+          const showHeader = groupFilter === null && groups.length > 1;
+          return (
+            <div key={groupName} className="mb-3">
+              {showHeader && (
+                <button
+                  onClick={() => {
+                    const next = new Set(collapsedGroups);
+                    if (next.has(groupName)) next.delete(groupName);
+                    else next.add(groupName);
+                    updateCollapsedAliasGroups([...next]);
+                  }}
+                  className="flex items-center gap-1 w-full text-left text-[10px] font-semibold uppercase tracking-[0.08em] text-[#555] mb-1 px-2 cursor-pointer hover:text-text-label transition-colors duration-150"
+                >
+                  <span
+                    className="shrink-0 transition-transform duration-200"
+                    style={{ transform: isCollapsed ? 'rotate(-90deg)' : 'rotate(0deg)' }}
+                  >
+                    <ChevronDownIcon size={8} />
+                  </span>
+                  {groupName}
+                  {isCollapsed && (
+                    <span className="text-[9px] font-normal normal-case tracking-normal text-text-dim ml-1">
+                      ({groupAliases.length})
+                    </span>
+                  )}
+                </button>
+              )}
+              {(!showHeader || !isCollapsed) &&
+                groupAliases.map((alias) => (
+                  <AliasRow
+                    key={alias.id}
+                    alias={alias}
+                    scope={scope}
+                    onEdit={(id) => {
+                      setEditingId(editingId === id ? null : id);
+                      setCreating(false);
+                    }}
+                  />
+                ))}
+            </div>
+          );
+        })}
       </div>
     </div>
   );

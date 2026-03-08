@@ -111,7 +111,38 @@ function buildApi(runner: CommandRunner) {
     return { level: t.name, count, tier: t.level, next: getImprovesToNextTier(count), group: getSkillCategory(n)[0] };
   };
 
-  return { send, echo, setVar, getVar, spam, lastUserInputTime, getSkillCount, getSkillLevel, getSkillTier, getSkillNext, getSkillGroup, getSkill };
+  const readFile = async (path: string): Promise<string> => runner.readFile(String(path));
+  const writeFile = async (path: string, content: string): Promise<void> => runner.writeFile(String(path), String(content));
+  const playSound = (id: number | string) => {
+    if (typeof id === 'string') runner.playSound(id);
+    else runner.playSound(Number(id));
+  };
+  const startTimer = (name: string) => runner.enableTimer(String(name));
+  const stopTimer = (name: string) => runner.disableTimer(String(name));
+  const enableTrigger = (name: string) => runner.enableTrigger(String(name));
+  const disableTrigger = (name: string) => runner.disableTrigger(String(name));
+  const enableAlias = (name: string) => runner.enableAlias(String(name));
+  const disableAlias = (name: string) => runner.disableAlias(String(name));
+  const enableTriggerGroup = (group: string) => runner.enableTriggerGroup(String(group));
+  const disableTriggerGroup = (group: string) => runner.disableTriggerGroup(String(group));
+  const enableAliasGroup = (group: string) => runner.enableAliasGroup(String(group));
+  const disableAliasGroup = (group: string) => runner.disableAliasGroup(String(group));
+  const enableTimerGroup = (group: string) => runner.enableTimerGroup(String(group));
+  const disableTimerGroup = (group: string) => runner.disableTimerGroup(String(group));
+  const getGameTime = () => runner.getGameTime();
+  const getCounter = (name: string) => runner.getCounter(String(name));
+  const getMovementMode = () => runner.getMovementMode();
+  const setMovementMode = (mode: string) => runner.setMovementMode(String(mode));
+
+  return {
+    send, echo, setVar, getVar, spam, lastUserInputTime,
+    getSkillCount, getSkillLevel, getSkillTier, getSkillNext, getSkillGroup, getSkill,
+    readFile, writeFile, playSound, startTimer, stopTimer,
+    enableTrigger, disableTrigger, enableAlias, disableAlias,
+    enableTriggerGroup, disableTriggerGroup, enableAliasGroup, disableAliasGroup,
+    enableTimerGroup, disableTimerGroup,
+    getGameTime, getCounter, getMovementMode, setMovementMode,
+  };
 }
 
 function charNames(activeCharacter: string | null) {
@@ -124,6 +155,11 @@ function charNames(activeCharacter: string | null) {
 const TRIGGER_PARAM_NAMES: string[] = [
   'send', 'echo', 'delay', 'setVar', 'getVar', 'spam', 'lastUserInputTime',
   'getSkillCount', 'getSkillLevel', 'getSkillTier', 'getSkillNext', 'getSkillGroup', 'getSkill',
+  'readFile', 'writeFile', 'playSound', 'startTimer', 'stopTimer',
+  'enableTrigger', 'disableTrigger', 'enableAlias', 'disableAlias',
+  'enableTriggerGroup', 'disableTriggerGroup', 'enableAliasGroup', 'disableAliasGroup',
+  'enableTimerGroup', 'disableTimerGroup',
+  'getGameTime', 'getCounter', 'getMovementMode', 'setMovementMode',
   '$0', '$1', '$2', '$3', '$4', '$5', '$6', '$7', '$8', '$9',
   '$line', '$me', '$Me',
 ];
@@ -144,6 +180,11 @@ export async function executeTriggerScript(
   const paramValues: unknown[] = [
     api.send, api.echo, delay, api.setVar, api.getVar, api.spam, api.lastUserInputTime,
     api.getSkillCount, api.getSkillLevel, api.getSkillTier, api.getSkillNext, api.getSkillGroup, api.getSkill,
+    api.readFile, api.writeFile, api.playSound, api.startTimer, api.stopTimer,
+    api.enableTrigger, api.disableTrigger, api.enableAlias, api.disableAlias,
+    api.enableTriggerGroup, api.disableTriggerGroup, api.enableAliasGroup, api.disableAliasGroup,
+    api.enableTimerGroup, api.disableTimerGroup,
+    api.getGameTime, api.getCounter, api.getMovementMode, api.setMovementMode,
     match.captures[0] ?? '', match.captures[1] ?? '', match.captures[2] ?? '',
     match.captures[3] ?? '', match.captures[4] ?? '', match.captures[5] ?? '',
     match.captures[6] ?? '', match.captures[7] ?? '', match.captures[8] ?? '',
@@ -165,6 +206,11 @@ export async function executeTriggerScript(
 const TIMER_PARAM_NAMES: string[] = [
   'send', 'echo', 'delay', 'setVar', 'getVar', 'spam', 'lastUserInputTime',
   'getSkillCount', 'getSkillLevel', 'getSkillTier', 'getSkillNext', 'getSkillGroup', 'getSkill',
+  'readFile', 'writeFile', 'playSound', 'startTimer', 'stopTimer',
+  'enableTrigger', 'disableTrigger', 'enableAlias', 'disableAlias',
+  'enableTriggerGroup', 'disableTriggerGroup', 'enableAliasGroup', 'disableAliasGroup',
+  'enableTimerGroup', 'disableTimerGroup',
+  'getGameTime', 'getCounter', 'getMovementMode', 'setMovementMode',
   '$me', '$Me',
 ];
 
@@ -183,6 +229,11 @@ export async function executeTimerScript(
   const paramValues: unknown[] = [
     api.send, api.echo, delay, api.setVar, api.getVar, api.spam, api.lastUserInputTime,
     api.getSkillCount, api.getSkillLevel, api.getSkillTier, api.getSkillNext, api.getSkillGroup, api.getSkill,
+    api.readFile, api.writeFile, api.playSound, api.startTimer, api.stopTimer,
+    api.enableTrigger, api.disableTrigger, api.enableAlias, api.disableAlias,
+    api.enableTriggerGroup, api.disableTriggerGroup, api.enableAliasGroup, api.disableAliasGroup,
+    api.enableTimerGroup, api.disableTimerGroup,
+    api.getGameTime, api.getCounter, api.getMovementMode, api.setMovementMode,
     ch.name, ch.cap,
   ];
 
@@ -200,6 +251,11 @@ export async function executeTimerScript(
 const ALIAS_PARAM_NAMES: string[] = [
   'send', 'echo', 'delay', 'setVar', 'getVar', 'spam', 'lastUserInputTime',
   'getSkillCount', 'getSkillLevel', 'getSkillTier', 'getSkillNext', 'getSkillGroup', 'getSkill',
+  'readFile', 'writeFile', 'playSound', 'startTimer', 'stopTimer',
+  'enableTrigger', 'disableTrigger', 'enableAlias', 'disableAlias',
+  'enableTriggerGroup', 'disableTriggerGroup', 'enableAliasGroup', 'disableAliasGroup',
+  'enableTimerGroup', 'disableTimerGroup',
+  'getGameTime', 'getCounter', 'getMovementMode', 'setMovementMode',
   '$1', '$2', '$3', '$4', '$5', '$6', '$7', '$8', '$9',
   'args', 'argList', '$me', '$Me',
 ];
@@ -220,6 +276,11 @@ export async function executeAliasScript(
   const paramValues: unknown[] = [
     api.send, api.echo, delay, api.setVar, api.getVar, api.spam, api.lastUserInputTime,
     api.getSkillCount, api.getSkillLevel, api.getSkillTier, api.getSkillNext, api.getSkillGroup, api.getSkill,
+    api.readFile, api.writeFile, api.playSound, api.startTimer, api.stopTimer,
+    api.enableTrigger, api.disableTrigger, api.enableAlias, api.disableAlias,
+    api.enableTriggerGroup, api.disableTriggerGroup, api.enableAliasGroup, api.disableAliasGroup,
+    api.enableTimerGroup, api.disableTimerGroup,
+    api.getGameTime, api.getCounter, api.getMovementMode, api.setMovementMode,
     matchedArgs[0] ?? '', matchedArgs[1] ?? '', matchedArgs[2] ?? '',
     matchedArgs[3] ?? '', matchedArgs[4] ?? '', matchedArgs[5] ?? '',
     matchedArgs[6] ?? '', matchedArgs[7] ?? '', matchedArgs[8] ?? '',

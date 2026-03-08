@@ -22,7 +22,7 @@ import { MudInput, MudTextarea, MudButton, MudNumberInput, ToggleSwitch } from '
 import { ScriptEditor } from './ScriptEditor';
 import { SyntaxHelpTable, SCRIPT_API_HELP_ROWS, SCRIPT_ACCENT } from './SyntaxHelpTable';
 import type { HelpRow } from './SyntaxHelpTable';
-import { GAG_GROUPS } from '../lib/gagPatterns';
+import { GAG_GROUPS, NPC_GAG_DISPLAY_PATTERNS } from '../lib/gagPatterns';
 import type { GagGroupId } from '../lib/gagPatterns';
 
 interface TriggerPanelProps {
@@ -98,15 +98,21 @@ function TriggerRow({
       <ConfirmDeleteButton onDelete={() => deleteTrigger(trigger.id, scope)} />
       <span
         className={`text-[11px] font-mono flex-1 truncate ${
-          trigger.matchMode === 'substring'
-            ? 'text-[#ff79c6]'
-            : trigger.matchMode === 'exact'
-              ? 'text-[#f59e0b]'
-              : 'text-[#22d3ee]'
+          trigger.name
+            ? 'text-text-primary'
+            : trigger.matchMode === 'substring'
+              ? 'text-[#ff79c6]'
+              : trigger.matchMode === 'exact'
+                ? 'text-[#f59e0b]'
+                : 'text-[#22d3ee]'
         }`}
-        title={`${trigger.pattern}\n${trigger.matchMode} match`}
+        title={
+          trigger.name
+            ? `${trigger.name}\nPattern: ${trigger.pattern}\n${trigger.matchMode} match`
+            : `${trigger.pattern}\n${trigger.matchMode} match`
+        }
       >
-        {trigger.pattern}
+        {trigger.name || trigger.pattern}
       </span>
       {trigger.multiLine && (
         <span
@@ -266,6 +272,7 @@ function TriggerEditor({
   activeCharacter: string | null;
   onSave: (
     data: {
+      name?: string;
       pattern: string;
       matchMode: TriggerMatchMode;
       body: string;
@@ -273,7 +280,7 @@ function TriggerEditor({
       cooldownMs: number;
       gag: boolean;
       highlight: string | null;
-      soundAlert: boolean;
+      soundName?: string | null;
       bodyMode?: BodyMode;
       multiLine?: boolean;
       endPattern?: string;
@@ -283,6 +290,7 @@ function TriggerEditor({
   ) => void;
   onCancel: () => void;
 }) {
+  const [name, setName] = useState(trigger?.name ?? '');
   const [pattern, setPattern] = useState(trigger?.pattern ?? prefill?.pattern ?? '');
   const [matchMode, setMatchMode] = useState<TriggerMatchMode>(
     trigger?.matchMode ?? prefill?.matchMode ?? 'substring'
@@ -293,7 +301,17 @@ function TriggerEditor({
   const [cooldownMs, setCooldownMs] = useState(trigger?.cooldownMs ?? 0);
   const [gag, setGag] = useState(trigger?.gag ?? prefill?.gag ?? false);
   const [highlight, setHighlight] = useState<string | null>(trigger?.highlight ?? null);
-  const [soundAlert, setSoundAlert] = useState(trigger?.soundAlert ?? false);
+  const [soundName, setSoundName] = useState<string | null>(
+    trigger?.soundName ?? (trigger?.soundAlert ? 'chime1' : null)
+  );
+  const { customSounds } = useAppSettingsContext();
+  const soundNames = useMemo(() => {
+    const names = ['chime1', 'chime2'];
+    for (const s of customSounds) {
+      if (s.name !== 'chime1' && s.name !== 'chime2') names.push(s.name);
+    }
+    return names;
+  }, [customSounds]);
   const [bodyMode, setBodyMode] = useState<BodyMode>(
     trigger?.bodyMode ?? prefill?.bodyMode ?? 'text'
   );
@@ -336,7 +354,6 @@ function TriggerEditor({
       cooldownMs: 0,
       gag: false,
       highlight: null,
-      soundAlert: false,
       createdAt: '',
       updatedAt: '',
     };
@@ -358,6 +375,7 @@ function TriggerEditor({
       e.preventDefault();
       onSave(
         {
+          name: name.trim() || undefined,
           pattern: pattern.trim(),
           matchMode,
           body,
@@ -365,7 +383,7 @@ function TriggerEditor({
           cooldownMs,
           gag,
           highlight,
-          soundAlert,
+          soundName,
           bodyMode,
           ...(multiLine ? { multiLine: true, endPattern: endPattern.trim() } : {}),
         },
@@ -393,6 +411,7 @@ function TriggerEditor({
               if (canSave)
                 onSave(
                   {
+                    name: name.trim() || undefined,
                     pattern: pattern.trim(),
                     matchMode,
                     body,
@@ -400,7 +419,7 @@ function TriggerEditor({
                     cooldownMs,
                     gag,
                     highlight,
-                    soundAlert,
+                    soundName,
                     bodyMode,
                     ...(multiLine ? { multiLine: true, endPattern: endPattern.trim() } : {}),
                   },
@@ -416,6 +435,19 @@ function TriggerEditor({
       </div>
 
       <div className="p-3 flex flex-col gap-2.5">
+        {/* Name (optional) */}
+        <div>
+          <label className="text-[10px] text-text-dim mb-0.5 block">Name</label>
+          <MudInput
+            accent="pink"
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            onKeyDown={handleFieldKeyDown}
+            placeholder="Optional label"
+            className="w-full"
+          />
+        </div>
+
         {/* Pattern + Match mode */}
         <div className="flex gap-2">
           <div className="flex-1">
@@ -614,17 +646,23 @@ function TriggerEditor({
             >
               Gag
             </button>
-            <button
-              onClick={() => setSoundAlert(!soundAlert)}
-              title={soundAlert ? 'Sound alert ON' : 'Sound alert OFF'}
-              className={`text-[9px] font-mono px-2 py-1 rounded border cursor-pointer transition-colors duration-150 ${
-                soundAlert
+            <select
+              value={soundName ?? ''}
+              onChange={(e) => setSoundName(e.target.value || null)}
+              title="Sound to play when trigger fires"
+              className={`text-[9px] font-mono px-2 py-1 rounded border cursor-pointer transition-colors duration-150 bg-transparent ${
+                soundName
                   ? 'text-[#8be9fd] border-[#8be9fd]/40 bg-[#8be9fd]/10'
-                  : 'text-text-dim border-border-dim bg-transparent hover:text-text-label'
+                  : 'text-text-dim border-border-dim'
               }`}
             >
-              Sound
-            </button>
+              <option value="">No Sound</option>
+              {soundNames.map((name) => (
+                <option key={name} value={name}>
+                  {name}
+                </option>
+              ))}
+            </select>
           </div>
         </div>
 
@@ -827,15 +865,27 @@ export function TriggerPanel({ onClose }: TriggerPanelProps) {
     setTriggerPrefill,
   } = useTriggerContext();
   const { activeCharacter } = useSkillTrackerContext();
-  const { gagGroups, updateGagGroups } = useAppSettingsContext();
+  const { gagGroups, updateGagGroups, gaggedNpcs, updateGaggedNpcs } = useAppSettingsContext();
 
   const [scope, setScope] = useState<TriggerScope>('global');
   const [gagsExpanded, setGagsExpanded] = useState(false);
   const [expandedGagGroup, setExpandedGagGroup] = useState<GagGroupId | null>(null);
+  const [npcGagInput, setNpcGagInput] = useState('');
+  const [npcPatternsExpanded, setNpcPatternsExpanded] = useState(false);
+
+  const addNpcGag = useCallback(() => {
+    const name = npcGagInput.trim();
+    if (name && !gaggedNpcs.some((n) => n.toLowerCase() === name.toLowerCase())) {
+      updateGaggedNpcs([...gaggedNpcs, name]);
+    }
+    setNpcGagInput('');
+  }, [npcGagInput, gaggedNpcs, updateGaggedNpcs]);
   const [groupFilter, setGroupFilter] = useState<string | null>(null);
   const [searchText, setSearchText] = useState('');
   const [editingId, setEditingId] = useState<TriggerId | null>(null);
   const [creating, setCreating] = useState(false);
+  const { collapsedTriggerGroups, updateCollapsedTriggerGroups } = useAppSettingsContext();
+  const collapsedGroups = useMemo(() => new Set(collapsedTriggerGroups), [collapsedTriggerGroups]);
 
   // Open editor when prefill arrives from context menu
   useEffect(() => {
@@ -859,6 +909,7 @@ export function TriggerPanel({ onClose }: TriggerPanelProps) {
   const handleSave = useCallback(
     (
       data: {
+        name?: string;
         pattern: string;
         matchMode: TriggerMatchMode;
         body: string;
@@ -866,7 +917,7 @@ export function TriggerPanel({ onClose }: TriggerPanelProps) {
         cooldownMs: number;
         gag: boolean;
         highlight: string | null;
-        soundAlert: boolean;
+        soundName?: string | null;
         bodyMode?: BodyMode;
         multiLine?: boolean;
         endPattern?: string;
@@ -1003,6 +1054,71 @@ export function TriggerPanel({ onClose }: TriggerPanelProps) {
                 </div>
               );
             })}
+
+            {/* NPC Gag */}
+            <div className="mt-2 pt-2 border-t border-border-dim">
+              <div className="text-[10px] font-semibold text-text-label mb-1">NPC Gag</div>
+              <div className="text-[9px] text-text-dim mb-1.5 leading-snug">
+                Gag all speech and emotes from specific NPCs in the terminal and chat panel.
+              </div>
+              <button
+                onClick={() => setNpcPatternsExpanded((v) => !v)}
+                className="text-[9px] text-text-dim mb-1.5 flex items-center gap-1 cursor-pointer hover:text-text-label transition-colors duration-150"
+              >
+                <span>Matched patterns ({NPC_GAG_DISPLAY_PATTERNS.length})</span>
+                <span className="transition-transform duration-200" style={{ transform: npcPatternsExpanded ? 'rotate(180deg)' : 'rotate(0deg)' }}>
+                  <ChevronDownIcon size={7} />
+                </span>
+              </button>
+              <div
+                className="grid transition-[grid-template-rows] duration-200 ease-in-out"
+                style={{ gridTemplateRows: npcPatternsExpanded ? '1fr' : '0fr' }}
+              >
+                <div className="overflow-hidden">
+                  <div className="mb-1.5 px-1.5 py-1 rounded bg-bg-input border border-border-dim break-all leading-relaxed space-y-0.5">
+                    {NPC_GAG_DISPLAY_PATTERNS.map((p, i) => (
+                      <div key={i} className="text-[9px] font-mono text-text-dim">{p}</div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+              <div className="flex items-center gap-1 mb-1.5">
+                <input
+                  type="text"
+                  value={npcGagInput}
+                  onChange={(e) => setNpcGagInput(e.target.value)}
+                  onKeyDown={(e) => { if (e.key === 'Enter') addNpcGag(); }}
+                  placeholder="NPC name..."
+                  className="flex-1 min-w-0 text-[11px] font-mono bg-bg-input border border-border-dim rounded px-1.5 py-0.5 text-text-primary placeholder:text-text-dim outline-none focus:border-pink/50"
+                />
+                <button
+                  onClick={addNpcGag}
+                  disabled={!npcGagInput.trim()}
+                  className="text-[10px] font-mono px-2 py-0.5 rounded border border-pink/40 text-pink cursor-pointer hover:bg-pink/10 transition-colors disabled:opacity-30 disabled:cursor-default"
+                >
+                  Add
+                </button>
+              </div>
+              {gaggedNpcs.length > 0 && (
+                <div className="flex flex-wrap gap-1">
+                  {gaggedNpcs.map((name) => (
+                    <span
+                      key={name}
+                      className="inline-flex items-center gap-1 text-[10px] font-mono bg-pink/10 border border-pink/30 text-pink rounded px-1.5 py-0.5"
+                    >
+                      {name}
+                      <button
+                        onClick={() => updateGaggedNpcs(gaggedNpcs.filter((n) => n !== name))}
+                        className="text-pink/60 hover:text-pink cursor-pointer leading-none"
+                        title={`Remove ${name}`}
+                      >
+                        ×
+                      </button>
+                    </span>
+                  ))}
+                </div>
+              )}
+            </div>
           </div>
         )}
       </div>
@@ -1079,26 +1195,50 @@ export function TriggerPanel({ onClose }: TriggerPanelProps) {
           </div>
         )}
 
-        {groupedTriggers.map(([groupName, groupTriggers]) => (
-          <div key={groupName} className="mb-3">
-            {groupFilter === null && groups.length > 1 && (
-              <div className="text-[10px] font-semibold uppercase tracking-[0.08em] text-[#555] mb-1 px-2">
-                {groupName}
-              </div>
-            )}
-            {groupTriggers.map((trigger) => (
-              <TriggerRow
-                key={trigger.id}
-                trigger={trigger}
-                scope={scope}
-                onEdit={(id) => {
-                  setEditingId(editingId === id ? null : id);
-                  setCreating(false);
-                }}
-              />
-            ))}
-          </div>
-        ))}
+        {groupedTriggers.map(([groupName, groupTriggers]) => {
+          const isCollapsed = collapsedGroups.has(groupName);
+          const showHeader = groupFilter === null && groups.length > 1;
+          return (
+            <div key={groupName} className="mb-3">
+              {showHeader && (
+                <button
+                  onClick={() => {
+                    const next = new Set(collapsedGroups);
+                    if (next.has(groupName)) next.delete(groupName);
+                    else next.add(groupName);
+                    updateCollapsedTriggerGroups([...next]);
+                  }}
+                  className="flex items-center gap-1 w-full text-left text-[10px] font-semibold uppercase tracking-[0.08em] text-[#555] mb-1 px-2 cursor-pointer hover:text-text-label transition-colors duration-150"
+                >
+                  <span
+                    className="shrink-0 transition-transform duration-200"
+                    style={{ transform: isCollapsed ? 'rotate(-90deg)' : 'rotate(0deg)' }}
+                  >
+                    <ChevronDownIcon size={8} />
+                  </span>
+                  {groupName}
+                  {isCollapsed && (
+                    <span className="text-[9px] font-normal normal-case tracking-normal text-text-dim ml-1">
+                      ({groupTriggers.length})
+                    </span>
+                  )}
+                </button>
+              )}
+              {(!showHeader || !isCollapsed) &&
+                groupTriggers.map((trigger) => (
+                  <TriggerRow
+                    key={trigger.id}
+                    trigger={trigger}
+                    scope={scope}
+                    onEdit={(id) => {
+                      setEditingId(editingId === id ? null : id);
+                      setCreating(false);
+                    }}
+                  />
+                ))}
+            </div>
+          );
+        })}
       </div>
     </div>
   );

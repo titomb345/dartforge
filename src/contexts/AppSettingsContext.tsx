@@ -52,11 +52,13 @@ export interface AppSettingsState {
   chatNotifications: ChatFilters;
   updateChatNotifications: (v: ChatFilters) => void;
   toggleChatNotification: (type: keyof ChatFilters) => void;
-  // Custom chimes
+  // Custom chimes / sound library
   customChime1: string | null;
   customChime2: string | null;
+  customSounds: import('../hooks/useSoundLibrary').CustomSoundEntry[];
   updateCustomChime1: (v: string | null) => void;
   updateCustomChime2: (v: string | null) => void;
+  updateCustomSounds: (v: import('../hooks/useSoundLibrary').CustomSoundEntry[]) => void;
   // Counter thresholds
   counterHotThreshold: number;
   counterColdThreshold: number;
@@ -71,6 +73,9 @@ export interface AppSettingsState {
   // Gag groups
   gagGroups: GagGroupSettings;
   updateGagGroups: (v: GagGroupSettings) => void;
+  // NPC gags
+  gaggedNpcs: string[];
+  updateGaggedNpcs: (v: string[]) => void;
   // Babel language trainer
   babelEnabled: boolean;
   babelLanguage: string;
@@ -112,6 +117,14 @@ export interface AppSettingsState {
   // Select-on-send
   selectOnSend: boolean;
   updateSelectOnSend: (v: boolean) => void;
+  // Skill counts on readouts
+  showSkillCounts: boolean;
+  updateShowSkillCounts: (v: boolean) => void;
+  // Collapsed panel groups
+  collapsedTriggerGroups: string[];
+  collapsedAliasGroups: string[];
+  updateCollapsedTriggerGroups: (v: string[]) => void;
+  updateCollapsedAliasGroups: (v: string[]) => void;
   // Character switching (provided by App.tsx)
   onSwitchCharacter?: () => void;
   connected?: boolean;

@@ -14,7 +14,9 @@ import {
   PlayIcon,
   CounterIcon,
   UserIcon,
+  PlusIcon,
 } from './icons';
+import type { CustomSoundEntry } from '../hooks/useSoundLibrary';
 import { PanelHeader } from './PanelHeader';
 import { DEFAULT_NUMPAD_MAPPINGS } from '../hooks/useAppSettings';
 import { MudInput, MudTextarea, MudNumberInput, ToggleSwitch } from './shared';
@@ -248,6 +250,8 @@ export function SettingsPanel({ onClose }: { onClose: () => void }) {
     updateStripPromptsEnabled: onStripPromptsEnabledChange,
     antiSpamEnabled,
     updateAntiSpamEnabled,
+    showSkillCounts,
+    updateShowSkillCounts,
     commandEchoEnabled,
     updateCommandEchoEnabled,
     selectOnSend,
@@ -272,8 +276,10 @@ export function SettingsPanel({ onClose }: { onClose: () => void }) {
     toggleChatNotification,
     customChime1,
     customChime2,
+    customSounds,
     updateCustomChime1,
     updateCustomChime2,
+    updateCustomSounds,
     counterHotThreshold,
     counterColdThreshold,
     updateCounterHotThreshold,
@@ -587,6 +593,11 @@ export function SettingsPanel({ onClose }: { onClose: () => void }) {
           <div className="text-[9px] text-text-dim font-mono leading-relaxed mt-1">
             Collapse consecutive identical lines with a repeat count.
           </div>
+          <ToggleRow label="Show skill counts" checked={showSkillCounts} onChange={updateShowSkillCounts} accent="#50fa7b" />
+          <div className="text-[9px] text-text-dim font-mono leading-relaxed mt-1">
+            Append tracked improve counts to &quot;show skills&quot; and &quot;show quick
+            skills&quot; readouts.
+          </div>
         </SettingsSection>
 
         {/* Counters */}
@@ -652,8 +663,10 @@ export function SettingsPanel({ onClose }: { onClose: () => void }) {
           <CustomSoundsSection
             customChime1={customChime1}
             customChime2={customChime2}
+            customSounds={customSounds}
             updateCustomChime1={updateCustomChime1}
             updateCustomChime2={updateCustomChime2}
+            updateCustomSounds={updateCustomSounds}
             open={openSection === 'sounds'}
             onToggle={() => toggle('sounds')}
           />
@@ -841,7 +854,7 @@ function ChimePicker({
 
       const destName = (await invoke('import_sound_file', {
         sourcePath: selected,
-        chimeId,
+        soundId: chimeId,
       })) as string;
 
       // Store the original filename for display
@@ -863,7 +876,7 @@ function ChimePicker({
     try {
       let url: string;
       if (customFileName && invoke) {
-        const dataUrl = (await invoke('get_sound_base64', { chimeId })) as string | null;
+        const dataUrl = (await invoke('get_sound_base64', { soundId: chimeId })) as string | null;
         url = dataUrl || `/${chimeId}.wav`;
       } else {
         url = `/${chimeId}.wav`;
@@ -886,7 +899,7 @@ function ChimePicker({
   const handleReset = async () => {
     setError(null);
     try {
-      if (invoke) await invoke('remove_custom_sound', { chimeId });
+      if (invoke) await invoke('remove_custom_sound', { soundId: chimeId });
       onUpdate(null);
     } catch (e) {
       setError(String(e));
@@ -931,45 +944,199 @@ function ChimePicker({
   );
 }
 
+function CustomSoundRow({
+  entry,
+  onRemove,
+  onPreview,
+}: {
+  entry: CustomSoundEntry;
+  onRemove: () => void;
+  onPreview: () => void;
+}) {
+  return (
+    <div className="flex items-center gap-2">
+      <span className="text-[10px] font-mono text-text-label flex-1 truncate" title={entry.name}>
+        {entry.name}
+      </span>
+      <span className="text-[9px] font-mono text-text-dim truncate max-w-[80px]" title={entry.fileName}>
+        {entry.fileName}
+      </span>
+      <button onClick={onPreview} className={CHIME_BTN} title="Preview">
+        <PlayIcon size={9} />
+      </button>
+      <button onClick={onRemove} className={CHIME_BTN} title="Remove">
+        <TrashIcon size={9} />
+      </button>
+    </div>
+  );
+}
+
 function CustomSoundsSection({
   customChime1,
   customChime2,
+  customSounds,
   updateCustomChime1,
   updateCustomChime2,
+  updateCustomSounds,
   open,
   onToggle,
 }: {
   customChime1: string | null;
   customChime2: string | null;
+  customSounds: CustomSoundEntry[];
   updateCustomChime1: (v: string | null) => void;
   updateCustomChime2: (v: string | null) => void;
+  updateCustomSounds: (v: CustomSoundEntry[]) => void;
   open: boolean;
   onToggle: () => void;
 }) {
+  const [newSoundName, setNewSoundName] = useState('');
+  const [error, setError] = useState<string | null>(null);
+  const previewRef = useRef<HTMLAudioElement | null>(null);
+
+  const handleAddSound = async () => {
+    if (!openDialog || !invoke) return;
+    const name = newSoundName.trim();
+    if (!name) {
+      setError('Enter a name for the sound.');
+      return;
+    }
+    if (!/^[a-zA-Z0-9_-]+$/.test(name)) {
+      setError('Name must use letters, digits, hyphens, underscores only.');
+      return;
+    }
+    if (name === 'chime1' || name === 'chime2') {
+      setError('Cannot use built-in sound names. Use the replacers above.');
+      return;
+    }
+    if (customSounds.some((s) => s.name === name)) {
+      setError(`Sound "${name}" already exists.`);
+      return;
+    }
+    setError(null);
+
+    try {
+      const selected = await openDialog({
+        filters: [{ name: 'Audio', extensions: ['wav', 'mp3', 'ogg', 'webm'] }],
+        multiple: false,
+        title: `Select audio file for "${name}"`,
+      });
+      if (!selected || typeof selected !== 'string') return;
+
+      const destName = (await invoke('import_sound_file', {
+        sourcePath: selected,
+        soundId: name,
+      })) as string;
+
+      updateCustomSounds([...customSounds, { name, fileName: destName }]);
+      setNewSoundName('');
+    } catch (e) {
+      setError(String(e));
+    }
+  };
+
+  const handleRemoveSound = async (name: string) => {
+    try {
+      if (invoke) await invoke('remove_custom_sound', { soundId: name });
+      updateCustomSounds(customSounds.filter((s) => s.name !== name));
+    } catch (e) {
+      setError(String(e));
+    }
+  };
+
+  const handlePreviewSound = async (soundId: string) => {
+    if (previewRef.current) {
+      previewRef.current.pause();
+      previewRef.current.src = '';
+      previewRef.current = null;
+    }
+    try {
+      let url: string;
+      if (invoke) {
+        const dataUrl = (await invoke('get_sound_base64', { soundId })) as string | null;
+        url = dataUrl || `/${soundId}.wav`;
+      } else {
+        url = `/${soundId}.wav`;
+      }
+      const audio = new Audio(url);
+      previewRef.current = audio;
+      const done = () => { previewRef.current = null; };
+      audio.onended = done;
+      audio.onerror = done;
+      audio.play().catch(done);
+    } catch {
+      previewRef.current = null;
+    }
+  };
+
   return (
     <SettingsSection
       open={open}
       onToggle={onToggle}
       icon={<Volume2Icon size={13} />}
-      title="Custom Sounds"
+      title="Sound Library"
       accent="#50fa7b"
     >
+      {/* Built-in chime replacements */}
       <ChimePicker
-        label="General Chat"
+        label="General Chat (chime1)"
         chimeId="chime1"
         customFileName={customChime1}
         onUpdate={updateCustomChime1}
       />
       <div className="border-t border-border-dim" />
       <ChimePicker
-        label="Tells & SZ"
+        label="Tells & SZ (chime2)"
         chimeId="chime2"
         customFileName={customChime2}
         onUpdate={updateCustomChime2}
       />
-      <div className="text-[9px] text-text-dim font-mono leading-relaxed mt-1">
-        Choose custom audio files for chat alert sounds. Supports WAV, MP3, OGG, and WebM (max 5
-        MB).
+
+      {/* Custom sounds */}
+      <div className="border-t border-border-dim mt-2 pt-2">
+        <div className="text-[10px] font-mono text-text-dim uppercase tracking-wide mb-1.5">
+          Custom Sounds
+        </div>
+        {customSounds.length > 0 && (
+          <div className="space-y-1.5 mb-2">
+            {customSounds.map((entry) => (
+              <CustomSoundRow
+                key={entry.name}
+                entry={entry}
+                onRemove={() => handleRemoveSound(entry.name)}
+                onPreview={() => handlePreviewSound(entry.name)}
+              />
+            ))}
+          </div>
+        )}
+        <div className="flex items-center gap-1">
+          <input
+            type="text"
+            value={newSoundName}
+            onChange={(e) => setNewSoundName(e.target.value)}
+            placeholder="Sound name"
+            className="flex-1 text-[10px] font-mono bg-transparent border border-border-dim rounded px-2 py-1 text-text-label placeholder:text-text-dim/50 focus:outline-none focus:border-[#50fa7b]/40"
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') handleAddSound();
+            }}
+          />
+          <button
+            onClick={handleAddSound}
+            className={CHIME_BTN}
+            title="Add custom sound"
+          >
+            <PlusIcon size={9} />
+            Add
+          </button>
+        </div>
+        {error && <div className="text-[9px] font-mono text-red-400 leading-relaxed mt-1">{error}</div>}
+      </div>
+
+      <div className="text-[9px] text-text-dim font-mono leading-relaxed mt-2">
+        Built-in sounds (chime1, chime2) are always available. Add custom sounds for triggers and
+        scripts. Use <span className="text-[#50fa7b]">playSound(3)</span> or{' '}
+        <span className="text-[#50fa7b]">playSound('name')</span> in scripts. Supports WAV, MP3,
+        OGG, WebM (max 5 MB).
       </div>
     </SettingsSection>
   );

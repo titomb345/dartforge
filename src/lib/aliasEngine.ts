@@ -102,7 +102,7 @@ const MATCH_MODE_PRIORITY: Record<AliasMatchMode, number> = {
  * so that e.g. an exact "port" fires before a prefix "port".
  * Returns the matched alias and extracted arguments, or null.
  */
-export function matchAlias(segment: string, aliases: Alias[]): { alias: Alias; args: string[] } | null {
+export function matchAlias(segment: string, aliases: Alias[], excludeIds?: Set<string>): { alias: Alias; args: string[] } | null {
   const trimmed = segment.trim();
   if (!trimmed) return null;
 
@@ -116,6 +116,7 @@ export function matchAlias(segment: string, aliases: Alias[]): { alias: Alias; a
 
   for (const alias of sorted) {
     if (!alias.enabled) continue;
+    if (excludeIds?.has(alias.id)) continue;
 
     switch (alias.matchMode) {
       case 'exact': {
@@ -174,7 +175,8 @@ function expandSegment(
   enableSpeedwalk: boolean,
   depth: number,
   subOptions?: SubstitutionOptions,
-  separator = ';;'
+  separator = ';;',
+  excludeIds?: Set<string>
 ): ExpandedCommand[] {
   const trimmed = segment.trim();
   if (!trimmed) return [{ type: 'send', text: '' }];
@@ -194,7 +196,7 @@ function expandSegment(
   }
 
   // Try alias match
-  const match = matchAlias(trimmed, aliases);
+  const match = matchAlias(trimmed, aliases, excludeIds);
   if (!match) {
     return [parseDirective(trimmed)];
   }
@@ -215,7 +217,7 @@ function expandSegment(
     } else {
       // Recursively expand (may hit another alias)
       commands.push(
-        ...expandSegment(subTrimmed, aliases, enableSpeedwalk, depth + 1, subOptions, separator)
+        ...expandSegment(subTrimmed, aliases, enableSpeedwalk, depth + 1, subOptions, separator, excludeIds)
       );
     }
   }
@@ -269,10 +271,12 @@ export function expandInput(
     enableSpeedwalk?: boolean;
     activeCharacter?: string | null;
     separator?: string;
+    excludeAliasIds?: Set<string>;
   }
 ): ExpansionResult {
   const enableSpeedwalk = options?.enableSpeedwalk ?? true;
   const separator = options?.separator ?? ';;';
+  const excludeIds = options?.excludeAliasIds;
   const sepLen = separator.length;
   const subOptions: SubstitutionOptions = {
     activeCharacter: options?.activeCharacter,
@@ -292,7 +296,7 @@ export function expandInput(
     // separators (/spam, /var), or when the alias body starts with a greedy
     // directive (so $* captures separators too). Otherwise split normally so that e.g.
     // "ta scrip;;wear scrip" becomes two separate commands.
-    const fullMatch = matchAlias(trimmed, aliases);
+    const fullMatch = matchAlias(trimmed, aliases, excludeIds);
     const argsStartWithDirective = fullMatch && /^\/(?:spam|var)$/i.test(fullMatch.args[0] ?? '');
     const bodyStartsWithGreedy = fullMatch && /^\/(?:spam|var)\s/i.test(fullMatch.alias.body.trim());
     if (
@@ -303,7 +307,7 @@ export function expandInput(
     ) {
       // Prefix alias consumes the rest of the line
       commands.push(
-        ...expandSegment(trimmed, aliases, enableSpeedwalk, 0, subOptions, separator)
+        ...expandSegment(trimmed, aliases, enableSpeedwalk, 0, subOptions, separator, excludeIds)
       );
       break;
     }
@@ -314,7 +318,7 @@ export function expandInput(
     if (splitPos === -1) {
       // No separators — process the rest as a single segment
       commands.push(
-        ...expandSegment(trimmed, aliases, enableSpeedwalk, 0, subOptions, separator)
+        ...expandSegment(trimmed, aliases, enableSpeedwalk, 0, subOptions, separator, excludeIds)
       );
       break;
     }
@@ -324,7 +328,7 @@ export function expandInput(
 
     if (segment) {
       commands.push(
-        ...expandSegment(segment, aliases, enableSpeedwalk, 0, subOptions, separator)
+        ...expandSegment(segment, aliases, enableSpeedwalk, 0, subOptions, separator, excludeIds)
       );
     }
   }

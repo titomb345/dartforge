@@ -14,6 +14,7 @@ export interface TriggerState {
   mergedTriggers: Trigger[];
   createTrigger: (
     partial: {
+      name?: string;
       pattern: string;
       matchMode: TriggerMatchMode;
       body: string;
@@ -22,6 +23,7 @@ export interface TriggerState {
       gag?: boolean;
       highlight?: string | null;
       soundAlert?: boolean;
+      soundName?: string | null;
       bodyMode?: BodyMode;
       multiLine?: boolean;
       endPattern?: string;

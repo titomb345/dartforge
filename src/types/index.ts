@@ -46,7 +46,7 @@ export interface PinnablePanelProps {
 }
 
 export type { SkillTier, SkillRecord, CharacterSkillFile, SkillMatchResult } from './skills';
-export type { QuickButtonId, QuickButton } from './quickButton';
+export type { QuickButtonId, QuickButton, QuickButtonToggle } from './quickButton';
 export type { MacroId, Macro, HotkeyCombo } from './macro';
 export { formatHotkey, hotkeyToString, hotkeyFromEvent, isReservedHotkey, isNumpadKey } from './macro';
 
