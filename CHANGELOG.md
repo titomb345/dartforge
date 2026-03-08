@@ -9,7 +9,7 @@ The `[Unreleased]` header controls automatic version bumping on merge:
 - `[Unreleased-minor]` → 0.1.0 → 0.2.0
 - `[Unreleased-major]` → 0.1.0 → 1.0.0
 
-## [Unreleased-minor]
+## [1.6.0] - 2026-03-08
 
 ### Added
 - Toggle buttons — quick buttons can now switch between ON and OFF states, each with its own label, color, and body (commands or script); toggle state is stored as a user variable, accessible via `$variable_name` in scripts and triggers
