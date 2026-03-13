@@ -148,7 +148,7 @@ pub async fn start_companion(
         .map(|ip| ip.to_string())
         .unwrap_or_else(|_| "127.0.0.1".to_string());
 
-    let url = format!("http://{}:{}", local_ip, port);
+    let url = format!("http://{local_ip}:{port}");
     let qr_svg = generate_qr_svg(&url);
 
     let axum_state = Arc::new(AxumState {
@@ -214,7 +214,7 @@ pub async fn get_companion_info(
         .unwrap_or_else(|_| "127.0.0.1".to_string());
 
     let url = if running {
-        format!("http://{}:{}", local_ip, port_val)
+        format!("http://{local_ip}:{port_val}")
     } else {
         String::new()
     };
@@ -263,7 +263,7 @@ async fn handle_ws(socket: WebSocket, state: Arc<AxumState>) {
                 "data": chunk
             })
             .to_string();
-            if ws_tx.send(Message::Text(json.into())).await.is_err() {
+            if ws_tx.send(Message::Text(json)).await.is_err() {
                 return;
             }
         }
@@ -289,7 +289,7 @@ async fn handle_ws(socket: WebSocket, state: Arc<AxumState>) {
                     .to_string()
                 }
             };
-            if ws_tx.send(Message::Text(json.into())).await.is_err() {
+            if ws_tx.send(Message::Text(json)).await.is_err() {
                 break;
             }
         }
