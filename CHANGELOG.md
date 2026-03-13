@@ -9,6 +9,11 @@ The `[Unreleased]` header controls automatic version bumping on merge:
 - `[Unreleased-minor]` → 0.1.0 → 0.2.0
 - `[Unreleased-major]` → 0.1.0 → 1.0.0
 
+## [Unreleased-patch]
+
+### Fixed
+- Companion connect/disconnect buttons now correctly reflect MUD connection state on page load and after disconnect; status is tracked from boot rather than only after companion server starts
+
 ## [1.7.2] - 2026-03-13
 
 ### Fixed

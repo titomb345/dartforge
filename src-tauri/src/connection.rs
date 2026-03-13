@@ -6,9 +6,22 @@ use tokio::net::TcpStream;
 use tokio::sync::mpsc;
 use tokio::time::{timeout, Duration};
 
+use std::sync::Arc;
+use tokio::sync::Mutex as TokioMutex;
+
 use crate::ansi;
 use crate::companion::CompanionMessage;
 use crate::events::{ConnectionStatusPayload, MudOutputPayload, CONNECTION_STATUS_EVENT, MUD_OUTPUT_EVENT};
+
+/// Shared type for tracking the last connection status.
+pub type LastStatus = Arc<TokioMutex<Option<(bool, String)>>>;
+
+fn set_status(last_status: &LastStatus, connected: bool, message: &str) {
+    // Use try_lock to avoid blocking — best-effort update
+    if let Ok(mut guard) = last_status.try_lock() {
+        *guard = Some((connected, message.to_string()));
+    }
+}
 
 const MUD_HOST: &str = "dartmud.com";
 const MUD_PORT: u16 = 2525;
@@ -21,21 +34,15 @@ pub async fn connect(
     app: AppHandle,
     mut cmd_rx: mpsc::Receiver<String>,
     broadcast_tx: tokio::sync::broadcast::Sender<CompanionMessage>,
+    last_status: LastStatus,
 ) {
     let addr = format!("{MUD_HOST}:{MUD_PORT}");
     info!("Connecting to {addr}...");
 
-    let _ = app.emit(
-        CONNECTION_STATUS_EVENT,
-        ConnectionStatusPayload {
-            connected: false,
-            message: format!("Connecting to {addr}..."),
-        },
-    );
-    let _ = broadcast_tx.send(CompanionMessage::ConnectionStatus {
-        connected: false,
-        message: format!("Connecting to {addr}..."),
-    });
+    let msg = format!("Connecting to {addr}...");
+    let _ = app.emit(CONNECTION_STATUS_EVENT, ConnectionStatusPayload { connected: false, message: msg.clone() });
+    let _ = broadcast_tx.send(CompanionMessage::ConnectionStatus { connected: false, message: msg.clone() });
+    set_status(&last_status, false, &msg);
 
     // Resolve DNS on a blocking thread to get the actual IP address
     let resolved = tokio::task::spawn_blocking(move || {
@@ -48,14 +55,16 @@ pub async fn connect(
             error!("DNS resolution failed for {addr}: {e}");
             let msg = format!("DNS resolution failed: {e}");
             let _ = app.emit(CONNECTION_STATUS_EVENT, ConnectionStatusPayload { connected: false, message: msg.clone() });
-            let _ = broadcast_tx.send(CompanionMessage::ConnectionStatus { connected: false, message: msg });
+            let _ = broadcast_tx.send(CompanionMessage::ConnectionStatus { connected: false, message: msg.clone() });
+            set_status(&last_status, false, &msg);
             return;
         }
         Err(e) => {
             error!("DNS resolution task failed: {e}");
             let msg = format!("DNS resolution failed: {e}");
             let _ = app.emit(CONNECTION_STATUS_EVENT, ConnectionStatusPayload { connected: false, message: msg.clone() });
-            let _ = broadcast_tx.send(CompanionMessage::ConnectionStatus { connected: false, message: msg });
+            let _ = broadcast_tx.send(CompanionMessage::ConnectionStatus { connected: false, message: msg.clone() });
+            set_status(&last_status, false, &msg);
             return;
         }
     };
@@ -87,7 +96,8 @@ pub async fn connect(
             info!("Retrying in {}s...", RETRY_DELAY.as_secs());
             let msg = format!("Connection failed, retrying ({attempt}/{MAX_RETRIES})...");
             let _ = app.emit(CONNECTION_STATUS_EVENT, ConnectionStatusPayload { connected: false, message: msg.clone() });
-            let _ = broadcast_tx.send(CompanionMessage::ConnectionStatus { connected: false, message: msg });
+            let _ = broadcast_tx.send(CompanionMessage::ConnectionStatus { connected: false, message: msg.clone() });
+            set_status(&last_status, false, &msg);
             tokio::time::sleep(RETRY_DELAY).await;
         }
     }
@@ -96,14 +106,16 @@ pub async fn connect(
         Some(s) => {
             let msg = format!("Connected to {addr}");
             let _ = app.emit(CONNECTION_STATUS_EVENT, ConnectionStatusPayload { connected: true, message: msg.clone() });
-            let _ = broadcast_tx.send(CompanionMessage::ConnectionStatus { connected: true, message: msg });
+            let _ = broadcast_tx.send(CompanionMessage::ConnectionStatus { connected: true, message: msg.clone() });
+            set_status(&last_status, true, &msg);
             s
         }
         None => {
             error!("Failed to connect to {addr} after {MAX_RETRIES} attempts");
             let msg = format!("Failed to connect after {MAX_RETRIES} attempts");
             let _ = app.emit(CONNECTION_STATUS_EVENT, ConnectionStatusPayload { connected: false, message: msg.clone() });
-            let _ = broadcast_tx.send(CompanionMessage::ConnectionStatus { connected: false, message: msg });
+            let _ = broadcast_tx.send(CompanionMessage::ConnectionStatus { connected: false, message: msg.clone() });
+            set_status(&last_status, false, &msg);
             return;
         }
     };
@@ -193,4 +205,5 @@ pub async fn connect(
         connected: false,
         message: "Disconnected".to_string(),
     });
+    set_status(&last_status, false, "Disconnected");
 }

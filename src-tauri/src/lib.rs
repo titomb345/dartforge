@@ -18,7 +18,7 @@ struct ConnectionState {
 fn spawn_connection(
     app: &tauri::AppHandle,
     state: &ConnectionState,
-    broadcast_tx: broadcast::Sender<companion::CompanionMessage>,
+    companion_state: &CompanionState,
     startup_delay: bool,
 ) {
     // Drop old sender and abort old task
@@ -35,12 +35,14 @@ fn spawn_connection(
     *state.cmd_tx.lock().unwrap_or_else(|e| e.into_inner()) = Some(tx);
 
     let app_handle = app.clone();
+    let broadcast_tx = companion_state.broadcast_tx.clone();
+    let last_status = companion_state.last_status.clone();
     let join = tauri::async_runtime::spawn(async move {
         if startup_delay {
             // Brief delay on first launch lets WebView2 finish initialization
             tokio::time::sleep(tokio::time::Duration::from_secs(2)).await;
         }
-        connection::connect(app_handle, rx, broadcast_tx).await;
+        connection::connect(app_handle, rx, broadcast_tx, last_status).await;
     });
 
     *state.task_handle.lock().unwrap_or_else(|e| e.into_inner()) = Some(join);
@@ -69,12 +71,16 @@ async fn reconnect(
     state: tauri::State<'_, ConnectionState>,
     companion_state: tauri::State<'_, CompanionState>,
 ) -> Result<(), String> {
-    spawn_connection(&app, &state, companion_state.broadcast_tx.clone(), false);
+    spawn_connection(&app, &state, &companion_state, false);
     Ok(())
 }
 
 #[tauri::command]
-async fn disconnect(app: tauri::AppHandle, state: tauri::State<'_, ConnectionState>) -> Result<(), String> {
+async fn disconnect(
+    app: tauri::AppHandle,
+    state: tauri::State<'_, ConnectionState>,
+    companion_state: tauri::State<'_, CompanionState>,
+) -> Result<(), String> {
     {
         let mut tx = state.cmd_tx.lock().map_err(|e| e.to_string())?;
         *tx = None;
@@ -92,6 +98,11 @@ async fn disconnect(app: tauri::AppHandle, state: tauri::State<'_, ConnectionSta
             message: "Disconnected".to_string(),
         },
     );
+    let _ = companion_state.broadcast_tx.send(companion::CompanionMessage::ConnectionStatus {
+        connected: false,
+        message: "Disconnected".to_string(),
+    });
+    *companion_state.last_status.lock().await = Some((false, "Disconnected".to_string()));
     Ok(())
 }
 
