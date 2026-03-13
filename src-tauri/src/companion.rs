@@ -77,32 +77,37 @@ pub struct CompanionState {
     pub replay: Arc<Mutex<ReplayBuffer>>,
     pub last_status: Arc<Mutex<Option<(bool, String)>>>,
     server_handle: Mutex<Option<tokio::task::JoinHandle<()>>>,
+    status_listener: Mutex<Option<tokio::task::JoinHandle<()>>>,
     running_port: Mutex<Option<u16>>,
 }
 
 impl CompanionState {
     pub fn new(broadcast_tx: broadcast::Sender<CompanionMessage>) -> Self {
-        let last_status = Arc::new(Mutex::new(None));
+        Self {
+            broadcast_tx,
+            replay: Arc::new(Mutex::new(ReplayBuffer::new())),
+            last_status: Arc::new(Mutex::new(None)),
+            server_handle: Mutex::new(None),
+            status_listener: Mutex::new(None),
+            running_port: Mutex::new(None),
+        }
+    }
 
-        // Background task: track latest connection status from broadcast channel
-        let status_rx = broadcast_tx.subscribe();
-        let status_ref = last_status.clone();
-        tokio::spawn(async move {
-            let mut rx = status_rx;
+    /// Spawn the status listener once (safe to call repeatedly).
+    async fn ensure_status_listener(&self) {
+        let mut guard = self.status_listener.lock().await;
+        if guard.is_some() {
+            return;
+        }
+        let mut rx = self.broadcast_tx.subscribe();
+        let status_ref = self.last_status.clone();
+        *guard = Some(tokio::spawn(async move {
             while let Ok(msg) = rx.recv().await {
                 if let CompanionMessage::ConnectionStatus { connected, message } = msg {
                     *status_ref.lock().await = Some((connected, message));
                 }
             }
-        });
-
-        Self {
-            broadcast_tx,
-            replay: Arc::new(Mutex::new(ReplayBuffer::new())),
-            last_status,
-            server_handle: Mutex::new(None),
-            running_port: Mutex::new(None),
-        }
+        }));
     }
 }
 
@@ -153,6 +158,8 @@ pub async fn start_companion(
     state: tauri::State<'_, CompanionState>,
     port: u16,
 ) -> Result<CompanionInfo, String> {
+    state.ensure_status_listener().await;
+
     // Stop existing server if running
     {
         let mut handle = state.server_handle.lock().await;
