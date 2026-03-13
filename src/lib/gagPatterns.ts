@@ -344,7 +344,7 @@ const NPC_EMOTE_VERBS =
   'glares|grins|growls|grunts|hums|inhales|kicks|laughs|looks|messes|nods|' +
   'nudges|peers|picks|points|pokes|ponders|rocks|screams|scowls|shakes|sighs|' +
   'slobbers|slouches|smiles|smirks|snarls|sneers|sniffs|spits|stares|straightens|' +
-  'stretches|swings|taunts|twiddles|wanders|waves|weeps|whistles|winks|wipes|' +
+  'stretches|swings|swipes|taunts|twiddles|wanders|waves|weeps|whistles|winks|wipes|' +
   'yawns|yips';
 
 /**

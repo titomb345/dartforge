@@ -35,6 +35,8 @@ export const FONT_OPTIONS = ALL_FONTS.filter(isFontAvailable);
 export const DEFAULT_DISPLAY = {
   fontSize: 14,
   fontFamily: 'Courier New' as string,
+  promptChar: '>' as string,
+  promptColor: '#00ff00' as string,
 };
 
 export type DisplaySettings = typeof DEFAULT_DISPLAY;

@@ -99,11 +99,11 @@ function formatFileSize(bytes: number): string {
 
 /* ── Main Modal ────────────────────────────────────────────── */
 
-interface LogViewerPanelProps {
+interface LogViewerModalProps {
   onClose: () => void;
 }
 
-export function LogViewerPanel({ onClose }: LogViewerPanelProps) {
+export function LogViewerModal({ onClose }: LogViewerModalProps) {
   const [sessions, setSessions] = useState<SessionLogEntry[]>([]);
   const [selected, setSelected] = useState<string | null>(null);
   const [lines, setLines] = useState<string[]>([]);

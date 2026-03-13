@@ -9,6 +9,15 @@ The `[Unreleased]` header controls automatic version bumping on merge:
 - `[Unreleased-minor]` → 0.1.0 → 0.2.0
 - `[Unreleased-major]` → 0.1.0 → 1.0.0
 
+## [Unreleased-minor]
+
+### Added
+- Chat panel Incoming/Outgoing tabs — Outgoing tab captures sent chat commands (say, tell, shout, ooc, sz) as a timestamped log with search and day separators
+- Delete individual chat messages — hover any message row (incoming or outgoing) to reveal a trash button that permanently removes it from history
+- Customizable command prompt — change the prompt character (default `>`) and color in Appearance > Display settings
+- `swipes` added to NPC gag emote verb list
+- **Mobile Companion** — embedded web server (Settings > Mobile Companion) serves a phone-friendly page on your local network; see MUD output with ANSI colors and send commands from your phone; commands from the companion go through the full pipeline (aliases, built-in commands, speedwalk, etc.); output respects gag filters; connect/disconnect the desktop client remotely from the companion page; shows QR code for quick connection (also accessible via Ctrl+Q)
+
 ## [1.6.0] - 2026-03-08
 
 ### Added

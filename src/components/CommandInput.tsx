@@ -19,6 +19,8 @@ import { useSpotlight } from '../contexts/SpotlightContext';
 interface CommandInputProps {
   onSend: (command: string) => void;
   onReconnect: () => void;
+  promptChar?: string;
+  promptColor?: string;
 }
 
 const LINE_HEIGHT = 20;
@@ -74,7 +76,7 @@ function findTabMatches(lines: string[], prefix: string): string[] {
 }
 
 export const CommandInput = forwardRef<HTMLTextAreaElement, CommandInputProps>(
-  ({ onSend, onReconnect }, ref) => {
+  ({ onSend, onReconnect, promptChar = '>', promptColor = '#00ff00' }, ref) => {
     const {
       connected,
       disabled,
@@ -365,12 +367,13 @@ export const CommandInput = forwardRef<HTMLTextAreaElement, CommandInputProps>(
         <span
           className={cn(
             'font-mono text-[13px] pt-[5px] pr-2 pl-1 leading-[20px] transition-colors duration-300 ease-in-out text-right',
-            disabled ? 'text-text-disabled' : 'text-green',
+            disabled ? 'text-text-disabled' : '',
             isMultiLine ? 'min-w-[28px]' : 'min-w-0'
           )}
+          style={disabled ? undefined : { color: promptColor }}
         >
           {isMultiLine && <span className="text-comment">{lineCount}</span>}
-          {'>'}
+          {promptChar}
         </span>
 
         <textarea

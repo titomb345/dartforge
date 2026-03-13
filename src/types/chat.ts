@@ -13,3 +13,9 @@ export interface ChatMessage {
 }
 
 export type ChatFilters = Record<ChatType, boolean>;
+
+export interface OutgoingMessage {
+  id: number;
+  command: string;
+  timestamp: Date;
+}

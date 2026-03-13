@@ -109,6 +109,34 @@ When adding a new feature, panel, keyboard shortcut, or non-obvious interaction,
 - **New built-in command** (`/echo`, `/delay`, etc.) → add to "Built-in Commands" (`key: 'commands'`)
 - If the feature has a toolbar button, set `helpId` to match its `data-help-id` (e.g., `'toolbar-timers'`) so the "Show me" spotlight works
 
+## Shared Components & UI Conventions
+Before building new UI, check `src/components/` for existing shared components. **Always reuse these** instead of writing one-off equivalents.
+
+### Mandatory Components
+| Component | File | When to use |
+|-----------|------|-------------|
+| `ConfirmDeleteButton` | `ConfirmDeleteButton.tsx` | **Every** delete action. Two-step: trash icon → "Del?" confirm. Variants: `row` (hidden until hover) and `fixed` (always visible). |
+| `PanelHeader` | `PanelHeader.tsx` | Top bar for every panel. Provides icon, title, badge, pin/close controls, and a toolbar slot via `children`. |
+| `FilterPill` | `FilterPill.tsx` | Togglable filter buttons (e.g. chat type filters). Supports `exclusive` mode, `soundAlert` dot, and right-click. |
+| `MudInput` / `MudTextarea` / `MudButton` | `shared.tsx` | All form inputs and buttons. Accent colors: cyan, red, purple, pink, green, orange. Sizes: sm, md, lg. |
+| `MudNumberInput` | `shared.tsx` | Numeric inputs with clamping on blur. Use instead of raw `<input type="number">`. |
+| `ToggleSwitch` | `shared.tsx` | Boolean on/off toggles with custom accent color. |
+| `IconButton` | `IconButton.tsx` | Toolbar icon buttons (30x30). Supports `toggled`, `pinned`, and `helpId` for spotlight. |
+| `FontSizeControl` | `FontSizeControl.tsx` | Reusable font size +/- stepper used in panel headers. |
+| `StatusBadge` | `StatusBar.tsx` | Colored status dots with optional animation and glow. |
+| `StatusReadout` | `StatusBar.tsx` | Collapsible status displays (icon + label) with compact/auto-compact modes. |
+| `SlideOut` | `SlideOut.tsx` | Wrapper for slide-out panels with open/close transitions. |
+| `ErrorBoundary` | `ErrorBoundary.tsx` | Wrap panel content to catch rendering crashes gracefully. |
+| `icons.tsx` | `icons.tsx` | 60+ SVG icons. Always import from here — never inline raw SVGs. |
+
+### UI Rules
+- **Delete = always confirm.** Use `ConfirmDeleteButton`. Never wire a delete action to a single click.
+- **Panel structure:** `PanelHeader` at top → optional toolbar/filter rows → scrollable content area. Use `panelRootClass()` from `lib/panelUtils.ts` for the root div.
+- **Accent colors:** Stick to the shared palette (cyan, red, purple, pink, green, orange, amber). Don't invent new theme colors.
+- **Text sizing:** Use `text-[Npx]` with font-mono for data-dense UI. Panel content typically 10–12px.
+- **Hover actions:** Wrap rows in `group` class, hide action buttons with `hidden group-hover:flex`.
+- **Help spotlight:** Set `data-help-id` on toolbar buttons so the in-app guide's "Show me" feature can highlight them.
+
 ## DartMUD Notes
 - Numberless combat interface
 - Class archetypes: Mage, Fighter, Multi-class

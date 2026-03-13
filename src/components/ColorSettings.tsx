@@ -264,6 +264,63 @@ export function ColorSettings({
               </button>
             </div>
           </div>
+
+          {/* Prompt character */}
+          <div className="px-2 py-1 flex items-center gap-2">
+            <span className="text-xs text-text-label flex-1">Prompt</span>
+            {display.promptChar !== DEFAULT_DISPLAY.promptChar && (
+              <button
+                onClick={() => onResetDisplay('promptChar')}
+                className="bg-transparent border-none text-[#555] hover:text-text-label text-sm cursor-pointer px-0.5 leading-none"
+                title="Reset to default"
+              >
+                ↺
+              </button>
+            )}
+            <input
+              type="text"
+              value={display.promptChar}
+              onChange={(e) => onUpdateDisplay('promptChar', e.target.value.slice(0, 4))}
+              spellCheck={false}
+              maxLength={4}
+              className="w-[48px] bg-bg-input border border-border rounded text-text-heading text-[11px] font-mono px-1.5 py-[3px] outline-none text-center"
+            />
+          </div>
+
+          {/* Prompt color */}
+          <div className="px-2 py-1 flex items-center gap-2">
+            <span className="text-xs text-text-label flex-1">Prompt Color</span>
+            {display.promptColor !== DEFAULT_DISPLAY.promptColor && (
+              <button
+                onClick={() => onResetDisplay('promptColor')}
+                className="bg-transparent border-none text-[#555] hover:text-text-label text-sm cursor-pointer px-0.5 leading-none"
+                title="Reset to default"
+              >
+                ↺
+              </button>
+            )}
+            <div
+              className="w-6 h-6 rounded border border-[#444] shrink-0 cursor-pointer"
+              style={{ background: display.promptColor }}
+              onClick={() => setExpandedKey((prev) => (prev === ('promptColor' as ThemeColorKey) ? null : ('promptColor' as ThemeColorKey)))}
+            />
+          </div>
+          <div
+            className={cn(
+              'overflow-hidden transition-[max-height,opacity] ease-in-out',
+              expandedKey === ('promptColor' as ThemeColorKey)
+                ? 'max-h-[220px] opacity-100 duration-250'
+                : 'max-h-0 opacity-0 duration-200'
+            )}
+          >
+            <div className="px-4 pb-3 pt-2 flex flex-col items-center gap-2">
+              <HexColorPicker
+                color={display.promptColor}
+                onChange={(c) => onUpdateDisplay('promptColor', c)}
+                style={{ width: '100%', height: '140px' }}
+              />
+            </div>
+          </div>
         </div>
 
         <div className="mb-4">

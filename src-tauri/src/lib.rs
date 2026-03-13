@@ -1,18 +1,26 @@
 mod ansi;
+mod companion;
 mod connection;
 mod events;
 mod storage;
 
 use std::sync::Mutex;
 use tauri::{Emitter, Manager};
-use tokio::sync::mpsc;
+use tokio::sync::{broadcast, mpsc};
+
+use companion::CompanionState;
 
 struct ConnectionState {
     cmd_tx: Mutex<Option<mpsc::Sender<String>>>,
     task_handle: Mutex<Option<tauri::async_runtime::JoinHandle<()>>>,
 }
 
-fn spawn_connection(app: &tauri::AppHandle, state: &ConnectionState, startup_delay: bool) {
+fn spawn_connection(
+    app: &tauri::AppHandle,
+    state: &ConnectionState,
+    broadcast_tx: broadcast::Sender<companion::CompanionMessage>,
+    startup_delay: bool,
+) {
     // Drop old sender and abort old task
     {
         let mut tx = state.cmd_tx.lock().unwrap_or_else(|e| e.into_inner());
@@ -32,7 +40,7 @@ fn spawn_connection(app: &tauri::AppHandle, state: &ConnectionState, startup_del
             // Brief delay on first launch lets WebView2 finish initialization
             tokio::time::sleep(tokio::time::Duration::from_secs(2)).await;
         }
-        connection::connect(app_handle, rx).await;
+        connection::connect(app_handle, rx, broadcast_tx).await;
     });
 
     *state.task_handle.lock().unwrap_or_else(|e| e.into_inner()) = Some(join);
@@ -56,8 +64,12 @@ async fn send_command(
 }
 
 #[tauri::command]
-async fn reconnect(app: tauri::AppHandle, state: tauri::State<'_, ConnectionState>) -> Result<(), String> {
-    spawn_connection(&app, &state, false);
+async fn reconnect(
+    app: tauri::AppHandle,
+    state: tauri::State<'_, ConnectionState>,
+    companion_state: tauri::State<'_, CompanionState>,
+) -> Result<(), String> {
+    spawn_connection(&app, &state, companion_state.broadcast_tx.clone(), false);
     Ok(())
 }
 
@@ -137,6 +149,9 @@ fn delete_credential(account: String) -> Result<(), String> {
 pub fn run() {
     env_logger::init();
 
+    // Create a long-lived broadcast channel for companion WebSocket clients
+    let (broadcast_tx, _) = broadcast::channel::<companion::CompanionMessage>(256);
+
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_store::Builder::default().build())
@@ -146,10 +161,15 @@ pub fn run() {
             cmd_tx: Mutex::new(None),
             task_handle: Mutex::new(None),
         })
+        .manage(CompanionState::new(broadcast_tx))
         .invoke_handler(tauri::generate_handler![
             send_command,
             reconnect,
             disconnect,
+            companion::start_companion,
+            companion::stop_companion,
+            companion::get_companion_info,
+            companion::broadcast_companion_output,
             storage::resolve_data_dir,
             storage::get_active_data_dir,
             storage::read_data_file,
