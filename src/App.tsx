@@ -128,11 +128,20 @@ import { AppSettingsProvider } from './contexts/AppSettingsContext';
 import { SpotlightProvider } from './contexts/SpotlightContext';
 import { SpotlightOverlay } from './components/SpotlightOverlay';
 import { HelpPanel } from './components/HelpPanel';
-import { LogViewerPanel } from './components/LogViewerPanel';
+import { LogViewerModal } from './components/LogViewerModal';
+import { CompanionQRDialog } from './components/CompanionQRDialog';
 import { QuickButtonBar } from './components/QuickButtonBar';
 import { MacroPanel } from './components/MacroPanel';
 import type { QuickButton, Macro } from './types';
 import { hotkeyToString, hotkeyFromEvent, isNumpadKey } from './types';
+
+/* ── Lazy Tauri imports for companion integration ────────────── */
+let tauriInvoke: ((cmd: string, args?: Record<string, unknown>) => Promise<unknown>) | null = null;
+let tauriListen: ((event: string, handler: (e: { payload: unknown }) => void) => Promise<() => void>) | null = null;
+if (getPlatform() === 'tauri') {
+  import('@tauri-apps/api/core').then((m) => { tauriInvoke = m.invoke; });
+  import('@tauri-apps/api/event').then((m) => { tauriListen = m.listen; });
+}
 
 /** Commands to send automatically after login */
 const LOGIN_COMMANDS = [
@@ -187,6 +196,7 @@ function AppMain() {
   const debugModeRef = useRef(false);
   const [debugMode, setDebugMode] = useState(false);
   const [activePanel, setActivePanel] = useState<Panel | null>(null);
+  const [showCompanionQR, setShowCompanionQR] = useState(false);
   const togglePanel = useCallback((panel: Panel) => setActivePanel((v) => (v === panel ? null : panel)), []);
   const closePanel = useCallback(() => setActivePanel(null), []);
   const writeToTerm = useCallback(
@@ -505,7 +515,12 @@ function AppMain() {
     muteSender,
     unmuteSender,
     updateSender,
+    outgoingMessages,
+    deleteMessage,
+    addOutgoingMessage,
+    deleteOutgoingMessage,
   } = useChatMessages(appSettings.chatHistorySize, chatNotificationsRef, soundLibraryRef, chatGaggedNpcsRef);
+  const addOutgoingMessageRef = useLatestRef(addOutgoingMessage);
   const handleChatMessageRef = useLatestRef(handleChatMessage);
 
   // Status trackers
@@ -1027,6 +1042,11 @@ function AppMain() {
 
   const transport = useTransport();
 
+  // Broadcast post-gag output to companion WebSocket clients
+  const onFilteredOutput = useCallback((data: string) => {
+    tauriInvoke?.('broadcast_companion_output', { data });
+  }, []);
+
   const { connected, passwordMode, skipHistory, sendCommand, reconnect, disconnect } =
     useMudConnection(
       terminalRef,
@@ -1036,7 +1056,8 @@ function AppMain() {
       onCharacterName,
       outputFilterRef,
       onLogin,
-      autoLoginRef
+      autoLoginRef,
+      onFilteredOutput,
     );
 
   // Session logger
@@ -1071,7 +1092,11 @@ function AppMain() {
       // mapTrackCommandRef.current(text); // automapper disabled
       await sendCommandRef.current?.(text);
     },
-    echo: (text) => writeToTerm(`\x1b[36m${text}\x1b[0m\r\n`),
+    echo: (text) => {
+      const formatted = `\x1b[36m${text}\x1b[0m\r\n`;
+      writeToTerm(formatted);
+      tauriInvoke?.('broadcast_companion_output', { data: formatted });
+    },
     expand: (input) =>
       expandInput(input, mergedAliasesRef.current, {
         enableSpeedwalk: enableSpeedwalkRef.current,
@@ -1292,6 +1317,7 @@ function AppMain() {
 
   // Command echo ref (used in handleSend callback)
   const commandEchoRef = useLatestRef(appSettings.commandEchoEnabled);
+  const promptCharRef = useLatestRef(display.promptChar);
   const passwordModeRef = useLatestRef(passwordMode);
 
   // Built-in command context — avoids closing over dozens of refs in handleSend
@@ -1341,10 +1367,11 @@ function AppMain() {
 
       // Command echo — write dimmed line to terminal before processing
       if (commandEchoRef.current && trimmed) {
+        const pc = promptCharRef.current ?? '>';
         if (passwordModeRef.current) {
-          writeToTerm('\x1b[90m> ******\x1b[0m\r\n');
+          writeToTerm(`\x1b[90m${pc} ******\x1b[0m\r\n`);
         } else {
-          writeToTerm(`\x1b[90m> ${rawInput}\x1b[0m\r\n`);
+          writeToTerm(`\x1b[90m${pc} ${rawInput}\x1b[0m\r\n`);
         }
       }
 
@@ -1354,6 +1381,13 @@ function AppMain() {
       // Idle tracking — stamp on any keypress-driven send (even empty Enter)
       stampUserInput();
 
+
+      // Capture outgoing chat commands for the Outgoing tab
+      // say/shout/ooc are direct commands; tell and sz are spells (cast tell, cast sz, cast skrydin's_zephyr)
+      if (/^(say|'|shout|ooc)\b/i.test(trimmed) ||
+          /^cast\s+(tell|t|sz|skyrdin'?s?_?zephyr)\b/i.test(trimmed)) {
+        addOutgoingMessageRef.current?.(trimmed);
+      }
 
       // Dispatch built-in slash commands (/block, /autocast, /var, etc.)
       if (await dispatchBuiltinCommand(trimmed, builtinCtxRef.current)) return;
@@ -1522,6 +1556,48 @@ function AppMain() {
     },
     [handleSend]
   );
+
+  // Ctrl+Q — toggle companion QR code dialog
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && e.key === 'q') {
+        e.preventDefault();
+        setShowCompanionQR((v) => !v);
+      }
+    };
+    window.addEventListener('keydown', handler);
+    return () => window.removeEventListener('keydown', handler);
+  }, []);
+
+  // Companion command listener — route commands from mobile companion through the full pipeline
+  const handleSendRef = useLatestRef(handleSend);
+  useEffect(() => {
+    if (!tauriListen) return;
+    let unlisten: (() => void) | null = null;
+    tauriListen('companion:command', (e: { payload: unknown }) => {
+      const payload = e.payload as { command?: string };
+      if (payload?.command != null) {
+        handleSendRef.current(payload.command);
+      }
+    }).then((fn) => { unlisten = fn; });
+    return () => { unlisten?.(); };
+  }, [handleSendRef]);
+
+  // Companion reconnect/disconnect listeners
+  const reconnectRef = useLatestRef(reconnect);
+  const disconnectRef = useLatestRef(disconnect);
+  useEffect(() => {
+    if (!tauriListen) return;
+    let unlistenReconnect: (() => void) | null = null;
+    let unlistenDisconnect: (() => void) | null = null;
+    tauriListen('companion:reconnect', () => {
+      reconnectRef.current();
+    }).then((fn) => { unlistenReconnect = fn; });
+    tauriListen('companion:disconnect', () => {
+      disconnectRef.current();
+    }).then((fn) => { unlistenDisconnect = fn; });
+    return () => { unlistenReconnect?.(); unlistenDisconnect?.(); };
+  }, [reconnectRef, disconnectRef]);
 
   // Global macro hotkey listener
   const macrosRef = useLatestRef(macrosCRUD.items);
@@ -1707,6 +1783,7 @@ function AppMain() {
       soundAlerts: chatSoundAlerts,
       newestFirst: chatNewestFirst,
       hideOwnMessages: chatHideOwnMessages,
+      outgoingMessages,
       toggleFilter: toggleChatFilter,
       setAllFilters: setAllChatFilters,
       toggleSoundAlert: toggleChatSoundAlert,
@@ -1715,6 +1792,9 @@ function AppMain() {
       muteSender,
       unmuteSender,
       updateSender,
+      deleteMessage,
+      addOutgoingMessage,
+      deleteOutgoingMessage,
     }),
     [
       chatMessages,
@@ -1723,6 +1803,7 @@ function AppMain() {
       chatSoundAlerts,
       chatNewestFirst,
       chatHideOwnMessages,
+      outgoingMessages,
       toggleChatFilter,
       setAllChatFilters,
       toggleChatSoundAlert,
@@ -1731,6 +1812,9 @@ function AppMain() {
       muteSender,
       unmuteSender,
       updateSender,
+      deleteMessage,
+      addOutgoingMessage,
+      deleteOutgoingMessage,
     ]
   );
 
@@ -2079,6 +2163,8 @@ function AppMain() {
                                               ref={inputRef}
                                               onSend={handleSend}
                                               onReconnect={reconnect}
+                                              promptChar={display.promptChar}
+                                              promptColor={display.promptColor}
                                             />
                                           </div>
                                         </div>
@@ -2205,7 +2291,7 @@ function AppMain() {
                                           <WhoPanel mode="slideout" />
                                         </SlideOut>
                                         {activePanel === 'logs' && (
-                                          <LogViewerPanel onClose={closePanel} />
+                                          <LogViewerModal onClose={closePanel} />
                                         )}
                                         <SlideOut panel="help">
                                           <HelpPanel onClose={closePanel} />
@@ -2213,6 +2299,9 @@ function AppMain() {
                                       </div>
                                     </div>
                                     <SpotlightOverlay />
+                                    {showCompanionQR && (
+                                      <CompanionQRDialog onClose={() => setShowCompanionQR(false)} />
+                                    )}
                                   </SpotlightProvider>
                                 </PanelProvider>
                                 </WhoTitleProvider>

@@ -1,5 +1,5 @@
 import { createContext, useContext } from 'react';
-import type { ChatMessage, ChatType, ChatFilters } from '../types/chat';
+import type { ChatMessage, ChatType, ChatFilters, OutgoingMessage } from '../types/chat';
 
 export interface ChatState {
   messages: ChatMessage[];
@@ -8,6 +8,7 @@ export interface ChatState {
   soundAlerts: ChatFilters;
   newestFirst: boolean;
   hideOwnMessages: boolean;
+  outgoingMessages: OutgoingMessage[];
   toggleFilter: (type: ChatType) => void;
   setAllFilters: (filters: ChatFilters) => void;
   toggleSoundAlert: (type: ChatType) => void;
@@ -16,6 +17,9 @@ export interface ChatState {
   muteSender: (name: string) => void;
   unmuteSender: (name: string) => void;
   updateSender: (signature: string, playerName: string) => void;
+  deleteMessage: (id: number) => void;
+  addOutgoingMessage: (command: string) => void;
+  deleteOutgoingMessage: (id: number) => void;
 }
 
 const ChatContext = createContext<ChatState | null>(null);

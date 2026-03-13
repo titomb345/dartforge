@@ -111,7 +111,8 @@ export function useMudConnection(
   onCharacterName?: (name: string) => void,
   outputFilterRef?: React.RefObject<OutputFilter | null>,
   onLogin?: () => void,
-  autoLoginRef?: React.RefObject<AutoLoginConfig | null>
+  autoLoginRef?: React.RefObject<AutoLoginConfig | null>,
+  onFilteredOutput?: (data: string) => void,
 ) {
   const [connected, setConnected] = useState(false);
   const [statusMessage, setStatusMessage] = useState('Connecting...');
@@ -133,6 +134,8 @@ export function useMudConnection(
   onCharacterNameRef.current = onCharacterName;
   const onLoginRef = useRef(onLogin);
   onLoginRef.current = onLogin;
+  const onFilteredOutputRef = useRef(onFilteredOutput);
+  onFilteredOutputRef.current = onFilteredOutput;
 
   // Banner filtering state
   const filteringBannerRef = useRef(false);
@@ -208,6 +211,9 @@ export function useMudConnection(
               ? outputFilterRef.current.filter(data)
               : data;
             if (filtered) {
+              // Broadcast post-gag output to companion clients
+              onFilteredOutputRef.current?.(filtered);
+
               let out = debugModeRef.current ? annotateAnsi(filtered) : filtered;
 
               const shouldStrip = outputFilterRef?.current?.stripPrompts ?? true;

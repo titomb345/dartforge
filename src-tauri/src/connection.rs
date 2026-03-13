@@ -7,6 +7,7 @@ use tokio::sync::mpsc;
 use tokio::time::{timeout, Duration};
 
 use crate::ansi;
+use crate::companion::CompanionMessage;
 use crate::events::{ConnectionStatusPayload, MudOutputPayload, CONNECTION_STATUS_EVENT, MUD_OUTPUT_EVENT};
 
 const MUD_HOST: &str = "dartmud.com";
@@ -16,7 +17,11 @@ const CONNECT_TIMEOUT: Duration = Duration::from_secs(10);
 const MAX_RETRIES: u32 = 3;
 const RETRY_DELAY: Duration = Duration::from_secs(2);
 
-pub async fn connect(app: AppHandle, mut cmd_rx: mpsc::Receiver<String>) {
+pub async fn connect(
+    app: AppHandle,
+    mut cmd_rx: mpsc::Receiver<String>,
+    broadcast_tx: tokio::sync::broadcast::Sender<CompanionMessage>,
+) {
     let addr = format!("{MUD_HOST}:{MUD_PORT}");
     info!("Connecting to {addr}...");
 
@@ -27,6 +32,10 @@ pub async fn connect(app: AppHandle, mut cmd_rx: mpsc::Receiver<String>) {
             message: format!("Connecting to {addr}..."),
         },
     );
+    let _ = broadcast_tx.send(CompanionMessage::ConnectionStatus {
+        connected: false,
+        message: format!("Connecting to {addr}..."),
+    });
 
     // Resolve DNS on a blocking thread to get the actual IP address
     let resolved = tokio::task::spawn_blocking(move || {
@@ -37,24 +46,16 @@ pub async fn connect(app: AppHandle, mut cmd_rx: mpsc::Receiver<String>) {
         Ok(Ok(iter)) => iter.collect(),
         Ok(Err(e)) => {
             error!("DNS resolution failed for {addr}: {e}");
-            let _ = app.emit(
-                CONNECTION_STATUS_EVENT,
-                ConnectionStatusPayload {
-                    connected: false,
-                    message: format!("DNS resolution failed: {e}"),
-                },
-            );
+            let msg = format!("DNS resolution failed: {e}");
+            let _ = app.emit(CONNECTION_STATUS_EVENT, ConnectionStatusPayload { connected: false, message: msg.clone() });
+            let _ = broadcast_tx.send(CompanionMessage::ConnectionStatus { connected: false, message: msg });
             return;
         }
         Err(e) => {
             error!("DNS resolution task failed: {e}");
-            let _ = app.emit(
-                CONNECTION_STATUS_EVENT,
-                ConnectionStatusPayload {
-                    connected: false,
-                    message: format!("DNS resolution failed: {e}"),
-                },
-            );
+            let msg = format!("DNS resolution failed: {e}");
+            let _ = app.emit(CONNECTION_STATUS_EVENT, ConnectionStatusPayload { connected: false, message: msg.clone() });
+            let _ = broadcast_tx.send(CompanionMessage::ConnectionStatus { connected: false, message: msg });
             return;
         }
     };
@@ -84,37 +85,25 @@ pub async fn connect(app: AppHandle, mut cmd_rx: mpsc::Receiver<String>) {
         }
         if attempt < MAX_RETRIES {
             info!("Retrying in {}s...", RETRY_DELAY.as_secs());
-            let _ = app.emit(
-                CONNECTION_STATUS_EVENT,
-                ConnectionStatusPayload {
-                    connected: false,
-                    message: format!("Connection failed, retrying ({attempt}/{MAX_RETRIES})..."),
-                },
-            );
+            let msg = format!("Connection failed, retrying ({attempt}/{MAX_RETRIES})...");
+            let _ = app.emit(CONNECTION_STATUS_EVENT, ConnectionStatusPayload { connected: false, message: msg.clone() });
+            let _ = broadcast_tx.send(CompanionMessage::ConnectionStatus { connected: false, message: msg });
             tokio::time::sleep(RETRY_DELAY).await;
         }
     }
 
     let stream = match stream {
         Some(s) => {
-            let _ = app.emit(
-                CONNECTION_STATUS_EVENT,
-                ConnectionStatusPayload {
-                    connected: true,
-                    message: format!("Connected to {addr}"),
-                },
-            );
+            let msg = format!("Connected to {addr}");
+            let _ = app.emit(CONNECTION_STATUS_EVENT, ConnectionStatusPayload { connected: true, message: msg.clone() });
+            let _ = broadcast_tx.send(CompanionMessage::ConnectionStatus { connected: true, message: msg });
             s
         }
         None => {
             error!("Failed to connect to {addr} after {MAX_RETRIES} attempts");
-            let _ = app.emit(
-                CONNECTION_STATUS_EVENT,
-                ConnectionStatusPayload {
-                    connected: false,
-                    message: format!("Failed to connect after {MAX_RETRIES} attempts"),
-                },
-            );
+            let msg = format!("Failed to connect after {MAX_RETRIES} attempts");
+            let _ = app.emit(CONNECTION_STATUS_EVENT, ConnectionStatusPayload { connected: false, message: msg.clone() });
+            let _ = broadcast_tx.send(CompanionMessage::ConnectionStatus { connected: false, message: msg });
             return;
         }
     };
@@ -178,7 +167,7 @@ pub async fn connect(app: AppHandle, mut cmd_rx: mpsc::Receiver<String>) {
                     }
                 }
 
-                // Emit display text to frontend
+                // Emit display text to frontend (companion gets post-gag output from frontend)
                 if !processed.display.is_empty() {
                     let _ = app.emit(MUD_OUTPUT_EVENT, MudOutputPayload { data: processed.display, ga: processed.ga });
                 }
@@ -200,4 +189,8 @@ pub async fn connect(app: AppHandle, mut cmd_rx: mpsc::Receiver<String>) {
             message: "Disconnected".to_string(),
         },
     );
+    let _ = broadcast_tx.send(CompanionMessage::ConnectionStatus {
+        connected: false,
+        message: "Disconnected".to_string(),
+    });
 }

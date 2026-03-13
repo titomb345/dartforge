@@ -2,7 +2,7 @@ import { useState, useCallback, useEffect, useRef } from 'react';
 import { useDataStore } from '../contexts/DataStoreContext';
 import { alertUser } from '../lib/platform';
 import { setChatIdCounter } from '../lib/chatPatterns';
-import type { ChatMessage, ChatType, ChatFilters } from '../types/chat';
+import type { ChatMessage, ChatType, ChatFilters, OutgoingMessage } from '../types/chat';
 import type { SoundLibrary } from './useSoundLibrary';
 
 const SETTINGS_FILE = 'settings.json';
@@ -46,6 +46,27 @@ function deserializeMessages(
     .filter((m): m is ChatMessage => m != null);
 }
 
+let outgoingIdCounter = 1;
+
+function serializeOutgoing(
+  msgs: OutgoingMessage[]
+): Array<Omit<OutgoingMessage, 'timestamp'> & { timestamp: string }> {
+  return msgs.map((m) => ({ ...m, timestamp: m.timestamp.toISOString() }));
+}
+
+function deserializeOutgoing(
+  raw: Array<Record<string, unknown>> | null
+): OutgoingMessage[] {
+  if (!raw || !Array.isArray(raw)) return [];
+  return raw
+    .map((r) => {
+      const ts = typeof r.timestamp === 'string' ? new Date(r.timestamp) : new Date();
+      if (isNaN(ts.getTime())) return null;
+      return { id: r.id as number, command: r.command as string, timestamp: ts };
+    })
+    .filter((m): m is OutgoingMessage => m != null);
+}
+
 export function useChatMessages(
   maxMessages = MAX_MESSAGES,
   notificationsRef?: React.RefObject<ChatFilters | null>,
@@ -59,8 +80,10 @@ export function useChatMessages(
   const [soundAlerts, setSoundAlerts] = useState<ChatFilters>({ ...DEFAULT_SOUND_ALERTS });
   const [newestFirst, setNewestFirst] = useState(true);
   const [hideOwnMessages, setHideOwnMessages] = useState(true);
+  const [outgoingMessages, setOutgoingMessages] = useState<OutgoingMessage[]>([]);
   const loaded = useRef(false);
   const historyLoaded = useRef(false);
+  const outgoingLoaded = useRef(false);
 
   // Refs for current values (used in handleChatMessage callback)
   const mutedSendersRef = useRef(mutedSenders);
@@ -113,6 +136,25 @@ export function useChatMessages(
         console.error('Failed to load chat history:', e);
       }
       historyLoaded.current = true;
+
+      // Load outgoing messages
+      try {
+        const rawOut = await dataStore.get<Array<Record<string, unknown>>>(
+          CHAT_HISTORY_FILE,
+          'outgoing'
+        );
+        const restored = deserializeOutgoing(rawOut);
+        if (restored.length > 0) {
+          const trimmed =
+            restored.length > maxMessages ? restored.slice(-maxMessages) : restored;
+          const maxId = trimmed.reduce((max, m) => Math.max(max, m.id), 0);
+          outgoingIdCounter = maxId + 1;
+          setOutgoingMessages(trimmed);
+        }
+      } catch (e) {
+        console.error('Failed to load outgoing history:', e);
+      }
+      outgoingLoaded.current = true;
     })();
   }, [dataStore.ready]);
 
@@ -123,6 +165,14 @@ export function useChatMessages(
       .set(CHAT_HISTORY_FILE, 'messages', serializeMessages(messages))
       .catch((e) => console.error('Failed to persist chat history:', e));
   }, [messages]);
+
+  // Persist outgoing messages when they change
+  useEffect(() => {
+    if (!outgoingLoaded.current) return;
+    dataStore
+      .set(CHAT_HISTORY_FILE, 'outgoing', serializeOutgoing(outgoingMessages))
+      .catch((e) => console.error('Failed to persist outgoing history:', e));
+  }, [outgoingMessages]);
 
   // Persist on change
   useEffect(() => {
@@ -209,6 +259,26 @@ export function useChatMessages(
     setMutedSenders((prev) => prev.filter((s) => s.toLowerCase() !== name.toLowerCase()));
   }, []);
 
+  const deleteMessage = useCallback((id: number) => {
+    setMessages((prev) => prev.filter((m) => m.id !== id));
+  }, []);
+
+  const addOutgoingMessage = useCallback((command: string) => {
+    const msg: OutgoingMessage = {
+      id: outgoingIdCounter++,
+      command,
+      timestamp: new Date(),
+    };
+    setOutgoingMessages((prev) => {
+      const next = [...prev, msg];
+      return next.length > maxMessages ? next.slice(-maxMessages) : next;
+    });
+  }, []);
+
+  const deleteOutgoingMessage = useCallback((id: number) => {
+    setOutgoingMessages((prev) => prev.filter((m) => m.id !== id));
+  }, []);
+
   const clearMessages = useCallback(() => {
     setMessages([]);
   }, []);
@@ -240,6 +310,7 @@ export function useChatMessages(
     soundAlerts,
     newestFirst,
     hideOwnMessages,
+    outgoingMessages,
     handleChatMessage,
     toggleFilter,
     setAllFilters,
@@ -249,6 +320,9 @@ export function useChatMessages(
     muteSender,
     unmuteSender,
     clearMessages,
+    deleteMessage,
+    addOutgoingMessage,
+    deleteOutgoingMessage,
     updateSender,
   };
 }

@@ -158,6 +158,11 @@ export const HELP_CATEGORIES: HelpCategory[] = [
           'Define shared JavaScript functions and constants available to all script-mode triggers and aliases. Open via the toolbar Scripts button (</>). Changes apply on next trigger/alias execution.',
         helpId: 'toolbar-scripts',
       },
+      {
+        title: 'Mobile Companion',
+        description:
+          'Enable in Settings > Mobile Companion to start a local web server. Open the displayed URL or scan the QR code on your phone (same WiFi network) to see MUD output with colors and send commands remotely.',
+      },
     ],
   },
   {
@@ -333,6 +338,12 @@ export const HELP_CATEGORIES: HelpCategory[] = [
         description:
           'Bind any key combo (Ctrl+1-0, Alt+1-0, F1-F12, etc.) to commands or scripts via the Macros panel. Macros fire from anywhere in the app.',
         helpId: 'toolbar-macros',
+      },
+      {
+        title: 'Companion QR Code',
+        description:
+          'Show a quick dialog with the Mobile Companion QR code and URL. Press again to dismiss.',
+        kbd: ['Ctrl', 'Q'],
       },
     ],
   },

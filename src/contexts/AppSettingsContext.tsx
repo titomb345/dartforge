@@ -125,6 +125,11 @@ export interface AppSettingsState {
   collapsedAliasGroups: string[];
   updateCollapsedTriggerGroups: (v: string[]) => void;
   updateCollapsedAliasGroups: (v: string[]) => void;
+  // Mobile companion
+  companionEnabled: boolean;
+  companionPort: number;
+  updateCompanionEnabled: (v: boolean) => void;
+  updateCompanionPort: (v: number) => void;
   // Character switching (provided by App.tsx)
   onSwitchCharacter?: () => void;
   connected?: boolean;

@@ -158,6 +158,10 @@ export function useAppSettings() {
   // Show skill counts on readouts
   const [showSkillCounts, setShowSkillCounts] = useState(false);
 
+  // Mobile companion
+  const [companionEnabled, setCompanionEnabled] = useState(false);
+  const [companionPort, setCompanionPort] = useState(3333);
+
   // Collapsed groups in trigger/alias panels
   const [collapsedTriggerGroups, setCollapsedTriggerGroups] = useState<string[]>(['Gags']);
   const [collapsedAliasGroups, setCollapsedAliasGroups] = useState<string[]>([]);
@@ -241,6 +245,8 @@ export function useAppSettings() {
       await load('babelEnabled', setBabelEnabled);
       await load('selectOnSend', setSelectOnSend);
       await load('showSkillCounts', setShowSkillCounts);
+      await load('companionEnabled', setCompanionEnabled);
+      await load('companionPort', setCompanionPort);
       await load('postSyncEnabled', setPostSyncEnabled);
       await load('autoLoginEnabled', setAutoLoginEnabled);
       await load('alignmentTrackingEnabled', setAlignmentTrackingEnabled);
@@ -411,6 +417,9 @@ export function useAppSettings() {
       updateShowSkillCounts: make(setShowSkillCounts, 'showSkillCounts'),
       updateCollapsedTriggerGroups: make(setCollapsedTriggerGroups, 'collapsedTriggerGroups'),
       updateCollapsedAliasGroups: make(setCollapsedAliasGroups, 'collapsedAliasGroups'),
+      // Mobile companion
+      updateCompanionEnabled: make(setCompanionEnabled, 'companionEnabled'),
+      updateCompanionPort: make(setCompanionPort, 'companionPort'),
     };
   }, [persist]);
 
@@ -566,6 +575,9 @@ export function useAppSettings() {
     // Collapsed panel groups
     collapsedTriggerGroups,
     collapsedAliasGroups,
+    // Mobile companion
+    companionEnabled,
+    companionPort,
     // Special updaters (have extra logic beyond simple set+persist)
     updateAlignmentTrackingEnabled,
     updateAutoLoginCharacters,
@@ -592,6 +604,7 @@ export function useAppSettings() {
     casterWeightItem, casterWeightContainer, casterWeightAdjustUp, casterWeightAdjustDown,
     autoConcAction, commandSeparator, selectOnSend, showSkillCounts,
     collapsedTriggerGroups, collapsedAliasGroups,
+    companionEnabled, companionPort,
     updateAlignmentTrackingEnabled, updateAutoLoginCharacters, updaters,
   ]);
 }

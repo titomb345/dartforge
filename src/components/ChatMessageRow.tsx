@@ -1,5 +1,6 @@
 import type { ChatMessage } from '../types/chat';
 import { VolumeOffIcon } from './icons';
+import { ConfirmDeleteButton } from './ConfirmDeleteButton';
 import { useAppSettingsContext } from '../contexts/AppSettingsContext';
 
 /** Color-coded badges for non-common languages */
@@ -100,12 +101,14 @@ export function ChatMessageRow({
   fontSize,
   onMute,
   onIdentify,
+  onDelete,
 }: {
   msg: ChatMessage;
   now: number;
   fontSize?: number;
   onMute?: (sender: string) => void;
   onIdentify?: (msgId: number) => void;
+  onDelete?: (msgId: number) => void;
 }) {
   const { timestampFormat } = useAppSettingsContext();
   const badge = TYPE_BADGES[msg.type];
@@ -173,9 +176,12 @@ export function ChatMessageRow({
         {msg.message}
       </div>
 
-      {/* Mute button — hover overlay for known senders */}
-      {!msg.isOwn && knownSender && onMute && (
-        <div className="absolute right-1 top-0.5 hidden group-hover:flex items-center">
+      {/* Hover action buttons */}
+      <div className="absolute right-1 top-0.5 hidden group-hover:flex items-center gap-1">
+        {onDelete && (
+          <ConfirmDeleteButton onDelete={() => onDelete(msg.id)} size={9} title="Delete message" />
+        )}
+        {!msg.isOwn && knownSender && onMute && (
           <button
             onClick={() => onMute(msg.sender)}
             className="cursor-pointer opacity-60 hover:opacity-100"
@@ -183,8 +189,8 @@ export function ChatMessageRow({
           >
             <VolumeOffIcon size={9} />
           </button>
-        </div>
-      )}
+        )}
+      </div>
     </div>
   );
 }

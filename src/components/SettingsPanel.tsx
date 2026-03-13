@@ -15,6 +15,7 @@ import {
   CounterIcon,
   UserIcon,
   PlusIcon,
+  SmartphoneIcon,
 } from './icons';
 import type { CustomSoundEntry } from '../hooks/useSoundLibrary';
 import { PanelHeader } from './PanelHeader';
@@ -687,6 +688,14 @@ export function SettingsPanel({ onClose }: { onClose: () => void }) {
             Flashes the taskbar icon when a message arrives while DartForge is unfocused.
           </div>
         </SettingsSection>
+
+        {/* Mobile Companion — Tauri only */}
+        {isTauri && (
+          <CompanionSection
+            open={openSection === 'companion'}
+            onToggle={() => toggle('companion')}
+          />
+        )}
 
         {/* Data Location — Tauri only */}
         {isTauri && (
@@ -1439,6 +1448,117 @@ function BackupsSection({ open, onToggle }: { open: boolean; onToggle: () => voi
               </div>
             </div>
           ))}
+        </div>
+      )}
+    </SettingsSection>
+  );
+}
+
+/* ── Mobile Companion Section ──────────────────────────────── */
+
+function CompanionSection({ open, onToggle }: { open: boolean; onToggle: () => void }) {
+  const {
+    companionEnabled,
+    companionPort,
+    updateCompanionEnabled,
+    updateCompanionPort,
+  } = useAppSettingsContext();
+
+  const [companionInfo, setCompanionInfo] = useState<{
+    running: boolean;
+    url: string;
+    qr_svg: string;
+    local_ip: string;
+  } | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  // Start/stop companion server when toggle changes
+  useEffect(() => {
+    if (!invoke) return;
+    let cancelled = false;
+
+    async function syncServer() {
+      try {
+        setError(null);
+        if (companionEnabled) {
+          const info = (await invoke!('start_companion', { port: companionPort })) as {
+            running: boolean;
+            url: string;
+            qr_svg: string;
+            local_ip: string;
+          };
+          if (!cancelled) setCompanionInfo(info);
+        } else {
+          await invoke!('stop_companion');
+          if (!cancelled) setCompanionInfo(null);
+        }
+      } catch (e) {
+        if (!cancelled) {
+          setError(String(e));
+          setCompanionInfo(null);
+        }
+      }
+    }
+
+    syncServer();
+    return () => { cancelled = true; };
+  }, [companionEnabled, companionPort]);
+
+  return (
+    <SettingsSection
+      icon={<SmartphoneIcon size={13} />}
+      title="Mobile Companion"
+      accent="#8be9fd"
+      open={open}
+      onToggle={onToggle}
+    >
+      <ToggleRow
+        label="Enable companion server"
+        checked={companionEnabled}
+        onChange={updateCompanionEnabled}
+        accent="#8be9fd"
+      />
+      <NumberRow
+        label="Port"
+        value={companionPort}
+        onChange={updateCompanionPort}
+        accent="cyan"
+        min={1024}
+        max={65535}
+        unit=""
+        width="w-[72px]"
+        dimmed={!companionEnabled}
+      />
+      <div className="text-[9px] text-text-dim font-mono leading-relaxed mt-1">
+        Opens a web server on your local network. Visit the URL below on your phone to see MUD output
+        and send commands. Only works on the same WiFi network.
+      </div>
+
+      {error && (
+        <div className="text-[10px] font-mono text-red-400 mt-1">
+          {error}
+        </div>
+      )}
+
+      {companionInfo?.running && (
+        <div className="mt-2 flex flex-col items-center gap-2">
+          <a
+            href={companionInfo.url}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-[12px] font-mono text-[#8be9fd] underline"
+          >
+            {companionInfo.url}
+          </a>
+          {companionInfo.qr_svg && (
+            <div
+              className="mt-1"
+              dangerouslySetInnerHTML={{ __html: companionInfo.qr_svg }}
+            />
+          )}
+          <div className="text-[9px] text-text-dim font-mono">
+            Scan with your phone camera to connect
+          </div>
         </div>
       )}
     </SettingsSection>

@@ -13,7 +13,7 @@ import type { DataStore } from '../contexts/DataStoreContext';
  * Prior to this collapse, each feature had its own version bump (up to v17).
  * normalizeVersion() maps those old version numbers to the collapsed scheme.
  */
-export const CURRENT_VERSION = 5;
+export const CURRENT_VERSION = 6;
 
 /** Raw store contents — all keys are optional since older stores may lack them. */
 export type StoreData = Record<string, unknown>;
@@ -270,6 +270,15 @@ const MIGRATIONS: MigrationFn[] = [
 
     // Custom sound library
     if (!('customSounds' in data)) data.customSounds = [];
+
+    return data;
+  },
+
+  // ── v5 → v6: v1.7 release ──────────────────────────────────────────
+  (data) => {
+    // Mobile companion server
+    if (!('companionEnabled' in data)) data.companionEnabled = false;
+    if (!('companionPort' in data)) data.companionPort = 3333;
 
     return data;
   },
