@@ -9,7 +9,7 @@ The `[Unreleased]` header controls automatic version bumping on merge:
 - `[Unreleased-minor]` → 0.1.0 → 0.2.0
 - `[Unreleased-major]` → 0.1.0 → 1.0.0
 
-## [Unreleased-minor]
+## [1.7.0] - 2026-03-13
 
 ### Added
 - Chat panel Incoming/Outgoing tabs — Outgoing tab captures sent chat commands (say, tell, shout, ooc, sz) as a timestamped log with search and day separators
