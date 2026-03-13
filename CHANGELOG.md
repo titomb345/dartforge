@@ -9,7 +9,7 @@ The `[Unreleased]` header controls automatic version bumping on merge:
 - `[Unreleased-minor]` → 0.1.0 → 0.2.0
 - `[Unreleased-major]` → 0.1.0 → 1.0.0
 
-## [Unreleased-patch]
+## [1.7.2] - 2026-03-13
 
 ### Fixed
 - App crash on startup caused by spawning a background task outside the async runtime during initialization
