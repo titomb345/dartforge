@@ -67,6 +67,7 @@ impl ReplayBuffer {
 struct AxumState {
     broadcast_tx: broadcast::Sender<CompanionMessage>,
     replay: Arc<Mutex<ReplayBuffer>>,
+    last_status: Arc<Mutex<Option<(bool, String)>>>,
     app_handle: AppHandle,
 }
 
@@ -74,15 +75,31 @@ struct AxumState {
 pub struct CompanionState {
     pub broadcast_tx: broadcast::Sender<CompanionMessage>,
     pub replay: Arc<Mutex<ReplayBuffer>>,
+    pub last_status: Arc<Mutex<Option<(bool, String)>>>,
     server_handle: Mutex<Option<tokio::task::JoinHandle<()>>>,
     running_port: Mutex<Option<u16>>,
 }
 
 impl CompanionState {
     pub fn new(broadcast_tx: broadcast::Sender<CompanionMessage>) -> Self {
+        let last_status = Arc::new(Mutex::new(None));
+
+        // Background task: track latest connection status from broadcast channel
+        let status_rx = broadcast_tx.subscribe();
+        let status_ref = last_status.clone();
+        tokio::spawn(async move {
+            let mut rx = status_rx;
+            while let Ok(msg) = rx.recv().await {
+                if let CompanionMessage::ConnectionStatus { connected, message } = msg {
+                    *status_ref.lock().await = Some((connected, message));
+                }
+            }
+        });
+
         Self {
             broadcast_tx,
             replay: Arc::new(Mutex::new(ReplayBuffer::new())),
+            last_status,
             server_handle: Mutex::new(None),
             running_port: Mutex::new(None),
         }
@@ -154,6 +171,7 @@ pub async fn start_companion(
     let axum_state = Arc::new(AxumState {
         broadcast_tx: state.broadcast_tx.clone(),
         replay: state.replay.clone(),
+        last_status: state.last_status.clone(),
         app_handle: app,
     });
 
@@ -254,13 +272,28 @@ async fn handle_ws(socket: WebSocket, state: Arc<AxumState>) {
     // messages that arrive between the snapshot and the subscribe.
     let mut broadcast_rx = state.broadcast_tx.subscribe();
 
-    // Replay recent output so the client has scrollback context
+    // Replay recent output and current status so the client has context
     {
         let buffer = state.replay.lock().await;
         for chunk in buffer.snapshot() {
             let json = serde_json::json!({
                 "type": "output",
                 "data": chunk
+            })
+            .to_string();
+            if ws_tx.send(Message::Text(json)).await.is_err() {
+                return;
+            }
+        }
+    }
+    // Send current connection status so buttons show correctly on load
+    {
+        let status = state.last_status.lock().await;
+        if let Some((connected, ref message)) = *status {
+            let json = serde_json::json!({
+                "type": "status",
+                "connected": connected,
+                "message": message
             })
             .to_string();
             if ws_tx.send(Message::Text(json)).await.is_err() {
