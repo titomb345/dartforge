@@ -53,6 +53,8 @@ function migrateCounter(c: ImproveCounter & Record<string, unknown>): ImproveCou
     lastResumedAt,
     periodStartAt,
     impsInCurrentPeriod: c.impsInCurrentPeriod,
+    archived: c.archived ?? false,
+    order: c.order,
   };
 }
 
