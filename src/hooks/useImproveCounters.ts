@@ -272,6 +272,51 @@ export function useImproveCounters() {
     );
   }, []);
 
+  const archiveCounter = useCallback(
+    (id: string) => {
+      // Stop if running/paused before archiving
+      const now = Date.now();
+      setCounters((prev) =>
+        prev.map((c) => {
+          if (c.id !== id) return c;
+          const elapsed = c.status === 'running' && c.lastResumedAt ? now - c.lastResumedAt : 0;
+          return {
+            ...c,
+            archived: true,
+            status: 'stopped' as CounterStatus,
+            accumulatedMs: c.accumulatedMs + elapsed,
+            lastResumedAt: null,
+          };
+        })
+      );
+      // Switch active to another non-archived counter if needed
+      setActiveCounterId((prevActive) => {
+        if (prevActive === id) {
+          const remaining = counters.filter((c) => c.id !== id && !c.archived);
+          return remaining[0]?.id ?? null;
+        }
+        return prevActive;
+      });
+    },
+    [counters]
+  );
+
+  const unarchiveCounter = useCallback((id: string) => {
+    setCounters((prev) =>
+      prev.map((c) => (c.id === id ? { ...c, archived: false } : c))
+    );
+    setActiveCounterId(id);
+  }, []);
+
+  const reorderCounters = useCallback((ids: string[]) => {
+    setCounters((prev) =>
+      prev.map((c) => {
+        const idx = ids.indexOf(c.id);
+        return idx >= 0 ? { ...c, order: idx } : c;
+      })
+    );
+  }, []);
+
   // --- Match handler (called from App.tsx onOutputChunk) ---
   const handleCounterMatch = useCallback(
     (match: SkillMatchResult) => {
@@ -419,6 +464,9 @@ export function useImproveCounters() {
     resumeCounter,
     stopCounter,
     clearCounter,
+    archiveCounter,
+    unarchiveCounter,
+    reorderCounters,
     handleCounterMatch,
     setPeriodLength,
     getElapsedMs,

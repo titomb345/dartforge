@@ -88,6 +88,11 @@ export const HELP_CATEGORIES: HelpCategory[] = [
           'When the window is too small to fit pinned panels and the terminal, panels automatically collapse into a narrow icon strip. Click an icon to open that panel as an overlay. Your pinned layout is preserved — panels restore to full size when the window grows.',
       },
       {
+        title: 'Panel Font Size',
+        description:
+          'Every panel has a font size control (- / +) in its header. Most panels share a global font size (adjustable from Settings > Display). Chat, Who, and Allocations can override the global with their own size — a ↺ reset button appears when overriding.',
+      },
+      {
         title: 'Session Logs',
         description:
           'Full-screen log viewer for browsing past sessions. Select a session from the sidebar, search across all logs with text or regex, and filter by your commands vs game output. Your typed commands are logged with a >> prefix for easy identification. Delete old sessions you no longer need.',
@@ -195,6 +200,13 @@ export const HELP_CATEGORIES: HelpCategory[] = [
         description:
           'Drag and drop status readouts in the bottom bar to rearrange them in any order you prefer. Your custom order is saved automatically.',
         helpId: 'status-bar',
+        interaction: 'drag',
+      },
+      {
+        title: 'Reorder Counter Pills',
+        description:
+          'Drag and drop counter pills in the Counters panel to rearrange their display order.',
+        helpId: 'toolbar-counters',
         interaction: 'drag',
       },
       {
@@ -553,7 +565,7 @@ export const HELP_CATEGORIES: HelpCategory[] = [
       {
         title: 'Improve Counters',
         description:
-          'Create named counters to track improve rates over time. Shows per-minute, per-period, and per-hour rates. Use Numpad * to quick-toggle.',
+          'Create named counters to track improve rates over time. Shows per-minute, per-period, and per-hour rates. Use Numpad * to quick-toggle. Drag counter pills to reorder them. Archive old counters to keep their stats for later review.',
         helpId: 'toolbar-counters',
       },
       {

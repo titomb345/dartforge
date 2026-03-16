@@ -9,6 +9,16 @@ The `[Unreleased]` header controls automatic version bumping on merge:
 - `[Unreleased-minor]` → 0.1.0 → 0.2.0
 - `[Unreleased-major]` → 0.1.0 → 1.0.0
 
+## [Unreleased-minor]
+
+### Added
+- Global panel font size setting — a single control that sets the default font size for all panels, configurable from Settings > Display or from any panel header. Chat, Who, and Allocations panels support per-panel overrides with a clear-override button (only visible when the panel size differs from global)
+- Counter archiving — archive counters to a collapsible dropdown; archived counters preserve all stats and can be restored or deleted, with actions always visible
+- Counter pill reordering — drag and drop counter pills to rearrange their display order
+
+### Changed
+- Mobile Companion redesign — new dark terminal aesthetic with glowing accents, d-pad style directional navigation grid with Up/Down, collapsible quick-bar with persisted state, send arrow button, empty state with connecting animation, PWA meta tags, safe-area inset support, and landscape/large-phone responsive tweaks
+
 ## [1.7.3] - 2026-03-13
 
 ### Fixed

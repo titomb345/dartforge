@@ -13,6 +13,7 @@ import {
 } from '../types/alloc';
 import { calcNull, calcArcane } from '../lib/allocPatterns';
 import { PanelHeader } from './PanelHeader';
+import { FontSizeControl } from './FontSizeControl';
 import {
   ChevronLeftIcon,
   ChevronRightSmallIcon,
@@ -144,7 +145,7 @@ function InlineField({
             : 'text-text-dim hover:text-text-label italic',
           className
         )}
-        title="Click to edit"
+        title={value || placeholder}
       >
         {value || placeholder}
       </button>
@@ -1036,7 +1037,8 @@ export function AllocPanel({ mode = 'slideout' }: AllocPanelProps) {
   const isPinned = mode === 'pinned';
   const { view, setView, allocTab, setAllocTab, magicView, setMagicView } =
     useAllocContext();
-  const { connected } = useAppSettingsContext();
+  const { connected, panelFontSize, allocFontSize, updateAllocFontSize } = useAppSettingsContext();
+  const effectiveAllocFontSize = allocFontSize ?? panelFontSize;
 
   return (
     <div
@@ -1045,8 +1047,16 @@ export function AllocPanel({ mode = 'slideout' }: AllocPanelProps) {
           ? 'h-full flex flex-col overflow-hidden'
           : 'w-[420px] h-full bg-bg-primary border-l border-border-subtle flex flex-col overflow-hidden'
       }
+      style={{ fontSize: effectiveAllocFontSize + 'px' }}
     >
-      <PanelHeader icon={<AllocIcon size={12} />} title="Allocations" panel="alloc" mode={mode} />
+      <PanelHeader icon={<AllocIcon size={12} />} title="Allocations" panel="alloc" mode={mode}>
+        <FontSizeControl
+          value={effectiveAllocFontSize}
+          onChange={updateAllocFontSize}
+          onReset={allocFontSize !== null ? () => updateAllocFontSize(null) : undefined}
+          globalValue={panelFontSize}
+        />
+      </PanelHeader>
 
       {!connected ? (
         <div className="flex items-center justify-center h-full text-[10px] text-text-dim font-mono">

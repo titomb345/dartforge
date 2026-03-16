@@ -90,16 +90,22 @@ export interface AppSettingsState {
   postSyncCommands: string;
   updatePostSyncEnabled: (v: boolean) => void;
   updatePostSyncCommands: (v: string) => void;
+  // Panel font size (global default for all panels)
+  panelFontSize: number;
+  updatePanelFontSize: (v: number) => void;
   // Who list
   whoAutoRefreshEnabled: boolean;
   whoRefreshMinutes: number;
-  whoFontSize: number;
+  whoFontSize: number | null;
   updateWhoAutoRefreshEnabled: (v: boolean) => void;
   updateWhoRefreshMinutes: (v: number) => void;
-  updateWhoFontSize: (v: number) => void;
+  updateWhoFontSize: (v: number | null) => void;
   // Chat font size
-  chatFontSize: number;
-  updateChatFontSize: (v: number) => void;
+  chatFontSize: number | null;
+  updateChatFontSize: (v: number | null) => void;
+  // Alloc font size
+  allocFontSize: number | null;
+  updateAllocFontSize: (v: number | null) => void;
   // Auto-login
   autoLoginEnabled: boolean;
   autoLoginActiveSlot: 0 | 1;

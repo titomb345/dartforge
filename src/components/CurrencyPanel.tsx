@@ -2,6 +2,8 @@ import { useState, useRef, useEffect, useCallback } from 'react';
 import type { PinnablePanelProps } from '../types';
 import { panelRootClass } from '../lib/panelUtils';
 import { PanelHeader } from './PanelHeader';
+import { FontSizeControl } from './FontSizeControl';
+import { useAppSettingsContext } from '../contexts/AppSettingsContext';
 import { CoinIcon } from './icons';
 import {
   ALL_SYSTEMS,
@@ -40,6 +42,7 @@ function BreakdownRow({ breakdown }: { breakdown: CoinBreakdown }) {
 
 export function CurrencyPanel({ mode = 'slideout' }: PinnablePanelProps) {
   const isPinned = mode === 'pinned';
+  const { panelFontSize, updatePanelFontSize } = useAppSettingsContext();
   const [input, setInput] = useState('1 Su');
   const [result, setResult] = useState<{ totalBase: number; breakdowns: CoinBreakdown[] } | null>(
     null
@@ -82,10 +85,12 @@ export function CurrencyPanel({ mode = 'slideout' }: PinnablePanelProps) {
 
   return (
     <div className={panelRootClass(isPinned)}>
-      <PanelHeader icon={<CoinIcon size={12} />} title="Currency Converter" panel="currency" mode={mode} />
+      <PanelHeader icon={<CoinIcon size={12} />} title="Currency Converter" panel="currency" mode={mode}>
+        <FontSizeControl value={panelFontSize} onChange={updatePanelFontSize} />
+      </PanelHeader>
 
       {/* Content */}
-      <div className="flex-1 overflow-auto">
+      <div className="flex-1 overflow-auto" style={{ fontSize: panelFontSize + 'px' }}>
         {/* Freeform input */}
         <div className="px-3 py-2.5">
           <label className="block text-[9px] text-text-dim uppercase tracking-wide mb-1">

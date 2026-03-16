@@ -3,11 +3,15 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-<title>DartForge Companion</title>
+<meta name="theme-color" content="#1e1f29">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<title>DartForge</title>
 <style>
   :root {
     --bg: #282a36;
     --bg-dark: #1e1f29;
+    --bg-input: #21222c;
     --fg: #f8f8f2;
     --fg-dim: #6272a4;
     --cyan: #8be9fd;
@@ -15,8 +19,9 @@
     --red: #ff5555;
     --orange: #ffb86c;
     --purple: #bd93f9;
-    --input-bg: #21222c;
     --border: #44475a;
+    --safe-bottom: env(safe-area-inset-bottom, 0px);
+    --safe-top: env(safe-area-inset-top, 0px);
   }
 
   * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -29,33 +34,54 @@
     font-size: 13px;
     overflow: hidden;
     -webkit-text-size-adjust: none;
+    touch-action: manipulation;
   }
 
   #app {
     display: flex;
     flex-direction: column;
-    height: 100%;
     height: 100dvh;
+    padding-top: var(--safe-top);
+    padding-bottom: var(--safe-bottom);
   }
 
-  /* ── Header ────────────────────────────────────── */
+  /* ── Header ──────────────────────────────────────── */
   #header {
     display: flex;
     align-items: center;
     justify-content: space-between;
-    padding: 8px 12px;
+    padding: 10px 14px;
     background: var(--bg-dark);
     border-bottom: 1px solid var(--border);
     flex-shrink: 0;
   }
 
-  #header .title {
-    font-size: 14px;
+  .brand {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .brand-icon {
+    width: 18px;
+    height: 18px;
+    color: var(--cyan);
+  }
+
+  .brand-name {
+    font-size: 15px;
     font-weight: bold;
     color: var(--cyan);
   }
 
-  #status {
+  #header-right {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  /* ── Status ──────────────────────────────────────── */
+  #status-pill {
     display: flex;
     align-items: center;
     gap: 6px;
@@ -74,85 +100,54 @@
   #status-dot.connected { background: var(--green); }
   #status-dot.ws-only { background: var(--orange); }
 
-  /* ── Output area ───────────────────────────────── */
-  #output {
-    flex: 1;
-    overflow-y: auto;
-    padding: 8px 10px;
-    white-space: pre-wrap;
-    word-wrap: break-word;
-    line-height: 1.4;
-    -webkit-overflow-scrolling: touch;
-  }
-
-  #output::-webkit-scrollbar { width: 6px; }
-  #output::-webkit-scrollbar-track { background: transparent; }
-  #output::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
-
-  /* ── Input area ────────────────────────────────── */
-  #input-bar {
-    display: flex;
-    gap: 8px;
-    padding: 8px 10px;
-    background: var(--bg-dark);
-    border-top: 1px solid var(--border);
-    flex-shrink: 0;
-  }
-
-  #cmd-input {
-    flex: 1;
-    background: var(--input-bg);
-    border: 1px solid var(--border);
-    border-radius: 6px;
-    color: var(--fg);
-    font-family: inherit;
-    font-size: 15px;
-    padding: 10px 12px;
-    outline: none;
-  }
-
-  #cmd-input:focus { border-color: var(--cyan); }
-
-  #send-btn {
-    background: var(--cyan);
-    color: var(--bg);
-    border: none;
-    border-radius: 6px;
-    padding: 10px 16px;
-    font-family: inherit;
-    font-size: 14px;
-    font-weight: bold;
-    cursor: pointer;
-    white-space: nowrap;
-  }
-
-  #send-btn:active { opacity: 0.8; }
-  #send-btn:disabled { opacity: 0.4; cursor: not-allowed; }
-
-  /* ── Connection control buttons ──────────────────── */
-  #conn-controls {
-    display: flex;
-    gap: 6px;
-  }
-
+  /* ── Connection buttons ──────────────────────────── */
   .conn-btn {
     background: var(--border);
     color: var(--fg);
     border: none;
     border-radius: 4px;
-    padding: 4px 10px;
+    padding: 5px 10px;
     font-family: inherit;
     font-size: 11px;
     font-weight: bold;
     cursor: pointer;
-    white-space: nowrap;
+    -webkit-tap-highlight-color: transparent;
+  }
+  .conn-btn:active { opacity: 0.8; }
+  .conn-btn.connect { background: var(--green); color: var(--bg-dark); }
+  .conn-btn.disconnect { background: var(--red); color: var(--bg-dark); }
+
+  /* ── Reconnect banner ────────────────────────────── */
+  #reconnect-banner {
+    display: none;
+    padding: 8px 14px;
+    background: var(--red);
+    color: var(--bg-dark);
+    font-size: 12px;
+    font-weight: bold;
+    text-align: center;
+    cursor: pointer;
+    -webkit-tap-highlight-color: transparent;
+  }
+  #reconnect-banner.visible { display: block; }
+
+  /* ── Output ──────────────────────────────────────── */
+  #output {
+    flex: 1;
+    overflow-y: auto;
+    padding: 10px 12px;
+    white-space: pre-wrap;
+    word-wrap: break-word;
+    line-height: 1.45;
+    -webkit-overflow-scrolling: touch;
   }
 
-  .conn-btn:active { opacity: 0.8; }
-  .conn-btn.connect { background: var(--green); color: var(--bg); }
-  .conn-btn.disconnect { background: var(--red); color: var(--bg); }
+  #output::-webkit-scrollbar { width: 4px; }
+  #output::-webkit-scrollbar-track { background: transparent; }
+  #output::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
 
-  /* ── ANSI color classes (generated by ansi_up or manual) ── */
+  /* ── ANSI colors ─────────────────────────────────── */
+  .ansi-black { color: #44475a; }
   .ansi-bright-black { color: #6272a4; }
   .ansi-red { color: #ff5555; }
   .ansi-green { color: #50fa7b; }
@@ -170,59 +165,226 @@
   .ansi-bright-white { color: #ffffff; }
   .ansi-bold { font-weight: bold; }
 
-  /* ── Reconnect banner ──────────────────────────── */
-  #reconnect-banner {
-    display: none;
-    padding: 6px 12px;
-    background: var(--red);
-    color: var(--bg);
-    font-size: 12px;
-    font-weight: bold;
-    text-align: center;
-    cursor: pointer;
-  }
-
-  #reconnect-banner.visible { display: block; }
-
-  /* Scrollback notice */
+  /* ── Scroll notice ───────────────────────────────── */
   #scroll-notice {
     display: none;
     position: fixed;
-    bottom: 60px;
-    right: 12px;
+    bottom: 130px;
+    left: 50%;
+    transform: translateX(-50%);
     background: var(--purple);
-    color: var(--bg);
+    color: var(--bg-dark);
     font-size: 11px;
     font-weight: bold;
-    padding: 4px 10px;
+    padding: 5px 14px;
     border-radius: 12px;
     cursor: pointer;
     z-index: 10;
+    -webkit-tap-highlight-color: transparent;
   }
   #scroll-notice.visible { display: block; }
+
+  /* ── D-pad ───────────────────────────────────────── */
+  #qbar-toggle {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 100%;
+    height: 22px;
+    background: var(--bg-dark);
+    border: none;
+    border-top: 1px solid var(--border);
+    color: var(--fg-dim);
+    font-family: inherit;
+    font-size: 10px;
+    cursor: pointer;
+    -webkit-tap-highlight-color: transparent;
+    flex-shrink: 0;
+  }
+  #qbar-toggle:active { color: var(--cyan); }
+
+  #quick-bar {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    padding: 8px 10px;
+    background: var(--bg-dark);
+    border-top: 1px solid var(--border);
+    flex-shrink: 0;
+  }
+  #quick-bar.collapsed { display: none; }
+
+  .qrow {
+    display: flex;
+    gap: 4px;
+    justify-content: center;
+  }
+
+  .quick-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 44px;
+    height: 40px;
+    background: var(--bg-input);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    color: var(--cyan);
+    font-family: inherit;
+    font-size: 13px;
+    font-weight: bold;
+    cursor: pointer;
+    padding: 0 8px;
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  .quick-btn:active {
+    background: var(--border);
+  }
+
+  .quick-btn.spacer {
+    background: transparent;
+    border-color: transparent;
+    pointer-events: none;
+  }
+
+  .qsep {
+    width: 8px;
+    flex-shrink: 0;
+  }
+
+  /* ── Input ───────────────────────────────────────── */
+  #input-bar {
+    display: flex;
+    gap: 8px;
+    padding: 8px 10px 10px;
+    background: var(--bg-dark);
+    border-top: 1px solid var(--border);
+    flex-shrink: 0;
+  }
+
+  #cmd-input {
+    flex: 1;
+    background: var(--bg-input);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    color: var(--fg);
+    font-family: inherit;
+    font-size: 16px;
+    padding: 12px 14px;
+    outline: none;
+    -webkit-appearance: none;
+  }
+
+  #cmd-input:focus { border-color: var(--cyan); }
+  #cmd-input::placeholder { color: var(--fg-dim); }
+
+  #send-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 50px;
+    background: var(--cyan);
+    color: var(--bg-dark);
+    border: none;
+    border-radius: 6px;
+    cursor: pointer;
+    -webkit-tap-highlight-color: transparent;
+    flex-shrink: 0;
+  }
+
+  #send-btn svg { width: 20px; height: 20px; }
+  #send-btn:active { opacity: 0.8; }
+  #send-btn:disabled { opacity: 0.3; cursor: not-allowed; }
+
+  /* ── Empty state ─────────────────────────────────── */
+  #empty-state {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    padding: 40px 20px;
+    color: var(--fg-dim);
+    text-align: center;
+    font-size: 12px;
+  }
+  #empty-state.hidden { display: none; }
+
+  /* ── Landscape ───────────────────────────────────── */
+  @media (max-height: 500px) {
+    .quick-btn { height: 34px; min-width: 38px; font-size: 12px; }
+    #quick-bar { padding: 5px 10px; gap: 3px; }
+    #input-bar { padding: 6px 10px; }
+    #cmd-input { padding: 10px 12px; font-size: 15px; }
+    #header { padding: 6px 12px; }
+    #scroll-notice { bottom: 100px; }
+  }
+
+  @media (min-width: 420px) {
+    .quick-btn { min-width: 50px; height: 42px; }
+  }
 </style>
 </head>
 <body>
 <div id="app">
   <div id="header">
-    <span class="title">DartForge</span>
-    <div style="display:flex;align-items:center;gap:10px;">
-      <div id="conn-controls">
-        <button class="conn-btn connect" id="btn-connect" title="Connect DartForge to MUD">Connect</button>
-        <button class="conn-btn disconnect" id="btn-disconnect" title="Disconnect DartForge from MUD">Disconnect</button>
-      </div>
-      <div id="status">
+    <div class="brand">
+      <svg class="brand-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+        <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/>
+      </svg>
+      <span class="brand-name">DartForge</span>
+    </div>
+    <div id="header-right">
+      <button class="conn-btn connect" id="btn-connect">Connect</button>
+      <button class="conn-btn disconnect" id="btn-disconnect" style="display:none">Disconnect</button>
+      <div id="status-pill">
         <div id="status-dot"></div>
-        <span id="status-text">Connecting...</span>
+        <span id="status-text">Connecting</span>
       </div>
     </div>
   </div>
-  <div id="reconnect-banner">Connection lost. Tap to reconnect.</div>
-  <div id="output"></div>
+
+  <div id="reconnect-banner">Connection lost — tap to reconnect</div>
+
+  <div id="output">
+    <div id="empty-state">
+      Waiting for MUD output...
+    </div>
+  </div>
+
   <div id="scroll-notice">&#x25BC; New output</div>
+
+  <button id="qbar-toggle" title="Toggle directional pad">&#x25B2; D-Pad</button>
+  <div id="quick-bar">
+    <div class="qrow">
+      <button class="quick-btn" data-cmd="nw">NW</button>
+      <button class="quick-btn" data-cmd="n">N</button>
+      <button class="quick-btn" data-cmd="ne">NE</button>
+      <div class="qsep"></div>
+      <button class="quick-btn" data-cmd="u">Up</button>
+    </div>
+    <div class="qrow">
+      <button class="quick-btn" data-cmd="w">W</button>
+      <button class="quick-btn spacer"></button>
+      <button class="quick-btn" data-cmd="e">E</button>
+      <div class="qsep"></div>
+      <button class="quick-btn" data-cmd="d">Dn</button>
+    </div>
+    <div class="qrow">
+      <button class="quick-btn" data-cmd="sw">SW</button>
+      <button class="quick-btn" data-cmd="s">S</button>
+      <button class="quick-btn" data-cmd="se">SE</button>
+    </div>
+  </div>
+
   <div id="input-bar">
-    <input id="cmd-input" type="text" placeholder="Type a command..." autocomplete="off" autocapitalize="none" autocorrect="off" spellcheck="false">
-    <button id="send-btn">Send</button>
+    <input id="cmd-input" type="text" placeholder="Enter command..." autocomplete="off" autocapitalize="none" autocorrect="off" spellcheck="false" enterkeyhint="send">
+    <button id="send-btn">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+        <line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/>
+      </svg>
+    </button>
   </div>
 </div>
 
@@ -230,8 +392,8 @@
 (function() {
   'use strict';
 
-  // ── ANSI parser (lightweight, no dependencies) ──────────────
-  const ANSI_COLORS = {
+  // ── ANSI parser ───────────────────────────────────────────────
+  var ANSI_COLORS = {
     30: 'ansi-black', 31: 'ansi-red', 32: 'ansi-green', 33: 'ansi-yellow',
     34: 'ansi-blue', 35: 'ansi-magenta', 36: 'ansi-cyan', 37: 'ansi-white',
     90: 'ansi-bright-black', 91: 'ansi-bright-red', 92: 'ansi-bright-green',
@@ -240,17 +402,18 @@
   };
 
   function ansiToHtml(text) {
-    let result = '';
-    let openSpans = 0;
-    const parts = text.split(/(\x1b\[[0-9;]*m)/);
+    var result = '';
+    var openSpans = 0;
+    var parts = text.split(/(\x1b\[[0-9;]*m)/);
 
-    for (const part of parts) {
-      const match = part.match(/^\x1b\[([0-9;]*)m$/);
+    for (var i = 0; i < parts.length; i++) {
+      var part = parts[i];
+      var match = part.match(/^\x1b\[([0-9;]*)m$/);
       if (match) {
-        const codes = match[1].split(';').map(Number);
-        for (const code of codes) {
+        var codes = match[1].split(';').map(Number);
+        for (var j = 0; j < codes.length; j++) {
+          var code = codes[j];
           if (code === 0) {
-            // Reset
             while (openSpans > 0) { result += '</span>'; openSpans--; }
           } else if (code === 1) {
             result += '<span class="ansi-bold">'; openSpans++;
@@ -259,7 +422,6 @@
           }
         }
       } else {
-        // Escape HTML entities
         result += part.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
       }
     }
@@ -268,26 +430,44 @@
     return result;
   }
 
-  // ── Elements ────────────────────────────────────────────────
-  const output = document.getElementById('output');
-  const cmdInput = document.getElementById('cmd-input');
-  const sendBtn = document.getElementById('send-btn');
-  const statusDot = document.getElementById('status-dot');
-  const statusText = document.getElementById('status-text');
-  const reconnectBanner = document.getElementById('reconnect-banner');
-  const scrollNotice = document.getElementById('scroll-notice');
+  // ── Elements ──────────────────────────────────────────────────
+  var output = document.getElementById('output');
+  var cmdInput = document.getElementById('cmd-input');
+  var sendBtn = document.getElementById('send-btn');
+  var statusDot = document.getElementById('status-dot');
+  var statusText = document.getElementById('status-text');
+  var reconnectBanner = document.getElementById('reconnect-banner');
+  var scrollNotice = document.getElementById('scroll-notice');
+  var emptyState = document.getElementById('empty-state');
+  var btnConnect = document.getElementById('btn-connect');
+  var btnDisconnect = document.getElementById('btn-disconnect');
+  var qbarToggle = document.getElementById('qbar-toggle');
+  var quickBar = document.getElementById('quick-bar');
 
-  // ── State ───────────────────────────────────────────────────
-  let ws = null;
-  let mudConnected = false;
-  let autoScroll = true;
-  const MAX_OUTPUT_LINES = 2000;
-  const commandHistory = [];
-  let historyIndex = -1;
+  // ── State ─────────────────────────────────────────────────────
+  var ws = null;
+  var mudConnected = false;
+  var autoScroll = true;
+  var hasOutput = false;
+  var MAX_OUTPUT_LINES = 2000;
+  var commandHistory = [];
+  var historyIndex = -1;
 
-  // ── Auto-scroll detection ───────────────────────────────────
+  // ── Quick-bar toggle (persisted) ──────────────────────────────
+  var qbarVisible = true;
+  try { qbarVisible = localStorage.getItem('df-qbar') !== '0'; } catch(e) {}
+  if (!qbarVisible) quickBar.classList.add('collapsed');
+
+  qbarToggle.addEventListener('click', function() {
+    qbarVisible = !qbarVisible;
+    quickBar.classList.toggle('collapsed', !qbarVisible);
+    qbarToggle.innerHTML = qbarVisible ? '&#x25B2; D-Pad' : '&#x25BC; D-Pad';
+    try { localStorage.setItem('df-qbar', qbarVisible ? '1' : '0'); } catch(e) {}
+  });
+
+  // ── Auto-scroll detection ────────────────────────────────────
   output.addEventListener('scroll', function() {
-    const atBottom = output.scrollHeight - output.scrollTop - output.clientHeight < 40;
+    var atBottom = output.scrollHeight - output.scrollTop - output.clientHeight < 40;
     autoScroll = atBottom;
     if (atBottom) scrollNotice.classList.remove('visible');
   });
@@ -298,11 +478,15 @@
     scrollNotice.classList.remove('visible');
   });
 
-  // ── Output management ───────────────────────────────────────
+  // ── Output management ────────────────────────────────────────
   function appendOutput(html) {
+    if (!hasOutput) {
+      hasOutput = true;
+      emptyState.classList.add('hidden');
+    }
+
     output.insertAdjacentHTML('beforeend', html);
 
-    // Trim if too many lines (count child nodes roughly)
     while (output.childNodes.length > MAX_OUTPUT_LINES) {
       output.removeChild(output.firstChild);
     }
@@ -314,19 +498,19 @@
     }
   }
 
-  // ── WebSocket ───────────────────────────────────────────────
-  let reconnectTimer = null;
-  let reconnectDelay = 1000;
+  // ── WebSocket ─────────────────────────────────────────────────
+  var reconnectTimer = null;
+  var reconnectDelay = 1000;
 
   function connect() {
-    const proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
-    const wsUrl = proto + '//' + location.host + '/ws';
+    var proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
+    var wsUrl = proto + '//' + location.host + '/ws';
 
     ws = new WebSocket(wsUrl);
 
     ws.onopen = function() {
       statusDot.className = mudConnected ? 'connected' : 'ws-only';
-      statusText.textContent = mudConnected ? 'Connected' : 'WS connected';
+      statusText.textContent = mudConnected ? 'Connected' : 'WS Only';
       reconnectBanner.classList.remove('visible');
       sendBtn.disabled = false;
       reconnectDelay = 1000;
@@ -334,7 +518,7 @@
 
     ws.onmessage = function(e) {
       try {
-        const msg = JSON.parse(e.data);
+        var msg = JSON.parse(e.data);
         if (msg.type === 'output') {
           appendOutput(ansiToHtml(msg.data));
         } else if (msg.type === 'status') {
@@ -373,21 +557,23 @@
     connect();
   });
 
-  // ── Send command ────────────────────────────────────────────
-  function sendCommand() {
-    const cmd = cmdInput.value;
+  // ── Send command ──────────────────────────────────────────────
+  function sendCommand(cmd) {
+    if (cmd === undefined) cmd = cmdInput.value;
     if (ws && ws.readyState === WebSocket.OPEN) {
       ws.send(cmd);
       if (cmd.trim()) {
-        commandHistory.unshift(cmd);
-        if (commandHistory.length > 100) commandHistory.pop();
+        if (commandHistory.length === 0 || commandHistory[0] !== cmd) {
+          commandHistory.unshift(cmd);
+          if (commandHistory.length > 100) commandHistory.pop();
+        }
       }
       historyIndex = -1;
-      cmdInput.value = '';
+      if (cmd === cmdInput.value) cmdInput.value = '';
     }
   }
 
-  sendBtn.addEventListener('click', sendCommand);
+  sendBtn.addEventListener('click', function() { sendCommand(); });
 
   cmdInput.addEventListener('keydown', function(e) {
     if (e.key === 'Enter') {
@@ -411,10 +597,15 @@
     }
   });
 
-  // ── Connection control buttons ─────────────────────────────
-  var btnConnect = document.getElementById('btn-connect');
-  var btnDisconnect = document.getElementById('btn-disconnect');
+  // ── Quick command buttons ─────────────────────────────────────
+  quickBar.addEventListener('click', function(e) {
+    var btn = e.target.closest('.quick-btn');
+    if (!btn || btn.classList.contains('spacer')) return;
+    var cmd = btn.getAttribute('data-cmd');
+    if (cmd) sendCommand(cmd);
+  });
 
+  // ── Connection control buttons ────────────────────────────────
   function updateConnButtons() {
     btnConnect.style.display = mudConnected ? 'none' : '';
     btnDisconnect.style.display = mudConnected ? '' : 'none';
@@ -433,7 +624,7 @@
     }
   });
 
-  // ── Start ───────────────────────────────────────────────────
+  // ── Start ─────────────────────────────────────────────────────
   connect();
   cmdInput.focus();
 })();

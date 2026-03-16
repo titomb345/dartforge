@@ -1258,6 +1258,45 @@ export function AlignmentIcon({ size = 11 }: IconProps) {
   );
 }
 
+export function ArchiveIcon({ size = 12 }: IconProps) {
+  return (
+    <svg
+      width={size}
+      height={size}
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
+      <polyline points="21 8 21 21 3 21 3 8" />
+      <rect x="1" y="3" width="22" height="5" />
+      <line x1="10" y1="12" x2="14" y2="12" />
+    </svg>
+  );
+}
+
+export function UnarchiveIcon({ size = 12 }: IconProps) {
+  return (
+    <svg
+      width={size}
+      height={size}
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
+      <polyline points="21 8 21 21 3 21 3 8" />
+      <rect x="1" y="3" width="22" height="5" />
+      <polyline points="12 15 12 10" />
+      <polyline points="9 12 12 9 15 12" />
+    </svg>
+  );
+}
+
 export function SmartphoneIcon({ size = 16 }: IconProps) {
   return (
     <svg

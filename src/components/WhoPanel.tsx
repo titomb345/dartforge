@@ -309,7 +309,8 @@ export function WhoPanel({ mode = 'slideout' }: PinnablePanelProps) {
   const { snapshot, refresh } = useWhoContext();
   const { mappings, resolveTitle, createMapping, updateMapping, deleteMapping } =
     useWhoTitleContext();
-  const { whoFontSize, updateWhoFontSize } = useAppSettingsContext();
+  const { panelFontSize, whoFontSize, updateWhoFontSize } = useAppSettingsContext();
+  const effectiveWhoFontSize = whoFontSize ?? panelFontSize;
   const [, setTick] = useState(0);
   const [editingTitle, setEditingTitle] = useState<string | null>(null);
 
@@ -338,7 +339,12 @@ export function WhoPanel({ mode = 'slideout' }: PinnablePanelProps) {
         panel="who"
         mode={mode}
       >
-        <FontSizeControl value={whoFontSize} onChange={updateWhoFontSize} />
+        <FontSizeControl
+          value={effectiveWhoFontSize}
+          onChange={updateWhoFontSize}
+          onReset={whoFontSize !== null ? () => updateWhoFontSize(null) : undefined}
+          globalValue={panelFontSize}
+        />
         <button
           onClick={refresh}
           title="Refresh who list"
@@ -364,7 +370,7 @@ export function WhoPanel({ mode = 'slideout' }: PinnablePanelProps) {
                   player={player}
                   mapping={player.isTitle ? resolveTitle(player.name) : null}
                   editingTitle={editingTitle}
-                  fontSize={whoFontSize}
+                  fontSize={effectiveWhoFontSize}
                   onStartEdit={setEditingTitle}
                   onSave={handleSave}
                   onCancel={() => setEditingTitle(null)}

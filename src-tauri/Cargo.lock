@@ -845,7 +845,7 @@ dependencies = [
 
 [[package]]
 name = "dartforge"
-version = "1.7.0"
+version = "1.8.0"
 dependencies = [
  "axum",
  "base64 0.22.1",

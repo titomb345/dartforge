@@ -1089,8 +1089,13 @@ function AppMain() {
   // Keep trigger runner in sync for use in the output filter closure
   triggerRunnerRef.current = {
     send: async (text) => {
-      // mapTrackCommandRef.current(text); // automapper disabled
-      await sendCommandRef.current?.(text);
+      // Apply movement mode to any bare direction commands (from triggers/aliases)
+      const finalText =
+        movementModeRef.current !== 'normal'
+          ? applyMovementMode(text, movementModeRef.current)
+          : text;
+      // mapTrackCommandRef.current(finalText); // automapper disabled
+      await sendCommandRef.current?.(finalText);
     },
     echo: (text) => {
       const formatted = `\x1b[36m${text}\x1b[0m\r\n`;
@@ -1435,8 +1440,13 @@ function AppMain() {
       await executeCommands(result.commands, {
         ...triggerRunnerRef.current,
         send: async (text) => {
-          // mapTrackCommandRef.current(text); // automapper disabled
-          await sendCommandRef.current?.(text);
+          // Apply movement mode to any bare direction commands produced by alias expansion
+          const finalText =
+            movementModeRef.current !== 'normal'
+              ? applyMovementMode(text, movementModeRef.current)
+              : text;
+          // mapTrackCommandRef.current(finalText); // automapper disabled
+          await sendCommandRef.current?.(finalText);
           // Update live allocs directly from outgoing set commands
           const parsed = parseAllocCommand(text);
           if (parsed) {
