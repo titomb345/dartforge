@@ -120,11 +120,15 @@ export function useAppSettings() {
   // Action blocking
   const [actionBlockingEnabled, setActionBlockingEnabled] = useState(true);
 
+  // Panel font size (global default)
+  const [panelFontSize, setPanelFontSize] = useState(11);
+
   // Who list
   const [whoAutoRefreshEnabled, setWhoAutoRefreshEnabled] = useState(true);
   const [whoRefreshMinutes, setWhoRefreshMinutes] = useState(5);
-  const [whoFontSize, setWhoFontSize] = useState(11);
-  const [chatFontSize, setChatFontSize] = useState(11);
+  const [whoFontSize, setWhoFontSize] = useState<number | null>(null);
+  const [chatFontSize, setChatFontSize] = useState<number | null>(null);
+  const [allocFontSize, setAllocFontSize] = useState<number | null>(null);
 
   // Babel language trainer
   const [babelEnabled, setBabelEnabled] = useState(false);
@@ -272,8 +276,10 @@ export function useAppSettings() {
       await load('counterHotThreshold', setCounterHotThreshold, (v) => v >= 0);
       await load('counterColdThreshold', setCounterColdThreshold, (v) => v >= 0);
       await load('whoRefreshMinutes', setWhoRefreshMinutes, (v) => v >= 1);
-      await load('whoFontSize', setWhoFontSize, (v) => v >= 8 && v <= 18);
-      await load('chatFontSize', setChatFontSize, (v) => v >= 8 && v <= 18);
+      await load('panelFontSize', setPanelFontSize, (v) => v >= 8 && v <= 18);
+      await loadNullable('whoFontSize', setWhoFontSize);
+      await loadNullable('chatFontSize', setChatFontSize);
+      await loadNullable('allocFontSize', setAllocFontSize);
       await load('babelIntervalSeconds', setBabelIntervalSeconds, (v) => v >= 10);
       await load('casterWeightAdjustUp', setCasterWeightAdjustUp, (v) => v >= 1);
       await load('casterWeightAdjustDown', setCasterWeightAdjustDown, (v) => v >= 1);
@@ -438,18 +444,34 @@ export function useAppSettings() {
     [persist]
   );
 
-  // Clamped font-size updater factory (shared logic for who/chat font sizes)
-  const makeFontSizeUpdater = useCallback(
-    (setter: React.Dispatch<React.SetStateAction<number>>, key: string) =>
-      (v: number) => {
-        const clamped = Math.max(8, Math.min(18, v));
-        setter(clamped);
-        persist(key, clamped);
+  // Global panel font size updater (always a number, clamped)
+  const updatePanelFontSize = useMemo(
+    () => (v: number) => {
+      const clamped = Math.max(8, Math.min(18, v));
+      setPanelFontSize(clamped);
+      persist('panelFontSize', clamped);
+    },
+    [persist]
+  );
+
+  // Nullable font-size updater factory (null = use global, number = override)
+  const makeNullableFontSizeUpdater = useCallback(
+    (setter: React.Dispatch<React.SetStateAction<number | null>>, key: string) =>
+      (v: number | null) => {
+        if (v === null) {
+          setter(null);
+          persist(key, null);
+        } else {
+          const clamped = Math.max(8, Math.min(18, v));
+          setter(clamped);
+          persist(key, clamped);
+        }
       },
     [persist]
   );
-  const updateWhoFontSize = useMemo(() => makeFontSizeUpdater(setWhoFontSize, 'whoFontSize'), [makeFontSizeUpdater]);
-  const updateChatFontSize = useMemo(() => makeFontSizeUpdater(setChatFontSize, 'chatFontSize'), [makeFontSizeUpdater]);
+  const updateWhoFontSize = useMemo(() => makeNullableFontSizeUpdater(setWhoFontSize, 'whoFontSize'), [makeNullableFontSizeUpdater]);
+  const updateChatFontSize = useMemo(() => makeNullableFontSizeUpdater(setChatFontSize, 'chatFontSize'), [makeNullableFontSizeUpdater]);
+  const updateAllocFontSize = useMemo(() => makeNullableFontSizeUpdater(setAllocFontSize, 'allocFontSize'), [makeNullableFontSizeUpdater]);
 
   const updateAutoLoginCharacters = useCallback(
     (v: [CharacterProfile | null, CharacterProfile | null]) => {
@@ -532,6 +554,9 @@ export function useAppSettings() {
     hasSeenGuide,
     // Action blocking
     actionBlockingEnabled,
+    // Panel font size
+    panelFontSize,
+    updatePanelFontSize,
     // Who list
     whoAutoRefreshEnabled,
     whoRefreshMinutes,
@@ -539,6 +564,8 @@ export function useAppSettings() {
     updateWhoFontSize,
     chatFontSize,
     updateChatFontSize,
+    allocFontSize,
+    updateAllocFontSize,
     // Gag groups
     gagGroups,
     gaggedNpcs,
@@ -594,8 +621,10 @@ export function useAppSettings() {
     customChime1, customChime2, customSounds,
     counterHotThreshold, counterColdThreshold,
     hasSeenGuide, actionBlockingEnabled,
+    panelFontSize, updatePanelFontSize,
     whoAutoRefreshEnabled, whoRefreshMinutes, whoFontSize, updateWhoFontSize,
     chatFontSize, updateChatFontSize,
+    allocFontSize, updateAllocFontSize,
     gagGroups, gaggedNpcs, announceMode, announcePetMode,
     babelEnabled, babelLanguage, babelIntervalSeconds, babelPhrases,
     postSyncEnabled, postSyncCommands,

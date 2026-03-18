@@ -13,7 +13,7 @@ import type { DataStore } from '../contexts/DataStoreContext';
  * Prior to this collapse, each feature had its own version bump (up to v17).
  * normalizeVersion() maps those old version numbers to the collapsed scheme.
  */
-export const CURRENT_VERSION = 6;
+export const CURRENT_VERSION = 7;
 
 /** Raw store contents — all keys are optional since older stores may lack them. */
 export type StoreData = Record<string, unknown>;
@@ -279,6 +279,33 @@ const MIGRATIONS: MigrationFn[] = [
     // Mobile companion server
     if (!('companionEnabled' in data)) data.companionEnabled = false;
     if (!('companionPort' in data)) data.companionPort = 3333;
+
+    return data;
+  },
+
+  // ── v6 → v7: v1.8 release ──────────────────────────────────────────
+  (data) => {
+    // Global panel font size (default for all panels)
+    if (!('panelFontSize' in data)) data.panelFontSize = 11;
+
+    // Anti-spam (was added in v1.7 without migration)
+    if (!('antiSpamEnabled' in data)) data.antiSpamEnabled = false;
+
+    // Alloc panel font size override
+    if (!('allocFontSize' in data)) data.allocFontSize = null;
+
+    // Convert whoFontSize / chatFontSize to nullable overrides:
+    // If user had the default (11), set to null (use global). Otherwise keep their custom value.
+    if ('whoFontSize' in data) {
+      if (data.whoFontSize === 11) data.whoFontSize = null;
+    } else {
+      data.whoFontSize = null;
+    }
+    if ('chatFontSize' in data) {
+      if (data.chatFontSize === 11) data.chatFontSize = null;
+    } else {
+      data.chatFontSize = null;
+    }
 
     return data;
   },

@@ -138,9 +138,12 @@ import { hotkeyToString, hotkeyFromEvent, isNumpadKey } from './types';
 /* ── Lazy Tauri imports for companion integration ────────────── */
 let tauriInvoke: ((cmd: string, args?: Record<string, unknown>) => Promise<unknown>) | null = null;
 let tauriListen: ((event: string, handler: (e: { payload: unknown }) => void) => Promise<() => void>) | null = null;
+let tauriReady: Promise<void> = Promise.resolve();
 if (getPlatform() === 'tauri') {
-  import('@tauri-apps/api/core').then((m) => { tauriInvoke = m.invoke; });
-  import('@tauri-apps/api/event').then((m) => { tauriListen = m.listen; });
+  tauriReady = Promise.all([
+    import('@tauri-apps/api/core').then((m) => { tauriInvoke = m.invoke; }),
+    import('@tauri-apps/api/event').then((m) => { tauriListen = m.listen; }),
+  ]).then(() => {});
 }
 
 /** Commands to send automatically after login */
@@ -202,9 +205,11 @@ function AppMain() {
   const writeToTerm = useCallback(
     (text: string) => {
       if (terminalRef.current) smartWrite(terminalRef.current, text);
+      tauriInvoke?.('broadcast_companion_output', { data: text });
     },
     []
   );
+  const writeToTermRef = useLatestRef(writeToTerm);
   const [panelLayout, setPanelLayout] = useState<PanelLayout>({ left: [], right: [] });
   const [pinnedWidths, setPinnedWidths] = useState<{ left: number; right: number }>({
     left: 320,
@@ -261,7 +266,20 @@ function AppMain() {
 
   const dataStore = useDataStore();
   const settingsLoadedRef = useRef(false);
-  const { commandHistory, handleHistoryChange } = useCommandHistory(dataStore);
+  const { commandHistory, handleHistoryChange: rawHistoryChange } = useCommandHistory(dataStore);
+  const handleHistoryChange = useCallback((history: string[]) => {
+    rawHistoryChange(history);
+    tauriInvoke?.('broadcast_companion_history', { history });
+  }, [rawHistoryChange]);
+
+  // Broadcast command history to companion whenever it changes
+  useEffect(() => {
+    if (commandHistory.length === 0) return;
+    tauriReady.then(() => {
+      tauriInvoke?.('broadcast_companion_history', { history: commandHistory });
+    });
+  }, [commandHistory]);
+
   const quickButtonsCRUD = usePersistedCRUD<QuickButton>(dataStore, 'quickButtons');
   const macrosCRUD = usePersistedCRUD<Macro>(dataStore, 'macros');
 
@@ -685,7 +703,7 @@ function AppMain() {
     dataStore.set('settings.json', 'filteredStatuses', filterFlags).catch(console.error);
   }, [filterFlags, boardDatesEnabled, stripPromptsEnabled, antiSpamEnabled]);
 
-  // Wire anti-spam flush callback so the timer can write to the terminal
+  // Wire anti-spam flush callback so the timer can write to terminal
   useEffect(() => {
     if (outputFilterRef.current) {
       outputFilterRef.current.onAntiSpamFlush = writeToTerm;
@@ -808,7 +826,7 @@ function AppMain() {
     deleteSkill,
     announceModeRef,
     announcePetModeRef,
-  } = useSkillTracker(sendCommandRef, processorRef, terminalRef, dataStore);
+  } = useSkillTracker(sendCommandRef, processorRef, terminalRef, dataStore, writeToTermRef);
   const skillDataRef = useLatestRef(skillData);
 
   // Keep announce mode refs in sync with settings
@@ -1089,13 +1107,18 @@ function AppMain() {
   // Keep trigger runner in sync for use in the output filter closure
   triggerRunnerRef.current = {
     send: async (text) => {
-      // mapTrackCommandRef.current(text); // automapper disabled
-      await sendCommandRef.current?.(text);
+      // Dispatch built-in slash commands produced by triggers/aliases
+      if (text.startsWith('/') && await dispatchBuiltinCommand(text, builtinCtxRef.current)) return;
+      // Apply movement mode to any bare direction commands (from triggers/aliases)
+      const finalText =
+        movementModeRef.current !== 'normal'
+          ? applyMovementMode(text, movementModeRef.current)
+          : text;
+      // mapTrackCommandRef.current(finalText); // automapper disabled
+      await sendCommandRef.current?.(finalText);
     },
     echo: (text) => {
-      const formatted = `\x1b[36m${text}\x1b[0m\r\n`;
-      writeToTerm(formatted);
-      tauriInvoke?.('broadcast_companion_output', { data: formatted });
+      writeToTerm(`\x1b[36m${text}\x1b[0m\r\n`);
     },
     expand: (input) =>
       expandInput(input, mergedAliasesRef.current, {
@@ -1435,8 +1458,15 @@ function AppMain() {
       await executeCommands(result.commands, {
         ...triggerRunnerRef.current,
         send: async (text) => {
-          // mapTrackCommandRef.current(text); // automapper disabled
-          await sendCommandRef.current?.(text);
+          // Dispatch built-in slash commands produced by alias expansion
+          if (text.startsWith('/') && await dispatchBuiltinCommand(text, builtinCtxRef.current)) return;
+          // Apply movement mode to any bare direction commands produced by alias expansion
+          const finalText =
+            movementModeRef.current !== 'normal'
+              ? applyMovementMode(text, movementModeRef.current)
+              : text;
+          // mapTrackCommandRef.current(finalText); // automapper disabled
+          await sendCommandRef.current?.(finalText);
           // Update live allocs directly from outgoing set commands
           const parsed = parseAllocCommand(text);
           if (parsed) {
@@ -1571,6 +1601,8 @@ function AppMain() {
 
   // Companion command listener — route commands from mobile companion through the full pipeline
   const handleSendRef = useLatestRef(handleSend);
+  const commandHistoryRef = useLatestRef(commandHistory);
+  const handleHistoryChangeRef = useLatestRef(handleHistoryChange);
   useEffect(() => {
     if (!tauriListen) return;
     let unlisten: (() => void) | null = null;
@@ -1578,6 +1610,14 @@ function AppMain() {
       const payload = e.payload as { command?: string };
       if (payload?.command != null) {
         handleSendRef.current(payload.command);
+        // Add companion commands to client history
+        const cmd = payload.command.trim();
+        if (cmd) {
+          const current = commandHistoryRef.current;
+          handleHistoryChangeRef.current(
+            [cmd, ...current.filter((h) => h !== cmd)].slice(0, 500)
+          );
+        }
       }
     }).then((fn) => { unlisten = fn; });
     return () => { unlisten?.(); };
@@ -1666,7 +1706,7 @@ function AppMain() {
     mergedTimers,
     timerState,
     sendCommandRef,
-    terminalRef,
+    writeToTermRef,
     outputFilterRef,
     mergedAliasesRef,
     enableSpeedwalkRef,

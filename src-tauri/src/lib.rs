@@ -181,6 +181,7 @@ pub fn run() {
             companion::stop_companion,
             companion::get_companion_info,
             companion::broadcast_companion_output,
+            companion::broadcast_companion_history,
             storage::resolve_data_dir,
             storage::get_active_data_dir,
             storage::read_data_file,

@@ -1,6 +1,7 @@
 import { useState, useCallback, useMemo } from 'react';
 import type { Macro, MacroId } from '../types/macro';
 import { formatHotkey, hotkeyToString } from '../types/macro';
+import { useAppSettingsContext } from '../contexts/AppSettingsContext';
 import { MacroIcon, PlusIcon } from './icons';
 import { PanelHeader } from './PanelHeader';
 import { ConfirmDeleteButton } from './ConfirmDeleteButton';
@@ -93,6 +94,7 @@ function MacroRow({
 }
 
 export function MacroPanel({ onClose, macros, onAdd, onUpdate, onDelete }: MacroPanelProps) {
+  const { panelFontSize } = useAppSettingsContext();
   const [editingId, setEditingId] = useState<MacroId | null>(null);
   const [creating, setCreating] = useState(false);
   const [searchText, setSearchText] = useState('');
@@ -185,7 +187,7 @@ export function MacroPanel({ onClose, macros, onAdd, onUpdate, onDelete }: Macro
       )}
 
       {/* Macro list */}
-      <div className="flex-1 overflow-y-auto overflow-x-hidden px-1 py-1">
+      <div className="panel-content flex-1 overflow-y-auto overflow-x-hidden px-1 py-1" style={{ fontSize: panelFontSize + 'px' }}>
         {filtered.length === 0 && (
           <div className="text-center text-[11px] text-text-dim py-6">
             {macros.length === 0

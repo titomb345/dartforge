@@ -16,6 +16,9 @@ export interface ImproveCounterState {
   resumeCounter: (id: string) => void;
   stopCounter: (id: string) => void;
   clearCounter: (id: string) => void;
+  archiveCounter: (id: string) => void;
+  unarchiveCounter: (id: string) => void;
+  reorderCounters: (ids: string[]) => void;
   handleCounterMatch: (match: SkillMatchResult) => void;
   setPeriodLength: (minutes: number) => void;
   getElapsedMs: (counter: ImproveCounter) => number;

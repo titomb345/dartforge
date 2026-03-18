@@ -136,7 +136,8 @@ export function ChatPanel({ mode = 'slideout' }: PinnablePanelProps) {
     deleteOutgoingMessage,
   } = useChatContext();
   const { sortedMappings, createMapping } = useSignatureContext();
-  const { chatFontSize, updateChatFontSize, timestampFormat, updateTimestampFormat, gaggedNpcs } = useAppSettingsContext();
+  const { panelFontSize, chatFontSize, updateChatFontSize, timestampFormat, updateTimestampFormat, gaggedNpcs } = useAppSettingsContext();
+  const effectiveChatFontSize = chatFontSize ?? panelFontSize;
   const scrollRef = useRef<HTMLDivElement | null>(null);
   const isNearEdgeRef = useRef(true);
   const [exclusiveFilter, setExclusiveFilter] = useState<ChatType | null>(null);
@@ -317,7 +318,12 @@ export function ChatPanel({ mode = 'slideout' }: PinnablePanelProps) {
   return (
     <div className={panelRootClass(isPinned)}>
       <PanelHeader icon={<ChatIcon size={12} />} title="Chat" panel="chat" mode={mode}>
-        <FontSizeControl value={chatFontSize} onChange={updateChatFontSize} />
+        <FontSizeControl
+          value={effectiveChatFontSize}
+          onChange={updateChatFontSize}
+          onReset={chatFontSize !== null ? () => updateChatFontSize(null) : undefined}
+          globalValue={panelFontSize}
+        />
         <button
           onClick={toggleNewestFirst}
           title={
@@ -493,7 +499,7 @@ export function ChatPanel({ mode = 'slideout' }: PinnablePanelProps) {
       )}
 
       {/* Message list */}
-      <div ref={scrollRef} onScroll={handleScroll} className="flex-1 overflow-y-auto py-1">
+      <div ref={scrollRef} onScroll={handleScroll} className="panel-content flex-1 overflow-y-auto py-1" style={{ fontSize: effectiveChatFontSize + 'px' }}>
         {activeTab === 'incoming' ? (
           /* ---- INCOMING TAB ---- */
           newestFirst ? (
@@ -512,7 +518,7 @@ export function ChatPanel({ mode = 'slideout' }: PinnablePanelProps) {
                   </div>
                 ) : (
                   todayMessages.map((msg) => (
-                    <ChatMessageRow key={msg.id} msg={msg} now={now} fontSize={chatFontSize} onMute={muteSender} onIdentify={handleIdentify} onDelete={deleteMessage} />
+                    <ChatMessageRow key={msg.id} msg={msg} now={now} fontSize={effectiveChatFontSize} onMute={muteSender} onIdentify={handleIdentify} onDelete={deleteMessage} />
                   ))
                 )}
               </div>
@@ -528,7 +534,7 @@ export function ChatPanel({ mode = 'slideout' }: PinnablePanelProps) {
                     lastDayKey = dayKey;
                   }
                   elements.push(
-                    <ChatMessageRow key={msg.id} msg={msg} now={now} fontSize={chatFontSize} onMute={muteSender} onIdentify={handleIdentify} onDelete={deleteMessage} />,
+                    <ChatMessageRow key={msg.id} msg={msg} now={now} fontSize={effectiveChatFontSize} onMute={muteSender} onIdentify={handleIdentify} onDelete={deleteMessage} />,
                   );
                 }
                 return elements;
@@ -548,7 +554,7 @@ export function ChatPanel({ mode = 'slideout' }: PinnablePanelProps) {
                     lastDayKey = dayKey;
                   }
                   elements.push(
-                    <ChatMessageRow key={msg.id} msg={msg} now={now} fontSize={chatFontSize} onMute={muteSender} onIdentify={handleIdentify} onDelete={deleteMessage} />,
+                    <ChatMessageRow key={msg.id} msg={msg} now={now} fontSize={effectiveChatFontSize} onMute={muteSender} onIdentify={handleIdentify} onDelete={deleteMessage} />,
                   );
                 }
                 return elements;
@@ -567,7 +573,7 @@ export function ChatPanel({ mode = 'slideout' }: PinnablePanelProps) {
                   </div>
                 ) : (
                   todayMessages.map((msg) => (
-                    <ChatMessageRow key={msg.id} msg={msg} now={now} fontSize={chatFontSize} onMute={muteSender} onIdentify={handleIdentify} onDelete={deleteMessage} />
+                    <ChatMessageRow key={msg.id} msg={msg} now={now} fontSize={effectiveChatFontSize} onMute={muteSender} onIdentify={handleIdentify} onDelete={deleteMessage} />
                   ))
                 )}
               </div>
@@ -589,7 +595,7 @@ export function ChatPanel({ mode = 'slideout' }: PinnablePanelProps) {
                   </div>
                 ) : (
                   todayOutgoing.map((msg) => (
-                    <OutgoingMessageRow key={msg.id} msg={msg} now={now} fontSize={chatFontSize} onDelete={deleteOutgoingMessage} />
+                    <OutgoingMessageRow key={msg.id} msg={msg} now={now} fontSize={effectiveChatFontSize} onDelete={deleteOutgoingMessage} />
                   ))
                 )}
               </div>
@@ -605,7 +611,7 @@ export function ChatPanel({ mode = 'slideout' }: PinnablePanelProps) {
                     lastDayKey = dayKey;
                   }
                   elements.push(
-                    <OutgoingMessageRow key={msg.id} msg={msg} now={now} fontSize={chatFontSize} onDelete={deleteOutgoingMessage} />,
+                    <OutgoingMessageRow key={msg.id} msg={msg} now={now} fontSize={effectiveChatFontSize} onDelete={deleteOutgoingMessage} />,
                   );
                 }
                 return elements;
@@ -625,7 +631,7 @@ export function ChatPanel({ mode = 'slideout' }: PinnablePanelProps) {
                     lastDayKey = dayKey;
                   }
                   elements.push(
-                    <OutgoingMessageRow key={msg.id} msg={msg} now={now} fontSize={chatFontSize} onDelete={deleteOutgoingMessage} />,
+                    <OutgoingMessageRow key={msg.id} msg={msg} now={now} fontSize={effectiveChatFontSize} onDelete={deleteOutgoingMessage} />,
                   );
                 }
                 return elements;
@@ -642,7 +648,7 @@ export function ChatPanel({ mode = 'slideout' }: PinnablePanelProps) {
                   </div>
                 ) : (
                   todayOutgoing.map((msg) => (
-                    <OutgoingMessageRow key={msg.id} msg={msg} now={now} fontSize={chatFontSize} onDelete={deleteOutgoingMessage} />
+                    <OutgoingMessageRow key={msg.id} msg={msg} now={now} fontSize={effectiveChatFontSize} onDelete={deleteOutgoingMessage} />
                   ))
                 )}
               </div>

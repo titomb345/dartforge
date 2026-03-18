@@ -247,7 +247,7 @@ function WelcomeBanner() {
 /* ── Main Panel ──────────────────────────────────────────── */
 
 export function HelpPanel({ onClose }: { onClose: () => void }) {
-  const { hasSeenGuide } = useAppSettingsContext();
+  const { hasSeenGuide, panelFontSize } = useAppSettingsContext();
   const defaultOpen = HELP_CATEGORIES.find((c) => c.defaultOpen)?.key ?? null;
   const [openSection, setOpenSection] = useState<string | null>(defaultOpen);
 
@@ -256,7 +256,7 @@ export function HelpPanel({ onClose }: { onClose: () => void }) {
       <PanelHeader icon={<HelpIcon size={12} />} title="Guide" onClose={onClose} />
 
       {/* Scrollable body */}
-      <div className="flex-1 overflow-y-auto p-3 space-y-2">
+      <div className="panel-content flex-1 overflow-y-auto p-3 space-y-2" style={{ fontSize: panelFontSize + 'px' }}>
         {!hasSeenGuide && <WelcomeBanner />}
 
         {HELP_CATEGORIES.map((cat) => (

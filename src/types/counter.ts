@@ -18,6 +18,10 @@ export interface ImproveCounter {
   periodStartAt: number | null;
   /** Imps counted since periodStartAt */
   impsInCurrentPeriod: number;
+  /** Whether the counter is archived (hidden from main view) */
+  archived?: boolean;
+  /** Display order for drag-and-drop reordering (lower = first) */
+  order?: number;
 }
 
 export interface CounterStore {

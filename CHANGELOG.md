@@ -9,6 +9,23 @@ The `[Unreleased]` header controls automatic version bumping on merge:
 - `[Unreleased-minor]` → 0.1.0 → 0.2.0
 - `[Unreleased-major]` → 0.1.0 → 1.0.0
 
+## [Unreleased-minor]
+
+### Added
+- Global panel font size setting — a single control that sets the default font size for all panels, configurable from Settings > Display or from any panel header. Chat, Who, and Allocations panels support per-panel overrides with a clear-override button (only visible when the panel size differs from global)
+- Counter archiving — archive counters to a collapsible dropdown; archived counters preserve all stats and can be restored or deleted, with actions always visible
+- Counter pill reordering — drag and drop counter pills to rearrange their display order
+- `/levels` command — displays a two-column reference table of all DartMUD skill levels and their improve count ranges
+
+### Changed
+- Mobile Companion redesign — new dark terminal aesthetic with glowing accents, d-pad style directional navigation grid with Up/Down, collapsible quick-bar with persisted state, send arrow button, empty state with connecting animation, PWA meta tags, safe-area inset support, and landscape/large-phone responsive tweaks
+
+### Fixed
+- Companion: virtual keyboard no longer causes a black box to cover the command input when focusing and scrolling
+- Companion: page can no longer be scrolled past its bounds when the keyboard is open, preventing the layout from shifting out of view
+- Companion: added scroll-to-bottom button that appears when scrolled up in the output area
+- Built-in slash commands (`/skill`, `/counter`, `/block`, etc.) now work inside aliases and triggers — previously only `/delay`, `/echo`, `/spam`, `/var`, and `/convert` were recognized
+
 ## [1.7.3] - 2026-03-13
 
 ### Fixed
