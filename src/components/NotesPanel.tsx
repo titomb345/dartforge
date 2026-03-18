@@ -8,7 +8,6 @@ import { useDataStore } from '../contexts/DataStoreContext';
 import { useSkillTrackerContext } from '../contexts/SkillTrackerContext';
 import { useNotesContext } from '../contexts/NotesContext';
 import { useAppSettingsContext } from '../contexts/AppSettingsContext';
-import { FontSizeControl } from './FontSizeControl';
 import { cn } from '../lib/cn';
 
 /* ── Constants ──────────────────────────────────────────────── */
@@ -135,7 +134,7 @@ export function NotesPanel({ mode = 'slideout' }: NotesPanelProps) {
   const dataStore = useDataStore();
   const { activeCharacter } = useSkillTrackerContext();
   const { pendingAppend, consumeAppend } = useNotesContext();
-  const { panelFontSize, updatePanelFontSize } = useAppSettingsContext();
+  const { panelFontSize } = useAppSettingsContext();
 
   // Each tab is just a display name. The slug (derived from name) determines the filename.
   const [tabs, setTabs] = useState<string[]>([]);
@@ -417,9 +416,7 @@ export function NotesPanel({ mode = 'slideout' }: NotesPanelProps) {
 
   return (
     <div className={panelRootClass(isPinned)}>
-      <PanelHeader icon={<NotesIcon size={12} />} title={notesTitle} panel="notes" mode={mode}>
-        <FontSizeControl value={panelFontSize} onChange={updatePanelFontSize} />
-      </PanelHeader>
+      <PanelHeader icon={<NotesIcon size={12} />} title={notesTitle} panel="notes" mode={mode} />
 
       {activeCharacter && loaded && (
         /* Note navigation bar */
@@ -482,7 +479,7 @@ export function NotesPanel({ mode = 'slideout' }: NotesPanelProps) {
       )}
 
       {/* Text area */}
-      <div className="flex-1 overflow-hidden p-1" style={{ fontSize: panelFontSize + 'px' }}>
+      <div className="panel-content flex-1 overflow-hidden p-1" style={{ fontSize: panelFontSize + 'px' }}>
         {activeCharacter ? (
           <textarea
             value={content}

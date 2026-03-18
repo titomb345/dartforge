@@ -499,7 +499,7 @@ export function ChatPanel({ mode = 'slideout' }: PinnablePanelProps) {
       )}
 
       {/* Message list */}
-      <div ref={scrollRef} onScroll={handleScroll} className="flex-1 overflow-y-auto py-1">
+      <div ref={scrollRef} onScroll={handleScroll} className="panel-content flex-1 overflow-y-auto py-1" style={{ fontSize: effectiveChatFontSize + 'px' }}>
         {activeTab === 'incoming' ? (
           /* ---- INCOMING TAB ---- */
           newestFirst ? (

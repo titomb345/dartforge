@@ -16,9 +16,7 @@ import {
   UserIcon,
   PlusIcon,
   SmartphoneIcon,
-  PaletteIcon,
 } from './icons';
-import { FontSizeControl } from './FontSizeControl';
 import type { CustomSoundEntry } from '../hooks/useSoundLibrary';
 import { PanelHeader } from './PanelHeader';
 import { DEFAULT_NUMPAD_MAPPINGS } from '../hooks/useAppSettings';
@@ -300,8 +298,6 @@ export function SettingsPanel({ onClose }: { onClose: () => void }) {
     updateAutoLoginCharacters,
     onSwitchCharacter,
     connected,
-    panelFontSize,
-    updatePanelFontSize,
   } = settings;
   const isTauri = getPlatform() === 'tauri';
 
@@ -446,23 +442,6 @@ export function SettingsPanel({ onClose }: { onClose: () => void }) {
             {isTauri
               ? "Passwords are stored securely in your operating system's credential manager. When enabled, name and password are sent automatically on connect."
               : "Your browser's password manager can save these credentials. Passwords are not stored by DartForge on web — they are held in memory for this session only."}
-          </div>
-        </SettingsSection>
-
-        {/* Display */}
-        <SettingsSection
-          icon={<PaletteIcon size={13} />}
-          title="Display"
-          accent="#61afef"
-          open={openSection === 'display'}
-          onToggle={() => toggle('display')}
-        >
-          <FieldRow label="Panel font size">
-            <FontSizeControl value={panelFontSize} onChange={updatePanelFontSize} />
-          </FieldRow>
-          <div className="text-[9px] text-text-dim font-mono leading-relaxed mt-1">
-            Default font size for all panels. Chat, Who, and Allocations can
-            override this individually from their panel headers.
           </div>
         </SettingsSection>
 

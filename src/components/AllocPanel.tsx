@@ -1044,8 +1044,8 @@ export function AllocPanel({ mode = 'slideout' }: AllocPanelProps) {
     <div
       className={
         isPinned
-          ? 'h-full flex flex-col overflow-hidden'
-          : 'w-[420px] h-full bg-bg-primary border-l border-border-subtle flex flex-col overflow-hidden'
+          ? 'panel-content h-full flex flex-col overflow-hidden'
+          : 'panel-content w-[420px] h-full bg-bg-primary border-l border-border-subtle flex flex-col overflow-hidden'
       }
       style={{ fontSize: effectiveAllocFontSize + 'px' }}
     >

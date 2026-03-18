@@ -35,7 +35,6 @@ import {
 import { ConfirmDeleteButton } from './ConfirmDeleteButton';
 import { useAppSettingsContext } from '../contexts/AppSettingsContext';
 import { PanelHeader } from './PanelHeader';
-import { FontSizeControl } from './FontSizeControl';
 
 type CounterPanelProps = PinnablePanelProps;
 
@@ -182,7 +181,7 @@ export function CounterPanel({ mode = 'slideout' }: CounterPanelProps) {
   const [archiveOpen, setArchiveOpen] = useState(false);
   const [draggingId, setDraggingId] = useState<string | null>(null);
 
-  const { panelFontSize, updatePanelFontSize } = useAppSettingsContext();
+  const { panelFontSize } = useAppSettingsContext();
 
   const isPinned = mode === 'pinned';
 
@@ -239,9 +238,7 @@ export function CounterPanel({ mode = 'slideout' }: CounterPanelProps) {
 
   return (
     <div className={panelRootClass(isPinned)}>
-      <PanelHeader icon={<CounterIcon size={12} />} title="Counters" panel="counter" mode={mode}>
-        <FontSizeControl value={panelFontSize} onChange={updatePanelFontSize} />
-      </PanelHeader>
+      <PanelHeader icon={<CounterIcon size={12} />} title="Counters" panel="counter" mode={mode} />
       {/* Counter tabs — drag-and-drop sortable */}
       <div className="flex items-center gap-1 px-2 py-1 border-b border-border-subtle shrink-0">
         <div className="flex items-center gap-1 flex-1 min-w-0 overflow-x-auto">
@@ -436,7 +433,7 @@ export function CounterPanel({ mode = 'slideout' }: CounterPanelProps) {
           </div>
 
           {/* Scrollable: stats + skills together */}
-          <div className="flex-1 overflow-y-auto" style={{ fontSize: panelFontSize + 'px' }}>
+          <div className="panel-content flex-1 overflow-y-auto" style={{ fontSize: panelFontSize + 'px' }}>
             {/* Stats */}
             <div className="px-2 py-1.5 border-b border-border-subtle">
               <CounterStats
@@ -473,7 +470,7 @@ export function CounterPanel({ mode = 'slideout' }: CounterPanelProps) {
               Restore
             </button>
           </div>
-          <div className="flex-1 overflow-y-auto" style={{ fontSize: panelFontSize + 'px' }}>
+          <div className="panel-content flex-1 overflow-y-auto" style={{ fontSize: panelFontSize + 'px' }}>
             <div className="px-2 py-1.5 border-b border-border-subtle">
               <CounterStats
                 counter={activeCounter}

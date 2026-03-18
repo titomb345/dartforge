@@ -23,8 +23,14 @@ export function useSkillTracker(
   sendCommandRef: React.RefObject<((cmd: string) => Promise<void>) | null>,
   processorRef: React.RefObject<OutputProcessor | null>,
   terminalRef: React.RefObject<XTerm | null>,
-  dataStore: DataStore
+  dataStore: DataStore,
+  writeToTermRef?: React.RefObject<(text: string) => void>,
 ) {
+  const echoLine = (line: string) => {
+    if (writeToTermRef?.current) writeToTermRef.current(line);
+    else if (terminalRef.current) smartWrite(terminalRef.current, line);
+  };
+
   const [activeCharacter, setActiveCharacterState] = useState<string | null>(null);
   const activeCharacterRef = useRef<string | null>(null);
   const [skillData, setSkillData] = useState<CharacterSkillFile>({ ...EMPTY_SKILL_FILE });
@@ -163,12 +169,12 @@ export function useSkillTracker(
         lastImproveRef.current = { who: 'self', skill: match.skill, prevCount };
 
         // Write inline outside updater (executes once)
-        if (showInlineImprovesRef.current && terminalRef.current) {
+        if (showInlineImprovesRef.current) {
           const tier = getTierForCount(newCount);
           const toNext = getImprovesToNextTier(newCount);
           const nextInfo = toNext > 0 ? ` | ${toNext} to next` : '';
           const line = `\x1b[36m[${match.skill} +1 \u2192 ${newCount} (${tier.abbr})${nextInfo}]\x1b[0m\r\n`;
-          smartWrite(terminalRef.current, line);
+          echoLine(line);
         }
 
         // Announce via OOC if enabled
@@ -202,12 +208,12 @@ export function useSkillTracker(
 
         lastImproveRef.current = { who: match.pet, skill: match.skill, prevCount };
 
-        if (showInlineImprovesRef.current && terminalRef.current) {
+        if (showInlineImprovesRef.current) {
           const tier = getTierForCount(newCount);
           const toNext = getImprovesToNextTier(newCount);
           const nextInfo = toNext > 0 ? ` | ${toNext} to next` : '';
           const line = `\x1b[35m[${match.pet}: ${match.skill} +1 \u2192 ${newCount} (${tier.abbr})${nextInfo}]\x1b[0m\r\n`;
-          smartWrite(terminalRef.current, line);
+          echoLine(line);
         }
 
         // Announce pet improve via OOC if enabled
@@ -232,11 +238,11 @@ export function useSkillTracker(
         lastImproveRef.current = null;
 
         // Write inline correction outside updater
-        if (showInlineImprovesRef.current && terminalRef.current) {
+        if (showInlineImprovesRef.current) {
           const tier = getTierForCount(last.prevCount);
           const label = last.who === 'self' ? last.skill : `${last.who}: ${last.skill}`;
           const line = `\x1b[33m[${label} -1 (mistake) \u2192 ${last.prevCount} (${tier.abbr})]\x1b[0m\r\n`;
-          smartWrite(terminalRef.current, line);
+          echoLine(line);
         }
 
         // Pure state update using captured `last`

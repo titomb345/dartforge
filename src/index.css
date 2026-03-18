@@ -285,3 +285,10 @@ input[type='number'] {
 .skill-cold .skill-rate {
   color: #8be9fd;
 }
+
+/* ── Panel content font-size scaling ──────────────────── */
+/* Override Tailwind's hardcoded text-[Npx] utilities inside panel content
+   areas so they scale with the global panelFontSize setting. */
+.panel-content [class*="text-\[11px\]"] { font-size: inherit !important; }
+.panel-content [class*="text-\[10px\]"] { font-size: calc(1em - 1px) !important; }
+.panel-content [class*="text-\[12px\]"] { font-size: calc(1em + 1px) !important; }

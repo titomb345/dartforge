@@ -137,7 +137,6 @@ export const CommandInput = forwardRef<HTMLTextAreaElement, CommandInputProps>(
     onHistoryChangeRef.current = onHistoryChange;
     const [value, setValue] = useState('');
     const [history, setHistory] = useState<string[]>(initialHistory ?? []);
-    const historyLoadedRef = useRef(false);
     const historyIndexRef = useRef(-1);
     const searchPrefixRef = useRef('');
     const internalRef = useRef<HTMLTextAreaElement | null>(null);
@@ -154,10 +153,9 @@ export const CommandInput = forwardRef<HTMLTextAreaElement, CommandInputProps>(
       [ref]
     );
 
-    // Sync persisted history when it arrives from async load
+    // Sync history from parent (persisted load + companion commands)
     useEffect(() => {
-      if (!historyLoadedRef.current && initialHistory && initialHistory.length > 0) {
-        historyLoadedRef.current = true;
+      if (initialHistory) {
         setHistory(initialHistory);
       }
     }, [initialHistory]);

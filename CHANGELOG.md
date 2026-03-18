@@ -24,6 +24,7 @@ The `[Unreleased]` header controls automatic version bumping on merge:
 - Companion: virtual keyboard no longer causes a black box to cover the command input when focusing and scrolling
 - Companion: page can no longer be scrolled past its bounds when the keyboard is open, preventing the layout from shifting out of view
 - Companion: added scroll-to-bottom button that appears when scrolled up in the output area
+- Built-in slash commands (`/skill`, `/counter`, `/block`, etc.) now work inside aliases and triggers — previously only `/delay`, `/echo`, `/spam`, `/var`, and `/convert` were recognized
 
 ## [1.7.3] - 2026-03-13
 

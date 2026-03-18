@@ -201,6 +201,10 @@ function expandSegment(
     return [parseDirective(trimmed)];
   }
 
+  // Exclude this alias from matching in its own body expansion to prevent self-recursion
+  const childExcludeIds = excludeIds ? new Set(excludeIds) : new Set<string>();
+  childExcludeIds.add(match.alias.id);
+
   // Substitute arguments into alias body (variables expanded at execution time)
   const expanded = substituteArgs(match.alias.body, match.args, subOptions);
 
@@ -211,13 +215,16 @@ function expandSegment(
     const subTrimmed = sub.trim();
     if (!subTrimmed) continue;
 
-    // Check if this is a directive (no alias expansion needed)
-    if (/^\/(delay|echo|spam|var|convert)\s/i.test(subTrimmed)) {
+    // Check if this is a slash command (no alias expansion needed).
+    // Known directives are parsed into typed commands; unknown slash
+    // commands pass through as 'send' so executeCommands can route
+    // them to dispatchBuiltinCommand.
+    if (subTrimmed.startsWith('/')) {
       commands.push(parseDirective(subTrimmed));
     } else {
-      // Recursively expand (may hit another alias)
+      // Recursively expand (may hit another alias, but not this one)
       commands.push(
-        ...expandSegment(subTrimmed, aliases, enableSpeedwalk, depth + 1, subOptions, separator, excludeIds)
+        ...expandSegment(subTrimmed, aliases, enableSpeedwalk, depth + 1, subOptions, separator, childExcludeIds)
       );
     }
   }

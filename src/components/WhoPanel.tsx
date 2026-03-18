@@ -355,7 +355,7 @@ export function WhoPanel({ mode = 'slideout' }: PinnablePanelProps) {
       </PanelHeader>
 
       {/* Content */}
-      <div className="flex-1 overflow-y-auto">
+      <div className="panel-content flex-1 overflow-y-auto" style={{ fontSize: effectiveWhoFontSize + 'px' }}>
         {!snapshot ? (
           <div className="flex items-center justify-center h-full text-[10px] text-text-dim font-mono">
             Not connected

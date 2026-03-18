@@ -10,6 +10,7 @@ import { FONT_OPTIONS, DEFAULT_DISPLAY, type DisplaySettings } from '../hooks/us
 import { cn } from '../lib/cn';
 import { PaletteIcon } from './icons';
 import { PanelHeader } from './PanelHeader';
+import { useAppSettingsContext } from '../contexts/AppSettingsContext';
 
 interface ColorSettingsProps {
   theme: TerminalTheme;
@@ -178,6 +179,7 @@ export function ColorSettings({
   const bright = THEME_COLOR_META.filter((m) => m.group === 'bright');
   const [expandedKey, setExpandedKey] = useState<ThemeColorKey | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
+  const { panelFontSize, updatePanelFontSize } = useAppSettingsContext();
 
   const toggleExpanded = (key: ThemeColorKey) => {
     setExpandedKey((prev) => (prev === key ? null : key));
@@ -258,6 +260,37 @@ export function ColorSettings({
               </span>
               <button
                 onClick={() => onUpdateDisplay('fontSize', Math.min(28, display.fontSize + 1))}
+                className="w-[22px] h-[22px] bg-bg-input border border-border rounded text-text-label text-sm cursor-pointer flex items-center justify-center leading-none p-0"
+              >
+                +
+              </button>
+            </div>
+          </div>
+
+          {/* Panel font size */}
+          <div className="px-2 py-1 flex items-center gap-2">
+            <span className="text-xs text-text-label flex-1">Panel Font</span>
+            {panelFontSize !== 11 && (
+              <button
+                onClick={() => updatePanelFontSize(11)}
+                className="bg-transparent border-none text-[#555] hover:text-text-label text-sm cursor-pointer px-0.5 leading-none"
+                title="Reset to default (11px)"
+              >
+                ↺
+              </button>
+            )}
+            <div className="flex items-center gap-1">
+              <button
+                onClick={() => updatePanelFontSize(Math.max(8, panelFontSize - 1))}
+                className="w-[22px] h-[22px] bg-bg-input border border-border rounded text-text-label text-sm cursor-pointer flex items-center justify-center leading-none p-0"
+              >
+                −
+              </button>
+              <span className="text-xs font-mono text-text-heading min-w-[28px] text-center">
+                {panelFontSize}px
+              </span>
+              <button
+                onClick={() => updatePanelFontSize(Math.min(18, panelFontSize + 1))}
                 className="w-[22px] h-[22px] bg-bg-input border border-border rounded text-text-label text-sm cursor-pointer flex items-center justify-center leading-none p-0"
               >
                 +

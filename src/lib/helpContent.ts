@@ -443,6 +443,11 @@ export const HELP_CATEGORIES: HelpCategory[] = [
         description:
           'Manage improve counters from the command line. "/counter list" shows all counters with status, imps, and elapsed time. "/counter status" shows a quick one-liner for the active counter. "/counter info" shows detailed stats including rates and skills. "/counter start|toggle|pause|stop|clear" controls the active counter. "/counter toggle" smart-toggles between start and pause. "/counter switch <name>" switches the active counter by name (partial match).',
       },
+      {
+        title: '/levels',
+        description:
+          'Display a reference table of all DartMUD skill levels with their improve count ranges. Shows a two-column table from "unskilled" through "mythic".',
+      },
     ],
   },
   {

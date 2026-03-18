@@ -17,7 +17,6 @@ import { ConfirmDeleteButton } from './ConfirmDeleteButton';
 import { FilterPill } from './FilterPill';
 import { MudInput, MudButton } from './shared';
 import { PanelHeader } from './PanelHeader';
-import { FontSizeControl } from './FontSizeControl';
 import { useAppSettingsContext } from '../contexts/AppSettingsContext';
 
 const SETTINGS_FILE = 'settings.json';
@@ -260,7 +259,7 @@ function buildSubGroups(
 export function SkillPanel({ mode = 'slideout' }: SkillPanelProps) {
   const { activeCharacter, skillData, addSkill } = useSkillTrackerContext();
   const dataStore = useDataStore();
-  const { panelFontSize, updatePanelFontSize } = useAppSettingsContext();
+  const { panelFontSize } = useAppSettingsContext();
   const [filter, setFilter] = useState<FilterValue>('all');
   const [sort, setSort] = useState<SortMode>('name');
   const [showSubs, setShowSubs] = useState(true);
@@ -421,7 +420,6 @@ export function SkillPanel({ mode = 'slideout' }: SkillPanelProps) {
   return (
     <div className={panelRootClass(isPinned)}>
       <PanelHeader icon={<TrendingUpIcon size={12} />} title={titleText} panel="skills" mode={mode}>
-        <FontSizeControl value={panelFontSize} onChange={updatePanelFontSize} />
         {sortButton}
         {addButton}
       </PanelHeader>
@@ -512,7 +510,7 @@ export function SkillPanel({ mode = 'slideout' }: SkillPanelProps) {
       )}
 
       {/* Skills list */}
-      <div className="flex-1 overflow-y-auto px-1 py-3" style={{ fontSize: panelFontSize + 'px' }}>
+      <div className="panel-content flex-1 overflow-y-auto px-1 py-3" style={{ fontSize: panelFontSize + 'px' }}>
         {!activeCharacter && (
           <div className="px-2 text-xs text-text-dim">Log in to track skills.</div>
         )}

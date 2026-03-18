@@ -5,7 +5,7 @@ import type { AutoConc } from './autoConc';
 import { parseConvertCommand, formatMultiConversion } from './currency';
 import { getSpellByAbbr, findSpellFuzzy } from './spellData';
 import { getSkillByAbbr, findSkillFuzzy } from './skillData';
-import { getTierForCount, getImprovesToNextTier } from './skillTiers';
+import { SKILL_TIERS, getTierForCount, getImprovesToNextTier } from './skillTiers';
 import type { Variable } from '../types/variable';
 import type { AnnounceMode } from '../types';
 import type { ImproveCounter } from '../types/counter';
@@ -725,6 +725,46 @@ const handlePowercast: Handler = async (trimmed, ctx) => {
   return true;
 };
 
+const handleLevels: Handler = async (trimmed, ctx) => {
+  if (!/^\/levels\b/i.test(trimmed)) return false;
+
+  const tiers = SKILL_TIERS.filter((t) => t.min > 0);
+  const mid = Math.ceil(tiers.length / 2);
+  const left = tiers.slice(0, mid);
+  const right = tiers.slice(mid);
+
+  // ASCII borders (Unicode box-drawing chars render at wrong widths in xterm.js)
+  const W = 32;
+  const dash = '-'.repeat(W);
+  const empty = ' '.repeat(W);
+  const title = 'DartMUD Skill Levels';
+  const inner = W * 2 + 1;
+  const titleCentered = title.padStart(Math.floor((inner + title.length) / 2)).padEnd(inner);
+
+  const lastLevel = SKILL_TIERS[SKILL_TIERS.length - 1].level;
+  const cell = (t: (typeof tiers)[0]) => {
+    const name = t.name.padEnd(16);
+    const range =
+      t.level === lastLevel
+        ? `${t.min}+`.padStart(13)
+        : `${String(t.min).padStart(5)} - ${String(t.max).padStart(5)}`;
+    return ` ${name} ${range} `;
+  };
+
+  echo(ctx, `+${dash}+${dash}+`);
+  echo(ctx, `|${titleCentered}|`);
+  echo(ctx, `+${dash}+${dash}+`);
+
+  for (let i = 0; i < left.length; i++) {
+    const lCell = cell(left[i]);
+    const rCell = right[i] ? cell(right[i]) : empty;
+    echo(ctx, `|${lCell}|${rCell}|`);
+  }
+
+  echo(ctx, `+${dash}+${dash}+`);
+  return true;
+};
+
 /** Ordered list of built-in command handlers. Returns true if command was handled. */
 const BUILTIN_HANDLERS: Handler[] = [
   handleBlock,
@@ -740,6 +780,7 @@ const BUILTIN_HANDLERS: Handler[] = [
   handleSkill,
   handleCounter,
   handlePowercast,
+  handleLevels,
 ];
 
 /**

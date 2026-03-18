@@ -30,6 +30,7 @@ pub struct CompanionCommandPayload {
 pub enum CompanionMessage {
     MudOutput { data: String },
     ConnectionStatus { connected: bool, message: String },
+    CommandHistory { history: Vec<String> },
 }
 
 // ── Replay buffer ───────────────────────────────────────────────────
@@ -68,6 +69,7 @@ struct AxumState {
     broadcast_tx: broadcast::Sender<CompanionMessage>,
     replay: Arc<Mutex<ReplayBuffer>>,
     last_status: Arc<Mutex<Option<(bool, String)>>>,
+    last_history: Arc<Mutex<Vec<String>>>,
     app_handle: AppHandle,
 }
 
@@ -76,6 +78,7 @@ pub struct CompanionState {
     pub broadcast_tx: broadcast::Sender<CompanionMessage>,
     pub replay: Arc<Mutex<ReplayBuffer>>,
     pub last_status: Arc<Mutex<Option<(bool, String)>>>,
+    pub last_history: Arc<Mutex<Vec<String>>>,
     server_handle: Mutex<Option<tokio::task::JoinHandle<()>>>,
     running_port: Mutex<Option<u16>>,
 }
@@ -86,6 +89,7 @@ impl CompanionState {
             broadcast_tx,
             replay: Arc::new(Mutex::new(ReplayBuffer::new())),
             last_status: Arc::new(Mutex::new(None)),
+            last_history: Arc::new(Mutex::new(Vec::new())),
             server_handle: Mutex::new(None),
             running_port: Mutex::new(None),
         }
@@ -133,6 +137,17 @@ pub async fn broadcast_companion_output(
     Ok(())
 }
 
+/// Called by the frontend to sync command history to companion clients.
+#[tauri::command]
+pub async fn broadcast_companion_history(
+    state: tauri::State<'_, CompanionState>,
+    history: Vec<String>,
+) -> Result<(), String> {
+    *state.last_history.lock().await = history.clone();
+    let _ = state.broadcast_tx.send(CompanionMessage::CommandHistory { history });
+    Ok(())
+}
+
 #[tauri::command]
 pub async fn start_companion(
     app: AppHandle,
@@ -158,6 +173,7 @@ pub async fn start_companion(
         broadcast_tx: state.broadcast_tx.clone(),
         replay: state.replay.clone(),
         last_status: state.last_status.clone(),
+        last_history: state.last_history.clone(),
         app_handle: app,
     });
 
@@ -287,6 +303,20 @@ async fn handle_ws(socket: WebSocket, state: Arc<AxumState>) {
             }
         }
     }
+    // Send command history so arrow buttons work immediately
+    {
+        let history = state.last_history.lock().await;
+        if !history.is_empty() {
+            let json = serde_json::json!({
+                "type": "history",
+                "history": *history
+            })
+            .to_string();
+            if ws_tx.send(Message::Text(json)).await.is_err() {
+                return;
+            }
+        }
+    }
 
     // Task: broadcast → WebSocket client
     let send_task = tokio::spawn(async move {
@@ -304,6 +334,13 @@ async fn handle_ws(socket: WebSocket, state: Arc<AxumState>) {
                         "type": "status",
                         "connected": connected,
                         "message": message
+                    })
+                    .to_string()
+                }
+                CompanionMessage::CommandHistory { history } => {
+                    serde_json::json!({
+                        "type": "history",
+                        "history": history
                     })
                     .to_string()
                 }

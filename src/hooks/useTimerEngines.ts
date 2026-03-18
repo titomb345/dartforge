@@ -1,6 +1,5 @@
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { useLatestRef } from './useLatestRef';
-import type { Terminal as XTerm } from '@xterm/xterm';
 import type { Timer } from '../types/timer';
 import type { TimerState } from '../contexts/TimerContext';
 import type { Alias } from '../types/alias';
@@ -9,7 +8,6 @@ import type { CommandRunner } from '../lib/commandUtils';
 import { expandInput } from '../lib/aliasEngine';
 import { executeCommands } from '../lib/commandUtils';
 import { executeTimerScript } from '../lib/scriptEngine';
-import { smartWrite } from '../lib/terminalUtils';
 import { DEFAULT_BABEL_PHRASES } from '../lib/babelPhrases';
 
 /** Shared hook for the recurring guard → setInterval → cleanup pattern. */
@@ -61,7 +59,7 @@ interface TimerEnginesDeps {
   mergedTimers: Timer[];
   timerState: TimerState;
   sendCommandRef: React.RefObject<((cmd: string) => Promise<void>) | null>;
-  terminalRef: React.RefObject<XTerm | null>;
+  writeToTermRef: React.RefObject<(text: string) => void>;
   outputFilterRef: React.RefObject<OutputFilter | null>;
   mergedAliasesRef: React.RefObject<Alias[]>;
   enableSpeedwalkRef: React.RefObject<boolean>;
@@ -88,7 +86,7 @@ export function useTimerEngines({
   mergedTimers,
   timerState,
   sendCommandRef,
-  terminalRef,
+  writeToTermRef,
   outputFilterRef,
   mergedAliasesRef,
   enableSpeedwalkRef,
@@ -107,9 +105,7 @@ export function useTimerEngines({
     () => {
       const cmd = antiIdleCommandRef.current;
       if (sendCommandRef.current && antiIdleEnabledRef.current) {
-        if (terminalRef.current) {
-          smartWrite(terminalRef.current, `\x1b[90m[anti-idle: ${cmd}]\x1b[0m\r\n`);
-        }
+        writeToTermRef.current?.(`\x1b[90m[anti-idle: ${cmd}]\x1b[0m\r\n`);
         sendCommandRef.current(cmd);
       }
     },
@@ -123,8 +119,8 @@ export function useTimerEngines({
     alignmentTrackingMinutes * 60_000,
     () => {
       if (sendCommandRef.current && alignmentTrackingEnabledRef.current) {
-        if (terminalRef.current && !outputFilterRef.current?.filterFlags.alignment) {
-          smartWrite(terminalRef.current, `\x1b[90m[alignment sync]\x1b[0m\r\n`);
+        if (!outputFilterRef.current?.filterFlags.alignment) {
+          writeToTermRef.current?.(`\x1b[90m[alignment sync]\x1b[0m\r\n`);
         }
         sendCommandRef.current('show alignment');
       }
@@ -163,9 +159,7 @@ export function useTimerEngines({
       const lang = babelLanguageRef.current;
       if (sendCommandRef.current && babelEnabledRef.current && lang) {
         const phrase = phrases[Math.floor(Math.random() * phrases.length)];
-        if (terminalRef.current) {
-          smartWrite(terminalRef.current, `\x1b[90m[babel: ${lang}] ${phrase}\x1b[0m\r\n`);
-        }
+        writeToTermRef.current?.(`\x1b[90m[babel: ${lang}] ${phrase}\x1b[0m\r\n`);
         sendCommandRef.current(`say (lang=${lang}) ${phrase}`);
       }
     };
