@@ -9,7 +9,7 @@ The `[Unreleased]` header controls automatic version bumping on merge:
 - `[Unreleased-minor]` → 0.1.0 → 0.2.0
 - `[Unreleased-major]` → 0.1.0 → 1.0.0
 
-## [Unreleased-minor]
+## [1.8.0] - 2026-03-18
 
 ### Added
 - Global panel font size setting — a single control that sets the default font size for all panels, configurable from Settings > Display or from any panel header. Chat, Who, and Allocations panels support per-panel overrides with a clear-override button (only visible when the panel size differs from global)
