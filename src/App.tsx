@@ -503,7 +503,14 @@ function AppMain() {
   const processorRef = useRef<OutputProcessor | null>(null);
   if (!processorRef.current) {
     processorRef.current = new OutputProcessor();
-    processorRef.current.registerMatcher(matchSkillLine);
+    // Permanent matcher drops `shown-skill` — those are only meaningful as the
+    // response to a client-initiated `show skills <name>`, and player/pet readouts
+    // are indistinguishable on the wire (see useSkillTracker temp matcher).
+    processorRef.current.registerMatcher((line) => {
+      const result = matchSkillLine(line);
+      if (result && result.type === 'shown-skill') return null;
+      return result;
+    });
   }
 
   // Sound library (built-in chimes + custom sounds)

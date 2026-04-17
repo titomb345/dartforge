@@ -83,6 +83,7 @@ export interface AllocState {
   magicView: AllocView;
   setMagicView: (view: AllocView) => void;
   currentMagicProfile: MagicProfile | null;
+  setCurrentMagicProfileIndex: (idx: number) => void;
   navigateMagicProfile: (direction: 'prev' | 'next') => void;
   createMagicProfile: (name?: string) => void;
   createMagicProfileFromLive: (name?: string) => void;
@@ -553,6 +554,13 @@ export function useAllocations(
 
   const currentMagicProfile = magicData.profiles[magicData.currentProfileIndex] ?? null;
 
+  const setCurrentMagicProfileIndex = useCallback((idx: number) => {
+    setMagicData((prev) => ({
+      ...prev,
+      currentProfileIndex: Math.max(0, Math.min(prev.profiles.length - 1, idx)),
+    }));
+  }, []);
+
   const navigateMagicProfile = useCallback((direction: 'prev' | 'next') => {
     setMagicData((prev) => {
       if (prev.profiles.length === 0) return prev;
@@ -757,6 +765,7 @@ export function useAllocations(
       magicView,
       setMagicView,
       currentMagicProfile,
+      setCurrentMagicProfileIndex,
       navigateMagicProfile,
       createMagicProfile,
       createMagicProfileFromLive,

@@ -9,6 +9,19 @@ The `[Unreleased]` header controls automatic version bumping on merge:
 - `[Unreleased-minor]` → 0.1.0 → 0.2.0
 - `[Unreleased-major]` → 0.1.0 → 1.0.0
 
+## [Unreleased-minor]
+
+### Added
+- Window state persistence — DartForge now remembers its window position, size, and maximized state between sessions, reopening exactly where you left it
+
+### Changed
+- Allocation panel profile selector — replaced left/right arrow navigation with a dropdown switcher; click the profile name to rename, click the chevron to pick from all profiles instantly
+- Allocation panel now shows content even when disconnected — profiles and settings are always accessible without an active connection
+- Backup restore now requires a two-step confirm — first click flips the button to "Overwrite?", second click performs the restore; clicking away cancels
+
+### Fixed
+- Pet skill readouts no longer overwrite player skill counts. Skill verification now only runs against the player's own skill the client explicitly asked the MUD about.
+
 ## [1.8.0] - 2026-03-18
 
 ### Added

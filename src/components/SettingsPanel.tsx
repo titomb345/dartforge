@@ -1333,6 +1333,7 @@ function BackupsSection({ open, onToggle }: { open: boolean; onToggle: () => voi
   const [status, showStatus] = useFlashStatus();
   const loadedRef = useRef(false);
   const [candidates, setCandidates] = useState<string[]>([]);
+  const [confirmingPath, setConfirmingPath] = useState<string | null>(null);
 
   // Load candidates for restore
   useEffect(() => {
@@ -1367,6 +1368,7 @@ function BackupsSection({ open, onToggle }: { open: boolean; onToggle: () => voi
 
   async function restoreBackup(backupPath: string) {
     if (!invoke) return;
+    setConfirmingPath(null);
     try {
       await invoke('restore_backup', { backupPath });
       await dataStore.reloadFromDir(candidates);
@@ -1435,16 +1437,30 @@ function BackupsSection({ open, onToggle }: { open: boolean; onToggle: () => voi
                 <span className="text-[9px] text-text-dim font-mono ml-auto mr-1">
                   {formatSize(entry.size)}
                 </span>
-                <button
-                  onClick={() => restoreBackup(entry.path)}
-                  className={cn(
-                    'text-[9px] font-mono px-1 py-0.5 rounded border cursor-pointer',
-                    'text-text-dim border-border-dim opacity-0 group-hover:opacity-100',
-                    'hover:text-cyan hover:border-cyan/30 transition-all'
-                  )}
-                >
-                  Restore
-                </button>
+                {confirmingPath === entry.path ? (
+                  <button
+                    onClick={() => restoreBackup(entry.path)}
+                    onBlur={() => setConfirmingPath(null)}
+                    autoFocus
+                    className={cn(
+                      'text-[9px] font-mono px-1 py-0.5 rounded border cursor-pointer',
+                      'text-[#f59e0b] border-[#f59e0b]/40 hover:bg-[#f59e0b]/10 transition-colors'
+                    )}
+                  >
+                    Overwrite?
+                  </button>
+                ) : (
+                  <button
+                    onClick={() => setConfirmingPath(entry.path)}
+                    className={cn(
+                      'text-[9px] font-mono px-1 py-0.5 rounded border cursor-pointer',
+                      'text-text-dim border-border-dim opacity-0 group-hover:opacity-100',
+                      'hover:text-cyan hover:border-cyan/30 transition-all'
+                    )}
+                  >
+                    Restore
+                  </button>
+                )}
               </div>
             </div>
           ))}

@@ -16,7 +16,6 @@ import { PanelHeader } from './PanelHeader';
 import { FontSizeControl } from './FontSizeControl';
 import {
   ChevronLeftIcon,
-  ChevronRightSmallIcon,
   PlusIcon,
   CopyIcon,
   CheckIcon,
@@ -179,6 +178,88 @@ function InlineField({
       style={accent ? { borderColor: `${accent}60` } : undefined}
       placeholder={placeholder}
     />
+  );
+}
+
+/** Profile name with dropdown switcher. Click name to rename, chevron to switch. */
+function ProfileSelector({
+  profiles,
+  currentIndex,
+  onSelect,
+  onRename,
+  accent,
+}: {
+  profiles: { id: string; name: string }[];
+  currentIndex: number;
+  onSelect: (idx: number) => void;
+  onRename: (id: string, name: string) => void;
+  accent: string;
+}) {
+  const [open, setOpen] = useState(false);
+  const menuRef = useRef<HTMLDivElement>(null);
+  const current = profiles[currentIndex] ?? null;
+
+  useEffect(() => {
+    if (!open) return;
+    const handler = (e: MouseEvent) => {
+      if (menuRef.current && !menuRef.current.contains(e.target as Node)) setOpen(false);
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, [open]);
+
+  if (!current) {
+    return <span className="flex-1 text-[11px] text-text-dim italic min-w-0">no profiles</span>;
+  }
+
+  return (
+    <div className="relative flex items-center flex-1 min-w-0 gap-0" ref={menuRef}>
+      <InlineField
+        value={current.name}
+        placeholder="name"
+        onSave={(v) => onRename(current.id, v)}
+        className="flex-1 min-w-0 font-semibold"
+        accent={accent}
+      />
+      {profiles.length > 1 && (
+        <button
+          onClick={() => setOpen((v) => !v)}
+          className={cn(
+            'flex items-center justify-center w-[16px] h-[16px] rounded shrink-0 cursor-pointer transition-colors',
+            open ? 'text-text-primary' : 'text-text-dim hover:text-text-primary'
+          )}
+          title={`Switch profile (${profiles.length})`}
+        >
+          <ChevronDownSmallIcon size={10} />
+        </button>
+      )}
+      {open && (
+        <div className="absolute top-full left-0 mt-1 min-w-[160px] max-h-[240px] overflow-auto bg-bg-primary border border-border rounded shadow-lg z-50">
+          {profiles.map((p, idx) => (
+            <button
+              key={p.id}
+              onClick={() => {
+                onSelect(idx);
+                setOpen(false);
+              }}
+              className={cn(
+                'flex items-center w-full px-2 py-1 text-[10px] text-left cursor-pointer transition-colors truncate',
+                idx === currentIndex
+                  ? 'font-semibold'
+                  : 'text-text-label hover:bg-bg-secondary/60'
+              )}
+              style={
+                idx === currentIndex
+                  ? { color: accent, background: `${accent}10` }
+                  : undefined
+              }
+            >
+              <span className="truncate">{p.name || 'unnamed'}</span>
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
   );
 }
 
@@ -598,7 +679,7 @@ function ProfileView() {
   const {
     data,
     currentProfile,
-    navigateProfile,
+    setCurrentProfileIndex,
     createProfile,
     deleteProfile,
     duplicateProfile,
@@ -611,8 +692,6 @@ function ProfileView() {
     loadProfileToLive,
   } = useAllocContext();
 
-  const profileNum = data.profiles.length > 0 ? data.currentProfileIndex + 1 : 0;
-  const profileTotal = data.profiles.length;
   // Use detectedLimbs for canonical ordering; fall back to profile keys for limbs not yet detected
   const limbNames =
     data.detectedLimbs.length > 0
@@ -625,40 +704,13 @@ function ProfileView() {
     <>
       {/* Profile navigation row */}
       <div className="flex items-center gap-1 px-2 py-1 border-b border-border-dim shrink-0">
-        <button
-          onClick={() => navigateProfile('prev')}
-          disabled={profileTotal === 0}
-          className="flex items-center justify-center w-[18px] h-[18px] rounded text-text-dim hover:text-text-primary cursor-pointer disabled:opacity-30 disabled:cursor-default transition-colors"
-          title="Previous profile"
-        >
-          <ChevronLeftIcon size={10} />
-        </button>
-        <span className="text-[11px] font-mono text-text-label w-[40px] text-center tabular-nums">
-          {profileTotal > 0
-            ? `${String(profileNum).padStart(2, '0')}/${String(profileTotal).padStart(2, '0')}`
-            : '--/--'}
-        </span>
-        <button
-          onClick={() => navigateProfile('next')}
-          disabled={profileTotal === 0}
-          className="flex items-center justify-center w-[18px] h-[18px] rounded text-text-dim hover:text-text-primary cursor-pointer disabled:opacity-30 disabled:cursor-default transition-colors"
-          title="Next profile"
-        >
-          <ChevronRightSmallIcon size={10} />
-        </button>
-
-        <div className="w-px h-3 bg-border-dim mx-0.5" />
-
-        {currentProfile ? (
-          <InlineField
-            value={currentProfile.name}
-            placeholder="name"
-            onSave={(v) => renameProfile(currentProfile.id, v)}
-            className="flex-1 min-w-0 font-semibold"
-          />
-        ) : (
-          <span className="flex-1 text-[11px] text-text-dim italic">no profiles</span>
-        )}
+        <ProfileSelector
+          profiles={data.profiles}
+          currentIndex={data.currentProfileIndex}
+          onSelect={setCurrentProfileIndex}
+          onRename={renameProfile}
+          accent={ACCENT}
+        />
 
         <div className="w-px h-3 bg-border-dim mx-0.5" />
 
@@ -865,7 +917,7 @@ function MagicProfileView() {
   const {
     magicData,
     currentMagicProfile,
-    navigateMagicProfile,
+    setCurrentMagicProfileIndex,
     createMagicProfile,
     deleteMagicProfile,
     duplicateMagicProfile,
@@ -876,48 +928,17 @@ function MagicProfileView() {
     loadMagicProfileToLive,
   } = useAllocContext();
 
-  const profileNum = magicData.profiles.length > 0 ? magicData.currentProfileIndex + 1 : 0;
-  const profileTotal = magicData.profiles.length;
-
   return (
     <>
       {/* Profile navigation row */}
       <div className="flex items-center gap-1 px-2 py-1 border-b border-border-dim shrink-0">
-        <button
-          onClick={() => navigateMagicProfile('prev')}
-          disabled={profileTotal === 0}
-          className="flex items-center justify-center w-[18px] h-[18px] rounded text-text-dim hover:text-text-primary cursor-pointer disabled:opacity-30 disabled:cursor-default transition-colors"
-          title="Previous profile"
-        >
-          <ChevronLeftIcon size={10} />
-        </button>
-        <span className="text-[11px] font-mono text-text-label w-[40px] text-center tabular-nums">
-          {profileTotal > 0
-            ? `${String(profileNum).padStart(2, '0')}/${String(profileTotal).padStart(2, '0')}`
-            : '--/--'}
-        </span>
-        <button
-          onClick={() => navigateMagicProfile('next')}
-          disabled={profileTotal === 0}
-          className="flex items-center justify-center w-[18px] h-[18px] rounded text-text-dim hover:text-text-primary cursor-pointer disabled:opacity-30 disabled:cursor-default transition-colors"
-          title="Next profile"
-        >
-          <ChevronRightSmallIcon size={10} />
-        </button>
-
-        <div className="w-px h-3 bg-border-dim mx-0.5" />
-
-        {currentMagicProfile ? (
-          <InlineField
-            value={currentMagicProfile.name}
-            placeholder="name"
-            onSave={(v) => renameMagicProfile(currentMagicProfile.id, v)}
-            className="flex-1 min-w-0 font-semibold"
-            accent={MAGIC_ACCENT}
-          />
-        ) : (
-          <span className="flex-1 text-[11px] text-text-dim italic">no profiles</span>
-        )}
+        <ProfileSelector
+          profiles={magicData.profiles}
+          currentIndex={magicData.currentProfileIndex}
+          onSelect={setCurrentMagicProfileIndex}
+          onRename={renameMagicProfile}
+          accent={MAGIC_ACCENT}
+        />
 
         <div className="w-px h-3 bg-border-dim mx-0.5" />
 
@@ -1037,7 +1058,7 @@ export function AllocPanel({ mode = 'slideout' }: AllocPanelProps) {
   const isPinned = mode === 'pinned';
   const { view, setView, allocTab, setAllocTab, magicView, setMagicView } =
     useAllocContext();
-  const { connected, panelFontSize, allocFontSize, updateAllocFontSize } = useAppSettingsContext();
+  const { panelFontSize, allocFontSize, updateAllocFontSize } = useAppSettingsContext();
   const effectiveAllocFontSize = allocFontSize ?? panelFontSize;
 
   return (
@@ -1058,34 +1079,26 @@ export function AllocPanel({ mode = 'slideout' }: AllocPanelProps) {
         />
       </PanelHeader>
 
-      {!connected ? (
-        <div className="flex items-center justify-center h-full text-[10px] text-text-dim font-mono">
-          Not connected
-        </div>
-      ) : (
-        <>
-          {/* Tabs & view toggle */}
-          <div className="flex items-center gap-1.5 px-2 py-1.5 border-b border-border-subtle shrink-0">
-            <TabToggle tab={allocTab} onSetTab={setAllocTab} />
-            {allocTab === 'combat' ? (
-              <ViewToggle view={view} onSetView={setView} accent={ACCENT} />
-            ) : (
-              <ViewToggle view={magicView} onSetView={setMagicView} accent={MAGIC_ACCENT} />
-            )}
-          </div>
+      {/* Tabs & view toggle */}
+      <div className="flex items-center gap-1.5 px-2 py-1.5 border-b border-border-subtle shrink-0">
+        <TabToggle tab={allocTab} onSetTab={setAllocTab} />
+        {allocTab === 'combat' ? (
+          <ViewToggle view={view} onSetView={setView} accent={ACCENT} />
+        ) : (
+          <ViewToggle view={magicView} onSetView={setMagicView} accent={MAGIC_ACCENT} />
+        )}
+      </div>
 
-          {allocTab === 'combat' ? (
-            view === 'live' ? (
-              <LiveView />
-            ) : (
-              <ProfileView />
-            )
-          ) : magicView === 'live' ? (
-            <MagicLiveView />
-          ) : (
-            <MagicProfileView />
-          )}
-        </>
+      {allocTab === 'combat' ? (
+        view === 'live' ? (
+          <LiveView />
+        ) : (
+          <ProfileView />
+        )
+      ) : magicView === 'live' ? (
+        <MagicLiveView />
+      ) : (
+        <MagicProfileView />
       )}
     </div>
   );

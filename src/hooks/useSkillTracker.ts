@@ -185,9 +185,12 @@ export function useSkillTracker(
           sendCommandRef.current(`show skills ${match.skill}`).catch(console.error);
         }
         if (processorRef.current) {
+          const expectedSkill = match.skill;
           processorRef.current.registerTempMatcher((line: string) => {
             const result = matchSkillLine(line);
-            if (result && result.type === 'shown-skill') return result;
+            if (result && result.type === 'shown-skill' && result.skill === expectedSkill) {
+              return result;
+            }
             return null;
           }, SHOW_SKILL_TIMEOUT_MS);
         }
