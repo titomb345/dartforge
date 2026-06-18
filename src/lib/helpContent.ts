@@ -166,7 +166,7 @@ export const HELP_CATEGORIES: HelpCategory[] = [
       {
         title: 'Mobile Companion',
         description:
-          'Enable in Settings > Mobile Companion to start a local web server. Open the displayed URL or scan the QR code on your phone (same WiFi network) to see MUD output with colors and send commands remotely.',
+          'Enable in Settings > Mobile Companion to start a local web server. Open the displayed URL or scan the QR code (same WiFi network) to see MUD output with colors and send commands remotely. It adapts to the device: phones get a directional d-pad and Prev/Next history buttons, while laptops/desktops get a wider layout where the numpad sends commands using your customizable DartForge numpad bindings and the arrow keys cycle history. Your character status bar — health, concentration, aura, hunger, thirst, encumbrance, movement and alignment — mirrors the desktop client just above the command input, collapsing to icon-only chips on phones (tap one to reveal its label). A sub-bar shows the in-game clock and lets you resize the output text, and your custom quick buttons (with live toggle state) appear above the input. Collapsible Who and Counters panels mirror the online-players list and your improve counters.',
       },
     ],
   },

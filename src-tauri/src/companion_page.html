@@ -3,15 +3,17 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, interactive-widget=resizes-content">
-<meta name="theme-color" content="#1e1f29">
+<meta name="theme-color" content="#000000">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <title>DartForge</title>
 <style>
   :root {
-    --bg: #282a36;
-    --bg-dark: #1e1f29;
-    --bg-input: #21222c;
+    /* True black output to match the desktop terminal; chrome is a hair
+       lighter so the header / input / d-pad read as distinct surfaces. */
+    --bg: #000000;
+    --bg-chrome: #0a0a0c;
+    --bg-input: #15151a;
     --fg: #f8f8f2;
     --fg-dim: #6272a4;
     --cyan: #8be9fd;
@@ -19,9 +21,13 @@
     --red: #ff5555;
     --orange: #ffb86c;
     --purple: #bd93f9;
-    --border: #44475a;
+    --border: #2a2a31;
     --safe-bottom: env(safe-area-inset-bottom, 0px);
     --safe-top: env(safe-area-inset-top, 0px);
+    /* Monospace stack tuned for ASCII-map fidelity (avoids Courier New,
+       whose loose metrics made the hex map look scrunched). */
+    --mono: ui-monospace, 'Cascadia Mono', 'Cascadia Code', Consolas, Menlo,
+            'DejaVu Sans Mono', 'Liberation Mono', monospace;
   }
 
   * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -32,7 +38,7 @@
     height: 100%;
     background: var(--bg);
     color: var(--fg);
-    font-family: 'Courier New', Courier, monospace;
+    font-family: var(--mono);
     font-size: 13px;
     overflow: hidden;
     overscroll-behavior: none;
@@ -59,7 +65,7 @@
     align-items: center;
     justify-content: space-between;
     padding: 10px 14px;
-    background: var(--bg-dark);
+    background: var(--bg-chrome);
     border-bottom: 1px solid var(--border);
     flex-shrink: 0;
   }
@@ -124,12 +130,172 @@
   #power-btn.connected { color: var(--green); border-color: var(--green); }
   #power-btn.disconnected { color: var(--red); border-color: var(--border); }
 
+  /* ── Vitals (character status) bar ───────────────── */
+  /* Mirrors the desktop status bar, pinned above the command input. On phones
+     the readouts collapse to icon-only chips (state is conveyed by color); tap
+     a chip to reveal its label. Wide screens show full labels like desktop. */
+  #vitals {
+    display: none;
+    align-items: center;
+    gap: 5px;
+    padding: 6px 10px;
+    background: var(--bg-chrome);
+    border-top: 1px solid var(--border);
+    overflow-x: auto;
+    overflow-y: hidden;
+    white-space: nowrap;
+    flex-shrink: 0;
+    scrollbar-width: none;
+  }
+  #vitals.populated { display: flex; }
+  #vitals::-webkit-scrollbar { display: none; }
+
+  .vital {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    flex-shrink: 0;
+    padding: 4px 6px;
+    border-radius: 3px;
+    border-left: 2px solid currentColor;
+    background: rgba(255, 255, 255, 0.04);
+    font-size: 10px;
+    font-weight: bold;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    line-height: 1;
+    cursor: pointer;
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  .vital svg {
+    width: 14px;
+    height: 14px;
+    flex-shrink: 0;
+    display: block;
+  }
+
+  /* Collapsed (icon-only) by default; revealed when the chip is expanded. */
+  .vital-label { display: none; }
+  .vital.show-label { padding-right: 8px; }
+  .vital.show-label .vital-label { display: inline; }
+
+  .vital.danger {
+    animation: vital-flash 1s ease-in-out infinite;
+  }
+
+  @keyframes vital-flash {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.35; }
+  }
+
+  /* ── Sub bar (clock + Who/Counters toggles + font size) ── */
+  #subbar {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 5px 10px;
+    background: var(--bg-chrome);
+    border-bottom: 1px solid var(--border);
+    flex-shrink: 0;
+    font-size: 11px;
+  }
+  #clock {
+    color: var(--fg-dim);
+    white-space: nowrap;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  #clock b { color: var(--cyan); font-weight: bold; }
+  .subbar-spacer { flex: 1; }
+  .subbar-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    height: 26px;
+    padding: 0 8px;
+    background: var(--bg-input);
+    border: 1px solid var(--border);
+    border-radius: 5px;
+    color: var(--fg-dim);
+    font-family: inherit;
+    font-size: 11px;
+    font-weight: bold;
+    cursor: pointer;
+    -webkit-tap-highlight-color: transparent;
+    flex-shrink: 0;
+  }
+  .subbar-btn:active { background: var(--border); }
+  .subbar-btn.active { color: var(--cyan); border-color: var(--cyan); }
+  .subbar-btn.icon-only { width: 28px; padding: 0; justify-content: center; }
+
+  /* ── Aux panels (Who / Counters) ─────────────────── */
+  .aux-panel {
+    display: none;
+    flex-shrink: 0;
+    max-height: 40vh;
+    overflow-y: auto;
+    background: var(--bg-chrome);
+    border-bottom: 1px solid var(--border);
+    padding: 6px 10px;
+    font-size: 12px;
+    -webkit-overflow-scrolling: touch;
+  }
+  .aux-panel.open { display: block; }
+  .aux-title {
+    color: var(--fg-dim);
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    margin-bottom: 5px;
+  }
+  .who-row { display: flex; align-items: baseline; gap: 6px; padding: 2px 0; white-space: nowrap; }
+  .who-guild { color: var(--purple); font-size: 10px; }
+  .who-idle { color: var(--fg-dim); font-size: 10px; margin-left: auto; padding-left: 8px; }
+  .who-row.title-row { color: var(--fg-dim); font-style: italic; }
+  .counter-row { display: flex; align-items: baseline; gap: 8px; padding: 3px 0; flex-wrap: wrap; }
+  .counter-name { font-weight: bold; }
+  .counter-name.active { color: var(--green); }
+  .counter-stat { color: var(--fg-dim); font-size: 11px; }
+  .counter-stat b { color: var(--orange); font-weight: bold; }
+
+  /* ── Quick buttons row ───────────────────────────── */
+  #quickbtns {
+    display: none;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 10px;
+    background: var(--bg-chrome);
+    border-top: 1px solid var(--border);
+    overflow-x: auto;
+    white-space: nowrap;
+    flex-shrink: 0;
+    scrollbar-width: none;
+  }
+  #quickbtns.populated { display: flex; }
+  #quickbtns::-webkit-scrollbar { display: none; }
+  .qbtn {
+    flex-shrink: 0;
+    padding: 5px 12px;
+    border-radius: 999px;
+    border: 1px solid currentColor;
+    background: rgba(255, 255, 255, 0.04);
+    font-family: inherit;
+    font-size: 11px;
+    font-weight: bold;
+    cursor: pointer;
+    -webkit-tap-highlight-color: transparent;
+  }
+  .qbtn:active { opacity: 0.7; }
+  .qbtn.disabled { opacity: 0.4; pointer-events: none; }
+
   /* ── Reconnect banner ────────────────────────────── */
   #reconnect-banner {
     display: none;
     padding: 8px 14px;
     background: var(--red);
-    color: var(--bg-dark);
+    color: #000;
     font-size: 12px;
     font-weight: bold;
     text-align: center;
@@ -151,13 +317,14 @@
     padding: 10px 12px;
     white-space: pre-wrap;
     word-wrap: break-word;
-    line-height: 1.45;
+    /* Tight line-height keeps the hex map's aspect ratio correct. */
+    line-height: 1.2;
     -webkit-overflow-scrolling: touch;
   }
 
-  #output::-webkit-scrollbar { width: 4px; }
+  #output::-webkit-scrollbar { width: 6px; }
   #output::-webkit-scrollbar-track { background: transparent; }
-  #output::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+  #output::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
 
   /* ── ANSI colors ─────────────────────────────────── */
   .ansi-black { color: #44475a; }
@@ -202,7 +369,7 @@
     left: 50%;
     transform: translateX(-50%);
     background: var(--purple);
-    color: var(--bg-dark);
+    color: #000;
     font-size: 11px;
     font-weight: bold;
     padding: 5px 14px;
@@ -220,7 +387,7 @@
     justify-content: center;
     width: 100%;
     height: 22px;
-    background: var(--bg-dark);
+    background: var(--bg-chrome);
     border: none;
     border-top: 1px solid var(--border);
     color: var(--fg-dim);
@@ -237,7 +404,7 @@
     flex-direction: column;
     gap: 4px;
     padding: 8px 10px;
-    background: var(--bg-dark);
+    background: var(--bg-chrome);
     border-top: 1px solid var(--border);
     flex-shrink: 0;
   }
@@ -280,7 +447,7 @@
   /* ── Input ───────────────────────────────────────── */
   /* ── Input area (history strip + command row) ──── */
   #input-area {
-    background: var(--bg-dark);
+    background: var(--bg-chrome);
     border-top: 1px solid var(--border);
     flex-shrink: 0;
   }
@@ -340,7 +507,7 @@
     justify-content: center;
     width: 50px;
     background: var(--cyan);
-    color: var(--bg-dark);
+    color: #000;
     border: none;
     border-radius: 6px;
     cursor: pointer;
@@ -351,6 +518,16 @@
   #send-btn svg { width: 20px; height: 20px; }
   #send-btn:active { opacity: 0.8; }
   #send-btn:disabled { opacity: 0.3; cursor: not-allowed; }
+
+  /* Desktop-only hint about keyboard movement. */
+  #kbd-hint {
+    display: none;
+    padding: 0 12px 8px;
+    color: var(--fg-dim);
+    font-size: 10px;
+    letter-spacing: 0.03em;
+  }
+  #kbd-hint b { color: var(--cyan); font-weight: bold; }
 
   /* ── Empty state ─────────────────────────────────── */
   #empty-state {
@@ -366,7 +543,7 @@
   }
   #empty-state.hidden { display: none; }
 
-  /* ── Landscape ───────────────────────────────────── */
+  /* ── Landscape (short viewports) ─────────────────── */
   @media (max-height: 500px) {
     .quick-btn { height: 34px; min-width: 38px; font-size: 12px; }
     #quick-bar { padding: 5px 10px; gap: 3px; }
@@ -375,8 +552,32 @@
     #header { padding: 6px 12px; }
   }
 
-  @media (min-width: 420px) {
+  /* Large phones — roomier directional buttons. */
+  @media (min-width: 420px) and (max-width: 759px) {
     .quick-btn { min-width: 50px; height: 42px; }
+  }
+
+  /* ── Desktop layout ──────────────────────────────── */
+  /* On wide screens this runs as a "play from my laptop" client: the
+     on-screen d-pad and Prev/Next strip are hidden (use the numpad and
+     arrow keys instead), output gets more room, and the keyboard hint
+     appears. */
+  @media (min-width: 760px) {
+    body { font-size: 14px; }
+    #qbar-toggle,
+    #quick-bar,
+    .history-btns { display: none !important; }
+    /* Output, vitals and input all share the same left edge (full width,
+       left-aligned) so nothing floats in a centered column. */
+    #output { padding: 12px 18px; }
+    #input-bar { padding: 10px 18px 12px; }
+    #cmd-input { font-size: 15px; }
+    #vitals { padding: 7px 18px; }
+    #subbar { padding: 5px 18px; }
+    #quickbtns { padding: 6px 18px; }
+    .aux-panel { padding: 8px 18px; }
+    #kbd-hint { display: block; padding: 0 18px 8px; }
+    #send-btn { width: 56px; }
   }
 </style>
 </head>
@@ -398,6 +599,17 @@
       </svg>
     </button>
   </div>
+
+  <div id="subbar">
+    <span id="clock"></span>
+    <span class="subbar-spacer"></span>
+    <button class="subbar-btn" id="who-btn">Who</button>
+    <button class="subbar-btn" id="ctr-btn">Counters</button>
+    <button class="subbar-btn icon-only" id="font-dec" title="Smaller text">A&#x2212;</button>
+    <button class="subbar-btn icon-only" id="font-inc" title="Larger text">A+</button>
+  </div>
+  <div class="aux-panel" id="who-panel"></div>
+  <div class="aux-panel" id="counters-panel"></div>
 
   <div id="reconnect-banner">Connection lost — tap to reconnect</div>
 
@@ -432,6 +644,10 @@
     </div>
   </div>
 
+  <div id="quickbtns"></div>
+
+  <div id="vitals"></div>
+
   <div id="input-area">
     <div class="history-btns">
       <button class="hist-btn" id="hist-up" title="Previous command">
@@ -455,6 +671,7 @@
         </svg>
       </button>
     </div>
+    <div id="kbd-hint"><b>Numpad</b> moves you (matches your DartForge numpad bindings) · <b>&#x2191;&#x2193;</b> history</div>
   </div>
 </div>
 
@@ -505,6 +722,18 @@
     return result;
   }
 
+  // ── Vitals icons (mirror the desktop status-bar SVGs) ─────────
+  var VITAL_ICONS = {
+    health: '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/></svg>',
+    concentration: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2" fill="currentColor" stroke="none"/></svg>',
+    aura: '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 2l1.09 3.36L16.36 4l-1.36 3.27L18.36 8.36l-3.36 1.09L16 12.73l-3.27-1.36L11.64 14.73l-1.09-3.36L7.27 12.73l1.36-3.27L5.27 8.36l3.36-1.09L7.27 4l3.27 1.36z"/><path d="M19 15l.54 1.66 1.66.54-1.66.54L19 19.4l-.54-1.66-1.66-.54 1.66-.54z" opacity="0.7"/><path d="M5 17l.36 1.1 1.1.36-1.1.36L5 19.92l-.36-1.1-1.1-.36 1.1-.36z" opacity="0.5"/></svg>',
+    hunger: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8h1a4 4 0 0 1 0 8h-1"/><path d="M2 8h16v9a4 4 0 0 1-4 4H6a4 4 0 0 1-4-4V8z"/><line x1="6" y1="1" x2="6" y2="4"/><line x1="10" y1="1" x2="10" y2="4"/><line x1="14" y1="1" x2="14" y2="4"/></svg>',
+    thirst: '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 2.69l5.66 5.66a8 8 0 1 1-11.31 0z"/></svg>',
+    encumbrance: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2a3 3 0 0 0-3 3c0 1.1.6 2.1 1.5 2.6L9 22h6l-1.5-14.4A3 3 0 0 0 15 5a3 3 0 0 0-3-3z"/></svg>',
+    movement: '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M7 20h10v2H7zM15 4l-1 4h3l-1 4h3v6H5v-6h3l-1-4h3L9 4z"/></svg>',
+    alignment: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="3" x2="12" y2="15"/><polygon points="12,3 4,9 20,9" fill="none"/><line x1="4" y1="9" x2="3" y2="17"/><line x1="20" y1="9" x2="21" y2="17"/><ellipse cx="3" cy="18" rx="1.5" ry="1" fill="currentColor" stroke="none"/><ellipse cx="21" cy="18" rx="1.5" ry="1" fill="currentColor" stroke="none"/><line x1="8" y1="21" x2="16" y2="21"/></svg>'
+  };
+
   // ── Elements ──────────────────────────────────────────────────
   var output = document.getElementById('output');
   var cmdInput = document.getElementById('cmd-input');
@@ -518,6 +747,20 @@
   var quickBar = document.getElementById('quick-bar');
   var histUp = document.getElementById('hist-up');
   var histDown = document.getElementById('hist-down');
+  var vitalsBar = document.getElementById('vitals');
+  var clockEl = document.getElementById('clock');
+  var whoBtn = document.getElementById('who-btn');
+  var ctrBtn = document.getElementById('ctr-btn');
+  var whoPanel = document.getElementById('who-panel');
+  var countersPanel = document.getElementById('counters-panel');
+  var quickBtns = document.getElementById('quickbtns');
+  var fontDec = document.getElementById('font-dec');
+  var fontInc = document.getElementById('font-inc');
+
+  function esc(s) {
+    return String(s == null ? '' : s)
+      .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  }
 
   // ── State ─────────────────────────────────────────────────────
   var ws = null;
@@ -528,6 +771,187 @@
   var commandHistory = [];
   var historyIndex = -1;
   var searchPrefix = '';
+
+  // ── Vitals rendering ──────────────────────────────────────────
+  // Each readout is collapsed (icon-only) or expanded (icon + label),
+  // tracked per key and persisted. Default is collapsed on phones and
+  // expanded on desktop; tapping a chip toggles it on either device.
+  var lastReadouts = [];
+  var vitalCollapse = {};
+  try { vitalCollapse = JSON.parse(localStorage.getItem('df-vitals-collapse') || '{}') || {}; } catch(e) {}
+  var wideMq = window.matchMedia('(min-width: 760px)');
+
+  function isCollapsed(key) {
+    if (Object.prototype.hasOwnProperty.call(vitalCollapse, key)) return !!vitalCollapse[key];
+    return !wideMq.matches; // default: collapsed on mobile, expanded on desktop
+  }
+
+  function renderVitals(readouts) {
+    lastReadouts = Array.isArray(readouts) ? readouts : [];
+    if (lastReadouts.length === 0) {
+      vitalsBar.classList.remove('populated');
+      vitalsBar.innerHTML = '';
+      return;
+    }
+    var html = '';
+    for (var i = 0; i < lastReadouts.length; i++) {
+      var r = lastReadouts[i];
+      var icon = VITAL_ICONS[r.key] || '';
+      var color = (r.color || '#f8f8f2').replace(/"/g, '');
+      var label = String(r.label == null ? '' : r.label)
+        .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+      var expanded = !isCollapsed(r.key);
+      html += '<span class="vital' + (expanded ? ' show-label' : '') + (r.danger ? ' danger' : '') +
+        '" data-key="' + r.key + '" style="color:' + color + '" title="' + label + '">' +
+        icon + '<span class="vital-label">' + label + '</span></span>';
+    }
+    vitalsBar.innerHTML = html;
+    vitalsBar.classList.add('populated');
+  }
+
+  // Tap a chip to expand/collapse its label — persisted, works on any device.
+  vitalsBar.addEventListener('click', function(e) {
+    var pill = e.target.closest('.vital');
+    if (!pill) return;
+    pill.classList.toggle('show-label');
+    var key = pill.getAttribute('data-key');
+    if (key) {
+      vitalCollapse[key] = !pill.classList.contains('show-label');
+      try { localStorage.setItem('df-vitals-collapse', JSON.stringify(vitalCollapse)); } catch(e) {}
+    }
+  });
+
+  // Re-render when crossing the mobile/desktop breakpoint so the default for
+  // chips the user hasn't explicitly toggled follows the device.
+  if (wideMq.addEventListener) {
+    wideMq.addEventListener('change', function() { renderVitals(lastReadouts); });
+  } else if (wideMq.addListener) {
+    wideMq.addListener(function() { renderVitals(lastReadouts); });
+  }
+
+  // ── Companion panels (clock, Who, Counters, quick buttons) ────
+  function handleState(key, data) {
+    if (key === 'clock') renderClock(data);
+    else if (key === 'who') renderWho(data);
+    else if (key === 'counters') renderCounters(data);
+    else if (key === 'quickbuttons') renderQuickButtons(data);
+  }
+
+  function fmtHour(h) {
+    var ampm = h < 12 ? 'am' : 'pm';
+    var hr = h % 12; if (hr === 0) hr = 12;
+    return hr + ampm;
+  }
+
+  function renderClock(d) {
+    if (!d) { clockEl.textContent = ''; return; }
+    var html = '';
+    if (typeof d.hour === 'number') html += '<b>' + fmtHour(d.hour) + '</b>';
+    if (d.timeOfDay) html += (html ? ' · ' : '') + esc(d.timeOfDay);
+    if (d.date) html += (html ? ' · ' : '') + esc(d.date);
+    if (d.holiday) html += ' · ' + esc(d.holiday);
+    clockEl.innerHTML = html;
+  }
+
+  function renderWho(d) {
+    var players = d && d.players ? d.players : [];
+    var real = 0;
+    for (var k = 0; k < players.length; k++) if (!players[k].isTitle) real++;
+    whoBtn.textContent = real > 0 ? 'Who ' + real : 'Who';
+    if (players.length === 0) {
+      whoPanel.innerHTML = '<div class="aux-title">Who</div>' +
+        '<div style="color:var(--fg-dim)">No one around.</div>';
+      return;
+    }
+    var sub = [];
+    if (d.totalEstimated) sub.push('~' + d.totalEstimated + ' on');
+    if (d.activeToday) sub.push(d.activeToday + ' today');
+    var html = '<div class="aux-title">Online' + (sub.length ? ' — ' + sub.join(' · ') : '') + '</div>';
+    for (var i = 0; i < players.length; i++) {
+      var p = players[i];
+      if (p.isTitle) {
+        html += '<div class="who-row title-row">' + esc(p.name) + '</div>';
+        continue;
+      }
+      var color = p.color ? ('' + p.color).replace(/"/g, '') : 'var(--fg)';
+      html += '<div class="who-row">' +
+        (p.guild ? '<span class="who-guild">[' + esc(p.guild) + ']</span>' : '') +
+        '<span style="color:' + color + '">' + esc(p.name) + '</span>' +
+        (p.idle ? '<span class="who-idle">' + esc(p.idle) + '</span>' : '') +
+        '</div>';
+    }
+    whoPanel.innerHTML = html;
+  }
+
+  function renderCounters(d) {
+    var list = Array.isArray(d) ? d : [];
+    if (list.length === 0) {
+      countersPanel.innerHTML = '<div class="aux-title">Counters</div>' +
+        '<div style="color:var(--fg-dim)">No active counters.</div>';
+      return;
+    }
+    var html = '<div class="aux-title">Improve Counters</div>';
+    for (var i = 0; i < list.length; i++) {
+      var c = list[i];
+      html += '<div class="counter-row">' +
+        '<span class="counter-name' + (c.active ? ' active' : '') + '">' + esc(c.name) + '</span>' +
+        '<span class="counter-stat"><b>' + esc(c.totalImps) + '</b> imps</span>' +
+        '<span class="counter-stat"><b>' + esc(c.perHour) + '</b>/hr</span>' +
+        '<span class="counter-stat">' + esc(c.status) + '</span>' +
+        '</div>';
+    }
+    countersPanel.innerHTML = html;
+  }
+
+  function renderQuickButtons(d) {
+    if (!Array.isArray(d) || d.length === 0) {
+      quickBtns.classList.remove('populated');
+      quickBtns.innerHTML = '';
+      return;
+    }
+    var html = '';
+    for (var i = 0; i < d.length; i++) {
+      var b = d[i];
+      var color = (b.color || '#8be9fd').replace(/"/g, '');
+      html += '<button class="qbtn' + (b.enabled ? '' : ' disabled') +
+        '" data-qb="' + esc(b.id) + '" style="color:' + color + '">' +
+        esc(b.label) + '</button>';
+    }
+    quickBtns.innerHTML = html;
+    quickBtns.classList.add('populated');
+  }
+
+  quickBtns.addEventListener('click', function(e) {
+    var b = e.target.closest('.qbtn');
+    if (!b) return;
+    var id = b.getAttribute('data-qb');
+    if (id && ws && ws.readyState === WebSocket.OPEN) {
+      ws.send(JSON.stringify({ type: 'quickbutton', id: id }));
+    }
+  });
+
+  // Who / Counters collapsible toggles (only one open at a time).
+  function togglePanel(panel, btn, other, otherBtn) {
+    var open = !panel.classList.contains('open');
+    panel.classList.toggle('open', open);
+    btn.classList.toggle('active', open);
+    if (open) { other.classList.remove('open'); otherBtn.classList.remove('active'); }
+  }
+  whoBtn.addEventListener('click', function() { togglePanel(whoPanel, whoBtn, countersPanel, ctrBtn); });
+  ctrBtn.addEventListener('click', function() { togglePanel(countersPanel, ctrBtn, whoPanel, whoBtn); });
+
+  // Output font-size control (persisted).
+  var fontSize = wideMq.matches ? 14 : 13;
+  try { var savedFs = parseInt(localStorage.getItem('df-fontsize'), 10); if (savedFs) fontSize = savedFs; } catch(e) {}
+  function applyFontSize() { output.style.fontSize = fontSize + 'px'; }
+  function setFontSize(next) {
+    fontSize = Math.max(9, Math.min(24, next));
+    applyFontSize();
+    try { localStorage.setItem('df-fontsize', fontSize); } catch(e) {}
+  }
+  applyFontSize();
+  fontDec.addEventListener('click', function() { setFontSize(fontSize - 1); });
+  fontInc.addEventListener('click', function() { setFontSize(fontSize + 1); });
 
   // ── Quick-bar toggle (persisted) ──────────────────────────────
   var qbarVisible = true;
@@ -606,6 +1030,15 @@
             historyIndex = -1;
             searchPrefix = '';
           }
+        } else if (msg.type === 'vitals') {
+          renderVitals(msg.readouts);
+        } else if (msg.type === 'config') {
+          if (msg.config && typeof msg.config === 'object' &&
+              msg.config.numpadMappings && typeof msg.config.numpadMappings === 'object') {
+            numpadMap = msg.config.numpadMappings;
+          }
+        } else if (msg.type === 'state') {
+          handleState(msg.key, msg.data);
         }
       } catch (err) {
         console.error('Parse error:', err);
@@ -720,6 +1153,37 @@
       navigateHistory(false);
     }
   });
+
+  // ── Numpad bindings (desktop "play from laptop" mode) ─────────
+  // The physical numpad sends commands, mirroring the desktop client's
+  // customizable numpad mappings (pushed via the 'config' message). Keys are
+  // identified by event.code so it works whether or not NumLock is on. Like
+  // the desktop, the keypad always sends its bound command regardless of input
+  // state (use the top-row number keys to type digits). `numpadMap` holds the
+  // user's bindings; DEFAULT_NUMPAD is the fallback for any unbound key.
+  var DEFAULT_NUMPAD = {
+    Numpad7: 'nw', Numpad8: 'n', Numpad9: 'ne',
+    Numpad4: 'w',  Numpad5: 'd', Numpad6: 'e',
+    Numpad1: 'sw', Numpad2: 's', Numpad3: 'se',
+    Numpad0: 'u',  NumpadAdd: 'back',
+    NumpadDivide: '/counter info',
+    NumpadMultiply: '/counter toggle',
+    NumpadSubtract: '/movemode',
+    NumpadDecimal: 'survey'
+  };
+  var numpadMap = {};
+
+  document.addEventListener('keydown', function(e) {
+    if (!e.code || e.code.lastIndexOf('Numpad', 0) !== 0) return;
+    var mv = numpadMap[e.code];
+    if (mv === undefined || mv === null) mv = DEFAULT_NUMPAD[e.code];
+    if (!mv) return;
+    e.preventDefault();
+    // Capture-phase stop so the input's own keydown (e.g. NumLock-off
+    // numpad keys reported as arrows) doesn't also fire history nav.
+    e.stopPropagation();
+    sendCommand(mv);
+  }, true);
 
   // ── Quick command buttons ─────────────────────────────────────
   quickBar.addEventListener('click', function(e) {

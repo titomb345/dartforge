@@ -9,6 +9,19 @@ The `[Unreleased]` header controls automatic version bumping on merge:
 - `[Unreleased-minor]` → 0.1.0 → 0.2.0
 - `[Unreleased-major]` → 0.1.0 → 1.0.0
 
+## [Unreleased-major]
+
+### Added
+- Mobile Companion character status bar — the companion now shows your live health, concentration, aura, hunger, thirst, encumbrance, movement, and alignment readouts using the same icons and colors as the desktop status bar, pinned above the command input and ordered to match your desktop layout. On phones the readouts collapse to icon-only chips (tap one to reveal its label); wider screens show full labels.
+- Mobile Companion numpad input — on a laptop/desktop browser the physical numpad sends commands, mirroring your customizable DartForge numpad bindings (including non-movement bindings like counter info or movement mode), with the same defaults and always-on behavior as the desktop client
+- Mobile Companion quick buttons — your custom quick buttons and toggles now appear on the companion above the command input; tapping one runs it on the desktop (commands, scripts, and toggle flips all handled), with live toggle labels and colors
+- Mobile Companion Who & Counters panels — collapsible panels for the online players (Who) list and your improve counters (total imps + per-hour rate), pushed live from the desktop
+- Mobile Companion in-game clock and text size — a new sub-bar shows the DartMUD time/date and holiday, with A−/A+ buttons to resize the output text (persisted per device)
+
+### Changed
+- Mobile Companion is now responsive to the device — phones keep the on-screen d-pad and Prev/Next history buttons, while wider laptop/desktop browsers hide them in favor of a roomier layout driven by the numpad and arrow keys
+- Mobile Companion output now uses a true-black background (matching the desktop terminal) instead of an off-black, with a tuned monospace font and tighter line height so ASCII maps and hex grids render with the correct proportions instead of looking scrunched
+
 ## [1.9.0] - 2026-04-18
 
 ### Added

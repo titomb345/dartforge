@@ -1,4 +1,4 @@
-use std::collections::VecDeque;
+use std::collections::{HashMap, VecDeque};
 use std::net::SocketAddr;
 use std::sync::Arc;
 
@@ -18,6 +18,12 @@ use tokio::sync::{broadcast, Mutex};
 pub const COMPANION_COMMAND_EVENT: &str = "companion:command";
 pub const COMPANION_RECONNECT_EVENT: &str = "companion:reconnect";
 pub const COMPANION_DISCONNECT_EVENT: &str = "companion:disconnect";
+pub const COMPANION_QUICKBUTTON_EVENT: &str = "companion:quickbutton";
+
+#[derive(Clone, Serialize, Deserialize)]
+pub struct CompanionQuickButtonPayload {
+    pub id: String,
+}
 
 #[derive(Clone, Serialize, Deserialize)]
 pub struct CompanionCommandPayload {
@@ -31,6 +37,16 @@ pub enum CompanionMessage {
     MudOutput { data: String },
     ConnectionStatus { connected: bool, message: String },
     CommandHistory { history: Vec<String> },
+    /// Parsed character status readouts (health, hunger, alignment, …) already
+    /// resolved to display label + color on the desktop side. Sent as an opaque
+    /// JSON array so the companion can render the status bar without re-parsing.
+    Vitals { readouts: serde_json::Value },
+    /// Companion-relevant settings mirrored from the desktop client (e.g. the
+    /// user's customizable numpad mappings). Opaque JSON object.
+    Config { config: serde_json::Value },
+    /// Generic keyed live-state feed (e.g. "clock", "who", "counters",
+    /// "quickbuttons"). The latest value per key is replayed to new clients.
+    State { key: String, data: serde_json::Value },
 }
 
 // ── Replay buffer ───────────────────────────────────────────────────
@@ -70,6 +86,9 @@ struct AxumState {
     replay: Arc<Mutex<ReplayBuffer>>,
     last_status: Arc<Mutex<Option<(bool, String)>>>,
     last_history: Arc<Mutex<Vec<String>>>,
+    last_vitals: Arc<Mutex<Option<serde_json::Value>>>,
+    last_config: Arc<Mutex<Option<serde_json::Value>>>,
+    last_states: Arc<Mutex<HashMap<String, serde_json::Value>>>,
     app_handle: AppHandle,
 }
 
@@ -79,6 +98,9 @@ pub struct CompanionState {
     pub replay: Arc<Mutex<ReplayBuffer>>,
     pub last_status: Arc<Mutex<Option<(bool, String)>>>,
     pub last_history: Arc<Mutex<Vec<String>>>,
+    pub last_vitals: Arc<Mutex<Option<serde_json::Value>>>,
+    pub last_config: Arc<Mutex<Option<serde_json::Value>>>,
+    pub last_states: Arc<Mutex<HashMap<String, serde_json::Value>>>,
     server_handle: Mutex<Option<tokio::task::JoinHandle<()>>>,
     running_port: Mutex<Option<u16>>,
 }
@@ -90,6 +112,9 @@ impl CompanionState {
             replay: Arc::new(Mutex::new(ReplayBuffer::new())),
             last_status: Arc::new(Mutex::new(None)),
             last_history: Arc::new(Mutex::new(Vec::new())),
+            last_vitals: Arc::new(Mutex::new(None)),
+            last_config: Arc::new(Mutex::new(None)),
+            last_states: Arc::new(Mutex::new(HashMap::new())),
             server_handle: Mutex::new(None),
             running_port: Mutex::new(None),
         }
@@ -148,6 +173,45 @@ pub async fn broadcast_companion_history(
     Ok(())
 }
 
+/// Called by the frontend to push parsed character status readouts to companion
+/// clients. `readouts` is an opaque JSON array built on the desktop side.
+#[tauri::command]
+pub async fn broadcast_companion_vitals(
+    state: tauri::State<'_, CompanionState>,
+    readouts: serde_json::Value,
+) -> Result<(), String> {
+    *state.last_vitals.lock().await = Some(readouts.clone());
+    let _ = state.broadcast_tx.send(CompanionMessage::Vitals { readouts });
+    Ok(())
+}
+
+/// Called by the frontend to mirror companion-relevant settings (e.g. the
+/// user's numpad mappings) to companion clients. `config` is an opaque JSON
+/// object.
+#[tauri::command]
+pub async fn broadcast_companion_config(
+    state: tauri::State<'_, CompanionState>,
+    config: serde_json::Value,
+) -> Result<(), String> {
+    *state.last_config.lock().await = Some(config.clone());
+    let _ = state.broadcast_tx.send(CompanionMessage::Config { config });
+    Ok(())
+}
+
+/// Called by the frontend to push a keyed live-state feed (clock, who,
+/// counters, quick buttons, …) to companion clients. The latest value per key
+/// is retained and replayed to new clients.
+#[tauri::command]
+pub async fn broadcast_companion_state(
+    state: tauri::State<'_, CompanionState>,
+    key: String,
+    data: serde_json::Value,
+) -> Result<(), String> {
+    state.last_states.lock().await.insert(key.clone(), data.clone());
+    let _ = state.broadcast_tx.send(CompanionMessage::State { key, data });
+    Ok(())
+}
+
 #[tauri::command]
 pub async fn start_companion(
     app: AppHandle,
@@ -174,6 +238,9 @@ pub async fn start_companion(
         replay: state.replay.clone(),
         last_status: state.last_status.clone(),
         last_history: state.last_history.clone(),
+        last_vitals: state.last_vitals.clone(),
+        last_config: state.last_config.clone(),
+        last_states: state.last_states.clone(),
         app_handle: app,
     });
 
@@ -317,6 +384,49 @@ async fn handle_ws(socket: WebSocket, state: Arc<AxumState>) {
             }
         }
     }
+    // Send current character vitals so the status bar populates on load
+    {
+        let vitals = state.last_vitals.lock().await;
+        if let Some(ref readouts) = *vitals {
+            let json = serde_json::json!({
+                "type": "vitals",
+                "readouts": readouts
+            })
+            .to_string();
+            if ws_tx.send(Message::Text(json)).await.is_err() {
+                return;
+            }
+        }
+    }
+    // Send companion config (numpad mappings, …) so input behaves correctly
+    {
+        let config = state.last_config.lock().await;
+        if let Some(ref config) = *config {
+            let json = serde_json::json!({
+                "type": "config",
+                "config": config
+            })
+            .to_string();
+            if ws_tx.send(Message::Text(json)).await.is_err() {
+                return;
+            }
+        }
+    }
+    // Send the latest keyed state feeds (clock, who, counters, quick buttons)
+    {
+        let states = state.last_states.lock().await;
+        for (key, data) in states.iter() {
+            let json = serde_json::json!({
+                "type": "state",
+                "key": key,
+                "data": data
+            })
+            .to_string();
+            if ws_tx.send(Message::Text(json)).await.is_err() {
+                return;
+            }
+        }
+    }
 
     // Task: broadcast → WebSocket client
     let send_task = tokio::spawn(async move {
@@ -341,6 +451,28 @@ async fn handle_ws(socket: WebSocket, state: Arc<AxumState>) {
                     serde_json::json!({
                         "type": "history",
                         "history": history
+                    })
+                    .to_string()
+                }
+                CompanionMessage::Vitals { readouts } => {
+                    serde_json::json!({
+                        "type": "vitals",
+                        "readouts": readouts
+                    })
+                    .to_string()
+                }
+                CompanionMessage::Config { config } => {
+                    serde_json::json!({
+                        "type": "config",
+                        "config": config
+                    })
+                    .to_string()
+                }
+                CompanionMessage::State { key, data } => {
+                    serde_json::json!({
+                        "type": "state",
+                        "key": key,
+                        "data": data
                     })
                     .to_string()
                 }
@@ -371,6 +503,17 @@ async fn handle_ws(socket: WebSocket, state: Arc<AxumState>) {
                             "disconnect" => {
                                 if let Err(e) = app_handle.emit(COMPANION_DISCONNECT_EVENT, ()) {
                                     warn!("Failed to emit companion disconnect: {e}");
+                                }
+                                continue;
+                            }
+                            "quickbutton" => {
+                                if let Some(id) = json.get("id").and_then(|v| v.as_str()) {
+                                    if let Err(e) = app_handle.emit(
+                                        COMPANION_QUICKBUTTON_EVENT,
+                                        CompanionQuickButtonPayload { id: id.to_string() },
+                                    ) {
+                                        warn!("Failed to emit companion quickbutton: {e}");
+                                    }
                                 }
                                 continue;
                             }
