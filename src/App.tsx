@@ -1040,11 +1040,15 @@ function AppMain() {
         handleCounterMatchRef.current(match);
       }
 
-      // Buffer recent lines for tab completion
+      // Buffer recent lines for tab completion. Mutate the existing array in
+      // place (newest-first, capped) rather than allocating a fresh array on
+      // every output chunk — same contents/order, far less GC churn under spam.
       const stripped = stripAnsi(data);
       const lines = stripped.split(/\r?\n/).filter((l) => l.trim());
       if (lines.length > 0) {
-        recentLinesRef.current = [...lines, ...recentLinesRef.current].slice(0, MAX_RECENT_LINES);
+        const recent = recentLinesRef.current;
+        recent.unshift(...lines);
+        if (recent.length > MAX_RECENT_LINES) recent.length = MAX_RECENT_LINES;
       }
     },
     [handleSkillMatch]
