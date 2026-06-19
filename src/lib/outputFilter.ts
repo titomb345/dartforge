@@ -11,6 +11,14 @@ import { isWhoHeaderLine, isWhoFinalLine, buildWhoSnapshot, type WhoSnapshot } f
 import type { ChatMessage } from '../types/chat';
 import { stripAnsi } from './ansiUtils';
 
+/**
+ * Anti-spam repeat window (ms). Identical lines only collapse when each
+ * arrives within this window of the previous one; every occurrence restarts
+ * the window. Once the window lapses with no repeat, the line is forgotten
+ * and a later identical line is shown fresh instead of collapsed.
+ */
+const ANTI_SPAM_WINDOW_MS = 1000;
+
 /** Sync gag flag keys. */
 type SyncGagFlags = { hp: boolean; score: boolean; combatAlloc: boolean; magicAlloc: boolean; alignment: boolean; who: boolean };
 
@@ -173,18 +181,23 @@ export class OutputFilter {
     }
   }
 
-  /** Start (or restart) the anti-spam flush timer. */
+  /**
+   * Start (or restart) the anti-spam repeat window. Called whenever the
+   * tracked line is set or matched, so the window slides forward with each
+   * occurrence. When it lapses, flush any accumulated count and forget the
+   * tracked line so a later identical line is shown fresh.
+   */
   private startAntiSpamTimer(): void {
     this.clearAntiSpamTimer();
     this.antiSpamTimer = setTimeout(() => {
       this.antiSpamTimer = null;
       if (this.repeatCount > 0) {
         const text = OutputFilter.antiSpamLine(this.repeatCount + 1);
-        this.repeatCount = 0;
-        this.prevStrippedLine = null;
         this.onAntiSpamFlush?.(text);
       }
-    }, 1000);
+      this.repeatCount = 0;
+      this.prevStrippedLine = null;
+    }, ANTI_SPAM_WINDOW_MS);
   }
 
   /** Reset all who-related tracking state (sync + passive). */
@@ -609,6 +622,9 @@ export class OutputFilter {
           this.repeatCount = 0;
         }
         this.prevStrippedLine = stripped;
+        // Open the repeat window so this tracked line is forgotten if no
+        // identical line follows it before the window lapses.
+        if (this.antiSpamEnabled) this.startAntiSpamTimer();
         this.lastLineGagged = false;
         output += `\x1b[${lineResult.highlight}m${displaySegment}\x1b[0m`;
         continue;
@@ -623,9 +639,10 @@ export class OutputFilter {
         this.lastLineGagged = false;
       }
 
-      // --- Anti-spam: collapse consecutive identical lines ---
+      // --- Anti-spam: collapse identical lines within a sliding window ---
       if (this.antiSpamEnabled && stripped !== '') {
         if (stripped === this.prevStrippedLine) {
+          // Match while the window is still open — collapse and slide it forward.
           this.repeatCount++;
           this.startAntiSpamTimer();
           output += '\x1b[0m'; // reset color state so gagged line doesn't bleed
@@ -637,7 +654,10 @@ export class OutputFilter {
           output += OutputFilter.antiSpamLine(this.repeatCount + 1);
           this.repeatCount = 0;
         }
+        // Track this line and open its window; if no repeat arrives before the
+        // window lapses, the timer forgets it so a later copy shows fresh.
         this.prevStrippedLine = stripped;
+        this.startAntiSpamTimer();
       }
 
       output += displaySegment;
