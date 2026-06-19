@@ -1,6 +1,7 @@
 import { useState, useCallback, useEffect, useRef, useMemo } from 'react';
 import type { DataStore } from '../contexts/DataStoreContext';
 import type { WhoTitleId, WhoTitleMapping } from '../types/whoTitleMap';
+import { sanitizeRecordMap } from '../lib/sanitizeRecords';
 
 const WHO_TITLES_FILE = 'who-titles.json';
 
@@ -32,7 +33,7 @@ export function useWhoTitleMappings(dataStore: DataStore, activeCharacter: strin
           WHO_TITLES_FILE,
           charKey
         );
-        setMappings(saved ?? {});
+        setMappings(sanitizeRecordMap<WhoTitleMapping>(saved, 'whoTitle'));
       } catch (e) {
         console.error('Failed to load who title mappings:', e);
         setMappings({});
@@ -82,7 +83,9 @@ export function useWhoTitleMappings(dataStore: DataStore, activeCharacter: strin
 
   // Sorted list for display (alphabetical by who title)
   const sortedMappings = useMemo(() => {
-    return Object.values(mappings).sort((a, b) => a.whoTitle.localeCompare(b.whoTitle));
+    return Object.values(mappings).sort((a, b) =>
+      (a.whoTitle ?? '').localeCompare(b.whoTitle ?? '')
+    );
   }, [mappings]);
 
   // Resolve a who title to its mapping (exact match)

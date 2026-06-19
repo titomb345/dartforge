@@ -34,7 +34,8 @@ import { useTransport } from './contexts/TransportContext';
 import { useThemeColors } from './hooks/useThemeColors';
 import { useSkillTracker } from './hooks/useSkillTracker';
 import { useChatMessages } from './hooks/useChatMessages';
-import { useImproveCounters } from './hooks/useImproveCounters';
+import { useImproveCounters, awakeMs } from './hooks/useImproveCounters';
+import { useGameClock } from './hooks/useGameClock';
 import { useAliases } from './hooks/useAliases';
 import { useVariables } from './hooks/useVariables';
 import { useConcentration } from './hooks/useConcentration';
@@ -70,7 +71,12 @@ import { useTimers } from './hooks/useTimers';
 import { TimerProvider } from './contexts/TimerContext';
 import { TimerPanel } from './components/TimerPanel';
 import { useSignatureMappings } from './hooks/useSignatureMappings';
-import { matchTriggers, expandTriggerBody, resetTriggerCooldowns } from './lib/triggerEngine';
+import {
+  matchTriggers,
+  expandTriggerBody,
+  substituteCaptures,
+  resetTriggerCooldowns,
+} from './lib/triggerEngine';
 import { executeTriggerScript, executeAliasScript, stampUserInput } from './lib/scriptEngine';
 import { useGlobalScript } from './hooks/useGlobalScript';
 import { ScriptPanel } from './components/ScriptPanel';
@@ -664,6 +670,15 @@ function AppMain() {
         for (const match of matches) {
           if (match.trigger.gag) gag = true;
           if (match.trigger.highlight) highlight = match.trigger.highlight;
+          // Optional line rewrite — substitutes captures, overrides any earlier
+          // replacement (e.g. skill-count injection). Last matching trigger wins.
+          if (match.trigger.replacement) {
+            replacement = substituteCaptures(
+              match.trigger.replacement,
+              match,
+              activeCharacterRef.current
+            );
+          }
           // Play sound: new soundName field takes priority, fall back to legacy soundAlert
           const soundToPlay = match.trigger.soundName ?? (match.trigger.soundAlert ? 'chime1' : null);
           if (soundToPlay) {
@@ -850,6 +865,9 @@ function AppMain() {
   // Improve counter hook
   const improveCounters = useImproveCounters();
   const { handleCounterMatch } = improveCounters;
+
+  // In-game clock (also pushed to the Mobile Companion header)
+  const companionGameClock = useGameClock();
   const handleCounterMatchRef = useLatestRef(handleCounterMatch);
   const improveCountersRef = useLatestRef(improveCounters);
 
@@ -1036,11 +1054,15 @@ function AppMain() {
         handleCounterMatchRef.current(match);
       }
 
-      // Buffer recent lines for tab completion
+      // Buffer recent lines for tab completion. Mutate the existing array in
+      // place (newest-first, capped) rather than allocating a fresh array on
+      // every output chunk — same contents/order, far less GC churn under spam.
       const stripped = stripAnsi(data);
       const lines = stripped.split(/\r?\n/).filter((l) => l.trim());
       if (lines.length > 0) {
-        recentLinesRef.current = [...lines, ...recentLinesRef.current].slice(0, MAX_RECENT_LINES);
+        const recent = recentLinesRef.current;
+        recent.unshift(...lines);
+        if (recent.length > MAX_RECENT_LINES) recent.length = MAX_RECENT_LINES;
       }
     },
     [handleSkillMatch]
@@ -1649,6 +1671,27 @@ function AppMain() {
   // Global macro hotkey listener
   const macrosRef = useLatestRef(macrosCRUD.items);
   const fireQuickButtonRef = useLatestRef(fireQuickButton);
+
+  // Companion quick-button fire listener — the companion sends the button id,
+  // the desktop runs the same fire logic (commands/script/toggle) as a click.
+  const quickButtonItemsRef = useLatestRef(quickButtonsCRUD.items);
+  useEffect(() => {
+    if (!tauriListen) return;
+    let unlisten: (() => void) | null = null;
+    tauriListen('companion:quickbutton', (e: { payload: unknown }) => {
+      const id = (e.payload as { id?: string })?.id;
+      if (!id) return;
+      const btn = quickButtonItemsRef.current.find((b) => b.id === id);
+      if (!btn || !btn.enabled) return;
+      if (btn.toggle) fireQuickButtonRef.current('', 'commands', btn);
+      else fireQuickButtonRef.current(btn.body, btn.bodyMode);
+    }).then((fn) => {
+      unlisten = fn;
+    });
+    return () => {
+      unlisten?.();
+    };
+  }, [fireQuickButtonRef, quickButtonItemsRef]);
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
       // Don't intercept if a modal/editor input is focused (except the command textarea)
@@ -1800,6 +1843,133 @@ function AppMain() {
     ],
     [health, concentration, aura, auraMudColor, auraMudColors, hunger, thirst, encumbrance, movement, alignment]
   );
+
+  // Push parsed character vitals to Mobile Companion clients whenever a readout
+  // changes. The desktop resolves each readout to its final display color so the
+  // companion can render the status bar without re-running any parsing.
+  useEffect(() => {
+    const byId = new Map(readoutConfigs.map((c) => [c.id, c]));
+    const ordered: StatusReadoutKey[] = [];
+    const seen = new Set<StatusReadoutKey>();
+    for (const id of statusBarOrder) {
+      if (byId.has(id)) {
+        ordered.push(id);
+        seen.add(id);
+      }
+    }
+    for (const c of readoutConfigs) {
+      if (!seen.has(c.id)) ordered.push(c.id);
+    }
+    const readouts = ordered
+      .map((id) => byId.get(id))
+      .filter((c): c is ReadoutConfig => !!c && c.data != null)
+      .map((c) => {
+        const d = c.data!;
+        const color = d.mudColor ? theme[d.mudColor] : (d.color ?? theme[d.themeColor]);
+        return {
+          key: c.id,
+          label: d.label,
+          color,
+          severity: d.severity,
+          danger: d.severity >= c.dangerThreshold,
+        };
+      });
+    tauriInvoke?.('broadcast_companion_vitals', { readouts });
+  }, [readoutConfigs, statusBarOrder, theme]);
+
+  // Mirror the user's customizable numpad mappings to companion clients so the
+  // companion's keypad movement matches the desktop client (including any
+  // custom bindings).
+  useEffect(() => {
+    tauriInvoke?.('broadcast_companion_config', {
+      config: { numpadMappings: appSettings.numpadMappings },
+    });
+  }, [appSettings.numpadMappings]);
+
+  // Mirror the in-game clock to companion clients (header display).
+  useEffect(() => {
+    tauriInvoke?.('broadcast_companion_state', {
+      key: 'clock',
+      data: {
+        hour: companionGameClock.hour,
+        timeOfDay: companionGameClock.timeOfDay,
+        date: companionGameClock.formattedDate,
+        holiday: companionGameClock.holiday,
+        reckoning: companionGameClock.reckoningLabel,
+      },
+    });
+  }, [
+    companionGameClock.hour,
+    companionGameClock.timeOfDay,
+    companionGameClock.formattedDate,
+    companionGameClock.holiday,
+    companionGameClock.reckoningLabel,
+  ]);
+
+  // Mirror the Who snapshot to companion clients (online players list).
+  useEffect(() => {
+    const data = whoSnapshot
+      ? {
+          players: whoSnapshot.players.map((p) => ({
+            name: p.name,
+            guild: p.guild,
+            state: p.state,
+            idle: p.idleTime,
+            color: p.nameColor ? theme[p.nameColor] : null,
+            isTitle: p.isTitle,
+          })),
+          totalEstimated: whoSnapshot.totalEstimated,
+          activeThisMonth: whoSnapshot.activeThisMonth,
+          activeToday: whoSnapshot.activeToday,
+        }
+      : null;
+    tauriInvoke?.('broadcast_companion_state', { key: 'who', data });
+  }, [whoSnapshot, theme]);
+
+  // Mirror improve counters to companion clients (active counter + rates).
+  useEffect(() => {
+    const now = Date.now();
+    const data = improveCounters.counters
+      .filter((c) => !c.archived)
+      .slice()
+      .sort((a, b) => (a.order ?? 0) - (b.order ?? 0))
+      .map((c) => {
+        const elapsed =
+          c.accumulatedMs +
+          (c.status === 'running' && c.lastResumedAt ? awakeMs(c.lastResumedAt, now) : 0);
+        const perHour = elapsed > 0 ? c.totalImps / (elapsed / 3_600_000) : 0;
+        return {
+          id: c.id,
+          name: c.name,
+          status: c.status,
+          totalImps: c.totalImps,
+          perHour: Math.round(perHour * 10) / 10,
+          active: c.id === improveCounters.activeCounterId,
+        };
+      });
+    tauriInvoke?.('broadcast_companion_state', { key: 'counters', data });
+  }, [improveCounters.counters, improveCounters.activeCounterId]);
+
+  // Mirror quick buttons (with resolved toggle state) to companion clients.
+  useEffect(() => {
+    const data = quickButtonsCRUD.items.map((btn) => {
+      const isToggle = !!btn.toggle;
+      let on = false;
+      if (isToggle) {
+        const v = getVariableByName(btn.toggle!.variable);
+        on = !!v && v !== '0';
+      }
+      return {
+        id: btn.id,
+        label: isToggle ? (on ? btn.toggle!.onLabel : btn.toggle!.offLabel) : btn.label,
+        color: isToggle ? (on ? btn.toggle!.onColor : btn.toggle!.offColor) : btn.color,
+        enabled: btn.enabled,
+        toggle: isToggle,
+        on,
+      };
+    });
+    tauriInvoke?.('broadcast_companion_state', { key: 'quickbuttons', data });
+  }, [quickButtonsCRUD.items, getVariableByName]);
 
   const skillTrackerValue = useMemo(
     () => ({

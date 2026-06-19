@@ -33,6 +33,12 @@ export interface Trigger {
   gag: boolean;
   /** Optional highlight color for matched line (ANSI color code, e.g. "33" for yellow) */
   highlight: string | null;
+  /**
+   * Optional rewrite of the matched line as shown in the terminal. Supports the
+   * same substitutions as the body ($0, $1–$9, $line, $me). null/empty = no
+   * rewrite. Composes with highlight; ignored when the line is gagged.
+   */
+  replacement?: string | null;
   /** @deprecated Use soundName instead. Kept for backward compat migration. */
   soundAlert?: boolean;
   /** Name of the sound to play when this trigger fires (null = no sound) */

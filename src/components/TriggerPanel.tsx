@@ -138,6 +138,14 @@ function TriggerRow({
           G
         </span>
       )}
+      {!trigger.gag && trigger.replacement && (
+        <span
+          title="Rewrites the matched line"
+          className="text-[8px] font-mono px-1 py-px rounded border border-[#50fa7b]/40 text-[#50fa7b] bg-[#50fa7b]/10 shrink-0"
+        >
+          RW
+        </span>
+      )}
       <button
         onClick={(e) => {
           e.stopPropagation();
@@ -280,6 +288,7 @@ function TriggerEditor({
       cooldownMs: number;
       gag: boolean;
       highlight: string | null;
+      replacement: string | null;
       soundName?: string | null;
       bodyMode?: BodyMode;
       multiLine?: boolean;
@@ -301,6 +310,7 @@ function TriggerEditor({
   const [cooldownMs, setCooldownMs] = useState(trigger?.cooldownMs ?? 0);
   const [gag, setGag] = useState(trigger?.gag ?? prefill?.gag ?? false);
   const [highlight, setHighlight] = useState<string | null>(trigger?.highlight ?? null);
+  const [replacement, setReplacement] = useState(trigger?.replacement ?? '');
   const [soundName, setSoundName] = useState<string | null>(
     trigger?.soundName ?? (trigger?.soundAlert ? 'chime1' : null)
   );
@@ -383,6 +393,7 @@ function TriggerEditor({
           cooldownMs,
           gag,
           highlight,
+          replacement: replacement.trim() || null,
           soundName,
           bodyMode,
           ...(multiLine ? { multiLine: true, endPattern: endPattern.trim() } : {}),
@@ -419,6 +430,7 @@ function TriggerEditor({
                     cooldownMs,
                     gag,
                     highlight,
+                    replacement: replacement.trim() || null,
                     soundName,
                     bodyMode,
                     ...(multiLine ? { multiLine: true, endPattern: endPattern.trim() } : {}),
@@ -821,6 +833,25 @@ function TriggerEditor({
           )}
         </div>
 
+        {/* Rewrite (substitute the displayed line) */}
+        <div>
+          <label className="text-[10px] text-text-dim mb-0.5 block">
+            Rewrite line <span className="text-text-dim/60">(optional)</span>
+          </label>
+          <MudInput
+            accent="pink"
+            value={replacement}
+            onChange={(e) => setReplacement(e.target.value)}
+            onKeyDown={handleFieldKeyDown}
+            placeholder="leave blank to show line as-is"
+            className="w-full"
+          />
+          <div className="text-[9px] text-text-dim mt-0.5 leading-snug">
+            Replaces the matched line in the terminal. Supports $0, $1–$9, $line, $me.
+            Combines with Highlight; ignored if Gag is on.
+          </div>
+        </div>
+
         {/* Live preview (text mode only — can't safely preview scripts) */}
         {bodyMode !== 'script' && (
           <div className="border-t border-[#444] pt-2">
@@ -861,6 +892,7 @@ export function TriggerPanel({ onClose }: TriggerPanelProps) {
     createTrigger,
     updateTrigger,
     deleteTrigger,
+    setGroupEnabled,
     triggerPrefill,
     setTriggerPrefill,
   } = useTriggerContext();
@@ -1198,31 +1230,48 @@ export function TriggerPanel({ onClose }: TriggerPanelProps) {
         {groupedTriggers.map(([groupName, groupTriggers]) => {
           const isCollapsed = collapsedGroups.has(groupName);
           const showHeader = groupFilter === null && groups.length > 1;
+          const allEnabled = groupTriggers.every((t) => t.enabled);
           return (
             <div key={groupName} className="mb-3">
               {showHeader && (
-                <button
-                  onClick={() => {
-                    const next = new Set(collapsedGroups);
-                    if (next.has(groupName)) next.delete(groupName);
-                    else next.add(groupName);
-                    updateCollapsedTriggerGroups([...next]);
-                  }}
-                  className="flex items-center gap-1 w-full text-left text-[10px] font-semibold uppercase tracking-[0.08em] text-[#555] mb-1 px-2 cursor-pointer hover:text-text-label transition-colors duration-150"
-                >
-                  <span
-                    className="shrink-0 transition-transform duration-200"
-                    style={{ transform: isCollapsed ? 'rotate(-90deg)' : 'rotate(0deg)' }}
+                <div className="group/hdr flex items-center gap-1 mb-1 px-2">
+                  <button
+                    onClick={() => {
+                      const next = new Set(collapsedGroups);
+                      if (next.has(groupName)) next.delete(groupName);
+                      else next.add(groupName);
+                      updateCollapsedTriggerGroups([...next]);
+                    }}
+                    className="flex items-center gap-1 flex-1 min-w-0 text-left text-[10px] font-semibold uppercase tracking-[0.08em] text-[#555] cursor-pointer hover:text-text-label transition-colors duration-150"
                   >
-                    <ChevronDownIcon size={8} />
-                  </span>
-                  {groupName}
-                  {isCollapsed && (
-                    <span className="text-[9px] font-normal normal-case tracking-normal text-text-dim ml-1">
-                      ({groupTriggers.length})
+                    <span
+                      className="shrink-0 transition-transform duration-200"
+                      style={{ transform: isCollapsed ? 'rotate(-90deg)' : 'rotate(0deg)' }}
+                    >
+                      <ChevronDownIcon size={8} />
                     </span>
-                  )}
-                </button>
+                    <span className="truncate">{groupName}</span>
+                    {isCollapsed && (
+                      <span className="text-[9px] font-normal normal-case tracking-normal text-text-dim ml-1 shrink-0">
+                        ({groupTriggers.length})
+                      </span>
+                    )}
+                  </button>
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setGroupEnabled(groupName, !allEnabled, scope);
+                    }}
+                    title={allEnabled ? `Disable all in "${groupName}"` : `Enable all in "${groupName}"`}
+                    className={`text-[8px] font-mono px-1.5 py-px rounded border cursor-pointer transition-colors duration-150 shrink-0 ${
+                      allEnabled
+                        ? 'text-green border-green/40 bg-green/10'
+                        : 'text-text-dim border-border-dim bg-transparent hover:text-text-label'
+                    }`}
+                  >
+                    {allEnabled ? 'on' : 'off'}
+                  </button>
+                </div>
               )}
               {(!showHeader || !isCollapsed) &&
                 groupTriggers.map((trigger) => (

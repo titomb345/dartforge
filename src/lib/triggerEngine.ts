@@ -228,14 +228,18 @@ function matchSingle(stripped: string, raw: string, trigger: Trigger): TriggerMa
  * Expand a trigger match into commands, using the same body syntax as aliases.
  * Substitutes $0 (matched text), $1–$9 (regex captures), $line (full line), $me.
  */
-export function expandTriggerBody(
-  body: string,
+/**
+ * Substitute trigger-match placeholders in a template string:
+ * $line (full matched line), $Me/$me (character name), $0 (matched text),
+ * $1–$9 (regex capture groups). Shared by command-body expansion and the
+ * optional line rewrite.
+ */
+export function substituteCaptures(
+  template: string,
   match: TriggerMatch,
-  activeCharacter?: string | null,
-  separator?: string
-): ExpandedCommand[] {
-  let result = body;
-
+  activeCharacter?: string | null
+): string {
+  let result = template;
   // $line = full stripped line
   result = result.split('$line').join(match.line);
   // $Me = capitalized character name — before $me to avoid partial match
@@ -249,6 +253,16 @@ export function expandTriggerBody(
   for (let i = 9; i >= 1; i--) {
     result = result.split(`$${i}`).join(match.captures[i] ?? '');
   }
+  return result;
+}
+
+export function expandTriggerBody(
+  body: string,
+  match: TriggerMatch,
+  activeCharacter?: string | null,
+  separator?: string
+): ExpandedCommand[] {
+  const result = substituteCaptures(body, match, activeCharacter);
 
   // Split on configured separator and parse directives (variables expanded at execution time)
   const segments = splitCommands(result, separator);

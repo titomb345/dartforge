@@ -18,6 +18,7 @@ export interface AliasState {
   ) => void;
   deleteAlias: (id: AliasId, scope: AliasScope) => void;
   toggleAlias: (id: AliasId, scope: AliasScope) => void;
+  setGroupEnabled: (group: string, enabled: boolean, scope: AliasScope) => void;
   duplicateAlias: (id: AliasId, scope: AliasScope) => AliasId | null;
 }
 

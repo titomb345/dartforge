@@ -8,6 +8,7 @@ import type {
   TriggerPrefill,
   TriggerScope,
 } from '../types/trigger';
+import { sanitizeRecordMap } from '../lib/sanitizeRecords';
 
 const TRIGGERS_FILE = 'triggers.json';
 const GLOBAL_KEY = 'global';
@@ -36,7 +37,7 @@ export function useTriggers(dataStore: DataStore, activeCharacter: string | null
           TRIGGERS_FILE,
           GLOBAL_KEY
         );
-        if (savedGlobal) setGlobalTriggers(savedGlobal);
+        if (savedGlobal) setGlobalTriggers(sanitizeRecordMap<Trigger>(savedGlobal, 'pattern'));
       } catch (e) {
         console.error('Failed to load global triggers:', e);
       }
@@ -56,7 +57,7 @@ export function useTriggers(dataStore: DataStore, activeCharacter: string | null
     (async () => {
       try {
         const saved = await dataStore.get<Record<TriggerId, Trigger>>(TRIGGERS_FILE, charKey);
-        setCharacterTriggers(saved ?? {});
+        setCharacterTriggers(sanitizeRecordMap<Trigger>(saved, 'pattern'));
       } catch (e) {
         console.error('Failed to load character triggers:', e);
         setCharacterTriggers({});
@@ -97,6 +98,7 @@ export function useTriggers(dataStore: DataStore, activeCharacter: string | null
         cooldownMs?: number;
         gag?: boolean;
         highlight?: string | null;
+        replacement?: string | null;
         soundAlert?: boolean;
         soundName?: string | null;
         bodyMode?: BodyMode;
@@ -117,6 +119,7 @@ export function useTriggers(dataStore: DataStore, activeCharacter: string | null
         cooldownMs: partial.cooldownMs ?? 0,
         gag: partial.gag ?? false,
         highlight: partial.highlight ?? null,
+        replacement: partial.replacement ?? null,
         soundAlert: partial.soundAlert ?? false,
         soundName: partial.soundName ?? null,
         bodyMode: partial.bodyMode,
@@ -185,6 +188,33 @@ export function useTriggers(dataStore: DataStore, activeCharacter: string | null
     }
   }, []);
 
+  /** Enable or disable every trigger in a group at once. */
+  const setGroupEnabled = useCallback(
+    (group: string, enabled: boolean, scope: TriggerScope) => {
+      const now = new Date().toISOString();
+      const updater = (prev: Record<TriggerId, Trigger>) => {
+        let changed = false;
+        const next: Record<TriggerId, Trigger> = {};
+        for (const [id, t] of Object.entries(prev)) {
+          if (t.group === group && t.enabled !== enabled) {
+            next[id] = { ...t, enabled, updatedAt: now };
+            changed = true;
+          } else {
+            next[id] = t;
+          }
+        }
+        return changed ? next : prev;
+      };
+
+      if (scope === 'character') {
+        setCharacterTriggers(updater);
+      } else {
+        setGlobalTriggers(updater);
+      }
+    },
+    []
+  );
+
   const duplicateTrigger = useCallback(
     (id: TriggerId, scope: TriggerScope): TriggerId | null => {
       const source = scope === 'character' ? characterTriggers : globalTriggers;
@@ -201,6 +231,7 @@ export function useTriggers(dataStore: DataStore, activeCharacter: string | null
           cooldownMs: original.cooldownMs,
           gag: original.gag,
           highlight: original.highlight,
+          replacement: original.replacement,
           soundAlert: original.soundAlert,
           soundName: original.soundName,
           bodyMode: original.bodyMode,
@@ -232,6 +263,7 @@ export function useTriggers(dataStore: DataStore, activeCharacter: string | null
       updateTrigger,
       deleteTrigger,
       toggleTrigger,
+      setGroupEnabled,
       duplicateTrigger,
       triggerPrefill,
       setTriggerPrefill,
@@ -244,6 +276,7 @@ export function useTriggers(dataStore: DataStore, activeCharacter: string | null
       updateTrigger,
       deleteTrigger,
       toggleTrigger,
+      setGroupEnabled,
       duplicateTrigger,
       triggerPrefill,
       setTriggerPrefill,

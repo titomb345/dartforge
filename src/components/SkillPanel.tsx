@@ -38,8 +38,8 @@ interface SubGroup {
 function sortSkills(skills: SkillRecord[], mode: SortMode): SkillRecord[] {
   return [...skills].sort((a, b) =>
     mode === 'name'
-      ? a.skill.localeCompare(b.skill)
-      : b.count - a.count || a.skill.localeCompare(b.skill)
+      ? (a.skill ?? '').localeCompare(b.skill ?? '')
+      : b.count - a.count || (a.skill ?? '').localeCompare(b.skill ?? '')
   );
 }
 
@@ -339,7 +339,7 @@ export function SkillPanel({ mode = 'slideout' }: SkillPanelProps) {
         skills: sortSkills(Object.values(skills), sort),
       }))
       .filter((g) => g.skills.length > 0)
-      .sort((a, b) => a.name.localeCompare(b.name));
+      .sort((a, b) => (a.name ?? '').localeCompare(b.name ?? ''));
   }, [skillData.pets, sort]);
 
   const allSkillsSorted = useMemo(() => {

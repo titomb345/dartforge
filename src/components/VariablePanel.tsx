@@ -215,7 +215,7 @@ export function VariablePanel({ onClose }: VariablePanelProps) {
           const q = searchText.toLowerCase();
           return v.name.toLowerCase().includes(q) || v.value.toLowerCase().includes(q);
         })
-        .sort((a, b) => a.name.localeCompare(b.name)),
+        .sort((a, b) => (a.name ?? '').localeCompare(b.name ?? '')),
     [variables, searchText]
   );
 

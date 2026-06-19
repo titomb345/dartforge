@@ -130,7 +130,7 @@ export const HELP_CATEGORIES: HelpCategory[] = [
       {
         title: 'Allocations Panel',
         description:
-          'Tracks your combat and magic allocations. Auto-parses from "show combat allocation:all" output. Click cells to edit values.',
+          'Tracks your combat and magic allocations. Auto-parses from "show combat allocation:all" output. Every limb shows a row of −/value/+ steppers under a sticky slot header — click a value to type an exact number, or use −/+ to step (hold Shift for ×5). The header\'s −/+ adjust that slot on every limb at once, and Apply All / Save sit in a sticky bottom bar.',
         helpId: 'toolbar-alloc',
       },
       {
@@ -166,7 +166,7 @@ export const HELP_CATEGORIES: HelpCategory[] = [
       {
         title: 'Mobile Companion',
         description:
-          'Enable in Settings > Mobile Companion to start a local web server. Open the displayed URL or scan the QR code on your phone (same WiFi network) to see MUD output with colors and send commands remotely.',
+          'Enable in Settings > Mobile Companion to start a local web server. Open the displayed URL or scan the QR code (same WiFi network) to see MUD output with colors and send commands remotely. It adapts to the device: phones get a directional d-pad and Prev/Next history buttons, while laptops/desktops get a wider layout where the numpad sends commands using your customizable DartForge numpad bindings and the arrow keys cycle history. Your character status bar — health, concentration, aura, hunger, thirst, encumbrance, movement and alignment — mirrors the desktop client just above the command input, collapsing to icon-only chips on phones (tap one to reveal its label). A sub-bar shows the in-game clock and lets you resize the output text, and your custom quick buttons (with live toggle state) appear above the input. Collapsible Who and Counters panels mirror the online-players list and your improve counters.',
       },
     ],
   },
@@ -586,7 +586,7 @@ export const HELP_CATEGORIES: HelpCategory[] = [
       {
         title: 'Allocation Tracking',
         description:
-          'Combat and magic allocations auto-parse from "show combat allocation:all" and "show magic allocation" output. Edit values inline.',
+          'Combat and magic allocations auto-parse from "show combat allocation:all" and "show magic allocation" output. Each limb has a row of −/value/+ steppers — click a value to type it exactly, or step with −/+ (Shift = ×5), then Apply per-limb or all at once from the sticky bottom bar.',
         helpId: 'toolbar-alloc',
       },
       {

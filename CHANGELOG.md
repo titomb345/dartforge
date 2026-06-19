@@ -9,6 +9,30 @@ The `[Unreleased]` header controls automatic version bumping on merge:
 - `[Unreleased-minor]` → 0.1.0 → 0.2.0
 - `[Unreleased-major]` → 0.1.0 → 1.0.0
 
+## [Unreleased-minor]
+
+### Added
+- Trigger line rewrite — a trigger can now rewrite the matched line shown in the terminal (with $0/$1–$9/$line/$me substitution), in addition to gag and highlight. Set it in the trigger editor's "Rewrite line" field; an RW badge marks triggers that use it
+- Trigger & Alias group enable/disable — each group header now has an on/off toggle that enables or disables every trigger/alias in that group at once
+- Mobile Companion character status bar — the companion now shows your live health, concentration, aura, hunger, thirst, encumbrance, movement, and alignment readouts using the same icons and colors as the desktop status bar, pinned above the command input and ordered to match your desktop layout. On phones the readouts collapse to icon-only chips (tap one to reveal its label); wider screens show full labels.
+- Mobile Companion numpad input — on a laptop/desktop browser the physical numpad sends commands, mirroring your customizable DartForge numpad bindings (including non-movement bindings like counter info or movement mode), with the same defaults and always-on behavior as the desktop client
+- Mobile Companion quick buttons — your custom quick buttons and toggles now appear on the companion above the command input; tapping one runs it on the desktop (commands, scripts, and toggle flips all handled), with live toggle labels and colors
+- Mobile Companion Who & Counters panels — collapsible panels for the online players (Who) list and your improve counters (total imps + per-hour rate), pushed live from the desktop
+- Mobile Companion in-game clock and text size — a new sub-bar shows the DartMUD time/date and holiday, with A−/A+ buttons to resize the output text (persisted per device)
+
+### Changed
+- Output hot path no longer rebuilds the tab-completion line buffer from scratch on every incoming chunk — it updates in place instead, reducing allocation churn (and GC pauses) during heavy output like combat spam. No visible behavior change
+- Allocation panel redesign — replaced the tiny hover-only +/- cells with larger always-visible −/value/+ steppers, while keeping every limb visible at a glance: each limb shows its full name, unspent points, and an Apply button on a title line above a single full-width row of steppers. Slot letters now live in a sticky column header (with bulk −/+ that adjust every limb at once), and Apply All / Save to Profile sit in a sticky bottom bar that no longer requires scrolling. Click any value to type an exact number; −/+ step by 1 (shift = ×5). Applies to both Combat and Magic tabs in Live and Profile views
+- Mobile Companion is now responsive to the device — phones keep the on-screen d-pad and Prev/Next history buttons, while wider laptop/desktop browsers hide them in favor of a roomier layout driven by the numpad and arrow keys
+- Mobile Companion output now uses a true-black background (matching the desktop terminal) instead of an off-black, with a tuned monospace font and tighter line height so ASCII maps and hex grids render with the correct proportions instead of looking scrunched
+
+### Fixed
+- A single malformed saved entry can no longer crash the entire app. Variable, trigger, alias, and who-title stores load straight from disk and then sort/look up by a text field (e.g. name/pattern); one corrupt entry (e.g. a value stored in a legacy format) made those operations throw on `undefined` and white-screen the whole client. Bad entries are now dropped on load (and self-healed out of the file on next save), and the lookups/sorts are guarded
+- Sound notifications no longer drop when several fire close together. Each chime shared one audio element, so a second tell/shout/zephyr arriving while the first was still playing just restarted (or cancelled) it — making notifications seem to not play. Chimes now play on independent clones so overlapping alerts all sound
+- Connection no longer silently goes "half-open" — if a write stalls or the writer fails (server gone, dead network with no clean close), the client now detects it within ~10s and surfaces a disconnect so reconnect can run, instead of continuing to show incoming output while silently dropping every command you send
+- Anti-spam now only collapses identical lines that arrive in quick succession. Previously two identical lines were merged into `[repeated xN]` no matter how far apart they appeared (e.g. 30 seconds), because the tracked line never expired. A repeat now only collapses when it lands within 1 second of the previous occurrence, and each repeat restarts that window; lines further apart are shown in full
+- Improve counter elapsed time no longer counts time the app or machine was suspended (sleep, tab throttling). A running counter left while the computer slept would credit the entire suspended span as active time (e.g. showing ~10h after a 5h sleep); suspended gaps are now detected and excluded, so elapsed time and per-period/per-hour rates reflect only active time
+
 ## [1.9.0] - 2026-04-18
 
 ### Added

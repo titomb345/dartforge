@@ -2,11 +2,19 @@ import { useState, useRef, useEffect } from 'react';
 import { useAllocContext } from '../contexts/AllocContext';
 import { useAppSettingsContext } from '../contexts/AppSettingsContext';
 import type { PinnablePanelProps } from '../types';
-import type { AllocView, AllocTab, LimbAllocation, MagicAllocation } from '../types/alloc';
+import type {
+  AllocView,
+  AllocTab,
+  AllocSlot,
+  MagicSlot,
+  LimbAllocation,
+  MagicAllocation,
+} from '../types/alloc';
 import {
   ALLOC_SLOTS,
   POINTS_PER_LIMB,
   SLOT_SHORT,
+  EMPTY_LIMB,
   MAGIC_SLOTS,
   MAGIC_POINTS,
   MAGIC_SLOT_SHORT,
@@ -26,10 +34,51 @@ import { ConfirmDeleteButton } from './ConfirmDeleteButton';
 import { cn } from '../lib/cn';
 
 /* ------------------------------------------------------------------ */
-/*  Layout constants                                                    */
+/*  Slot colors & metadata                                            */
 /* ------------------------------------------------------------------ */
-const CELL_W = 26;
-const APPLY_W = 14;
+
+/** Per-slot accent colors, shared by the steppers and the distribution bar. */
+const SLOT_COLORS: Record<AllocSlot, string> = {
+  bonus: '#bd93f9',
+  daring: '#ff79c6',
+  speed: '#50fa7b',
+  aiming: '#f1fa8c',
+  parry: '#8be9fd',
+  control: '#ffb86c',
+};
+
+const MAGIC_SLOT_COLORS: Record<MagicSlot, string> = {
+  air: '#8be9fd',
+  fire: '#ff6e6e',
+  water: '#6272a4',
+  earth: '#8b6d4b',
+};
+
+const NULL_COLOR = '#44475a';
+const UNSPENT_COLOR = '#f1fa8c';
+const OVERSPENT_COLOR = '#ff5555';
+
+interface SlotMeta {
+  key: string;
+  label: string;
+  color: string;
+}
+
+const COMBAT_SLOT_META: SlotMeta[] = ALLOC_SLOTS.map((s) => ({
+  key: s,
+  label: SLOT_SHORT[s].toUpperCase(),
+  color: SLOT_COLORS[s],
+}));
+
+const MAGIC_SLOT_META: SlotMeta[] = MAGIC_SLOTS.map((s) => ({
+  key: s,
+  label: MAGIC_SLOT_SHORT[s].toUpperCase(),
+  color: MAGIC_SLOT_COLORS[s],
+}));
+
+const gridStyle = (cols: number) => ({
+  gridTemplateColumns: `repeat(${cols}, minmax(0, 1fr))`,
+});
 
 /* ------------------------------------------------------------------ */
 /*  Shared sub-components                                              */
@@ -40,12 +89,10 @@ function SaveProfileMenu({
   profiles,
   onNew,
   onUpdate,
-  accent,
 }: {
   profiles: { id: string; name: string }[];
   onNew: () => void;
   onUpdate: (id: string) => void;
-  accent?: string;
 }) {
   const [open, setOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
@@ -69,7 +116,7 @@ function SaveProfileMenu({
         Save to Profile <ChevronDownSmallIcon size={8} />
       </button>
       {open && (
-        <div className="absolute bottom-full left-0 mb-1 min-w-[140px] max-h-[200px] overflow-auto bg-bg-primary border border-border rounded shadow-lg z-50">
+        <div className="absolute bottom-full right-0 mb-1 min-w-[140px] max-h-[200px] overflow-auto bg-bg-primary border border-border rounded shadow-lg z-50">
           <button
             onClick={() => {
               onNew();
@@ -89,7 +136,6 @@ function SaveProfileMenu({
               }}
               className="flex items-center gap-1 w-full px-2 py-1 text-[10px] text-left text-text-label hover:bg-bg-secondary/60 cursor-pointer transition-colors truncate"
               title={`Overwrite "${p.name}" with live values`}
-              style={accent ? { color: undefined } : undefined}
             >
               <span className="truncate">{p.name}</span>
             </button>
@@ -263,14 +309,21 @@ function ProfileSelector({
   );
 }
 
-/** Editable numeric cell. Click to type exact value, or use +/- on hover. */
-function AllocCell({
+/**
+ * One slot's value control: −/value/+ in a compact box.
+ * Click the value to type an exact number; −/+ step by 1 (shift = ×5).
+ * The box's bottom border is tinted with the slot color so columns stay
+ * identifiable under the sticky letter header.
+ */
+function ValueStepper({
   value,
+  color,
   readOnly,
   onChange,
   onDelta,
 }: {
   value: number;
+  color: string;
   readOnly?: boolean;
   onChange?: (v: number) => void;
   onDelta?: (delta: number) => void;
@@ -286,71 +339,69 @@ function AllocCell({
     }
   }, [editing]);
 
-  const handleClick = () => {
-    if (readOnly) return;
-    if (!editing) {
-      setDraft(String(value));
-      setEditing(true);
-    }
-  };
-
   const handleDelta = (e: React.MouseEvent, delta: number) => {
     e.stopPropagation();
     const mult = e.shiftKey ? 5 : 1;
     onDelta?.(delta * mult);
   };
 
-  if (editing) {
-    return (
-      <input
-        ref={inputRef}
-        type="text"
-        inputMode="numeric"
-        value={draft}
-        onChange={(e) => setDraft(e.target.value.replace(/[^0-9]/g, ''))}
-        onBlur={() => {
-          const num = parseInt(draft, 10);
-          if (!isNaN(num) && num !== value) onChange?.(num);
-          setEditing(false);
-        }}
-        onKeyDown={(e) => {
-          if (e.key === 'Enter') e.currentTarget.blur();
-          if (e.key === 'Escape') {
-            setDraft(String(value));
-            setEditing(false);
-          }
-        }}
-        style={{ width: `${CELL_W}px` }}
-        className="bg-bg-canvas border border-border rounded text-center text-[10px] text-text-primary outline-none px-0 py-0 font-mono"
-      />
-    );
-  }
-
   return (
     <div
-      className={cn(
-        'group/cell relative flex items-center justify-center h-[20px] rounded text-[10px] font-mono select-none',
-        readOnly
-          ? 'text-text-dim bg-transparent'
-          : 'text-text-primary bg-bg-canvas/50 cursor-pointer hover:bg-bg-secondary transition-colors duration-100'
-      )}
-      style={{ width: `${CELL_W}px` }}
-      onClick={handleClick}
+      className="flex items-stretch h-[28px] rounded border border-border-dim bg-bg-canvas/40 overflow-hidden"
+      style={{ borderBottomColor: color, borderBottomWidth: 2 }}
     >
       {!readOnly && (
         <button
           onClick={(e) => handleDelta(e, -1)}
-          className="absolute left-[-1px] top-0 bottom-0 w-[10px] flex items-center justify-center opacity-0 group-hover/cell:opacity-100 text-[8px] text-text-dim hover:text-red transition-all duration-100 cursor-pointer"
-          title="- 1 (shift: - 5)"
+          className="w-[12px] shrink-0 flex items-center justify-center text-[12px] leading-none text-text-dim hover:text-red hover:bg-bg-secondary cursor-pointer transition-colors"
+          title="− 1 (shift: − 5)"
         >
-          -
+          −
         </button>
       )}
-      <span>{value}</span>
+      {editing ? (
+        <input
+          ref={inputRef}
+          type="text"
+          inputMode="numeric"
+          value={draft}
+          onChange={(e) => setDraft(e.target.value.replace(/[^0-9]/g, ''))}
+          onBlur={() => {
+            const num = parseInt(draft, 10);
+            if (!isNaN(num) && num !== value) onChange?.(num);
+            setEditing(false);
+          }}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') e.currentTarget.blur();
+            if (e.key === 'Escape') {
+              setDraft(String(value));
+              setEditing(false);
+            }
+          }}
+          className="flex-1 min-w-0 w-full text-center text-[9px] font-mono tabular-nums tracking-tight bg-bg-canvas text-text-primary outline-none px-0 border-x border-border"
+        />
+      ) : (
+        <button
+          onClick={() => {
+            if (readOnly) return;
+            setDraft(String(value));
+            setEditing(true);
+          }}
+          className={cn(
+            'flex-1 min-w-0 text-center text-[9px] font-mono tabular-nums tracking-tight px-0 truncate',
+            readOnly
+              ? 'text-text-dim cursor-default'
+              : 'text-text-primary hover:bg-bg-secondary cursor-text transition-colors'
+          )}
+          title={readOnly ? undefined : 'Click to type an exact value'}
+        >
+          {value}
+        </button>
+      )}
       {!readOnly && (
         <button
           onClick={(e) => handleDelta(e, 1)}
-          className="absolute right-[-1px] top-0 bottom-0 w-[10px] flex items-center justify-center opacity-0 group-hover/cell:opacity-100 text-[8px] text-text-dim hover:text-green transition-all duration-100 cursor-pointer"
+          className="w-[12px] shrink-0 flex items-center justify-center text-[12px] leading-none text-text-dim hover:text-green hover:bg-bg-secondary cursor-pointer transition-colors"
           title="+ 1 (shift: + 5)"
         >
           +
@@ -360,17 +411,151 @@ function AllocCell({
   );
 }
 
+/**
+ * Sticky column header: the slot letters (which label every limb row below),
+ * with optional bulk −/+ buttons that adjust that slot across all limbs at once.
+ */
+function SlotHeaderRow({
+  cols,
+  slots,
+  onSlotDelta,
+}: {
+  cols: number;
+  slots: SlotMeta[];
+  onSlotDelta?: (key: string, delta: number) => void;
+}) {
+  const handleDelta = (e: React.MouseEvent, key: string, delta: number) => {
+    e.stopPropagation();
+    const mult = e.shiftKey ? 5 : 1;
+    onSlotDelta?.(key, delta * mult);
+  };
+
+  return (
+    <div className="shrink-0 px-2 pt-1.5 pb-1 border-b border-border-dim">
+      {onSlotDelta && (
+        <div className="text-[8px] uppercase tracking-wider text-text-dim mb-0.5">
+          Adjust all limbs
+        </div>
+      )}
+      <div className="grid gap-x-[3px]" style={gridStyle(cols)}>
+        {slots.map((s) => (
+          <div key={s.key} className="flex flex-col items-center gap-0.5 min-w-0">
+            <span
+              className="text-[9px] font-bold uppercase leading-none"
+              style={{ color: s.color }}
+              title={s.key}
+            >
+              {s.label}
+            </span>
+            {onSlotDelta && (
+              <div className="flex w-full rounded border border-border-dim overflow-hidden">
+                <button
+                  onClick={(e) => handleDelta(e, s.key, -1)}
+                  className="flex-1 h-[16px] flex items-center justify-center text-[11px] leading-none text-text-dim hover:text-red hover:bg-bg-secondary cursor-pointer transition-colors"
+                  title="All limbs − 1 (shift: − 5)"
+                >
+                  −
+                </button>
+                <div className="w-px bg-border-dim" />
+                <button
+                  onClick={(e) => handleDelta(e, s.key, 1)}
+                  className="flex-1 h-[16px] flex items-center justify-center text-[11px] leading-none text-text-dim hover:text-green hover:bg-bg-secondary cursor-pointer transition-colors"
+                  title="All limbs + 1 (shift: + 5)"
+                >
+                  +
+                </button>
+              </div>
+            )}
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+/**
+ * One limb (or the magic "elemental" set): name + unspent + Apply on a title
+ * line, then a single full-width row of value steppers, then the distribution
+ * bar. Columns align with the sticky SlotHeaderRow above.
+ */
+function LimbRow({
+  name,
+  cols,
+  slots,
+  getValue,
+  unspent,
+  unspentLabel,
+  bar,
+  readOnly,
+  onApply,
+  onSlotChange,
+  onSlotDelta,
+}: {
+  name: string;
+  cols: number;
+  slots: SlotMeta[];
+  getValue: (key: string) => number;
+  unspent: number;
+  unspentLabel: string;
+  bar: React.ReactNode;
+  readOnly?: boolean;
+  onApply?: () => void;
+  onSlotChange?: (key: string, v: number) => void;
+  onSlotDelta?: (key: string, delta: number) => void;
+}) {
+  return (
+    <div className="py-1.5 border-b border-border-dim/40 last:border-b-0">
+      <div className="flex items-center gap-1.5 mb-1 px-0.5">
+        <span
+          className="flex-1 min-w-0 text-[10px] font-semibold text-text-heading truncate"
+          title={name}
+        >
+          {name}
+        </span>
+        <span className="shrink-0 whitespace-nowrap text-[9px] text-text-dim">
+          {unspentLabel}{' '}
+          <span
+            className="font-mono"
+            style={{
+              color: unspent < 0 ? OVERSPENT_COLOR : unspent > 0 ? UNSPENT_COLOR : undefined,
+            }}
+          >
+            {unspent}
+          </span>
+        </span>
+        {onApply && (
+          <button
+            onClick={onApply}
+            className="shrink-0 flex items-center justify-center w-[22px] h-[18px] rounded text-text-dim hover:text-green hover:bg-green/10 cursor-pointer transition-colors"
+            title={`Apply ${name}`}
+          >
+            <CheckIcon size={11} />
+          </button>
+        )}
+      </div>
+      <div className="grid gap-x-[3px]" style={gridStyle(cols)}>
+        {slots.map((s) => (
+          <ValueStepper
+            key={s.key}
+            value={getValue(s.key)}
+            color={s.color}
+            readOnly={readOnly}
+            onChange={(v) => onSlotChange?.(s.key, v)}
+            onDelta={(d) => onSlotDelta?.(s.key, d)}
+          />
+        ))}
+      </div>
+      <div className="mt-1">{bar}</div>
+    </div>
+  );
+}
+
 /** Thin colored bar showing point distribution per limb. */
 function PointBar({ alloc }: { alloc: LimbAllocation }) {
   const n = calcNull(alloc);
   const segments: { slot: string; value: number; color: string }[] = [
-    { slot: 'b', value: alloc.bonus, color: '#bd93f9' },
-    { slot: 'd', value: alloc.daring, color: '#ff79c6' },
-    { slot: 's', value: alloc.speed, color: '#50fa7b' },
-    { slot: 'a', value: alloc.aiming, color: '#f1fa8c' },
-    { slot: 'p', value: alloc.parry, color: '#8be9fd' },
-    { slot: 'c', value: alloc.control, color: '#ffb86c' },
-    { slot: 'n', value: n, color: '#44475a' },
+    ...ALLOC_SLOTS.map((s) => ({ slot: s, value: alloc[s], color: SLOT_COLORS[s] })),
+    { slot: 'n', value: n, color: NULL_COLOR },
   ];
 
   return (
@@ -379,10 +564,7 @@ function PointBar({ alloc }: { alloc: LimbAllocation }) {
         value > 0 ? (
           <div
             key={slot}
-            style={{
-              width: `${(value / POINTS_PER_LIMB) * 100}%`,
-              backgroundColor: color,
-            }}
+            style={{ width: `${(value / POINTS_PER_LIMB) * 100}%`, backgroundColor: color }}
           />
         ) : null
       )}
@@ -394,11 +576,8 @@ function PointBar({ alloc }: { alloc: LimbAllocation }) {
 function MagicPointBar({ alloc }: { alloc: MagicAllocation }) {
   const arcane = calcArcane(alloc);
   const segments: { slot: string; value: number; color: string }[] = [
-    { slot: 'air', value: alloc.air, color: '#8be9fd' },
-    { slot: 'fire', value: alloc.fire, color: '#ff6e6e' },
-    { slot: 'water', value: alloc.water, color: '#6272a4' },
-    { slot: 'earth', value: alloc.earth, color: '#8b6d4b' },
-    { slot: 'arcane', value: arcane, color: '#44475a' },
+    ...MAGIC_SLOTS.map((s) => ({ slot: s, value: alloc[s], color: MAGIC_SLOT_COLORS[s] })),
+    { slot: 'arcane', value: arcane, color: NULL_COLOR },
   ];
 
   return (
@@ -407,101 +586,10 @@ function MagicPointBar({ alloc }: { alloc: MagicAllocation }) {
         value > 0 ? (
           <div
             key={slot}
-            style={{
-              width: `${(value / MAGIC_POINTS) * 100}%`,
-              backgroundColor: color,
-            }}
+            style={{ width: `${(value / MAGIC_POINTS) * 100}%`, backgroundColor: color }}
           />
         ) : null
       )}
-    </div>
-  );
-}
-
-/** Column headers for the combat allocation grid with +/- bulk buttons. */
-function GridHeaders({ onSlotDelta }: { onSlotDelta?: (slot: (typeof ALLOC_SLOTS)[number], delta: number) => void }) {
-  const handleDelta = (e: React.MouseEvent, slot: (typeof ALLOC_SLOTS)[number], delta: number) => {
-    e.stopPropagation();
-    const mult = e.shiftKey ? 5 : 1;
-    onSlotDelta?.(slot, delta * mult);
-  };
-
-  return (
-    <div className="flex items-center gap-0">
-      <div className="flex-1 min-w-0" />
-      {ALLOC_SLOTS.map((slot) => (
-        <div
-          key={slot}
-          style={{ width: `${CELL_W}px` }}
-          className="group/hdr relative text-center text-[9px] font-bold uppercase tracking-wider text-text-dim"
-          title={slot}
-        >
-          {onSlotDelta && (
-            <button
-              onClick={(e) => handleDelta(e, slot, -1)}
-              className="absolute left-[-1px] top-0 bottom-0 w-[10px] flex items-center justify-center opacity-0 group-hover/hdr:opacity-100 text-[8px] text-text-dim hover:text-red transition-all duration-100 cursor-pointer"
-              title={`All limbs - 1 (shift: - 5)`}
-            >
-              -
-            </button>
-          )}
-          {SLOT_SHORT[slot]}
-          {onSlotDelta && (
-            <button
-              onClick={(e) => handleDelta(e, slot, 1)}
-              className="absolute right-[-1px] top-0 bottom-0 w-[10px] flex items-center justify-center opacity-0 group-hover/hdr:opacity-100 text-[8px] text-text-dim hover:text-green transition-all duration-100 cursor-pointer"
-              title={`All limbs + 1 (shift: + 5)`}
-            >
-              +
-            </button>
-          )}
-        </div>
-      ))}
-      <div style={{ width: `${APPLY_W}px` }} />
-    </div>
-  );
-}
-
-/** Column headers for the magic allocation grid with +/- bulk buttons. */
-function MagicGridHeaders({ onSlotDelta }: { onSlotDelta?: (slot: (typeof MAGIC_SLOTS)[number], delta: number) => void }) {
-  const handleDelta = (e: React.MouseEvent, slot: (typeof MAGIC_SLOTS)[number], delta: number) => {
-    e.stopPropagation();
-    const mult = e.shiftKey ? 5 : 1;
-    onSlotDelta?.(slot, delta * mult);
-  };
-
-  return (
-    <div className="flex items-center gap-0">
-      <div className="flex-1 min-w-0" />
-      {MAGIC_SLOTS.map((slot) => (
-        <div
-          key={slot}
-          style={{ width: `${CELL_W}px` }}
-          className="group/hdr relative text-center text-[9px] font-bold uppercase tracking-wider text-text-dim"
-          title={slot}
-        >
-          {onSlotDelta && (
-            <button
-              onClick={(e) => handleDelta(e, slot, -1)}
-              className="absolute left-[-1px] top-0 bottom-0 w-[10px] flex items-center justify-center opacity-0 group-hover/hdr:opacity-100 text-[8px] text-text-dim hover:text-red transition-all duration-100 cursor-pointer"
-              title={`All elements - 1 (shift: - 5)`}
-            >
-              -
-            </button>
-          )}
-          {MAGIC_SLOT_SHORT[slot]}
-          {onSlotDelta && (
-            <button
-              onClick={(e) => handleDelta(e, slot, 1)}
-              className="absolute right-[-1px] top-0 bottom-0 w-[10px] flex items-center justify-center opacity-0 group-hover/hdr:opacity-100 text-[8px] text-text-dim hover:text-green transition-all duration-100 cursor-pointer"
-              title={`All elements + 1 (shift: + 5)`}
-            >
-              +
-            </button>
-          )}
-        </div>
-      ))}
-      <div style={{ width: `${APPLY_W}px` }} />
     </div>
   );
 }
@@ -573,13 +661,18 @@ function TabToggle({ tab, onSetTab }: { tab: AllocTab; onSetTab: (t: AllocTab) =
   );
 }
 
+/** Sticky bottom action bar. */
+function ActionBar({ children }: { children: React.ReactNode }) {
+  return (
+    <div className="shrink-0 flex items-center gap-1 px-2 py-1.5 border-t border-border-dim bg-bg-primary">
+      {children}
+    </div>
+  );
+}
+
 /* ------------------------------------------------------------------ */
 /*  Combat: Live View                                                   */
 /* ------------------------------------------------------------------ */
-
-/** Width of the grid area (cells + apply button) for PointBar alignment. */
-const COMBAT_GRID_W = ALLOC_SLOTS.length * CELL_W + APPLY_W;
-const MAGIC_GRID_W = MAGIC_SLOTS.length * CELL_W + APPLY_W;
 
 function LiveView() {
   const {
@@ -605,54 +698,33 @@ function LiveView() {
   }
 
   return (
-    <div className="flex-1 overflow-auto px-2 py-1">
-      <div className="flex flex-col gap-0.5">
-        <GridHeaders onSlotDelta={(slot, delta) => setLiveAllLimbsSlotDelta(slot, delta)} />
+    <div className="flex-1 flex flex-col min-h-0">
+      <SlotHeaderRow
+        cols={6}
+        slots={COMBAT_SLOT_META}
+        onSlotDelta={(slot, delta) => setLiveAllLimbsSlotDelta(slot as AllocSlot, delta)}
+      />
+      <div className="flex-1 overflow-auto px-2">
         {limbNames.map((limb) => {
-          const alloc = live[limb] ?? {
-            bonus: 0,
-            daring: 0,
-            speed: 0,
-            aiming: 0,
-            parry: 0,
-            control: 0,
-          };
+          const alloc = live[limb] ?? EMPTY_LIMB;
           return (
-            <div key={limb} className="flex flex-col gap-0">
-              <div className="flex items-center gap-0">
-                <div
-                  className="flex-1 min-w-0 text-[10px] text-text-label truncate pr-1"
-                  title={limb}
-                >
-                  {limb}
-                </div>
-                {ALLOC_SLOTS.map((slot) => (
-                  <AllocCell
-                    key={slot}
-                    value={alloc[slot]}
-                    onChange={(v) => updateLiveLimbSlot(limb, slot, v)}
-                    onDelta={(d) => setLiveLimbSlotDelta(limb, slot, d)}
-                  />
-                ))}
-                <button
-                  onClick={() => applyLiveLimb(limb)}
-                  style={{ width: `${APPLY_W}px` }}
-                  className="flex items-center justify-center h-[20px] rounded text-text-dim hover:text-green cursor-pointer transition-colors"
-                  title={`Apply ${limb}`}
-                >
-                  <CheckIcon size={9} />
-                </button>
-              </div>
-              <div className="ml-auto" style={{ width: `${COMBAT_GRID_W}px` }}>
-                <PointBar alloc={alloc} />
-              </div>
-            </div>
+            <LimbRow
+              key={limb}
+              name={limb}
+              cols={6}
+              slots={COMBAT_SLOT_META}
+              getValue={(slot) => alloc[slot as AllocSlot]}
+              unspent={calcNull(alloc)}
+              unspentLabel="unspent"
+              bar={<PointBar alloc={alloc} />}
+              onApply={() => applyLiveLimb(limb)}
+              onSlotChange={(slot, v) => updateLiveLimbSlot(limb, slot as AllocSlot, v)}
+              onSlotDelta={(slot, d) => setLiveLimbSlotDelta(limb, slot as AllocSlot, d)}
+            />
           );
         })}
       </div>
-
-      {/* Live view actions */}
-      <div className="flex items-center gap-1 mt-2 pt-1.5 border-t border-border-dim">
+      <ActionBar>
         <button
           onClick={() => applyLiveAll()}
           className="flex items-center gap-0.5 px-1.5 py-[2px] rounded text-[10px] font-semibold cursor-pointer transition-all duration-200 border"
@@ -661,12 +733,14 @@ function LiveView() {
         >
           Apply All
         </button>
-        <SaveProfileMenu
-          profiles={data.profiles}
-          onNew={() => createProfileFromLive()}
-          onUpdate={(id) => updateProfileFromLive(id)}
-        />
-      </div>
+        <div className="ml-auto">
+          <SaveProfileMenu
+            profiles={data.profiles}
+            onNew={() => createProfileFromLive()}
+            onUpdate={(id) => updateProfileFromLive(id)}
+          />
+        </div>
+      </ActionBar>
     </div>
   );
 }
@@ -701,7 +775,7 @@ function ProfileView() {
         : [];
 
   return (
-    <>
+    <div className="flex-1 flex flex-col min-h-0">
       {/* Profile navigation row */}
       <div className="flex items-center gap-1 px-2 py-1 border-b border-border-dim shrink-0">
         <ProfileSelector
@@ -713,17 +787,6 @@ function ProfileView() {
         />
 
         <div className="w-px h-3 bg-border-dim mx-0.5" />
-
-        {currentProfile && (
-          <button
-            onClick={() => applyAll(currentProfile.id)}
-            className="flex items-center gap-0.5 px-1.5 py-[1px] rounded text-[10px] font-semibold cursor-pointer transition-all duration-200 border"
-            style={{ color: ACCENT, borderColor: `${ACCENT}40`, background: `${ACCENT}10` }}
-            title="Apply all limbs"
-          >
-            Apply
-          </button>
-        )}
 
         <button
           onClick={() => createProfile()}
@@ -758,69 +821,71 @@ function ProfileView() {
         )}
       </div>
 
-      {/* Profile allocation grid */}
-      <div className="flex-1 overflow-auto px-2 py-1">
-        {!currentProfile ? (
-          <div className="flex flex-col items-center justify-center h-full text-text-dim text-[11px] gap-2">
-            <p>No allocation profiles yet.</p>
-            <button
-              onClick={() => createProfile()}
-              className="flex items-center gap-1 px-2 py-1 rounded text-[10px] cursor-pointer border border-border-dim hover:border-border text-text-label hover:text-text-primary transition-colors"
-            >
-              <PlusIcon size={10} /> Create Profile
-            </button>
-          </div>
-        ) : (
-          <div className="flex flex-col gap-0.5">
-            <GridHeaders onSlotDelta={currentProfile ? (slot, delta) => setAllLimbsSlotDelta(currentProfile.id, slot, delta) : undefined} />
+      {!currentProfile ? (
+        <div className="flex-1 flex flex-col items-center justify-center text-text-dim text-[11px] gap-2">
+          <p>No allocation profiles yet.</p>
+          <button
+            onClick={() => createProfile()}
+            className="flex items-center gap-1 px-2 py-1 rounded text-[10px] cursor-pointer border border-border-dim hover:border-border text-text-label hover:text-text-primary transition-colors"
+          >
+            <PlusIcon size={10} /> Create Profile
+          </button>
+        </div>
+      ) : (
+        <>
+          <SlotHeaderRow
+            cols={6}
+            slots={COMBAT_SLOT_META}
+            onSlotDelta={(slot, delta) =>
+              setAllLimbsSlotDelta(currentProfile.id, slot as AllocSlot, delta)
+            }
+          />
+          <div className="flex-1 overflow-auto px-2">
             {limbNames.map((limb) => {
               const alloc = currentProfile.limbs[limb];
               if (!alloc) return null;
               return (
-                <div key={limb} className="flex flex-col gap-0">
-                  <div className="flex items-center gap-0">
-                    <div
-                      className="flex-1 min-w-0 text-[10px] text-text-label truncate pr-1"
-                      title={limb}
-                    >
-                      {limb}
-                    </div>
-                    {ALLOC_SLOTS.map((slot) => (
-                      <AllocCell
-                        key={slot}
-                        value={alloc[slot]}
-                        onChange={(v) => updateLimbSlot(currentProfile.id, limb, slot, v)}
-                        onDelta={(d) => setLimbSlotDelta(currentProfile.id, limb, slot, d)}
-                      />
-                    ))}
-                    <button
-                      onClick={() => applyLimb(currentProfile.id, limb)}
-                      style={{ width: `${APPLY_W}px` }}
-                      className="flex items-center justify-center h-[20px] rounded text-text-dim hover:text-green cursor-pointer transition-colors"
-                      title={`Apply ${limb}`}
-                    >
-                      <CheckIcon size={9} />
-                    </button>
-                  </div>
-                  <div className="ml-auto" style={{ width: `${COMBAT_GRID_W}px` }}>
-                    <PointBar alloc={alloc} />
-                  </div>
-                </div>
+                <LimbRow
+                  key={limb}
+                  name={limb}
+                  cols={6}
+                  slots={COMBAT_SLOT_META}
+                  getValue={(slot) => alloc[slot as AllocSlot]}
+                  unspent={calcNull(alloc)}
+                  unspentLabel="unspent"
+                  bar={<PointBar alloc={alloc} />}
+                  onApply={() => applyLimb(currentProfile.id, limb)}
+                  onSlotChange={(slot, v) =>
+                    updateLimbSlot(currentProfile.id, limb, slot as AllocSlot, v)
+                  }
+                  onSlotDelta={(slot, d) =>
+                    setLimbSlotDelta(currentProfile.id, limb, slot as AllocSlot, d)
+                  }
+                />
               );
             })}
           </div>
-        )}
-      </div>
-
-      {currentProfile?.isActive && (
-        <div
-          className="flex items-center justify-center gap-1 px-2 py-0.5 border-t border-border-dim text-[10px] font-semibold"
-          style={{ color: '#50fa7b', background: 'rgba(80, 250, 123, 0.05)' }}
-        >
-          <CheckIcon size={9} /> Active
-        </div>
+          <ActionBar>
+            {currentProfile.isActive && (
+              <span
+                className="flex items-center gap-1 text-[10px] font-semibold"
+                style={{ color: '#50fa7b' }}
+              >
+                <CheckIcon size={9} /> Active
+              </span>
+            )}
+            <button
+              onClick={() => applyAll(currentProfile.id)}
+              className="ml-auto flex items-center gap-0.5 px-1.5 py-[2px] rounded text-[10px] font-semibold cursor-pointer transition-all duration-200 border"
+              style={{ color: ACCENT, borderColor: `${ACCENT}40`, background: `${ACCENT}10` }}
+              title="Apply all limbs"
+            >
+              Apply All
+            </button>
+          </ActionBar>
+        </>
       )}
-    </>
+    </div>
   );
 }
 
@@ -850,42 +915,23 @@ function MagicLiveView() {
   }
 
   return (
-    <div className="flex-1 overflow-auto px-2 py-1">
-      <div className="flex flex-col gap-0.5">
-        <MagicGridHeaders />
-        <div className="flex flex-col gap-0">
-          <div className="flex items-center gap-0">
-            <div
-              className="flex-1 min-w-0 text-[10px] text-text-label truncate pr-1"
-              title="elemental"
-            >
-              elemental
-            </div>
-            {MAGIC_SLOTS.map((slot) => (
-              <AllocCell
-                key={slot}
-                value={alloc[slot]}
-                onChange={(v) => updateMagicLiveSlot(slot, v)}
-                onDelta={(d) => setMagicLiveSlotDelta(slot, d)}
-              />
-            ))}
-            <button
-              onClick={() => applyMagicLive()}
-              style={{ width: `${APPLY_W}px` }}
-              className="flex items-center justify-center h-[20px] rounded text-text-dim hover:text-green cursor-pointer transition-colors"
-              title="Apply magic allocation"
-            >
-              <CheckIcon size={9} />
-            </button>
-          </div>
-          <div className="ml-auto" style={{ width: `${MAGIC_GRID_W}px` }}>
-            <MagicPointBar alloc={alloc} />
-          </div>
-        </div>
+    <div className="flex-1 flex flex-col min-h-0">
+      <SlotHeaderRow cols={4} slots={MAGIC_SLOT_META} />
+      <div className="flex-1 overflow-auto px-2">
+        <LimbRow
+          name="elemental"
+          cols={4}
+          slots={MAGIC_SLOT_META}
+          getValue={(slot) => alloc[slot as MagicSlot]}
+          unspent={calcArcane(alloc)}
+          unspentLabel="arcane"
+          bar={<MagicPointBar alloc={alloc} />}
+          onApply={() => applyMagicLive()}
+          onSlotChange={(slot, v) => updateMagicLiveSlot(slot as MagicSlot, v)}
+          onSlotDelta={(slot, d) => setMagicLiveSlotDelta(slot as MagicSlot, d)}
+        />
       </div>
-
-      {/* Live view actions */}
-      <div className="flex items-center gap-1 mt-2 pt-1.5 border-t border-border-dim">
+      <ActionBar>
         <button
           onClick={() => applyMagicLive()}
           className="flex items-center gap-0.5 px-1.5 py-[2px] rounded text-[10px] font-semibold cursor-pointer transition-all duration-200 border"
@@ -898,13 +944,14 @@ function MagicLiveView() {
         >
           Apply
         </button>
-        <SaveProfileMenu
-          profiles={magicData.profiles}
-          onNew={() => createMagicProfileFromLive()}
-          onUpdate={(id) => updateMagicProfileFromLive(id)}
-          accent={MAGIC_ACCENT}
-        />
-      </div>
+        <div className="ml-auto">
+          <SaveProfileMenu
+            profiles={magicData.profiles}
+            onNew={() => createMagicProfileFromLive()}
+            onUpdate={(id) => updateMagicProfileFromLive(id)}
+          />
+        </div>
+      </ActionBar>
     </div>
   );
 }
@@ -929,7 +976,7 @@ function MagicProfileView() {
   } = useAllocContext();
 
   return (
-    <>
+    <div className="flex-1 flex flex-col min-h-0">
       {/* Profile navigation row */}
       <div className="flex items-center gap-1 px-2 py-1 border-b border-border-dim shrink-0">
         <ProfileSelector
@@ -941,21 +988,6 @@ function MagicProfileView() {
         />
 
         <div className="w-px h-3 bg-border-dim mx-0.5" />
-
-        {currentMagicProfile && (
-          <button
-            onClick={() => applyMagic(currentMagicProfile.id)}
-            className="flex items-center gap-0.5 px-1.5 py-[1px] rounded text-[10px] font-semibold cursor-pointer transition-all duration-200 border"
-            style={{
-              color: MAGIC_ACCENT,
-              borderColor: `${MAGIC_ACCENT}40`,
-              background: `${MAGIC_ACCENT}10`,
-            }}
-            title="Apply magic allocation"
-          >
-            Apply
-          </button>
-        )}
 
         <button
           onClick={() => createMagicProfile()}
@@ -990,63 +1022,62 @@ function MagicProfileView() {
         )}
       </div>
 
-      {/* Profile allocation grid */}
-      <div className="flex-1 overflow-auto px-2 py-1">
-        {!currentMagicProfile ? (
-          <div className="flex flex-col items-center justify-center h-full text-text-dim text-[11px] gap-2">
-            <p>No magic profiles yet.</p>
-            <button
-              onClick={() => createMagicProfile()}
-              className="flex items-center gap-1 px-2 py-1 rounded text-[10px] cursor-pointer border border-border-dim hover:border-border text-text-label hover:text-text-primary transition-colors"
-            >
-              <PlusIcon size={10} /> Create Profile
-            </button>
-          </div>
-        ) : (
-          <div className="flex flex-col gap-0.5">
-            <MagicGridHeaders />
-            <div className="flex flex-col gap-0">
-              <div className="flex items-center gap-0">
-                <div
-                  className="flex-1 min-w-0 text-[10px] text-text-label truncate pr-1"
-                  title="elemental"
-                >
-                  elemental
-                </div>
-                {MAGIC_SLOTS.map((slot) => (
-                  <AllocCell
-                    key={slot}
-                    value={currentMagicProfile.alloc[slot]}
-                    onChange={(v) => updateMagicProfileSlot(currentMagicProfile.id, slot, v)}
-                    onDelta={(d) => setMagicProfileSlotDelta(currentMagicProfile.id, slot, d)}
-                  />
-                ))}
-                <button
-                  onClick={() => applyMagic(currentMagicProfile.id)}
-                  style={{ width: `${APPLY_W}px` }}
-                  className="flex items-center justify-center h-[20px] rounded text-text-dim hover:text-green cursor-pointer transition-colors"
-                  title="Apply magic allocation"
-                >
-                  <CheckIcon size={9} />
-                </button>
-              </div>
-              <div className="ml-auto" style={{ width: `${MAGIC_GRID_W}px` }}>
-                <MagicPointBar alloc={currentMagicProfile.alloc} />
-              </div>
-            </div>
-          </div>
-        )}
-      </div>
-
-      {currentMagicProfile?.isActive && (
-        <div
-          className="flex items-center justify-center gap-1 px-2 py-0.5 border-t border-border-dim text-[10px] font-semibold"
-          style={{ color: '#50fa7b', background: 'rgba(80, 250, 123, 0.05)' }}
-        >
-          <CheckIcon size={9} /> Active
+      {!currentMagicProfile ? (
+        <div className="flex-1 flex flex-col items-center justify-center text-text-dim text-[11px] gap-2">
+          <p>No magic profiles yet.</p>
+          <button
+            onClick={() => createMagicProfile()}
+            className="flex items-center gap-1 px-2 py-1 rounded text-[10px] cursor-pointer border border-border-dim hover:border-border text-text-label hover:text-text-primary transition-colors"
+          >
+            <PlusIcon size={10} /> Create Profile
+          </button>
         </div>
+      ) : (
+        <>
+          <SlotHeaderRow cols={4} slots={MAGIC_SLOT_META} />
+          <div className="flex-1 overflow-auto px-2">
+            <LimbRow
+              name="elemental"
+              cols={4}
+              slots={MAGIC_SLOT_META}
+              getValue={(slot) => currentMagicProfile.alloc[slot as MagicSlot]}
+              unspent={calcArcane(currentMagicProfile.alloc)}
+              unspentLabel="arcane"
+              bar={<MagicPointBar alloc={currentMagicProfile.alloc} />}
+              onApply={() => applyMagic(currentMagicProfile.id)}
+              onSlotChange={(slot, v) =>
+                updateMagicProfileSlot(currentMagicProfile.id, slot as MagicSlot, v)
+              }
+              onSlotDelta={(slot, d) =>
+                setMagicProfileSlotDelta(currentMagicProfile.id, slot as MagicSlot, d)
+              }
+            />
+          </div>
+          <ActionBar>
+            {currentMagicProfile.isActive && (
+              <span
+                className="flex items-center gap-1 text-[10px] font-semibold"
+                style={{ color: '#50fa7b' }}
+              >
+                <CheckIcon size={9} /> Active
+              </span>
+            )}
+            <button
+              onClick={() => applyMagic(currentMagicProfile.id)}
+              className="ml-auto flex items-center gap-0.5 px-1.5 py-[2px] rounded text-[10px] font-semibold cursor-pointer transition-all duration-200 border"
+              style={{
+                color: MAGIC_ACCENT,
+                borderColor: `${MAGIC_ACCENT}40`,
+                background: `${MAGIC_ACCENT}10`,
+              }}
+              title="Apply magic allocation"
+            >
+              Apply
+            </button>
+          </ActionBar>
+        </>
       )}
-    </>
+    </div>
   );
 }
 

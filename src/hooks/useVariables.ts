@@ -1,6 +1,7 @@
 import { useState, useCallback, useEffect, useRef, useMemo } from 'react';
 import type { DataStore } from '../contexts/DataStoreContext';
 import type { Variable, VariableId, VariableScope } from '../types/variable';
+import { sanitizeRecordMap } from '../lib/sanitizeRecords';
 
 const VARIABLES_FILE = 'variables.json';
 const GLOBAL_KEY = 'global';
@@ -29,7 +30,7 @@ export function useVariables(dataStore: DataStore, activeCharacter: string | nul
           VARIABLES_FILE,
           GLOBAL_KEY
         );
-        if (savedGlobal) setGlobalVariables(savedGlobal);
+        if (savedGlobal) setGlobalVariables(sanitizeRecordMap<Variable>(savedGlobal, 'name'));
       } catch (e) {
         console.error('Failed to load global variables:', e);
       }
@@ -49,7 +50,7 @@ export function useVariables(dataStore: DataStore, activeCharacter: string | nul
     (async () => {
       try {
         const saved = await dataStore.get<Record<VariableId, Variable>>(VARIABLES_FILE, charKey);
-        setCharacterVariables(saved ?? {});
+        setCharacterVariables(sanitizeRecordMap<Variable>(saved, 'name'));
       } catch (e) {
         console.error('Failed to load character variables:', e);
         setCharacterVariables({});
@@ -162,7 +163,7 @@ export function useVariables(dataStore: DataStore, activeCharacter: string | nul
     (name: string, value: string, scope: VariableScope): void => {
       const source = scope === 'character' ? characterVariables : globalVariables;
       const existing = Object.values(source).find(
-        (v) => v.name.toLowerCase() === name.toLowerCase()
+        (v) => typeof v?.name === 'string' && v.name.toLowerCase() === name.toLowerCase()
       );
 
       if (existing) {
