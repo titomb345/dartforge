@@ -37,11 +37,11 @@ export function useFilteredGroups<T extends Groupable>(
       const lower = searchText.toLowerCase();
       list = list.filter(
         (item) =>
-          item.pattern.toLowerCase().includes(lower) ||
+          (item.pattern ?? '').toLowerCase().includes(lower) ||
           (item.name && item.name.toLowerCase().includes(lower))
       );
     }
-    return list.sort((a, b) => a.pattern.localeCompare(b.pattern));
+    return [...list].sort((a, b) => (a.pattern ?? '').localeCompare(b.pattern ?? ''));
   }, [items, groupFilter, searchText]);
 
   const grouped = useMemo(() => {

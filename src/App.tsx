@@ -71,7 +71,12 @@ import { useTimers } from './hooks/useTimers';
 import { TimerProvider } from './contexts/TimerContext';
 import { TimerPanel } from './components/TimerPanel';
 import { useSignatureMappings } from './hooks/useSignatureMappings';
-import { matchTriggers, expandTriggerBody, resetTriggerCooldowns } from './lib/triggerEngine';
+import {
+  matchTriggers,
+  expandTriggerBody,
+  substituteCaptures,
+  resetTriggerCooldowns,
+} from './lib/triggerEngine';
 import { executeTriggerScript, executeAliasScript, stampUserInput } from './lib/scriptEngine';
 import { useGlobalScript } from './hooks/useGlobalScript';
 import { ScriptPanel } from './components/ScriptPanel';
@@ -665,6 +670,15 @@ function AppMain() {
         for (const match of matches) {
           if (match.trigger.gag) gag = true;
           if (match.trigger.highlight) highlight = match.trigger.highlight;
+          // Optional line rewrite — substitutes captures, overrides any earlier
+          // replacement (e.g. skill-count injection). Last matching trigger wins.
+          if (match.trigger.replacement) {
+            replacement = substituteCaptures(
+              match.trigger.replacement,
+              match,
+              activeCharacterRef.current
+            );
+          }
           // Play sound: new soundName field takes priority, fall back to legacy soundAlert
           const soundToPlay = match.trigger.soundName ?? (match.trigger.soundAlert ? 'chime1' : null);
           if (soundToPlay) {

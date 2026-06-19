@@ -474,6 +474,7 @@ export function AliasPanel({ onClose }: AliasPanelProps) {
     createAlias,
     updateAlias,
     deleteAlias,
+    setGroupEnabled,
   } = useAliasContext();
   const { activeCharacter } = useSkillTrackerContext();
 
@@ -636,31 +637,48 @@ export function AliasPanel({ onClose }: AliasPanelProps) {
         {groupedAliases.map(([groupName, groupAliases]) => {
           const isCollapsed = collapsedGroups.has(groupName);
           const showHeader = groupFilter === null && groups.length > 1;
+          const allEnabled = groupAliases.every((a) => a.enabled);
           return (
             <div key={groupName} className="mb-3">
               {showHeader && (
-                <button
-                  onClick={() => {
-                    const next = new Set(collapsedGroups);
-                    if (next.has(groupName)) next.delete(groupName);
-                    else next.add(groupName);
-                    updateCollapsedAliasGroups([...next]);
-                  }}
-                  className="flex items-center gap-1 w-full text-left text-[10px] font-semibold uppercase tracking-[0.08em] text-[#555] mb-1 px-2 cursor-pointer hover:text-text-label transition-colors duration-150"
-                >
-                  <span
-                    className="shrink-0 transition-transform duration-200"
-                    style={{ transform: isCollapsed ? 'rotate(-90deg)' : 'rotate(0deg)' }}
+                <div className="flex items-center gap-1 mb-1 px-2">
+                  <button
+                    onClick={() => {
+                      const next = new Set(collapsedGroups);
+                      if (next.has(groupName)) next.delete(groupName);
+                      else next.add(groupName);
+                      updateCollapsedAliasGroups([...next]);
+                    }}
+                    className="flex items-center gap-1 flex-1 min-w-0 text-left text-[10px] font-semibold uppercase tracking-[0.08em] text-[#555] cursor-pointer hover:text-text-label transition-colors duration-150"
                   >
-                    <ChevronDownIcon size={8} />
-                  </span>
-                  {groupName}
-                  {isCollapsed && (
-                    <span className="text-[9px] font-normal normal-case tracking-normal text-text-dim ml-1">
-                      ({groupAliases.length})
+                    <span
+                      className="shrink-0 transition-transform duration-200"
+                      style={{ transform: isCollapsed ? 'rotate(-90deg)' : 'rotate(0deg)' }}
+                    >
+                      <ChevronDownIcon size={8} />
                     </span>
-                  )}
-                </button>
+                    <span className="truncate">{groupName}</span>
+                    {isCollapsed && (
+                      <span className="text-[9px] font-normal normal-case tracking-normal text-text-dim ml-1 shrink-0">
+                        ({groupAliases.length})
+                      </span>
+                    )}
+                  </button>
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setGroupEnabled(groupName, !allEnabled, scope);
+                    }}
+                    title={allEnabled ? `Disable all in "${groupName}"` : `Enable all in "${groupName}"`}
+                    className={`text-[8px] font-mono px-1.5 py-px rounded border cursor-pointer transition-colors duration-150 shrink-0 ${
+                      allEnabled
+                        ? 'text-green border-green/40 bg-green/10'
+                        : 'text-text-dim border-border-dim bg-transparent hover:text-text-label'
+                    }`}
+                  >
+                    {allEnabled ? 'on' : 'off'}
+                  </button>
+                </div>
               )}
               {(!showHeader || !isCollapsed) &&
                 groupAliases.map((alias) => (

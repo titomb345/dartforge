@@ -39,7 +39,7 @@ export function expandVariables(text: string, variables: Variable[]): string {
   // Build lookup of enabled variables (first match wins — character vars come first in merged list)
   const varMap = new Map<string, string>();
   for (const v of variables) {
-    if (!v.enabled) continue;
+    if (!v.enabled || typeof v.name !== 'string') continue;
     const key = v.name.toLowerCase();
     if (!varMap.has(key)) {
       varMap.set(key, v.value);

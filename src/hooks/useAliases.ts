@@ -1,6 +1,7 @@
 import { useState, useCallback, useEffect, useRef, useMemo } from 'react';
 import type { DataStore } from '../contexts/DataStoreContext';
 import type { Alias, AliasBodyMode, AliasId, AliasMatchMode, AliasScope } from '../types/alias';
+import { sanitizeRecordMap } from '../lib/sanitizeRecords';
 
 const ALIASES_FILE = 'aliases.json';
 const SETTINGS_FILE = 'settings.json';
@@ -29,7 +30,7 @@ export function useAliases(dataStore: DataStore, activeCharacter: string | null)
     (async () => {
       try {
         const savedGlobal = await dataStore.get<Record<AliasId, Alias>>(ALIASES_FILE, GLOBAL_KEY);
-        if (savedGlobal) setGlobalAliases(savedGlobal);
+        if (savedGlobal) setGlobalAliases(sanitizeRecordMap<Alias>(savedGlobal, 'pattern'));
 
         const savedSpeedwalk = await dataStore.get<boolean>(SETTINGS_FILE, SPEEDWALK_KEY);
         if (savedSpeedwalk != null) setEnableSpeedwalkState(savedSpeedwalk);
@@ -52,7 +53,7 @@ export function useAliases(dataStore: DataStore, activeCharacter: string | null)
     (async () => {
       try {
         const saved = await dataStore.get<Record<AliasId, Alias>>(ALIASES_FILE, charKey);
-        setCharacterAliases(saved ?? {});
+        setCharacterAliases(sanitizeRecordMap<Alias>(saved, 'pattern'));
       } catch (e) {
         console.error('Failed to load character aliases:', e);
         setCharacterAliases({});
@@ -179,6 +180,33 @@ export function useAliases(dataStore: DataStore, activeCharacter: string | null)
     }
   }, []);
 
+  /** Enable or disable every alias in a group at once. */
+  const setGroupEnabled = useCallback(
+    (group: string, enabled: boolean, scope: AliasScope) => {
+      const now = new Date().toISOString();
+      const updater = (prev: Record<AliasId, Alias>) => {
+        let changed = false;
+        const next: Record<AliasId, Alias> = {};
+        for (const [id, a] of Object.entries(prev)) {
+          if (a.group === group && a.enabled !== enabled) {
+            next[id] = { ...a, enabled, updatedAt: now };
+            changed = true;
+          } else {
+            next[id] = a;
+          }
+        }
+        return changed ? next : prev;
+      };
+
+      if (scope === 'character') {
+        setCharacterAliases(updater);
+      } else {
+        setGlobalAliases(updater);
+      }
+    },
+    []
+  );
+
   const duplicateAlias = useCallback(
     (id: AliasId, scope: AliasScope): AliasId | null => {
       const source = scope === 'character' ? characterAliases : globalAliases;
@@ -217,6 +245,7 @@ export function useAliases(dataStore: DataStore, activeCharacter: string | null)
       updateAlias,
       deleteAlias,
       toggleAlias,
+      setGroupEnabled,
       duplicateAlias,
     }),
     [
@@ -229,6 +258,7 @@ export function useAliases(dataStore: DataStore, activeCharacter: string | null)
       updateAlias,
       deleteAlias,
       toggleAlias,
+      setGroupEnabled,
       duplicateAlias,
     ]
   );

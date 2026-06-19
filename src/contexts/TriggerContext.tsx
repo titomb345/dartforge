@@ -22,6 +22,7 @@ export interface TriggerState {
       cooldownMs?: number;
       gag?: boolean;
       highlight?: string | null;
+      replacement?: string | null;
       soundAlert?: boolean;
       soundName?: string | null;
       bodyMode?: BodyMode;
@@ -37,6 +38,7 @@ export interface TriggerState {
   ) => void;
   deleteTrigger: (id: TriggerId, scope: TriggerScope) => void;
   toggleTrigger: (id: TriggerId, scope: TriggerScope) => void;
+  setGroupEnabled: (group: string, enabled: boolean, scope: TriggerScope) => void;
   duplicateTrigger: (id: TriggerId, scope: TriggerScope) => TriggerId | null;
   triggerPrefill: TriggerPrefill | null;
   setTriggerPrefill: (prefill: TriggerPrefill | null) => void;
