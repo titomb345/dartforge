@@ -29,6 +29,11 @@ const READ_BUF_SIZE: usize = 4096;
 const CONNECT_TIMEOUT: Duration = Duration::from_secs(10);
 const MAX_RETRIES: u32 = 3;
 const RETRY_DELAY: Duration = Duration::from_secs(2);
+/// Max time a single write may block before we treat the connection as stalled.
+/// Commands are tiny, so a write that can't drain in this window means the
+/// socket is half-open (server gone / TCP backpressure with no drain) and the
+/// connection should be torn down rather than silently swallowing input.
+const WRITE_TIMEOUT: Duration = Duration::from_secs(10);
 
 pub async fn connect(
     app: AppHandle,
@@ -126,12 +131,25 @@ pub async fn connect(
     let (write_tx, mut write_rx) = mpsc::channel::<Vec<u8>>(100);
     let write_tx_for_cmds = write_tx.clone();
 
-    // Spawn write loop — handles both user commands and telnet responses
-    let write_handle = tokio::spawn(async move {
+    // Spawn write loop — handles both user commands and telnet responses.
+    // Each write is bounded by WRITE_TIMEOUT so a stalled/half-open socket
+    // tears the task down instead of blocking forever (which would leave the
+    // connection looking healthy while silently dropping commands).
+    let mut write_handle = tokio::spawn(async move {
         while let Some(data) = write_rx.recv().await {
-            if let Err(e) = writer.write_all(&data).await {
-                error!("Write error: {e}");
-                break;
+            match timeout(WRITE_TIMEOUT, writer.write_all(&data)).await {
+                Ok(Ok(())) => {}
+                Ok(Err(e)) => {
+                    error!("Write error: {e}");
+                    break;
+                }
+                Err(_) => {
+                    error!(
+                        "Write stalled (>{}s); treating connection as dead",
+                        WRITE_TIMEOUT.as_secs()
+                    );
+                    break;
+                }
             }
         }
     });
@@ -152,7 +170,20 @@ pub async fn connect(
     let mut buf = vec![0u8; READ_BUF_SIZE];
     let mut remainder: Vec<u8> = Vec::new();
     loop {
-        match reader.read(&mut buf).await {
+        let read_result = tokio::select! {
+            result = reader.read(&mut buf) => result,
+            _ = &mut write_handle => {
+                // Writer task exited (write error or stall). Output may still be
+                // arriving, but we can no longer send commands — tear the
+                // connection down so a disconnect is surfaced and the normal
+                // reconnect path can run, rather than appearing healthy while
+                // silently dropping input.
+                warn!("Writer task exited; tearing down half-open connection");
+                break;
+            }
+        };
+
+        match read_result {
             Ok(0) => {
                 info!("Connection closed by server");
                 break;
