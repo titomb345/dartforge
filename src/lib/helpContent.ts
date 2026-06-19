@@ -130,7 +130,7 @@ export const HELP_CATEGORIES: HelpCategory[] = [
       {
         title: 'Allocations Panel',
         description:
-          'Tracks your combat and magic allocations. Auto-parses from "show combat allocation:all" output. Click cells to edit values.',
+          'Tracks your combat and magic allocations. Auto-parses from "show combat allocation:all" output. Every limb shows a row of −/value/+ steppers under a sticky slot header — click a value to type an exact number, or use −/+ to step (hold Shift for ×5). The header\'s −/+ adjust that slot on every limb at once, and Apply All / Save sit in a sticky bottom bar.',
         helpId: 'toolbar-alloc',
       },
       {
@@ -586,7 +586,7 @@ export const HELP_CATEGORIES: HelpCategory[] = [
       {
         title: 'Allocation Tracking',
         description:
-          'Combat and magic allocations auto-parse from "show combat allocation:all" and "show magic allocation" output. Edit values inline.',
+          'Combat and magic allocations auto-parse from "show combat allocation:all" and "show magic allocation" output. Each limb has a row of −/value/+ steppers — click a value to type it exactly, or step with −/+ (Shift = ×5), then Apply per-limb or all at once from the sticky bottom bar.',
         helpId: 'toolbar-alloc',
       },
       {
