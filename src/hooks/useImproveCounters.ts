@@ -6,6 +6,24 @@ import type { SkillMatchResult } from '../types/skills';
 const COUNTERS_FILE = 'counters.json';
 const SETTINGS_FILE = 'settings.json';
 const SAVE_INTERVAL_MS = 30_000; // periodic save for running counters
+const HEARTBEAT_MS = 1_000; // liveness tick / suspension detector
+// A gap between heartbeats larger than this means the app or machine was
+// suspended (sleep, tab throttling, etc.) — that span is NOT counted as
+// active time.
+const SUSPEND_GAP_MS = 5_000;
+// Hard cap on a single credited running segment. A continuous awake segment is
+// flushed well within SAVE_INTERVAL_MS, so this only ever truncates a
+// suspension gap that slipped past the heartbeat (e.g. acting in the < 1s
+// window right after wake). Must be larger than SAVE_INTERVAL_MS.
+const MAX_SEGMENT_MS = SAVE_INTERVAL_MS + SUSPEND_GAP_MS;
+
+/**
+ * Active milliseconds elapsed in the current running segment, clamped so a
+ * suspended span (sleep/throttle) isn't counted as active time.
+ */
+export function awakeMs(lastResumedAt: number, now: number): number {
+  return Math.min(Math.max(0, now - lastResumedAt), MAX_SEGMENT_MS);
+}
 
 function generateId(): string {
   return `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
@@ -139,10 +157,34 @@ export function useImproveCounters() {
   // Derive a stable boolean for whether any counter is running
   const hasRunning = counters.some((c) => c.status === 'running');
 
-  // 1-second tick for live elapsed display
+  // Heartbeat: drives the live elapsed display and detects suspension gaps.
+  // If the interval fires much later than expected (machine slept, tab was
+  // throttled), the missed span is treated as inactive: we credit only the
+  // awake time up to the last beat and resume timing from now, so the gap is
+  // never counted.
+  const lastBeatRef = useRef(0);
   useEffect(() => {
     if (!hasRunning) return;
-    const id = setInterval(() => setTick((t) => t + 1), 1000);
+    lastBeatRef.current = Date.now();
+    const id = setInterval(() => {
+      const now = Date.now();
+      const gap = now - lastBeatRef.current;
+      lastBeatRef.current = now;
+      if (gap > SUSPEND_GAP_MS) {
+        const lastBeat = now - gap;
+        setCounters((prev) =>
+          prev.map((c) => {
+            if (c.status !== 'running' || !c.lastResumedAt) return c;
+            return {
+              ...c,
+              accumulatedMs: c.accumulatedMs + Math.max(0, lastBeat - c.lastResumedAt),
+              lastResumedAt: now,
+            };
+          })
+        );
+      }
+      setTick((t) => t + 1);
+    }, HEARTBEAT_MS);
     return () => clearInterval(id);
   }, [hasRunning]);
 
@@ -156,7 +198,7 @@ export function useImproveCounters() {
           if (c.status !== 'running' || !c.lastResumedAt) return c;
           return {
             ...c,
-            accumulatedMs: c.accumulatedMs + (now - c.lastResumedAt),
+            accumulatedMs: c.accumulatedMs + awakeMs(c.lastResumedAt, now),
             lastResumedAt: now,
           };
         });
@@ -217,7 +259,7 @@ export function useImproveCounters() {
     setCounters((prev) =>
       prev.map((c) => {
         if (c.id !== id || c.status !== 'running') return c;
-        const elapsed = c.lastResumedAt ? now - c.lastResumedAt : 0;
+        const elapsed = c.lastResumedAt ? awakeMs(c.lastResumedAt, now) : 0;
         return {
           ...c,
           status: 'paused' as CounterStatus,
@@ -244,7 +286,7 @@ export function useImproveCounters() {
       prev.map((c) => {
         if (c.id !== id) return c;
         if (c.status === 'stopped') return c;
-        const elapsed = c.status === 'running' && c.lastResumedAt ? now - c.lastResumedAt : 0;
+        const elapsed = c.status === 'running' && c.lastResumedAt ? awakeMs(c.lastResumedAt, now) : 0;
         return {
           ...c,
           status: 'stopped' as CounterStatus,
@@ -281,7 +323,7 @@ export function useImproveCounters() {
       setCounters((prev) =>
         prev.map((c) => {
           if (c.id !== id) return c;
-          const elapsed = c.status === 'running' && c.lastResumedAt ? now - c.lastResumedAt : 0;
+          const elapsed = c.status === 'running' && c.lastResumedAt ? awakeMs(c.lastResumedAt, now) : 0;
           return {
             ...c,
             archived: true,
@@ -391,7 +433,7 @@ export function useImproveCounters() {
     (counter: ImproveCounter): number => {
       void tick;
       if (counter.status === 'running' && counter.lastResumedAt) {
-        return counter.accumulatedMs + (Date.now() - counter.lastResumedAt);
+        return counter.accumulatedMs + awakeMs(counter.lastResumedAt, Date.now());
       }
       return counter.accumulatedMs;
     },

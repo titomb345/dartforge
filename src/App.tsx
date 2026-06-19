@@ -34,7 +34,7 @@ import { useTransport } from './contexts/TransportContext';
 import { useThemeColors } from './hooks/useThemeColors';
 import { useSkillTracker } from './hooks/useSkillTracker';
 import { useChatMessages } from './hooks/useChatMessages';
-import { useImproveCounters } from './hooks/useImproveCounters';
+import { useImproveCounters, awakeMs } from './hooks/useImproveCounters';
 import { useGameClock } from './hooks/useGameClock';
 import { useAliases } from './hooks/useAliases';
 import { useVariables } from './hooks/useVariables';
@@ -1918,7 +1918,7 @@ function AppMain() {
       .map((c) => {
         const elapsed =
           c.accumulatedMs +
-          (c.status === 'running' && c.lastResumedAt ? now - c.lastResumedAt : 0);
+          (c.status === 'running' && c.lastResumedAt ? awakeMs(c.lastResumedAt, now) : 0);
         const perHour = elapsed > 0 ? c.totalImps / (elapsed / 3_600_000) : 0;
         return {
           id: c.id,

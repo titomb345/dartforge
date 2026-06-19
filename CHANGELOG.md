@@ -22,6 +22,10 @@ The `[Unreleased]` header controls automatic version bumping on merge:
 - Mobile Companion is now responsive to the device — phones keep the on-screen d-pad and Prev/Next history buttons, while wider laptop/desktop browsers hide them in favor of a roomier layout driven by the numpad and arrow keys
 - Mobile Companion output now uses a true-black background (matching the desktop terminal) instead of an off-black, with a tuned monospace font and tighter line height so ASCII maps and hex grids render with the correct proportions instead of looking scrunched
 
+### Fixed
+- Anti-spam now only collapses identical lines that arrive in quick succession. Previously two identical lines were merged into `[repeated xN]` no matter how far apart they appeared (e.g. 30 seconds), because the tracked line never expired. A repeat now only collapses when it lands within 1 second of the previous occurrence, and each repeat restarts that window; lines further apart are shown in full
+- Improve counter elapsed time no longer counts time the app or machine was suspended (sleep, tab throttling). A running counter left while the computer slept would credit the entire suspended span as active time (e.g. showing ~10h after a 5h sleep); suspended gaps are now detected and excluded, so elapsed time and per-period/per-hour rates reflect only active time
+
 ## [1.9.0] - 2026-04-18
 
 ### Added
