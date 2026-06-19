@@ -353,7 +353,7 @@ function ValueStepper({
       {!readOnly && (
         <button
           onClick={(e) => handleDelta(e, -1)}
-          className="w-[13px] shrink-0 flex items-center justify-center text-[12px] leading-none text-text-dim hover:text-red hover:bg-bg-secondary cursor-pointer transition-colors"
+          className="w-[12px] shrink-0 flex items-center justify-center text-[12px] leading-none text-text-dim hover:text-red hover:bg-bg-secondary cursor-pointer transition-colors"
           title="− 1 (shift: − 5)"
         >
           −
@@ -378,7 +378,7 @@ function ValueStepper({
               setEditing(false);
             }
           }}
-          className="flex-1 min-w-0 w-full text-center text-[10px] font-mono bg-bg-canvas text-text-primary outline-none px-0 border-x border-border"
+          className="flex-1 min-w-0 w-full text-center text-[9px] font-mono tabular-nums tracking-tight bg-bg-canvas text-text-primary outline-none px-0 border-x border-border"
         />
       ) : (
         <button
@@ -388,7 +388,7 @@ function ValueStepper({
             setEditing(true);
           }}
           className={cn(
-            'flex-1 min-w-0 text-center text-[10px] font-mono px-0.5',
+            'flex-1 min-w-0 text-center text-[9px] font-mono tabular-nums tracking-tight px-0 truncate',
             readOnly
               ? 'text-text-dim cursor-default'
               : 'text-text-primary hover:bg-bg-secondary cursor-text transition-colors'
@@ -401,7 +401,7 @@ function ValueStepper({
       {!readOnly && (
         <button
           onClick={(e) => handleDelta(e, 1)}
-          className="w-[13px] shrink-0 flex items-center justify-center text-[12px] leading-none text-text-dim hover:text-green hover:bg-bg-secondary cursor-pointer transition-colors"
+          className="w-[12px] shrink-0 flex items-center justify-center text-[12px] leading-none text-text-dim hover:text-green hover:bg-bg-secondary cursor-pointer transition-colors"
           title="+ 1 (shift: + 5)"
         >
           +
