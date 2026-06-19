@@ -9,7 +9,7 @@ The `[Unreleased]` header controls automatic version bumping on merge:
 - `[Unreleased-minor]` → 0.1.0 → 0.2.0
 - `[Unreleased-major]` → 0.1.0 → 1.0.0
 
-## [Unreleased-major]
+## [Unreleased-minor]
 
 ### Added
 - Trigger line rewrite — a trigger can now rewrite the matched line shown in the terminal (with $0/$1–$9/$line/$me substitution), in addition to gag and highlight. Set it in the trigger editor's "Rewrite line" field; an RW badge marks triggers that use it
