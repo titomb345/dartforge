@@ -57,8 +57,13 @@ export function useSoundLibrary(
         audio = audioMapRef.current.get(id);
       }
       if (audio) {
-        audio.currentTime = 0;
-        audio.play().catch(() => {});
+        // Play a fresh clone each time. A single HTMLAudioElement can only play
+        // one instance at a time, so reusing the shared element made rapid or
+        // overlapping notifications (a burst of tells/shouts/zephyrs that share
+        // a chime) restart or cancel each other — dropping chimes. Cloning lets
+        // them overlap; a playing media element isn't GC'd mid-playback.
+        const node = audio.cloneNode(true) as HTMLAudioElement;
+        node.play().catch(() => {});
       }
     },
     names() {
