@@ -37,14 +37,21 @@ import { cn } from '../lib/cn';
 /*  Slot colors & metadata                                            */
 /* ------------------------------------------------------------------ */
 
-/** Per-slot accent colors, shared by the steppers and the distribution bar. */
+/**
+ * Per-slot accent colors, shared by the header chips, steppers, and the
+ * distribution bar. Grouped by intent so the panel reads at a glance:
+ * offensive slots (bonus/daring/speed/aiming) use a hot red→gold ramp,
+ * defensive slots (parry/control) use cool blues.
+ */
 const SLOT_COLORS: Record<AllocSlot, string> = {
-  bonus: '#bd93f9',
-  daring: '#ff79c6',
-  speed: '#50fa7b',
-  aiming: '#f1fa8c',
-  parry: '#8be9fd',
-  control: '#ffb86c',
+  // Offense — warm
+  bonus: '#ff5555',
+  daring: '#ff8042',
+  speed: '#ffb13d',
+  aiming: '#ffd633',
+  // Defense — cool
+  parry: '#38bdf8',
+  control: '#5b7cfa',
 };
 
 const MAGIC_SLOT_COLORS: Record<MagicSlot, string> = {
@@ -441,8 +448,8 @@ function SlotHeaderRow({
         {slots.map((s) => (
           <div key={s.key} className="flex flex-col items-center gap-0.5 min-w-0">
             <span
-              className="text-[9px] font-bold uppercase leading-none"
-              style={{ color: s.color }}
+              className="w-full text-center text-[9px] font-bold uppercase leading-none rounded-sm px-1 py-[3px]"
+              style={{ background: s.color, color: '#040404' }}
               title={s.key}
             >
               {s.label}
