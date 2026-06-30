@@ -210,6 +210,12 @@ export const HELP_CATEGORIES: HelpCategory[] = [
         interaction: 'drag',
       },
       {
+        title: 'Hot & Cold Skill Highlights',
+        description:
+          'In the Counters panel, a skill row pulses amber when its per-period rate (the /period column) reaches the "hot" threshold and cyan when it falls to or below the "cold" threshold — so you can spot at a glance which skills are improving fastest and which have gone stale. Set both thresholds (in improves per period) in Settings > Counters; set either to 0 to turn that highlight off.',
+        helpId: 'toolbar-counters',
+      },
+      {
         title: 'Chat Sound Alerts',
         description:
           'Right-click a chat filter pill (Say, Shout, OOC, Tell, SZ) to toggle sound alerts for that message type.',

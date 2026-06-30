@@ -12,6 +12,7 @@ The `[Unreleased]` header controls automatic version bumping on merge:
 ## [Unreleased-minor]
 
 ### Changed
+- Counter panel skills table now has labeled, aligned columns (Skill · Imps · per-period rate) with a header that stays pinned while you scroll a long skill list, so it's clear what each number means and how it ties to the hot/cold thresholds. The per-skill rate dropped its parentheses and is right-aligned in its own column
 - Allocation panel slot colors are now meaningful instead of arbitrary. On the Combat tab, offensive slots (Bonus/Daring/Speed/Aiming) share a hot red→gold ramp and defensive slots (Parry/Control) use cool blues, so you can tell offense from defense at a glance. On the Magic tab, each element now wears a color that evokes it — airy pale cyan, fiery orange-red, ocean blue, and earthy green — replacing the muddy, low-contrast water/earth tones. The slot letters in the column header are now filled color chips (the full slot color as the background) rather than just tinted text, making each column's color easier to match to its stepper and distribution-bar segment
 
 ## [1.10.0] - 2026-06-19

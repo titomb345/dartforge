@@ -450,6 +450,7 @@ export function CounterPanel({ mode = 'slideout' }: CounterPanelProps) {
               counter={activeCounter}
               skills={getSkillsSorted(activeCounter)}
               getRate={(skill) => getSkillPeriodRate(activeCounter, skill)}
+              periodLabel={`/${periodLengthMinutes}m`}
             />
           </div>
         </div>
@@ -485,6 +486,7 @@ export function CounterPanel({ mode = 'slideout' }: CounterPanelProps) {
               counter={activeCounter}
               skills={getSkillsSorted(activeCounter)}
               getRate={(skill) => getSkillPeriodRate(activeCounter, skill)}
+              periodLabel={`/${periodLengthMinutes}m`}
             />
           </div>
         </div>
@@ -583,10 +585,12 @@ function SkillsTable({
   counter,
   skills,
   getRate,
+  periodLabel,
 }: {
   counter: ImproveCounter;
   skills: { skill: string; count: number }[];
   getRate: (skill: string) => number;
+  periodLabel: string;
 }) {
   const { counterHotThreshold, counterColdThreshold } = useAppSettingsContext();
 
@@ -602,6 +606,15 @@ function SkillsTable({
 
   return (
     <div className="px-1 py-1">
+      {/* Column header — sticks to the top of the scroll area so the imps /
+          per-period columns stay labeled while scrolling a long skill list */}
+      <div className="sticky top-0 z-10 flex items-center px-2 py-0.5 bg-bg-primary border-b border-border-subtle text-[8px] uppercase tracking-wider text-text-dim">
+        <span className="flex-1 min-w-0">Skill</span>
+        <span className="w-12 text-right shrink-0">Imps</span>
+        <span className="w-12 text-right shrink-0" title="Improves per period">
+          {periodLabel}
+        </span>
+      </div>
       {skills.map(({ skill, count }) => {
         const rate = getRate(skill);
         const effectClass =
@@ -614,17 +627,17 @@ function SkillsTable({
         return (
           <div
             key={skill}
-            className={`flex items-center justify-between px-2 py-0.5 hover:bg-bg-secondary/50 transition-colors duration-100 rounded-sm ${effectClass}`}
+            className={`flex items-center px-2 py-0.5 hover:bg-bg-secondary/50 transition-colors duration-100 rounded-sm ${effectClass}`}
           >
-            <span className="text-[11px] text-text-primary truncate mr-2">{skill}</span>
-            <div className="flex items-center gap-2 shrink-0">
-              <span className="text-[11px] font-mono text-text-label">
-                {count.toLocaleString()}
-              </span>
-              <span className="skill-rate text-[10px] font-mono text-text-label w-10 text-right">
-                ({rate.toFixed(2)})
-              </span>
-            </div>
+            <span className="flex-1 min-w-0 text-[11px] text-text-primary truncate mr-2">
+              {skill}
+            </span>
+            <span className="w-12 shrink-0 text-right text-[11px] font-mono tabular-nums text-text-label">
+              {count.toLocaleString()}
+            </span>
+            <span className="skill-rate w-12 shrink-0 text-right text-[10px] font-mono tabular-nums text-text-label">
+              {rate.toFixed(2)}
+            </span>
           </div>
         );
       })}
