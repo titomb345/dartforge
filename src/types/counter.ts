@@ -14,9 +14,14 @@ export interface ImproveCounter {
   /** Epoch ms when counter was last started/resumed (null when not running) */
   lastResumedAt: number | null;
 
-  /** Epoch ms when current period began */
-  periodStartAt: number | null;
-  /** Imps counted since periodStartAt */
+  /**
+   * Active elapsed-ms mark at which the current period window began. Measured
+   * in the same active-time domain as `accumulatedMs` (NOT wall-clock), so the
+   * period freezes whenever the counter isn't running — pausing, sleeping, or
+   * closing the app never advances it. `null` when there is no live period.
+   */
+  periodStartActiveMs: number | null;
+  /** Imps counted since the current period began */
   impsInCurrentPeriod: number;
   /** Whether the counter is archived (hidden from main view) */
   archived?: boolean;

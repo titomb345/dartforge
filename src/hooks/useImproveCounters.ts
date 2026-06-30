@@ -25,6 +25,19 @@ export function awakeMs(lastResumedAt: number, now: number): number {
   return Math.min(Math.max(0, now - lastResumedAt), MAX_SEGMENT_MS);
 }
 
+/**
+ * Total active ms for a counter: the frozen `accumulatedMs` plus, if running,
+ * the awake time since it last resumed. Frozen whenever the counter isn't
+ * running, so anything derived from it (elapsed, rates, the period window)
+ * freezes on pause/stop.
+ */
+export function activeElapsed(c: ImproveCounter, now: number): number {
+  if (c.status === 'running' && c.lastResumedAt) {
+    return c.accumulatedMs + awakeMs(c.lastResumedAt, now);
+  }
+  return c.accumulatedMs;
+}
+
 function generateId(): string {
   return `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 }
@@ -39,7 +52,7 @@ function makeCounter(name: string): ImproveCounter {
     startedAt: null,
     accumulatedMs: 0,
     lastResumedAt: null,
-    periodStartAt: null,
+    periodStartActiveMs: null,
     impsInCurrentPeriod: 0,
   };
 }
@@ -55,9 +68,18 @@ function migrateCounter(c: ImproveCounter & Record<string, unknown>): ImproveCou
     lastResumedAt = new Date(lastResumedAt as unknown as string).getTime();
   }
 
-  let periodStartAt: number | null = c.periodStartAt;
-  if (typeof periodStartAt === 'string') {
-    periodStartAt = new Date(periodStartAt as unknown as string).getTime();
+  // Period model: new installs and already-migrated data carry
+  // `periodStartActiveMs` (active-time domain). Old data only has the
+  // wall-clock `periodStartAt` timestamp — convert it once by starting a fresh
+  // period window at the counter's current active mark (accumulatedMs) if it
+  // had a live period, else null.
+  const raw = c as Record<string, unknown>;
+  let periodStartActiveMs: number | null;
+  if (raw.periodStartActiveMs !== undefined) {
+    periodStartActiveMs = raw.periodStartActiveMs as number | null;
+  } else {
+    const hadLivePeriod = raw.periodStartAt != null && c.status !== 'stopped';
+    periodStartActiveMs = hadLivePeriod ? c.accumulatedMs : null;
   }
 
   return {
@@ -69,7 +91,7 @@ function migrateCounter(c: ImproveCounter & Record<string, unknown>): ImproveCou
     startedAt: c.startedAt,
     accumulatedMs: c.accumulatedMs,
     lastResumedAt,
-    periodStartAt,
+    periodStartActiveMs,
     impsInCurrentPeriod: c.impsInCurrentPeriod,
     archived: c.archived ?? false,
     order: c.order,
@@ -79,6 +101,19 @@ function migrateCounter(c: ImproveCounter & Record<string, unknown>): ImproveCou
 export interface SkillTally {
   skill: string;
   count: number;
+}
+
+export interface PeriodProgress {
+  /** Improves counted in the current period window. */
+  imps: number;
+  /** Active ms elapsed in the current window (clamped to periodMs). */
+  elapsedMs: number;
+  /** Total length of a period window in ms. */
+  periodMs: number;
+  /** Ms remaining before the window rolls over. */
+  remainingMs: number;
+  /** Whether the counter is running (a live window exists). */
+  active: boolean;
 }
 
 export function useImproveCounters() {
@@ -105,23 +140,16 @@ export function useImproveCounters() {
 
         if (savedCounters && savedCounters.length > 0) {
           const now = Date.now();
-          const periodMs = (savedPeriod ?? 10) * 60_000;
 
-          // Migrate old format + resume running counters
+          // Migrate old format + resume running counters. The period window is
+          // active-time based, so the offline gap counts as neither active time
+          // nor period progress — just resume timing from now without touching
+          // the period (it picks up exactly where it left off).
           const resumed = savedCounters.map((raw) => {
             const c = migrateCounter(raw as ImproveCounter & Record<string, unknown>);
             if (c.status === 'running' && c.lastResumedAt) {
               // Don't add offline gap — only count time while app is open
-              const updated = { ...c, lastResumedAt: now };
-              // Check if period expired during gap
-              if (updated.periodStartAt) {
-                const periodElapsed = now - updated.periodStartAt;
-                if (periodElapsed > periodMs) {
-                  updated.periodStartAt = now;
-                  updated.impsInCurrentPeriod = 0;
-                }
-              }
-              return updated;
+              return { ...c, lastResumedAt: now };
             }
             return c;
           });
@@ -166,27 +194,54 @@ export function useImproveCounters() {
   useEffect(() => {
     if (!hasRunning) return;
     lastBeatRef.current = Date.now();
+    const periodMs = periodLengthMinutes * 60_000;
     const id = setInterval(() => {
       const now = Date.now();
       const gap = now - lastBeatRef.current;
       lastBeatRef.current = now;
-      if (gap > SUSPEND_GAP_MS) {
-        const lastBeat = now - gap;
-        setCounters((prev) =>
-          prev.map((c) => {
-            if (c.status !== 'running' || !c.lastResumedAt) return c;
-            return {
-              ...c,
-              accumulatedMs: c.accumulatedMs + Math.max(0, lastBeat - c.lastResumedAt),
+      const suspended = gap > SUSPEND_GAP_MS;
+      const lastBeat = now - gap;
+      setCounters((prev) => {
+        let changed = false;
+        const next = prev.map((c) => {
+          if (c.status !== 'running' || !c.lastResumedAt) return c;
+          let updated = c;
+          // Suspension gap (sleep/throttle): credit only awake time up to the
+          // last beat, then resume timing from now so the gap isn't counted.
+          if (suspended) {
+            updated = {
+              ...updated,
+              accumulatedMs: updated.accumulatedMs + Math.max(0, lastBeat - c.lastResumedAt),
               lastResumedAt: now,
             };
-          })
-        );
-      }
+            changed = true;
+          }
+          // Timer-driven period rollover so the live "this period" readout and
+          // countdown stay honest even when no improves are arriving (the
+          // per-improve handler also rolls, but only when an improve lands).
+          // Measured in active time, so a paused/slept stretch never rolls it.
+          if (updated.periodStartActiveMs != null) {
+            const over = activeElapsed(updated, now) - updated.periodStartActiveMs;
+            if (over >= periodMs) {
+              updated = {
+                ...updated,
+                periodStartActiveMs:
+                  updated.periodStartActiveMs + Math.floor(over / periodMs) * periodMs,
+                impsInCurrentPeriod: 0,
+              };
+              changed = true;
+            }
+          }
+          return updated;
+        });
+        // Return the same reference when nothing changed so the periodic-save
+        // effect doesn't fire every heartbeat.
+        return changed ? next : prev;
+      });
       setTick((t) => t + 1);
     }, HEARTBEAT_MS);
     return () => clearInterval(id);
-  }, [hasRunning]);
+  }, [hasRunning, periodLengthMinutes]);
 
   // Periodic save for running counters — flush elapsed into accumulatedMs
   useEffect(() => {
@@ -248,7 +303,9 @@ export function useImproveCounters() {
           status: 'running' as CounterStatus,
           startedAt: c.startedAt ?? new Date(now).toISOString(),
           lastResumedAt: now,
-          periodStartAt: c.periodStartAt ?? now,
+          // Start a period at the current active mark if one isn't already
+          // open (a stopped counter keeps its window so it resumes in place).
+          periodStartActiveMs: c.periodStartActiveMs ?? c.accumulatedMs,
         };
       })
     );
@@ -309,7 +366,7 @@ export function useImproveCounters() {
           startedAt: null,
           accumulatedMs: 0,
           lastResumedAt: null,
-          periodStartAt: null,
+          periodStartActiveMs: null,
           impsInCurrentPeriod: 0,
         };
       })
@@ -372,20 +429,23 @@ export function useImproveCounters() {
 
         setCounters((prev) => {
           const now = Date.now();
+          const periodMs = periodLengthMinutes * 60_000;
           return prev.map((c) => {
             if (c.status !== 'running') return c;
 
-            // Check period rollover
-            let periodStart = c.periodStartAt;
+            // Roll the period window if the active-time elapsed since it began
+            // has passed a full period (fallback to the heartbeat's rollover).
+            const active = activeElapsed(c, now);
+            let periodStart = c.periodStartActiveMs;
             let periodImps = c.impsInCurrentPeriod;
-            if (periodStart) {
-              const periodElapsed = now - periodStart;
-              if (periodElapsed > periodLengthMinutes * 60_000) {
-                periodStart = now;
+            if (periodStart != null) {
+              const over = active - periodStart;
+              if (over >= periodMs) {
+                periodStart += Math.floor(over / periodMs) * periodMs;
                 periodImps = 0;
               }
             } else {
-              periodStart = now;
+              periodStart = active;
               periodImps = 0;
             }
 
@@ -393,7 +453,7 @@ export function useImproveCounters() {
               ...c,
               skills: { ...c.skills, [skill]: (c.skills[skill] ?? 0) + 1 },
               totalImps: c.totalImps + 1,
-              periodStartAt: periodStart,
+              periodStartActiveMs: periodStart,
               impsInCurrentPeriod: periodImps + 1,
             };
           });
@@ -432,10 +492,7 @@ export function useImproveCounters() {
   const getElapsedMs = useCallback(
     (counter: ImproveCounter): number => {
       void tick;
-      if (counter.status === 'running' && counter.lastResumedAt) {
-        return counter.accumulatedMs + awakeMs(counter.lastResumedAt, Date.now());
-      }
-      return counter.accumulatedMs;
+      return activeElapsed(counter, Date.now());
     },
     [tick]
   );
@@ -465,6 +522,36 @@ export function useImproveCounters() {
       return counter.totalImps / (elapsed / 3_600_000);
     },
     [getElapsedMs]
+  );
+
+  const getPeriodProgress = useCallback(
+    (counter: ImproveCounter): PeriodProgress => {
+      void tick;
+      const periodMs = periodLengthMinutes * 60_000;
+      // No live window when stopped (or never started). Paused counters keep a
+      // live window so the readout stays visible and frozen.
+      if (counter.status === 'stopped' || counter.periodStartActiveMs == null) {
+        return {
+          imps: counter.impsInCurrentPeriod,
+          elapsedMs: 0,
+          periodMs,
+          remainingMs: periodMs,
+          active: false,
+        };
+      }
+      const elapsedMs = Math.min(
+        Math.max(0, activeElapsed(counter, Date.now()) - counter.periodStartActiveMs),
+        periodMs
+      );
+      return {
+        imps: counter.impsInCurrentPeriod,
+        elapsedMs,
+        periodMs,
+        remainingMs: periodMs - elapsedMs,
+        active: true,
+      };
+    },
+    [tick, periodLengthMinutes]
   );
 
   const getSkillsSorted = useCallback((counter: ImproveCounter): SkillTally[] => {
@@ -517,6 +604,7 @@ export function useImproveCounters() {
     getPerMinuteRate,
     getPerPeriodRate,
     getPerHourRate,
+    getPeriodProgress,
     getSkillsSorted,
     getSkillPeriodRate,
   };
