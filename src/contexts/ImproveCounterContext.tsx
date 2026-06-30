@@ -1,7 +1,7 @@
 import { createContext, useContext } from 'react';
 import type { ImproveCounter } from '../types/counter';
 import type { SkillMatchResult } from '../types/skills';
-import type { SkillTally } from '../hooks/useImproveCounters';
+import type { SkillTally, PeriodProgress } from '../hooks/useImproveCounters';
 
 export interface ImproveCounterState {
   counters: ImproveCounter[];
@@ -25,6 +25,7 @@ export interface ImproveCounterState {
   getPerMinuteRate: (counter: ImproveCounter) => number;
   getPerPeriodRate: (counter: ImproveCounter) => number;
   getPerHourRate: (counter: ImproveCounter) => number;
+  getPeriodProgress: (counter: ImproveCounter) => PeriodProgress;
   getSkillsSorted: (counter: ImproveCounter) => SkillTally[];
   getSkillPeriodRate: (counter: ImproveCounter, skill: string) => number;
 }

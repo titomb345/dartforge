@@ -216,6 +216,13 @@ export const HELP_CATEGORIES: HelpCategory[] = [
         helpId: 'toolbar-counters',
       },
       {
+        title: 'Sort the Skills List',
+        description:
+          'Click any column header in the Counters skills table — Skill, Imps, or the per-period rate — to sort by that field. Click the active column again to flip the direction (the arrow shows which way).',
+        helpId: 'toolbar-counters',
+        interaction: 'click',
+      },
+      {
         title: 'Chat Sound Alerts',
         description:
           'Right-click a chat filter pill (Say, Shout, OOC, Tell, SZ) to toggle sound alerts for that message type.',

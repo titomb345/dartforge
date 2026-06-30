@@ -17,6 +17,7 @@ import {
 } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import { useImproveCounterContext } from '../contexts/ImproveCounterContext';
+import type { PeriodProgress } from '../hooks/useImproveCounters';
 import type { ImproveCounter } from '../types/counter';
 import type { PinnablePanelProps } from '../types';
 import { panelRootClass } from '../lib/panelUtils';
@@ -38,6 +39,12 @@ import { PanelHeader } from './PanelHeader';
 
 type CounterPanelProps = PinnablePanelProps;
 
+type SkillSortKey = 'name' | 'count' | 'rate';
+interface SkillSort {
+  key: SkillSortKey;
+  dir: 'asc' | 'desc';
+}
+
 function formatCompactDuration(ms: number): string {
   const totalSeconds = Math.floor(ms / 1000);
   const h = Math.floor(totalSeconds / 3600);
@@ -46,6 +53,14 @@ function formatCompactDuration(ms: number): string {
   if (h > 0) return `${h}h ${m}m ${s}s`;
   if (m > 0) return `${m}m ${s}s`;
   return `${s}s`;
+}
+
+/** Countdown clock as m:ss (e.g. 3:48). */
+function formatClock(ms: number): string {
+  const total = Math.max(0, Math.ceil(ms / 1000));
+  const m = Math.floor(total / 60);
+  const s = total % 60;
+  return `${m}:${s.toString().padStart(2, '0')}`;
 }
 
 function StatusDot({ status }: { status: ImproveCounter['status'] }) {
@@ -171,6 +186,7 @@ export function CounterPanel({ mode = 'slideout' }: CounterPanelProps) {
     getPerMinuteRate,
     getPerPeriodRate,
     getPerHourRate,
+    getPeriodProgress,
     getSkillsSorted,
     getSkillPeriodRate,
   } = useImproveCounterContext();
@@ -180,6 +196,15 @@ export function CounterPanel({ mode = 'slideout' }: CounterPanelProps) {
   const periodInputRef = useRef<HTMLInputElement>(null);
   const [archiveOpen, setArchiveOpen] = useState(false);
   const [draggingId, setDraggingId] = useState<string | null>(null);
+  const [skillSort, setSkillSort] = useState<SkillSort>({ key: 'count', dir: 'desc' });
+
+  const handleSkillSort = useCallback((key: SkillSortKey) => {
+    setSkillSort((prev) =>
+      prev.key === key
+        ? { key, dir: prev.dir === 'asc' ? 'desc' : 'asc' }
+        : { key, dir: key === 'name' ? 'asc' : 'desc' }
+    );
+  }, []);
 
   const { panelFontSize } = useAppSettingsContext();
 
@@ -443,6 +468,7 @@ export function CounterPanel({ mode = 'slideout' }: CounterPanelProps) {
                 perPeriod={getPerPeriodRate(activeCounter)}
                 perHour={getPerHourRate(activeCounter)}
                 periodLabel={`${periodLengthMinutes}m`}
+                period={getPeriodProgress(activeCounter)}
               />
             </div>
             {/* Skills */}
@@ -451,6 +477,8 @@ export function CounterPanel({ mode = 'slideout' }: CounterPanelProps) {
               skills={getSkillsSorted(activeCounter)}
               getRate={(skill) => getSkillPeriodRate(activeCounter, skill)}
               periodLabel={`/${periodLengthMinutes}m`}
+              sort={skillSort}
+              onSort={handleSkillSort}
             />
           </div>
         </div>
@@ -480,6 +508,7 @@ export function CounterPanel({ mode = 'slideout' }: CounterPanelProps) {
                 perPeriod={getPerPeriodRate(activeCounter)}
                 perHour={getPerHourRate(activeCounter)}
                 periodLabel={`${periodLengthMinutes}m`}
+                period={getPeriodProgress(activeCounter)}
               />
             </div>
             <SkillsTable
@@ -487,6 +516,8 @@ export function CounterPanel({ mode = 'slideout' }: CounterPanelProps) {
               skills={getSkillsSorted(activeCounter)}
               getRate={(skill) => getSkillPeriodRate(activeCounter, skill)}
               periodLabel={`/${periodLengthMinutes}m`}
+              sort={skillSort}
+              onSort={handleSkillSort}
             />
           </div>
         </div>
@@ -542,6 +573,7 @@ function CounterStats({
   perPeriod,
   perHour,
   periodLabel,
+  period,
 }: {
   counter: ImproveCounter;
   elapsed: number;
@@ -549,7 +581,9 @@ function CounterStats({
   perPeriod: number;
   perHour: number;
   periodLabel: string;
+  period: PeriodProgress;
 }) {
+  const pct = period.periodMs > 0 ? (period.elapsedMs / period.periodMs) * 100 : 0;
   return (
     <div className="space-y-1">
       <div className="flex items-baseline justify-between">
@@ -561,11 +595,40 @@ function CounterStats({
           {formatCompactDuration(elapsed)}
         </span>
       </div>
-      <div className="grid grid-cols-3 gap-1 text-center">
+      <div
+        className="grid grid-cols-3 gap-1 text-center"
+        title="Session averages over total active time"
+      >
         <RateStat label="/min" value={perMinute} />
         <RateStat label={`/${periodLabel}`} value={perPeriod} />
         <RateStat label="/hr" value={perHour} />
       </div>
+      <div className="text-center text-[8px] text-text-dim/80 uppercase tracking-wider">
+        session average
+      </div>
+      {period.active && (
+        <div className="pt-1 mt-0.5 border-t border-border-subtle/60">
+          <div className="flex items-baseline justify-between">
+            <span className="text-[10px] text-text-dim">This period</span>
+            <span className="text-[11px] font-mono text-text-label">
+              <span className="font-semibold text-amber">{period.imps}</span>
+              <span className="text-[9px] text-text-dim ml-0.5">imps</span>
+              <span className="text-text-dim mx-1">·</span>
+              {formatClock(period.remainingMs)}
+              <span className="text-[9px] text-text-dim ml-0.5">left</span>
+            </span>
+          </div>
+          <div
+            className="mt-1 h-[3px] rounded-full overflow-hidden bg-bg-canvas/60"
+            title={`${formatClock(period.elapsedMs)} into this ${periodLabel} period`}
+          >
+            <div
+              className="h-full bg-amber/60 transition-[width] duration-1000 ease-linear"
+              style={{ width: `${pct}%` }}
+            />
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -581,18 +644,65 @@ function RateStat({ label, value }: { label: string; value: number }) {
   );
 }
 
+function SortHeader({
+  label,
+  sortKey,
+  sort,
+  onSort,
+  align,
+  title,
+}: {
+  label: string;
+  sortKey: SkillSortKey;
+  sort: SkillSort;
+  onSort: (key: SkillSortKey) => void;
+  align: 'left' | 'right';
+  title?: string;
+}) {
+  const active = sort.key === sortKey;
+  return (
+    <button
+      onClick={() => onSort(sortKey)}
+      title={title ?? `Sort by ${label.toLowerCase()}`}
+      className={`flex items-center gap-0.5 cursor-pointer uppercase tracking-wider transition-colors hover:text-text-label ${
+        align === 'right' ? 'w-12 shrink-0 justify-end' : 'flex-1 min-w-0 justify-start'
+      } ${active ? 'text-text-label' : 'text-text-dim'}`}
+    >
+      <span className="truncate">{label}</span>
+      {active &&
+        (sort.dir === 'asc' ? <ChevronUpIcon size={7} /> : <ChevronDownIcon size={7} />)}
+    </button>
+  );
+}
+
 function SkillsTable({
   counter,
   skills,
   getRate,
   periodLabel,
+  sort,
+  onSort,
 }: {
   counter: ImproveCounter;
   skills: { skill: string; count: number }[];
   getRate: (skill: string) => number;
   periodLabel: string;
+  sort: SkillSort;
+  onSort: (key: SkillSortKey) => void;
 }) {
   const { counterHotThreshold, counterColdThreshold } = useAppSettingsContext();
+
+  const sortedSkills = useMemo(() => {
+    const arr = [...skills];
+    const mul = sort.dir === 'asc' ? 1 : -1;
+    arr.sort((a, b) => {
+      if (sort.key === 'name') return a.skill.localeCompare(b.skill) * mul;
+      if (sort.key === 'rate') return (getRate(a.skill) - getRate(b.skill)) * mul;
+      // count — fall back to name for stable ordering on ties
+      return (a.count - b.count || b.skill.localeCompare(a.skill)) * mul;
+    });
+    return arr;
+  }, [skills, sort, getRate]);
 
   if (skills.length === 0) {
     return (
@@ -607,15 +717,21 @@ function SkillsTable({
   return (
     <div className="px-1 py-1">
       {/* Column header — sticks to the top of the scroll area so the imps /
-          per-period columns stay labeled while scrolling a long skill list */}
-      <div className="sticky top-0 z-10 flex items-center px-2 py-0.5 bg-bg-primary border-b border-border-subtle text-[8px] uppercase tracking-wider text-text-dim">
-        <span className="flex-1 min-w-0">Skill</span>
-        <span className="w-12 text-right shrink-0">Imps</span>
-        <span className="w-12 text-right shrink-0" title="Improves per period">
-          {periodLabel}
-        </span>
+          per-period columns stay labeled while scrolling a long skill list.
+          Each column is a button that sorts the list by that field. */}
+      <div className="sticky top-0 z-10 flex items-center px-2 py-0.5 bg-bg-primary border-b border-border-subtle text-[8px]">
+        <SortHeader label="Skill" sortKey="name" sort={sort} onSort={onSort} align="left" />
+        <SortHeader label="Imps" sortKey="count" sort={sort} onSort={onSort} align="right" />
+        <SortHeader
+          label={periodLabel}
+          sortKey="rate"
+          sort={sort}
+          onSort={onSort}
+          align="right"
+          title="Sort by improves per period"
+        />
       </div>
-      {skills.map(({ skill, count }) => {
+      {sortedSkills.map(({ skill, count }) => {
         const rate = getRate(skill);
         const effectClass =
           counterHotThreshold > 0 && rate >= counterHotThreshold

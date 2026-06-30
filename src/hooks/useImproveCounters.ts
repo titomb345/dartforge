@@ -81,6 +81,19 @@ export interface SkillTally {
   count: number;
 }
 
+export interface PeriodProgress {
+  /** Improves counted in the current period window. */
+  imps: number;
+  /** Active ms elapsed in the current window (clamped to periodMs). */
+  elapsedMs: number;
+  /** Total length of a period window in ms. */
+  periodMs: number;
+  /** Ms remaining before the window rolls over. */
+  remainingMs: number;
+  /** Whether the counter is running (a live window exists). */
+  active: boolean;
+}
+
 export function useImproveCounters() {
   const dataStore = useDataStore();
   const [counters, setCounters] = useState<ImproveCounter[]>([]);
@@ -166,27 +179,45 @@ export function useImproveCounters() {
   useEffect(() => {
     if (!hasRunning) return;
     lastBeatRef.current = Date.now();
+    const periodMs = periodLengthMinutes * 60_000;
     const id = setInterval(() => {
       const now = Date.now();
       const gap = now - lastBeatRef.current;
       lastBeatRef.current = now;
-      if (gap > SUSPEND_GAP_MS) {
-        const lastBeat = now - gap;
-        setCounters((prev) =>
-          prev.map((c) => {
-            if (c.status !== 'running' || !c.lastResumedAt) return c;
-            return {
-              ...c,
-              accumulatedMs: c.accumulatedMs + Math.max(0, lastBeat - c.lastResumedAt),
+      const suspended = gap > SUSPEND_GAP_MS;
+      const lastBeat = now - gap;
+      setCounters((prev) => {
+        let changed = false;
+        const next = prev.map((c) => {
+          if (c.status !== 'running' || !c.lastResumedAt) return c;
+          let updated = c;
+          // Suspension gap (sleep/throttle): credit only awake time up to the
+          // last beat, then resume timing from now so the gap isn't counted.
+          if (suspended) {
+            updated = {
+              ...updated,
+              accumulatedMs: updated.accumulatedMs + Math.max(0, lastBeat - c.lastResumedAt),
               lastResumedAt: now,
             };
-          })
-        );
-      }
+            changed = true;
+          }
+          // Timer-driven period rollover so the live "this period" readout and
+          // countdown stay honest even when no improves are arriving (the
+          // per-improve handler also rolls, but only when an improve lands).
+          if (updated.periodStartAt != null && now - updated.periodStartAt > periodMs) {
+            updated = { ...updated, periodStartAt: now, impsInCurrentPeriod: 0 };
+            changed = true;
+          }
+          return updated;
+        });
+        // Return the same reference when nothing changed so the periodic-save
+        // effect doesn't fire every heartbeat.
+        return changed ? next : prev;
+      });
       setTick((t) => t + 1);
     }, HEARTBEAT_MS);
     return () => clearInterval(id);
-  }, [hasRunning]);
+  }, [hasRunning, periodLengthMinutes]);
 
   // Periodic save for running counters — flush elapsed into accumulatedMs
   useEffect(() => {
@@ -467,6 +498,31 @@ export function useImproveCounters() {
     [getElapsedMs]
   );
 
+  const getPeriodProgress = useCallback(
+    (counter: ImproveCounter): PeriodProgress => {
+      void tick;
+      const periodMs = periodLengthMinutes * 60_000;
+      if (counter.status !== 'running' || counter.periodStartAt == null) {
+        return {
+          imps: counter.impsInCurrentPeriod,
+          elapsedMs: 0,
+          periodMs,
+          remainingMs: periodMs,
+          active: false,
+        };
+      }
+      const elapsedMs = Math.min(Math.max(0, Date.now() - counter.periodStartAt), periodMs);
+      return {
+        imps: counter.impsInCurrentPeriod,
+        elapsedMs,
+        periodMs,
+        remainingMs: periodMs - elapsedMs,
+        active: true,
+      };
+    },
+    [tick, periodLengthMinutes]
+  );
+
   const getSkillsSorted = useCallback((counter: ImproveCounter): SkillTally[] => {
     return Object.entries(counter.skills)
       .map(([skill, count]) => ({ skill, count }))
@@ -517,6 +573,7 @@ export function useImproveCounters() {
     getPerMinuteRate,
     getPerPeriodRate,
     getPerHourRate,
+    getPeriodProgress,
     getSkillsSorted,
     getSkillPeriodRate,
   };

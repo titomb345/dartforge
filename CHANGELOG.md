@@ -11,7 +11,12 @@ The `[Unreleased]` header controls automatic version bumping on merge:
 
 ## [Unreleased-minor]
 
+### Added
+- Counter panel now shows a live "This period" readout under the session stats — the number of improves counted in the current period window plus a m:ss countdown and a progress bar to the next rollover, so you can see your real-time pace instead of only the lifetime average. The period now also rolls over on a timer (not just when the next improve lands), keeping the countdown honest during quiet stretches
+- Counter panel skills table is now sortable — click the Skill, Imps, or per-period rate column header to sort by that field, and click again to flip the direction
+
 ### Changed
+- Counter panel's /min, /period, /hr stats are now explicitly labeled as session averages (so they're not mistaken for the current period's pace, which the new "This period" readout shows)
 - Counter panel skills table now has labeled, aligned columns (Skill · Imps · per-period rate) with a header that stays pinned while you scroll a long skill list, so it's clear what each number means and how it ties to the hot/cold thresholds. The per-skill rate dropped its parentheses and is right-aligned in its own column
 - Allocation panel slot colors are now meaningful instead of arbitrary. On the Combat tab, offensive slots (Bonus/Daring/Speed/Aiming) share a hot red→gold ramp and defensive slots (Parry/Control) use cool blues, so you can tell offense from defense at a glance. On the Magic tab, each element now wears a color that evokes it — airy pale cyan, fiery orange-red, ocean blue, and earthy green — replacing the muddy, low-contrast water/earth tones. The slot letters in the column header are now filled color chips (the full slot color as the background) rather than just tinted text, making each column's color easier to match to its stepper and distribution-bar segment
 
