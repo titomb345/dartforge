@@ -54,11 +54,17 @@ const SLOT_COLORS: Record<AllocSlot, string> = {
   control: '#5b7cfa',
 };
 
+/**
+ * Per-element colors for the magic tab — each evokes its element so the
+ * chips, steppers, and distribution bar read at a glance: airy pale cyan,
+ * a fiery orange-red, ocean blue, and an earthy green. All kept bright/
+ * saturated enough to stay legible as filled header chips.
+ */
 const MAGIC_SLOT_COLORS: Record<MagicSlot, string> = {
-  air: '#8be9fd',
-  fire: '#ff6e6e',
-  water: '#6272a4',
-  earth: '#8b6d4b',
+  air: '#a5f3fc',
+  fire: '#ff5e3a',
+  water: '#2596e8',
+  earth: '#84cc16',
 };
 
 const NULL_COLOR = '#44475a';
