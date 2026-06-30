@@ -9,7 +9,7 @@ The `[Unreleased]` header controls automatic version bumping on merge:
 - `[Unreleased-minor]` → 0.1.0 → 0.2.0
 - `[Unreleased-major]` → 0.1.0 → 1.0.0
 
-## [Unreleased-minor]
+## [1.11.0] - 2026-06-30
 
 ### Added
 - Counter panel now shows a live "This period" readout under the session stats — the number of improves counted in the current period window plus a m:ss countdown and a progress bar to the next rollover, so you can see your real-time pace instead of only the lifetime average. The period rolls over on a timer (not just when the next improve lands), and — like the rest of the counter — is measured in active time: pausing (or closing the app) freezes the entire counter, so every number is exactly the same when you resume, whether that's in five minutes or four weeks
