@@ -42,6 +42,11 @@ export interface ParsedHexArt {
    * other colors). Only populated when the parser was given ANSI lines.
    */
   riverEdges: { q: number; r: number; dir: Direction }[];
+  /**
+   * Cliff edges: 'x'/'c' chars substituted into hex borders/slopes.
+   * Unlike rivers these glyphs are unambiguous — no color needed.
+   */
+  cliffEdges: { q: number; r: number; dir: Direction }[];
   /** Number of rings visible (0, 1, or 2) */
   rings: number;
   /**
@@ -484,6 +489,39 @@ function detectRiverEdges(
 }
 
 /**
+ * Detect cliff edges for a cell: 'x' (crag) and 'c' (cliff) chars
+ * substituted into borders and slopes. The glyphs are unambiguous, so no
+ * color is needed. Borders require 2+ cliff chars ('x---x' is a real
+ * cliff border; a single corner char is a neighbor's cliff passing by).
+ */
+function detectCliffEdges(
+  spec: { q: number; r: number; line: number; col: number },
+  artLines: string[]
+): Direction[] {
+  const isCliffChar = (lineIdx: number, col: number): boolean => {
+    const ch = artLines[lineIdx]?.[col];
+    return ch === 'x' || ch === 'c';
+  };
+
+  const edges: Direction[] = [];
+  for (const [dir, lineIdx] of [
+    ['n', spec.line],
+    ['s', spec.line + 4],
+  ] as [Direction, number][]) {
+    let hits = 0;
+    for (let i = 0; i < 5; i++) {
+      if (isCliffChar(lineIdx, spec.col + i)) hits++;
+    }
+    if (hits >= 2) edges.push(dir);
+  }
+  if (isCliffChar(spec.line + 1, spec.col - 1)) edges.push('nw');
+  if (isCliffChar(spec.line + 1, spec.col + 5)) edges.push('ne');
+  if (isCliffChar(spec.line + 3, spec.col - 1)) edges.push('sw');
+  if (isCliffChar(spec.line + 3, spec.col + 5)) edges.push('se');
+  return edges;
+}
+
+/**
  * Try to parse hex art using the fixed template. Returns null when the art
  * doesn't validate against the template (caller falls back to search parsing).
  * `ansiLines` (same lines with ANSI codes) enables color-based river-edge
@@ -571,6 +609,7 @@ function parseHexArtTemplate(artLines: string[], ansiLines?: string[]): ParsedHe
   const hexes = new Map<string, HexTerrainType>();
   const rivers: string[] = [];
   const riverEdges: { q: number; r: number; dir: Direction }[] = [];
+  const cliffEdges: { q: number; r: number; dir: Direction }[] = [];
   const labelOccurrences = new Map<string, { q: number; r: number; count: number }[]>();
   // Per-cell terrain char counts, kept for terrain-char landmark labels
   const cellStats: {
@@ -585,6 +624,9 @@ function parseHexArtTemplate(artLines: string[], ansiLines?: string[]): ParsedHe
       for (const dir of detectRiverEdges(spec, artLines, colorRows)) {
         riverEdges.push({ q: spec.q, r: spec.r, dir });
       }
+    }
+    for (const dir of detectCliffEdges(spec, artLines)) {
+      cliffEdges.push({ q: spec.q, r: spec.r, dir });
     }
     const terrainCounts = new Map<string, number>();
     const cellLabels = new Map<string, number>();
@@ -645,7 +687,16 @@ function parseHexArtTemplate(artLines: string[], ansiLines?: string[]): ParsedHe
     return { ...l, q: null, r: null };
   });
 
-  return { hexes, rivers, riverEdges, rings, landmarks, rawLines: artLines, source: 'template' };
+  return {
+    hexes,
+    rivers,
+    riverEdges,
+    cliffEdges,
+    rings,
+    landmarks,
+    rawLines: artLines,
+    source: 'template',
+  };
 }
 
 /**
@@ -730,6 +781,7 @@ function parseHexArtSearch(artLines: string[]): ParsedHexArt | null {
     hexes,
     rivers,
     riverEdges: [],
+    cliffEdges: [],
     rings: ringCount,
     landmarks,
     rawLines: artLines,

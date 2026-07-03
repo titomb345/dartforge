@@ -36,6 +36,8 @@ export interface HexCell {
   river: boolean;
   /** Hex sides a river runs along (drawn as blue edges) */
   riverEdges: Direction[];
+  /** Hex sides with a cliff (climbing across costs concentration) */
+  cliffEdges: Direction[];
   /** True if the player has stood in this hex */
   visited: boolean;
   visitCount: number;
@@ -183,6 +185,7 @@ export class HexMapStore {
         terrain,
         river: false,
         riverEdges: [],
+        cliffEdges: [],
         visited: false,
         visitCount: 0,
         lastSeen: now,
@@ -212,13 +215,23 @@ export class HexMapStore {
     if (cell) cell.river = true;
   }
 
+  private edgesOf(cell: HexCell, kind: 'river' | 'cliff'): Direction[] {
+    return kind === 'river' ? cell.riverEdges : cell.cliffEdges;
+  }
+
+  private setEdgesOf(cell: HexCell, kind: 'river' | 'cliff', edges: Direction[]): void {
+    if (kind === 'river') cell.riverEdges = edges;
+    else cell.cliffEdges = edges;
+  }
+
   /**
-   * Mark a river along one side of a cell, mirroring onto the neighbor's
-   * opposite side (the edge is shared). Art-color detection is a heuristic
-   * PREVIEW — it may only touch unvisited cells; visited cells' river edges
-   * are owned by their room descriptions (see setVisitedRiverEdges).
+   * Mark a river/cliff along one side of a cell, mirroring onto the
+   * neighbor's opposite side (the edge is shared). Art detection is a
+   * heuristic PREVIEW — it may only touch unvisited cells; visited cells'
+   * edges are owned by their room descriptions (see setVisitedEdges).
    */
-  markRiverEdge(
+  markEdge(
+    kind: 'river' | 'cliff',
     island: number,
     q: number,
     r: number,
@@ -234,23 +247,31 @@ export class HexMapStore {
       // A shared edge is OWNED by whichever side has been visited — its
       // room description already ruled on it. Art previews may not add
       // what a visited side's description didn't confirm, on EITHER side.
-      if (cell?.visited && !cell.riverEdges.includes(dir)) return;
-      if (neighbor?.visited && !neighbor.riverEdges.includes(opp)) return;
+      if (cell?.visited && !this.edgesOf(cell, kind).includes(dir)) return;
+      if (neighbor?.visited && !this.edgesOf(neighbor, kind).includes(opp)) return;
     }
 
-    if (cell && !cell.riverEdges.includes(dir)) cell.riverEdges.push(dir);
-    if (neighbor && !neighbor.riverEdges.includes(opp)) neighbor.riverEdges.push(opp);
+    if (cell && !this.edgesOf(cell, kind).includes(dir)) this.edgesOf(cell, kind).push(dir);
+    if (neighbor && !this.edgesOf(neighbor, kind).includes(opp)) {
+      this.edgesOf(neighbor, kind).push(opp);
+    }
   }
 
   /**
-   * Authoritatively set a VISITED cell's river edges from its room
-   * description. The description lists every river side of the hex you're
+   * Authoritatively set a VISITED cell's river/cliff edges from its room
+   * description. The description lists every such side of the hex you're
    * standing on, so this REPLACES whatever art previews had painted —
    * wrong art-based marks disappear the moment you stand on the hex.
    * Edges confirmed by visited neighbors' own descriptions are kept, and
    * this cell's edges mirror onto its neighbors.
    */
-  setVisitedRiverEdges(island: number, q: number, r: number, dirs: Direction[]): void {
+  setVisitedEdges(
+    kind: 'river' | 'cliff',
+    island: number,
+    q: number,
+    r: number,
+    dirs: Direction[]
+  ): void {
     const cell = this.cells.get(cellKey(island, q, r));
     if (!cell) return;
     const edges = [...dirs];
@@ -261,21 +282,27 @@ export class HexMapStore {
       const opp = oppositeDirection(dir);
       if (neighbor.visited) {
         // Keep edges confirmed by a visited neighbor's own description
-        if (neighbor.riverEdges.includes(opp) && !edges.includes(dir)) {
+        if (this.edgesOf(neighbor, kind).includes(opp) && !edges.includes(dir)) {
           edges.push(dir);
         }
       } else if (!dirs.includes(dir)) {
-        // This description says NO river on that side — scrub the stale
-        // mirror off the unvisited neighbor (art previews there defer to us)
-        neighbor.riverEdges = neighbor.riverEdges.filter((d) => d !== opp);
+        // This description says NO river/cliff on that side — scrub the
+        // stale mirror off the unvisited neighbor (art previews defer to us)
+        this.setEdgesOf(
+          neighbor,
+          kind,
+          this.edgesOf(neighbor, kind).filter((d) => d !== opp)
+        );
       }
     }
-    cell.riverEdges = edges;
+    this.setEdgesOf(cell, kind, edges);
     for (const dir of dirs) {
       const n = applyDirection({ q, r }, dir);
       const neighbor = this.cells.get(cellKey(island, n.q, n.r));
       const opp = oppositeDirection(dir);
-      if (neighbor && !neighbor.riverEdges.includes(opp)) neighbor.riverEdges.push(opp);
+      if (neighbor && !this.edgesOf(neighbor, kind).includes(opp)) {
+        this.edgesOf(neighbor, kind).push(opp);
+      }
     }
   }
 
@@ -337,21 +364,27 @@ export class HexMapStore {
   }
 
   /**
-   * Clear river marks on a cell (interior + edges, including the mirrored
-   * neighbor sides). Correct rivers re-detect on the next survey there.
+   * Clear river and cliff marks on a cell (interior + edges, including the
+   * mirrored neighbor sides). Correct marks re-detect on the next survey.
    */
-  clearRiver(island: number, q: number, r: number): void {
+  clearOverlayMarks(island: number, q: number, r: number): void {
     const cell = this.get(island, q, r);
     if (!cell) return;
-    for (const dir of cell.riverEdges) {
-      const t = applyDirection({ q, r }, dir);
-      const target = this.get(island, t.q, t.r);
-      if (target) {
-        const opp = oppositeDirection(dir);
-        target.riverEdges = target.riverEdges.filter((d) => d !== opp);
+    for (const kind of ['river', 'cliff'] as const) {
+      for (const dir of this.edgesOf(cell, kind)) {
+        const t = applyDirection({ q, r }, dir);
+        const target = this.get(island, t.q, t.r);
+        if (target) {
+          const opp = oppositeDirection(dir);
+          this.setEdgesOf(
+            target,
+            kind,
+            this.edgesOf(target, kind).filter((d) => d !== opp)
+          );
+        }
       }
+      this.setEdgesOf(cell, kind, []);
     }
-    cell.riverEdges = [];
     cell.river = false;
   }
 
@@ -405,6 +438,9 @@ export class HexMapStore {
         existing.river = existing.river || cell.river;
         for (const re of cell.riverEdges) {
           if (!existing.riverEdges.includes(re)) existing.riverEdges.push(re);
+        }
+        for (const ce of cell.cliffEdges) {
+          if (!existing.cliffEdges.includes(ce)) existing.cliffEdges.push(ce);
         }
         existing.visited = existing.visited || cell.visited;
         existing.visitCount += cell.visitCount;
@@ -510,9 +546,14 @@ export class HexMapStore {
         }
         let stepCost = TERRAIN_COST[nCell.terrain] ?? 2;
         if (nCell.river) stepCost += RIVER_INTERIOR_COST;
-        // Stepping across a river edge costs concentration (swim across)
-        if (cell?.riverEdges.includes(dir) || nCell.riverEdges.includes(oppositeDirection(dir))) {
+        const opp = oppositeDirection(dir);
+        // Crossing a river edge (swim) or a cliff edge (climb) is a
+        // concentration event, same as rough terrain
+        if (cell?.riverEdges.includes(dir) || nCell.riverEdges.includes(opp)) {
           stepCost += RIVER_CROSSING_COST;
+        }
+        if (cell?.cliffEdges.includes(dir) || nCell.cliffEdges.includes(opp)) {
+          stepCost += CONC_HIT;
         }
         if (!nCell.visited) stepCost *= 1.15;
         const g = best.g + stepCost;
@@ -561,6 +602,7 @@ export class HexMapStore {
         terrain: cell.terrain ?? 'unknown',
         river: !!cell.river,
         riverEdges: Array.isArray(cell.riverEdges) ? cell.riverEdges : [],
+        cliffEdges: Array.isArray(cell.cliffEdges) ? cell.cliffEdges : [],
         visited: !!cell.visited,
         visitCount: cell.visitCount ?? 0,
         lastSeen: cell.lastSeen ?? 0,

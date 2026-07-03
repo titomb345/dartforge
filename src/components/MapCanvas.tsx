@@ -68,6 +68,7 @@ const LABEL_COLOR = 'rgba(200, 185, 160, 0.85)';
 const LABEL_FONT = '9px "Courier New", monospace';
 const LANDMARK_COLOR = '#e8c97a';
 const RIVER_COLOR = 'rgba(96, 158, 214, 0.85)';
+const CLIFF_COLOR = 'rgba(205, 185, 150, 0.9)';
 const BLOCKED_COLOR = 'rgba(220, 80, 70, 0.7)';
 const TOOLTIP_BG = 'rgba(20, 18, 16, 0.95)';
 const TOOLTIP_BORDER = 'rgba(140, 125, 100, 0.5)';
@@ -145,10 +146,11 @@ export function MapCanvas({ width, height, showLabels, showFog, onWalkTo }: MapC
       drawHex(ctx, cell, isCurrent, showFog);
     }
 
-    // Rivers, blocked edges, and landmarks on top
+    // Rivers, cliffs, blocked edges, and landmarks on top
     for (const cell of cells) {
       if (cell.river) drawRiver(ctx, cell);
       if (cell.riverEdges.length > 0) drawRiverEdges(ctx, cell);
+      if (cell.cliffEdges.length > 0) drawCliffEdges(ctx, cell);
       if (cell.blocked.length > 0) drawBlockedEdges(ctx, cell);
       if (cell.landmarks.length > 0) drawLandmarkMarker(ctx, cell);
     }
@@ -239,10 +241,13 @@ export function MapCanvas({ width, height, showLabels, showFog, onWalkTo }: MapC
         setTooltip(null);
         return;
       }
-      // Ctrl+click clears incorrect blocked/river marks on the hex
+      // Ctrl+click clears incorrect blocked/river/cliff marks on the hex
       if (
         (e.ctrlKey || e.altKey) &&
-        (cell.blocked.length > 0 || cell.riverEdges.length > 0 || cell.river)
+        (cell.blocked.length > 0 ||
+          cell.riverEdges.length > 0 ||
+          cell.cliffEdges.length > 0 ||
+          cell.river)
       ) {
         clearBlockedAt(hex.q, hex.r);
         setTooltip(null);
@@ -407,6 +412,23 @@ function drawRiver(ctx: CanvasRenderingContext2D, cell: HexCell) {
   ctx.lineCap = 'butt';
 }
 
+/** Cliffs along hex sides — dashed stone-colored edge segments */
+function drawCliffEdges(ctx: CanvasRenderingContext2D, cell: HexCell) {
+  const { x, y } = hexToPixel(cell.q, cell.r, HEX_SIZE);
+  const corners = hexCorners(x, y, HEX_SIZE - 1);
+  ctx.strokeStyle = CLIFF_COLOR;
+  ctx.lineWidth = 2.5;
+  ctx.setLineDash([4, 3]);
+  for (const dir of cell.cliffEdges) {
+    const [a, b] = EDGE_CORNERS[dir];
+    ctx.beginPath();
+    ctx.moveTo(corners[a].x, corners[a].y);
+    ctx.lineTo(corners[b].x, corners[b].y);
+    ctx.stroke();
+  }
+  ctx.setLineDash([]);
+}
+
 /** Red tick across each blocked edge */
 function drawBlockedEdges(ctx: CanvasRenderingContext2D, cell: HexCell) {
   const { x, y } = hexToPixel(cell.q, cell.r, HEX_SIZE);
@@ -569,6 +591,13 @@ function CellTooltip({
           <span style={{ color: RIVER_COLOR }}>
             {' '}
             · river{cell.riverEdges.length > 0 ? ` (${cell.riverEdges.map((d) => directionLabel(d)).join(', ')})` : ''}
+            <span className="opacity-60 italic"> — Ctrl+click to clear</span>
+          </span>
+        )}
+        {cell.cliffEdges.length > 0 && (
+          <span style={{ color: CLIFF_COLOR }}>
+            {' '}
+            · cliff ({cell.cliffEdges.map((d) => directionLabel(d)).join(', ')})
             <span className="opacity-60 italic"> — Ctrl+click to clear</span>
           </span>
         )}

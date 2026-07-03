@@ -78,7 +78,22 @@ export interface SurveyResolution {
 // Description parsing
 // ---------------------------------------------------------------------------
 
-const RIVER_DESC_RE = /\brivers?(?: with an? [a-z ]{1,30}?)? to the ([a-z]+(?:,? and [a-z]+)*)/gi;
+// Direction lists run until the sentence's period: "southeast, and south",
+// "northeast, southeast, and south". Tokenizing + parseDirection filtering
+// drops "and" and any stray words.
+const RIVER_DESC_RE = /\brivers?(?: with an? [a-z ]{1,30}?)? to the ([a-z, ]+)/gi;
+const CLIFF_DESC_RE = /\bcliffs? to the ([a-z, ]+)/gi;
+
+function parseEdgeDirections(description: string, re: RegExp): Direction[] {
+  const dirs: Direction[] = [];
+  for (const m of description.matchAll(re)) {
+    for (const word of m[1].split(/[^a-z]+/i)) {
+      const dir = parseDirection(word);
+      if (dir && !dirs.includes(dir)) dirs.push(dir);
+    }
+  }
+  return dirs;
+}
 
 /**
  * Extract river directions from a wilderness description. Handles crossing
@@ -89,14 +104,15 @@ const RIVER_DESC_RE = /\brivers?(?: with an? [a-z ]{1,30}?)? to the ([a-z]+(?:,?
  *   "...river with a stone bridge to the northeast." → [ne]
  */
 export function parseRiverDirections(description: string): Direction[] {
-  const dirs: Direction[] = [];
-  for (const m of description.matchAll(RIVER_DESC_RE)) {
-    for (const word of m[1].split(/[^a-z]+/i)) {
-      const dir = parseDirection(word);
-      if (dir && !dirs.includes(dir)) dirs.push(dir);
-    }
-  }
-  return dirs;
+  return parseEdgeDirections(description, RIVER_DESC_RE);
+}
+
+/**
+ * Extract cliff directions, e.g. "There is a cliff to the northeast,
+ * southeast, and south." → [ne, se, s]
+ */
+export function parseCliffDirections(description: string): Direction[] {
+  return parseEdgeDirections(description, CLIFF_DESC_RE);
 }
 
 // ---------------------------------------------------------------------------
@@ -527,27 +543,27 @@ export class HexLocalizer {
         this.map.markRiver(pos.island, pos.q + dq, pos.r + dr);
       }
 
-      // River edges from art colors — a heuristic PREVIEW for hexes not yet
-      // visited (blue chars along borders/slopes). Never touches visited
-      // cells: their river edges are owned by their descriptions below.
+      // River/cliff edges from art — a heuristic PREVIEW for hexes not yet
+      // visited (blue chars / x-c chars along borders and slopes). Never
+      // touches visited cells: their edges are owned by their descriptions.
       for (const re of art.riverEdges) {
-        this.map.markRiverEdge(pos.island, pos.q + re.q, pos.r + re.r, re.dir, 'art');
+        this.map.markEdge('river', pos.island, pos.q + re.q, pos.r + re.r, re.dir, 'art');
+      }
+      for (const ce of art.cliffEdges) {
+        this.map.markEdge('cliff', pos.island, pos.q + ce.q, pos.r + ce.r, ce.dir, 'art');
       }
     }
 
     this.map.markVisited(pos.island, pos.q, pos.r, description, now);
 
     // The description is GROUND TRUTH for the hex we're standing on: it
-    // names every river side ("There is a swift river to the southeast, and
-    // south."). Replace whatever the art previews guessed — wrong art marks
-    // disappear the moment the hex is actually visited.
+    // names every river and cliff side ("There is a swift river to the
+    // southeast, and south."  "There is a cliff to the northwest.").
+    // Replace whatever the art previews guessed — wrong art marks disappear
+    // the moment the hex is actually visited.
     if (confident && description) {
-      this.map.setVisitedRiverEdges(
-        pos.island,
-        pos.q,
-        pos.r,
-        parseRiverDirections(description)
-      );
+      this.map.setVisitedEdges('river', pos.island, pos.q, pos.r, parseRiverDirections(description));
+      this.map.setVisitedEdges('cliff', pos.island, pos.q, pos.r, parseCliffDirections(description));
     }
 
     if (confident) {

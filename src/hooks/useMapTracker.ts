@@ -380,7 +380,7 @@ export function useMapTracker(
       const map = mapRef.current;
       const island = map.pos?.island ?? map.primaryIsland();
       map.clearBlocked(island, q, r);
-      map.clearRiver(island, q, r);
+      map.clearOverlayMarks(island, q, r);
       syncState();
       scheduleSave();
     },
