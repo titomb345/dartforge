@@ -401,12 +401,20 @@ function parseLandmarks(
 /** Border/structural chars that may appear at border positions */
 const BORDER_CHARS = new Set(['-', '*', 'c', 'x', '=']);
 
-/** Colors that mark a '*' edge char as river (water) rather than path */
+/** Colors that mark an edge char as river (water) rather than path/road */
 const RIVER_EDGE_COLORS = new Set<ThemeColorKey>(['blue', 'brightBlue', 'cyan', 'brightCyan']);
 
 /**
+ * Edge chars that can carry a river when blue: '*' is the river course,
+ * with '=' and '+' variants on some segments (still rivers — crossing them
+ * costs concentration). Ordinary border dashes and slopes are NEVER rivers,
+ * whatever their color.
+ */
+const RIVER_EDGE_CHARS = new Set(['*', '=', '+']);
+
+/**
  * Detect river edges for a cell from art colors. Rivers are rendered as
- * blue '*' chars substituted into the cell's borders and slopes.
+ * blue chars substituted into the cell's borders and slopes.
  */
 function detectRiverEdges(
   spec: { q: number; r: number; line: number; col: number },
@@ -415,7 +423,7 @@ function detectRiverEdges(
 ): Direction[] {
   const isRiverChar = (lineIdx: number, col: number): boolean => {
     const line = artLines[lineIdx];
-    if (!line || line[col] !== '*') return false;
+    if (!line || !RIVER_EDGE_CHARS.has(line[col])) return false;
     const colors = colorRows[lineIdx];
     if (!colors) return false;
     const c = colors[col];
@@ -423,17 +431,19 @@ function detectRiverEdges(
   };
 
   const edges: Direction[] = [];
-  // N and S: the 5-char horizontal borders
+  // N and S: the 5-char horizontal borders. A river ALONG the border colors
+  // essentially the whole run ('*****'); a river merely passing the hex's
+  // corner colors only the end chars ('----*') and must NOT count. Require
+  // 4 of 5 (tolerating one '='/glitch char mid-span).
   for (const [dir, lineIdx] of [
     ['n', spec.line],
     ['s', spec.line + 4],
   ] as [Direction, number][]) {
+    let hits = 0;
     for (let i = 0; i < 5; i++) {
-      if (isRiverChar(lineIdx, spec.col + i)) {
-        edges.push(dir);
-        break;
-      }
+      if (isRiverChar(lineIdx, spec.col + i)) hits++;
     }
+    if (hits >= 4) edges.push(dir);
   }
   // Diagonals: the slope chars at the cell's corners
   if (isRiverChar(spec.line + 1, spec.col - 1)) edges.push('nw');
@@ -522,8 +532,8 @@ function parseHexArtTemplate(artLines: string[], ansiLines?: string[]): ParsedHe
   const haveColors = !!ansiLines && ansiLines.length === artLines.length;
   if (haveColors) {
     for (let i = 0; i < artLines.length; i++) {
-      // Only decode rows that contain a '*' at all — colors are pointless otherwise
-      if (artLines[i].includes('*')) colorRows[i] = lineFgColors(ansiLines![i]);
+      // Only decode rows containing a river-capable char
+      if (/[*=+]/.test(artLines[i])) colorRows[i] = lineFgColors(ansiLines![i]);
     }
   }
 

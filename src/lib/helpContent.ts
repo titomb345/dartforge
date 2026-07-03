@@ -183,9 +183,9 @@ export const HELP_CATEGORIES: HelpCategory[] = [
         interaction: 'right-click',
       },
       {
-        title: 'Clear Wrong Blocked Marks',
+        title: 'Clear Wrong Map Marks',
         description:
-          'Red edge ticks mark directions the map believes are blocked. If one is wrong, Ctrl+click (or Alt+click) the hex to clear all its blocked marks. Marks also heal themselves: successfully walking through a "blocked" edge removes the mark automatically.',
+          'Red edge ticks mark directions the map believes are blocked; blue edges mark rivers. If either is wrong on a hex, Ctrl+click (or Alt+click) it to clear all its blocked and river marks — correct ones re-detect the next time you survey there. Blocked marks also heal themselves: successfully walking through a "blocked" edge removes the mark automatically.',
         helpId: 'toolbar-map',
         interaction: 'click',
       },

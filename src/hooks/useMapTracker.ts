@@ -58,7 +58,10 @@ export interface MapTrackerActions {
   walkTo: (q: number, r: number) => void;
   cancelWalk: () => void;
   setCellNotes: (q: number, r: number, notes: string) => void;
-  /** Clear all blocked-direction marks on a hex (both sides of each edge) */
+  /**
+   * Clear a hex's blocked-direction AND river marks (both sides of each
+   * edge). Correct data re-detects on the next survey there.
+   */
   clearBlockedAt: (q: number, r: number) => void;
   clearMap: () => void;
   /** Center request — bumps a counter to signal MapCanvas to re-center */
@@ -365,6 +368,7 @@ export function useMapTracker(
       const map = mapRef.current;
       const island = map.pos?.island ?? map.primaryIsland();
       map.clearBlocked(island, q, r);
+      map.clearRiver(island, q, r);
       syncState();
       scheduleSave();
     },

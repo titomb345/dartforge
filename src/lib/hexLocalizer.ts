@@ -78,19 +78,23 @@ export interface SurveyResolution {
 // Description parsing
 // ---------------------------------------------------------------------------
 
-const RIVER_DESC_RE = /\brivers? to the ([a-z]+(?:,? and [a-z]+)*)/i;
+const RIVER_DESC_RE = /\brivers?(?: with an? [a-z ]{1,30}?)? to the ([a-z]+(?:,? and [a-z]+)*)/gi;
 
 /**
- * Extract river directions from a wilderness description, e.g.
- * "There is a swift river to the southeast, and south." → [se, s]
+ * Extract river directions from a wilderness description. Handles crossing
+ * modifiers and multiple river sentences, e.g.
+ *   "There is a swift river to the southeast, and south." → [se, s]
+ *   "There is a swift river to the north.  There is a swift river with a
+ *    fjord to the northwest." → [n, nw]
+ *   "...river with a stone bridge to the northeast." → [ne]
  */
 export function parseRiverDirections(description: string): Direction[] {
-  const m = RIVER_DESC_RE.exec(description);
-  if (!m) return [];
   const dirs: Direction[] = [];
-  for (const word of m[1].split(/[^a-z]+/i)) {
-    const dir = parseDirection(word);
-    if (dir && !dirs.includes(dir)) dirs.push(dir);
+  for (const m of description.matchAll(RIVER_DESC_RE)) {
+    for (const word of m[1].split(/[^a-z]+/i)) {
+      const dir = parseDirection(word);
+      if (dir && !dirs.includes(dir)) dirs.push(dir);
+    }
   }
   return dirs;
 }
@@ -486,13 +490,17 @@ export class HexLocalizer {
   // Painting
   // -------------------------------------------------------------------------
 
-  /** Paint the patch at the current position. Returns the conflict count. */
+  /**
+   * Paint the patch at the current position. Returns the conflict count.
+   * `confident` gates sticky data (landmarks, river marks) — terrain
+   * painting self-heals, those don't.
+   */
   private paint(
     patch: Map<string, HexTerrainType>,
     art: ParsedHexArt,
     description: string,
     now: number,
-    withLandmarks = true
+    confident = true
   ): number {
     const pos = this.map.pos;
     if (!pos) return 0;
@@ -508,27 +516,41 @@ export class HexLocalizer {
       }
     }
 
-    for (const rel of art.rivers) {
-      const comma = rel.indexOf(',');
-      const dq = Number(rel.slice(0, comma));
-      const dr = Number(rel.slice(comma + 1));
-      this.map.markRiver(pos.island, pos.q + dq, pos.r + dr);
-    }
+    // River marks are sticky (like landmarks) — only place them when the
+    // position is confidently resolved, or a single off-by-one survey
+    // stamps permanent rivers onto the wrong hexes.
+    if (confident) {
+      for (const rel of art.rivers) {
+        const comma = rel.indexOf(',');
+        const dq = Number(rel.slice(0, comma));
+        const dr = Number(rel.slice(comma + 1));
+        this.map.markRiver(pos.island, pos.q + dq, pos.r + dr);
+      }
 
-    // River edges from art colors (blue '*' border/slope chars, all visible hexes)
-    for (const re of art.riverEdges) {
-      this.map.markRiverEdge(pos.island, pos.q + re.q, pos.r + re.r, re.dir);
-    }
-
-    // River edges from the description ("There is a swift river to the
-    // southeast, and south.") — color-independent, current hex only
-    for (const dir of parseRiverDirections(description)) {
-      this.map.markRiverEdge(pos.island, pos.q, pos.r, dir);
+      // River edges from art colors — a heuristic PREVIEW for hexes not yet
+      // visited (blue chars along borders/slopes). Never touches visited
+      // cells: their river edges are owned by their descriptions below.
+      for (const re of art.riverEdges) {
+        this.map.markRiverEdge(pos.island, pos.q + re.q, pos.r + re.r, re.dir, 'art');
+      }
     }
 
     this.map.markVisited(pos.island, pos.q, pos.r, description, now);
 
-    if (withLandmarks) {
+    // The description is GROUND TRUTH for the hex we're standing on: it
+    // names every river side ("There is a swift river to the southeast, and
+    // south."). Replace whatever the art previews guessed — wrong art marks
+    // disappear the moment the hex is actually visited.
+    if (confident && description) {
+      this.map.setVisitedRiverEdges(
+        pos.island,
+        pos.q,
+        pos.r,
+        parseRiverDirections(description)
+      );
+    }
+
+    if (confident) {
       for (const lm of art.landmarks) {
         if (lm.q === null || lm.r === null) continue;
         this.map.addLandmark(pos.island, pos.q + lm.q, pos.r + lm.r, lm.description, now);

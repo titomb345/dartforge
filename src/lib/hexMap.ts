@@ -201,16 +201,64 @@ export class HexMapStore {
   }
 
   /**
-   * Mark a river along one side of a cell (sticky). Mirrors onto the
-   * neighbor's opposite side when that cell exists — the edge is shared.
+   * Mark a river along one side of a cell, mirroring onto the neighbor's
+   * opposite side (the edge is shared). Art-color detection is a heuristic
+   * PREVIEW — it may only touch unvisited cells; visited cells' river edges
+   * are owned by their room descriptions (see setVisitedRiverEdges).
    */
-  markRiverEdge(island: number, q: number, r: number, dir: Direction): void {
+  markRiverEdge(
+    island: number,
+    q: number,
+    r: number,
+    dir: Direction,
+    source: 'art' | 'description' = 'description'
+  ): void {
     const cell = this.cells.get(cellKey(island, q, r));
-    if (cell && !cell.riverEdges.includes(dir)) cell.riverEdges.push(dir);
+    if (cell && !(source === 'art' && cell.visited) && !cell.riverEdges.includes(dir)) {
+      cell.riverEdges.push(dir);
+    }
     const n = applyDirection({ q, r }, dir);
     const neighbor = this.cells.get(cellKey(island, n.q, n.r));
     const opp = oppositeDirection(dir);
-    if (neighbor && !neighbor.riverEdges.includes(opp)) neighbor.riverEdges.push(opp);
+    if (
+      neighbor &&
+      !(source === 'art' && neighbor.visited) &&
+      !neighbor.riverEdges.includes(opp)
+    ) {
+      neighbor.riverEdges.push(opp);
+    }
+  }
+
+  /**
+   * Authoritatively set a VISITED cell's river edges from its room
+   * description. The description lists every river side of the hex you're
+   * standing on, so this REPLACES whatever art previews had painted —
+   * wrong art-based marks disappear the moment you stand on the hex.
+   * Edges confirmed by visited neighbors' own descriptions are kept, and
+   * this cell's edges mirror onto its neighbors.
+   */
+  setVisitedRiverEdges(island: number, q: number, r: number, dirs: Direction[]): void {
+    const cell = this.cells.get(cellKey(island, q, r));
+    if (!cell) return;
+    const edges = [...dirs];
+    for (const dir of COMPASS_DIRECTIONS) {
+      const n = applyDirection({ q, r }, dir);
+      const neighbor = this.cells.get(cellKey(island, n.q, n.r));
+      if (
+        neighbor?.visited &&
+        neighbor.riverEdges.includes(oppositeDirection(dir)) &&
+        !edges.includes(dir)
+      ) {
+        edges.push(dir);
+      }
+    }
+    cell.riverEdges = edges;
+    for (const dir of dirs) {
+      const n = applyDirection({ q, r }, dir);
+      const neighbor = this.cells.get(cellKey(island, n.q, n.r));
+      const opp = oppositeDirection(dir);
+      if (neighbor && !neighbor.riverEdges.includes(opp)) neighbor.riverEdges.push(opp);
+    }
   }
 
   /** Mark a cell visited (creates it if needed) and store its description. */
@@ -268,6 +316,25 @@ export class HexMapStore {
       }
     }
     cell.blocked = [];
+  }
+
+  /**
+   * Clear river marks on a cell (interior + edges, including the mirrored
+   * neighbor sides). Correct rivers re-detect on the next survey there.
+   */
+  clearRiver(island: number, q: number, r: number): void {
+    const cell = this.get(island, q, r);
+    if (!cell) return;
+    for (const dir of cell.riverEdges) {
+      const t = applyDirection({ q, r }, dir);
+      const target = this.get(island, t.q, t.r);
+      if (target) {
+        const opp = oppositeDirection(dir);
+        target.riverEdges = target.riverEdges.filter((d) => d !== opp);
+      }
+    }
+    cell.riverEdges = [];
+    cell.river = false;
   }
 
   setNotes(island: number, q: number, r: number, notes: string): void {
@@ -424,7 +491,11 @@ export class HexMapStore {
           continue;
         }
         let stepCost = TERRAIN_COST[nCell.terrain] ?? 1.8;
-        if (nCell.river) stepCost += 2; // crossing means swimming
+        if (nCell.river) stepCost += 2; // river through the hex — swimming
+        // Stepping across a river edge costs concentration (swim across)
+        if (cell?.riverEdges.includes(dir) || nCell.riverEdges.includes(oppositeDirection(dir))) {
+          stepCost += 2.5;
+        }
         if (!nCell.visited) stepCost *= 1.15;
         const g = best.g + stepCost;
         const existing = open.get(nKey);

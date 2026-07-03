@@ -241,8 +241,11 @@ export function MapCanvas({ width, height, showLabels, showFog, onWalkTo }: MapC
         setTooltip(null);
         return;
       }
-      // Ctrl+click clears incorrect blocked-direction marks on the hex
-      if ((e.ctrlKey || e.altKey) && cell.blocked.length > 0) {
+      // Ctrl+click clears incorrect blocked/river marks on the hex
+      if (
+        (e.ctrlKey || e.altKey) &&
+        (cell.blocked.length > 0 || cell.riverEdges.length > 0 || cell.river)
+      ) {
         clearBlockedAt(hex.q, hex.r);
         setTooltip(null);
         return;
@@ -568,6 +571,7 @@ function CellTooltip({
           <span style={{ color: RIVER_COLOR }}>
             {' '}
             · river{cell.riverEdges.length > 0 ? ` (${cell.riverEdges.map((d) => directionLabel(d)).join(', ')})` : ''}
+            <span className="opacity-60 italic"> — Ctrl+click to clear</span>
           </span>
         )}
         <span className="font-normal opacity-50 ml-1.5">
