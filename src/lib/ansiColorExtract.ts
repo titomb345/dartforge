@@ -54,6 +54,45 @@ export interface AnsiColorSegment {
   color: ThemeColorKey;
 }
 
+/**
+ * Per-visible-character foreground colors for a whole raw line.
+ * Index i corresponds to character i of the ANSI-stripped line.
+ * Used by the automapper to tell rivers (blue '*' edge chars) from
+ * paths (same '*' char, different color) in hex art.
+ */
+export function lineFgColors(rawLine: string): (ThemeColorKey | null)[] {
+  const colors: (ThemeColorKey | null)[] = [];
+  let bold = false;
+  let fg = -1;
+  let i = 0;
+
+  while (i < rawLine.length) {
+    const m = rawLine.slice(i).match(/^\x1b\[([0-9;]*)m/);
+    if (m) {
+      const parts = m[1].split(';').map(Number);
+      for (const p of parts) {
+        if (p === 0) {
+          bold = false;
+          fg = -1;
+        } else if (p === 1) {
+          bold = true;
+        } else if (p >= 30 && p <= 37) {
+          fg = p - 30;
+        } else if (p >= 90 && p <= 97) {
+          fg = p - 90;
+          bold = true;
+        }
+      }
+      i += m[0].length;
+      continue;
+    }
+    colors.push(fg >= 0 ? (bold ? ANSI_BRIGHT[fg] : ANSI_BASE[fg]) : null);
+    i++;
+  }
+
+  return colors;
+}
+
 const ANSI_RE = /\x1b\[([0-9;]*)m/g;
 
 /**

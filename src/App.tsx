@@ -592,8 +592,9 @@ function AppMain() {
       onAlignment: (match) => updateAlignmentRef.current(match),
       onChat: (msg) => handleChatMessageRef.current(msg),
       onWho: (snapshot) => updateWhoSnapshotRef.current(snapshot),
-      // Automapper feed — untrimmed lines (hex art needs its leading whitespace)
-      onMapLine: (line) => mapFeedLineRef.current(line),
+      // Automapper feed — untrimmed lines (hex art needs its leading whitespace);
+      // the raw line carries ANSI colors for river detection
+      onMapLine: (line, raw) => mapFeedLineRef.current(line, raw),
       onLine: (stripped, raw) => {
         // Action blocker — check for unblock triggers
         const blocker = actionBlockerRef.current;

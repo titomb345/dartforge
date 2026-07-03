@@ -129,10 +129,13 @@ function expectedArtLines(line: string): number | null {
 export class RoomParser {
   private state: ParserState = 'idle';
   private artLines: string[] = [];
+  private artAnsiLines: string[] = [];
   private artExpected: number | null = null;
   private descLines: string[] = [];
   private linesSinceStart = 0;
   private postArtWait = 0;
+  /** ANSI version of the line currently being processed (for art color) */
+  private currentAnsi = '';
   private onEvent: (event: RoomParserEvent) => void;
 
   constructor(onEvent: (event: RoomParserEvent) => void) {
@@ -141,11 +144,14 @@ export class RoomParser {
 
   /**
    * Feed an ANSI-stripped line WITH leading whitespace preserved.
+   * `ansiLine` is the same line with ANSI codes intact — used to tell
+   * rivers from paths in hex art (same '*' char, different color).
    */
-  feedLine(rawLine: string): void {
+  feedLine(rawLine: string, ansiLine?: string): void {
     // Strip trailing CR/LF only — leading whitespace is meaningful in hex art
     const line = rawLine.replace(/[\r\n]+$/, '');
     const trimmed = line.trim();
+    this.currentAnsi = (ansiLine ?? rawLine).replace(/[\r\n]+$/, '');
 
     switch (this.state) {
       case 'idle':
@@ -166,6 +172,7 @@ export class RoomParser {
   private startSurvey(): void {
     this.state = 'awaiting-art';
     this.artLines = [];
+    this.artAnsiLines = [];
     this.artExpected = null;
     this.descLines = [];
     this.linesSinceStart = 0;
@@ -207,6 +214,7 @@ export class RoomParser {
     if (TOP_BORDER_RE.test(trimmed) && isHexArtLine(line)) {
       this.state = 'in-art';
       this.artLines = [line];
+      this.artAnsiLines = [this.currentAnsi];
       this.artExpected = expectedArtLines(line);
       this.linesSinceStart = 0;
       return;
@@ -246,6 +254,7 @@ export class RoomParser {
         return;
       }
       this.artLines.push(line);
+      this.artAnsiLines.push(this.currentAnsi);
       if (this.artLines.length >= this.artExpected) {
         this.finishArt('');
       }
@@ -259,6 +268,7 @@ export class RoomParser {
         return;
       }
       this.artLines.push(line);
+      this.artAnsiLines.push(this.currentAnsi);
       return;
     }
     this.finishArt(trimmed ? line : '');
@@ -337,7 +347,8 @@ export class RoomParser {
   }
 
   private emitSurvey(): void {
-    const art = this.artLines.length >= 5 ? parseHexArt(this.artLines) : null;
+    const art =
+      this.artLines.length >= 5 ? parseHexArt(this.artLines, this.artAnsiLines) : null;
     const description = this.descLines.join(' ');
     this.onEvent({ type: 'survey', art, description });
     this.reset();
@@ -346,6 +357,7 @@ export class RoomParser {
   private reset(): void {
     this.state = 'idle';
     this.artLines = [];
+    this.artAnsiLines = [];
     this.artExpected = null;
     this.descLines = [];
     this.linesSinceStart = 0;

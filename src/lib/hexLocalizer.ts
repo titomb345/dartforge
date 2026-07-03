@@ -75,6 +75,27 @@ export interface SurveyResolution {
 }
 
 // ---------------------------------------------------------------------------
+// Description parsing
+// ---------------------------------------------------------------------------
+
+const RIVER_DESC_RE = /\brivers? to the ([a-z]+(?:,? and [a-z]+)*)/i;
+
+/**
+ * Extract river directions from a wilderness description, e.g.
+ * "There is a swift river to the southeast, and south." → [se, s]
+ */
+export function parseRiverDirections(description: string): Direction[] {
+  const m = RIVER_DESC_RE.exec(description);
+  if (!m) return [];
+  const dirs: Direction[] = [];
+  for (const word of m[1].split(/[^a-z]+/i)) {
+    const dir = parseDirection(word);
+    if (dir && !dirs.includes(dir)) dirs.push(dir);
+  }
+  return dirs;
+}
+
+// ---------------------------------------------------------------------------
 // Localizer
 // ---------------------------------------------------------------------------
 
@@ -463,6 +484,17 @@ export class HexLocalizer {
       const dq = Number(rel.slice(0, comma));
       const dr = Number(rel.slice(comma + 1));
       this.map.markRiver(pos.island, pos.q + dq, pos.r + dr);
+    }
+
+    // River edges from art colors (blue '*' border/slope chars, all visible hexes)
+    for (const re of art.riverEdges) {
+      this.map.markRiverEdge(pos.island, pos.q + re.q, pos.r + re.r, re.dir);
+    }
+
+    // River edges from the description ("There is a swift river to the
+    // southeast, and south.") — color-independent, current hex only
+    for (const dir of parseRiverDirections(description)) {
+      this.map.markRiverEdge(pos.island, pos.q, pos.r, dir);
     }
 
     this.map.markVisited(pos.island, pos.q, pos.r, description, now);

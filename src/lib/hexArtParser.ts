@@ -19,6 +19,9 @@
  */
 
 import { TERRAIN_CHAR_MAP, type HexTerrainType } from './hexTerrainPatterns';
+import { lineFgColors } from './ansiColorExtract';
+import type { ThemeColorKey } from './defaultTheme';
+import type { Direction } from './hexUtils';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -33,6 +36,12 @@ export interface ParsedHexArt {
    * majority voting would otherwise hide them entirely.
    */
   rivers: string[];
+  /**
+   * River edges detected from art colors: rivers are drawn as BLUE '*'
+   * chars substituted into hex borders/slopes (paths use the same char in
+   * other colors). Only populated when the parser was given ANSI lines.
+   */
+  riverEdges: { q: number; r: number; dir: Direction }[];
   /** Number of rings visible (0, 1, or 2) */
   rings: number;
   /**
@@ -392,11 +401,55 @@ function parseLandmarks(
 /** Border/structural chars that may appear at border positions */
 const BORDER_CHARS = new Set(['-', '*', 'c', 'x', '=']);
 
+/** Colors that mark a '*' edge char as river (water) rather than path */
+const RIVER_EDGE_COLORS = new Set<ThemeColorKey>(['blue', 'brightBlue', 'cyan', 'brightCyan']);
+
+/**
+ * Detect river edges for a cell from art colors. Rivers are rendered as
+ * blue '*' chars substituted into the cell's borders and slopes.
+ */
+function detectRiverEdges(
+  spec: { q: number; r: number; line: number; col: number },
+  artLines: string[],
+  colorRows: ((ThemeColorKey | null)[] | null)[]
+): Direction[] {
+  const isRiverChar = (lineIdx: number, col: number): boolean => {
+    const line = artLines[lineIdx];
+    if (!line || line[col] !== '*') return false;
+    const colors = colorRows[lineIdx];
+    if (!colors) return false;
+    const c = colors[col];
+    return c !== null && c !== undefined && RIVER_EDGE_COLORS.has(c);
+  };
+
+  const edges: Direction[] = [];
+  // N and S: the 5-char horizontal borders
+  for (const [dir, lineIdx] of [
+    ['n', spec.line],
+    ['s', spec.line + 4],
+  ] as [Direction, number][]) {
+    for (let i = 0; i < 5; i++) {
+      if (isRiverChar(lineIdx, spec.col + i)) {
+        edges.push(dir);
+        break;
+      }
+    }
+  }
+  // Diagonals: the slope chars at the cell's corners
+  if (isRiverChar(spec.line + 1, spec.col - 1)) edges.push('nw');
+  if (isRiverChar(spec.line + 1, spec.col + 5)) edges.push('ne');
+  if (isRiverChar(spec.line + 3, spec.col - 1)) edges.push('sw');
+  if (isRiverChar(spec.line + 3, spec.col + 5)) edges.push('se');
+  return edges;
+}
+
 /**
  * Try to parse hex art using the fixed template. Returns null when the art
  * doesn't validate against the template (caller falls back to search parsing).
+ * `ansiLines` (same lines with ANSI codes) enables color-based river-edge
+ * detection.
  */
-function parseHexArtTemplate(artLines: string[]): ParsedHexArt | null {
+function parseHexArtTemplate(artLines: string[], ansiLines?: string[]): ParsedHexArt | null {
   if (artLines.length < 5) return null;
 
   // Locate the top border on the first line: a 5-char border run whose
@@ -463,12 +516,29 @@ function parseHexArtTemplate(artLines: string[]): ParsedHexArt | null {
   // (0-ring art has a single cell, so accept whatever the layout can hold)
   if (validCells.length < Math.min(4, cellsSpec.length)) return null;
 
+  // Per-line color arrays for river-edge detection (lazy: only when ANSI
+  // lines were provided and alignment holds)
+  const colorRows: ((ThemeColorKey | null)[] | null)[] = new Array(artLines.length).fill(null);
+  const haveColors = !!ansiLines && ansiLines.length === artLines.length;
+  if (haveColors) {
+    for (let i = 0; i < artLines.length; i++) {
+      // Only decode rows that contain a '*' at all — colors are pointless otherwise
+      if (artLines[i].includes('*')) colorRows[i] = lineFgColors(ansiLines![i]);
+    }
+  }
+
   // Extract terrain + labels per cell
   const hexes = new Map<string, HexTerrainType>();
   const rivers: string[] = [];
+  const riverEdges: { q: number; r: number; dir: Direction }[] = [];
   const labelOccurrences = new Map<string, { q: number; r: number; count: number }[]>();
 
   for (const spec of validCells) {
+    if (haveColors) {
+      for (const dir of detectRiverEdges(spec, artLines, colorRows)) {
+        riverEdges.push({ q: spec.q, r: spec.r, dir });
+      }
+    }
     const terrainCounts = new Map<string, number>();
     const cellLabels = new Map<string, number>();
     for (let lineIdx = spec.line + 1; lineIdx <= spec.line + 3; lineIdx++) {
@@ -515,7 +585,7 @@ function parseHexArtTemplate(artLines: string[]): ParsedHexArt | null {
     return { ...l, q: null, r: null };
   });
 
-  return { hexes, rivers, rings, landmarks, rawLines: artLines, source: 'template' };
+  return { hexes, rivers, riverEdges, rings, landmarks, rawLines: artLines, source: 'template' };
 }
 
 /**
@@ -524,10 +594,12 @@ function parseHexArtTemplate(artLines: string[]): ParsedHexArt | null {
  * for art that doesn't match the template.
  *
  * @param artLines - The raw hex art lines (after "You gaze at your surroundings." and blank line)
+ * @param ansiLines - The same lines with ANSI codes (optional; enables
+ *   color-based river-edge detection)
  * @returns Parsed hex data with terrain for each visible hex, or null if parsing fails
  */
-export function parseHexArt(artLines: string[]): ParsedHexArt | null {
-  const templated = parseHexArtTemplate(artLines);
+export function parseHexArt(artLines: string[], ansiLines?: string[]): ParsedHexArt | null {
+  const templated = parseHexArtTemplate(artLines, ansiLines);
   if (templated) return templated;
   return parseHexArtSearch(artLines);
 }
@@ -597,6 +669,7 @@ function parseHexArtSearch(artLines: string[]): ParsedHexArt | null {
   return {
     hexes,
     rivers,
+    riverEdges: [],
     rings: ringCount,
     landmarks,
     rawLines: artLines,

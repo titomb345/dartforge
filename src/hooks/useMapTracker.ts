@@ -41,8 +41,11 @@ export interface MapTrackerState {
 }
 
 export interface MapTrackerActions {
-  /** Feed an ANSI-stripped line (leading whitespace preserved!) */
-  feedLine: (line: string) => void;
+  /**
+   * Feed an ANSI-stripped line (leading whitespace preserved!).
+   * `raw` is the same line with ANSI codes, for color-based river detection.
+   */
+  feedLine: (line: string, raw?: string) => void;
   /** Track an outgoing command (all sends — user, triggers, walk steps) */
   trackCommand: (command: string) => void;
   /** Cells of the island currently being displayed (the player's island) */
@@ -273,8 +276,8 @@ export function useMapTracker(
 
   const flushTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const feedLine = useCallback((line: string) => {
-    parserRef.current?.feedLine(line);
+  const feedLine = useCallback((line: string, raw?: string) => {
+    parserRef.current?.feedLine(line, raw);
     // The MUD's trailing prompt has no newline, so a survey without a clean
     // description terminator would wait for the NEXT output burst. Flush it
     // once the stream goes idle instead.

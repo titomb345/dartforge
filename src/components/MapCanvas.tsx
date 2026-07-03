@@ -149,6 +149,7 @@ export function MapCanvas({ width, height, showLabels, showFog, onWalkTo }: MapC
     // Rivers, blocked edges, and landmarks on top
     for (const cell of cells) {
       if (cell.river) drawRiver(ctx, cell);
+      if (cell.riverEdges.length > 0) drawRiverEdges(ctx, cell);
       if (cell.blocked.length > 0) drawBlockedEdges(ctx, cell);
       if (cell.landmarks.length > 0) drawLandmarkMarker(ctx, cell);
     }
@@ -347,6 +348,36 @@ function drawHex(
   ctx.globalAlpha = 1;
 }
 
+/**
+ * Which hex corners bound each edge (flat-top layout, hexCorners order:
+ * 0=E, 1=SE-bottom, 2=SW-bottom, 3=W, 4=NW-top, 5=NE-top).
+ */
+const EDGE_CORNERS: Record<Direction, [number, number]> = {
+  n: [4, 5],
+  ne: [5, 0],
+  se: [0, 1],
+  s: [1, 2],
+  sw: [2, 3],
+  nw: [3, 4],
+};
+
+/** Rivers running along hex sides — drawn as thick blue edge segments */
+function drawRiverEdges(ctx: CanvasRenderingContext2D, cell: HexCell) {
+  const { x, y } = hexToPixel(cell.q, cell.r, HEX_SIZE);
+  const corners = hexCorners(x, y, HEX_SIZE - 1);
+  ctx.strokeStyle = RIVER_COLOR;
+  ctx.lineWidth = 3;
+  ctx.lineCap = 'round';
+  for (const dir of cell.riverEdges) {
+    const [a, b] = EDGE_CORNERS[dir];
+    ctx.beginPath();
+    ctx.moveTo(corners[a].x, corners[a].y);
+    ctx.lineTo(corners[b].x, corners[b].y);
+    ctx.stroke();
+  }
+  ctx.lineCap = 'butt';
+}
+
 /** Blue stream meandering across a hex (rivers run through other terrain) */
 function drawRiver(ctx: CanvasRenderingContext2D, cell: HexCell) {
   const { x, y } = hexToPixel(cell.q, cell.r, HEX_SIZE);
@@ -526,7 +557,12 @@ function CellTooltip({
         style={{ color: isCurrent ? CURRENT_ROOM_GLOW : TOOLTIP_TEXT }}
       >
         {terrainLabel}
-        {cell.river && <span style={{ color: RIVER_COLOR }}> · river</span>}
+        {(cell.river || cell.riverEdges.length > 0) && (
+          <span style={{ color: RIVER_COLOR }}>
+            {' '}
+            · river{cell.riverEdges.length > 0 ? ` (${cell.riverEdges.map((d) => directionLabel(d)).join(', ')})` : ''}
+          </span>
+        )}
         <span className="font-normal opacity-50 ml-1.5">
           ({cell.q}, {cell.r})
         </span>

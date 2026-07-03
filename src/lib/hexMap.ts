@@ -34,6 +34,8 @@ export interface HexCell {
   terrain: HexTerrainType;
   /** True if a river runs through this hex (overlay on top of terrain) */
   river: boolean;
+  /** Hex sides a river runs along (drawn as blue edges) */
+  riverEdges: Direction[];
   /** True if the player has stood in this hex */
   visited: boolean;
   visitCount: number;
@@ -168,6 +170,7 @@ export class HexMapStore {
         island,
         terrain,
         river: false,
+        riverEdges: [],
         visited: false,
         visitCount: 0,
         lastSeen: now,
@@ -195,6 +198,19 @@ export class HexMapStore {
   markRiver(island: number, q: number, r: number): void {
     const cell = this.cells.get(cellKey(island, q, r));
     if (cell) cell.river = true;
+  }
+
+  /**
+   * Mark a river along one side of a cell (sticky). Mirrors onto the
+   * neighbor's opposite side when that cell exists — the edge is shared.
+   */
+  markRiverEdge(island: number, q: number, r: number, dir: Direction): void {
+    const cell = this.cells.get(cellKey(island, q, r));
+    if (cell && !cell.riverEdges.includes(dir)) cell.riverEdges.push(dir);
+    const n = applyDirection({ q, r }, dir);
+    const neighbor = this.cells.get(cellKey(island, n.q, n.r));
+    const opp = oppositeDirection(dir);
+    if (neighbor && !neighbor.riverEdges.includes(opp)) neighbor.riverEdges.push(opp);
   }
 
   /** Mark a cell visited (creates it if needed) and store its description. */
@@ -277,6 +293,9 @@ export class HexMapStore {
           this.indexTerrain(targetKey, existing.terrain);
         }
         existing.river = existing.river || cell.river;
+        for (const re of cell.riverEdges) {
+          if (!existing.riverEdges.includes(re)) existing.riverEdges.push(re);
+        }
         existing.visited = existing.visited || cell.visited;
         existing.visitCount += cell.visitCount;
         existing.lastSeen = Math.max(existing.lastSeen, cell.lastSeen);
@@ -427,6 +446,7 @@ export class HexMapStore {
         island: cell.island ?? 0,
         terrain: cell.terrain ?? 'unknown',
         river: !!cell.river,
+        riverEdges: Array.isArray(cell.riverEdges) ? cell.riverEdges : [],
         visited: !!cell.visited,
         visitCount: cell.visitCount ?? 0,
         lastSeen: cell.lastSeen ?? 0,

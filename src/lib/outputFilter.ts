@@ -80,8 +80,10 @@ export interface OutputFilterCallbacks {
    * Fired for every complete line with ANSI stripped but leading whitespace
    * PRESERVED (only trailing CR/LF removed). Required by the automapper —
    * hex art is column-aligned ASCII and trimming destroys it.
+   * `raw` is the same line WITH ANSI codes, for color-based art parsing
+   * (rivers and paths share the '*' char and differ only by color).
    */
-  onMapLine?: (line: string) => void;
+  onMapLine?: (line: string, raw: string) => void;
 }
 
 /** Per-status filter flags — controls which status types get stripped from terminal. */
@@ -492,7 +494,7 @@ export class OutputFilter {
       const strippedFull = seg === segment ? rawStripped : stripAnsi(seg);
 
       // Automapper feed — untrimmed (leading whitespace is significant in hex art)
-      this.callbacks.onMapLine?.(strippedFull.replace(/[\r\n]+$/, ''));
+      this.callbacks.onMapLine?.(strippedFull.replace(/[\r\n]+$/, ''), seg);
 
       let stripped = strippedFull.trim();
       // Always strip server prompt prefix for parsing, even when display keeps it.
