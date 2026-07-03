@@ -42,6 +42,11 @@ export interface MapTrackerState {
   islandCount: number;
   /** True when position is unknown (teleported into featureless terrain) */
   lost: boolean;
+  /**
+   * True while inside a town/building (set by exits-line rooms, cleared by
+   * the next wilderness survey). Hex movement doesn't apply indoors.
+   */
+  indoors: boolean;
   walking: WalkState | null;
 }
 
@@ -91,6 +96,7 @@ export function useMapTracker(
     visitedCount: 0,
     islandCount: 0,
     lost: false,
+    indoors: false,
     walking: null,
   });
   const [centerVersion, setCenterVersion] = useState(0);
@@ -141,6 +147,7 @@ export function useMapTracker(
       visitedCount: visited,
       islandCount: map.islandSizes().size,
       lost: localizerRef.current.lost,
+      indoors: localizerRef.current.indoors,
       walking: walk
         ? { target: walk.target, remaining: walk.path.length - walk.confirmed }
         : null,
@@ -347,6 +354,10 @@ export function useMapTracker(
     (q: number, r: number) => {
       const map = mapRef.current;
       if (!map.pos) return;
+      if (localizerRef.current.indoors) {
+        echoRef.current('[Map] You are indoors — step outside to walk.');
+        return;
+      }
       if (localizerRef.current.lost) {
         echoRef.current('[Map] Cannot walk — position unknown.');
         return;
