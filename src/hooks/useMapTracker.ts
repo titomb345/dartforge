@@ -20,8 +20,13 @@ function mapFilename(character: string): string {
 
 /** Max ms to wait for a survey to confirm a walk step before aborting */
 const WALK_STEP_TIMEOUT = 8_000;
-/** Delay between confirmed step and sending the next one */
-const WALK_STEP_DELAY = 250;
+/**
+ * Moves kept in flight ahead of survey confirmation. Two hides a full
+ * server round-trip per hex (like a player spamming directions — the
+ * localizer's pending-move queue is built for it) while capping the
+ * overshoot after a mid-walk block to a single hex.
+ */
+const WALK_PIPELINE = 2;
 
 export interface WalkState {
   target: { q: number; r: number };
@@ -95,10 +100,12 @@ export function useMapTracker(
   // Walk executor state (refs — driven by parser events, not renders)
   const walkRef = useRef<{
     path: Direction[];
-    idx: number;
+    /** Steps confirmed by surveys */
+    confirmed: number;
+    /** Steps sent to the MUD (sent - confirmed = in flight) */
+    sent: number;
     target: { q: number; r: number };
     timeout: ReturnType<typeof setTimeout> | null;
-    stepDelay: ReturnType<typeof setTimeout> | null;
   } | null>(null);
   const walkSendingRef = useRef(false);
   const sendDirectionRef = useRef(sendDirection);
@@ -133,7 +140,7 @@ export function useMapTracker(
       islandCount: map.islandSizes().size,
       lost: localizerRef.current.lost,
       walking: walk
-        ? { target: walk.target, remaining: walk.path.length - walk.idx }
+        ? { target: walk.target, remaining: walk.path.length - walk.confirmed }
         : null,
     }));
   }, []);
@@ -142,16 +149,11 @@ export function useMapTracker(
   // Walk executor
   // ---------------------------------------------------------------------
 
-  const clearWalkTimers = () => {
-    const walk = walkRef.current;
-    if (walk?.timeout) clearTimeout(walk.timeout);
-    if (walk?.stepDelay) clearTimeout(walk.stepDelay);
-  };
-
   const cancelWalk = useCallback(
     (reason?: string) => {
-      if (!walkRef.current) return;
-      clearWalkTimers();
+      const walk = walkRef.current;
+      if (!walk) return;
+      if (walk.timeout) clearTimeout(walk.timeout);
       walkRef.current = null;
       if (reason) echoRef.current(`[Map] Walk stopped — ${reason}`);
       syncState();
@@ -159,20 +161,31 @@ export function useMapTracker(
     [syncState]
   );
 
-  const sendWalkStep = useCallback(() => {
+  const armWalkTimeout = useCallback(() => {
     const walk = walkRef.current;
     if (!walk) return;
-    const dir = walk.path[walk.idx];
-    if (!dir) {
-      cancelWalk();
-      return;
-    }
+    if (walk.timeout) clearTimeout(walk.timeout);
     walk.timeout = setTimeout(() => cancelWalk('no response from the MUD'), WALK_STEP_TIMEOUT);
+  }, [cancelWalk]);
+
+  /**
+   * Send walk steps until WALK_PIPELINE moves are in flight. Sends are
+   * chained one at a time so commands reach the MUD in path order.
+   */
+  const pumpWalkSends = useCallback(() => {
+    const walk = walkRef.current;
+    if (!walk) return;
+    if (walk.sent >= walk.path.length) return;
+    if (walk.sent - walk.confirmed >= WALK_PIPELINE) return;
+    const dir = walk.path[walk.sent];
+    walk.sent += 1;
     walkSendingRef.current = true;
     Promise.resolve(sendDirectionRef.current(dir))
       .catch(() => cancelWalk('send failed'))
       .finally(() => {
         walkSendingRef.current = false;
+        // Top up the pipeline (only refills if this walk is still active)
+        if (walkRef.current) pumpWalkSends();
       });
   }, [cancelWalk]);
 
@@ -181,10 +194,6 @@ export function useMapTracker(
     (res: SurveyResolution) => {
       const walk = walkRef.current;
       if (!walk) return;
-      if (walk.timeout) {
-        clearTimeout(walk.timeout);
-        walk.timeout = null;
-      }
       const pos = res.pos;
       if (!pos || res.kind === 'lost') {
         cancelWalk('position lost');
@@ -192,24 +201,26 @@ export function useMapTracker(
       }
       if (res.moved === null && res.kind === 'stationary') {
         // A manual survey mid-walk — our step hasn't resolved yet; keep waiting
-        walk.timeout = setTimeout(() => cancelWalk('no response from the MUD'), WALK_STEP_TIMEOUT);
+        armWalkTimeout();
         return;
       }
-      if (res.moved !== walk.path[walk.idx]) {
+      if (res.moved !== walk.path[walk.confirmed]) {
         cancelWalk('unexpected movement');
         return;
       }
-      walk.idx += 1;
-      if (walk.idx >= walk.path.length) {
+      walk.confirmed += 1;
+      if (walk.confirmed >= walk.path.length) {
+        if (walk.timeout) clearTimeout(walk.timeout);
         walkRef.current = null;
         echoRef.current('[Map] Arrived.');
         syncState();
         return;
       }
-      walk.stepDelay = setTimeout(() => sendWalkStep(), WALK_STEP_DELAY);
+      armWalkTimeout();
+      pumpWalkSends();
       syncState();
     },
-    [cancelWalk, sendWalkStep, syncState]
+    [cancelWalk, armWalkTimeout, pumpWalkSends, syncState]
   );
 
   // ---------------------------------------------------------------------
@@ -344,12 +355,13 @@ export function useMapTracker(
         return;
       }
       cancelWalk();
-      walkRef.current = { path, idx: 0, target: { q, r }, timeout: null, stepDelay: null };
+      walkRef.current = { path, confirmed: 0, sent: 0, target: { q, r }, timeout: null };
       echoRef.current(`[Map] Walking ${path.length} hex${path.length === 1 ? '' : 'es'}...`);
       syncState();
-      sendWalkStep();
+      armWalkTimeout();
+      pumpWalkSends();
     },
-    [cancelWalk, sendWalkStep, syncState]
+    [cancelWalk, armWalkTimeout, pumpWalkSends, syncState]
   );
 
   const setCellNotes = useCallback(
