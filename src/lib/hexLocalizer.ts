@@ -476,8 +476,12 @@ export class HexLocalizer {
   }
 
   /**
-   * While mapping on a secondary island, check whether the current patch
-   * uniquely matches somewhere on another island; if so, merge.
+   * While more than one island exists, check whether the current patch
+   * uniquely matches somewhere on ANOTHER island; if so, the two regions
+   * physically overlap — merge them (smaller into larger, so the main
+   * map's coordinate frame stays stable). Works in both directions:
+   * walking from a side region into the main map's territory, or sailing
+   * from the main map into a side region's territory.
    */
   private tryMergeProbe(
     patch: Map<string, HexTerrainType>,
@@ -485,21 +489,32 @@ export class HexLocalizer {
   ): { from: number; into: number } | undefined {
     const pos = this.map.pos;
     if (!pos) return undefined;
-    const primary = this.map.primaryIsland();
-    if (pos.island === primary) return undefined;
+    const sizes = this.map.islandSizes();
+    if (sizes.size < 2) return undefined;
     if (!this.isDistinctive(patch)) return undefined;
 
     const target = this.findUniqueAnchor(patch, pos.island);
     if (!target) return undefined;
 
-    const from = pos.island;
-    this.map.mergeIslands(from, { q: pos.q, r: pos.r }, target.island, {
-      q: target.q,
-      r: target.r,
-    });
-    // mergeIslands translates this.map.pos for us
+    // The current position (in our frame) and the matched anchor (in the
+    // other frame) are the SAME physical hex — merge the smaller island
+    // into the larger using that correspondence.
+    const ourSize = sizes.get(pos.island) ?? 0;
+    const theirSize = sizes.get(target.island) ?? 0;
+    let from: number;
+    let into: number;
+    if (theirSize > ourSize) {
+      from = pos.island;
+      into = target.island;
+      this.map.mergeIslands(from, { q: pos.q, r: pos.r }, into, { q: target.q, r: target.r });
+      // mergeIslands translates this.map.pos into the target frame
+    } else {
+      from = target.island;
+      into = pos.island;
+      this.map.mergeIslands(from, { q: target.q, r: target.r }, into, { q: pos.q, r: pos.r });
+    }
     void now;
-    return { from, into: target.island };
+    return { from, into };
   }
 
   // -------------------------------------------------------------------------
