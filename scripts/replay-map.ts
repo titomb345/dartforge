@@ -174,7 +174,7 @@ function handleEvent(event: RoomParserEvent, oracle: boolean): void {
     return;
   }
   if (event.type === 'town-room') {
-    localizer.onTownRoom();
+    localizer.onTownRoom(clock);
     return;
   }
 

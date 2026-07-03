@@ -183,6 +183,13 @@ export const HELP_CATEGORIES: HelpCategory[] = [
         interaction: 'right-click',
       },
       {
+        title: 'Clear Wrong Blocked Marks',
+        description:
+          'Red edge ticks mark directions the map believes are blocked. If one is wrong, Ctrl+click (or Alt+click) the hex to clear all its blocked marks. Marks also heal themselves: successfully walking through a "blocked" edge removes the mark automatically.',
+        helpId: 'toolbar-map',
+        interaction: 'click',
+      },
+      {
         title: 'Quick Character Switch',
         description:
           'In Settings > Characters, click "Switch to [name]" to disconnect and immediately reconnect as your other character. A 20-minute cooldown applies between different characters (DartMUD server rule).',

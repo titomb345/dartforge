@@ -245,6 +245,31 @@ export class HexMapStore {
     if (target && !target.blocked.includes(opp)) target.blocked.push(opp);
   }
 
+  /** Remove a blocked mark (both sides) — a move through it succeeded. */
+  unmarkBlocked(pos: HexPos, dir: Direction): void {
+    const cell = this.getAt(pos);
+    if (cell) cell.blocked = cell.blocked.filter((d) => d !== dir);
+    const t = applyDirection(pos, dir);
+    const target = this.get(pos.island, t.q, t.r);
+    const opp = oppositeDirection(dir);
+    if (target) target.blocked = target.blocked.filter((d) => d !== opp);
+  }
+
+  /** Clear ALL blocked marks on a cell, including the mirrored neighbor sides. */
+  clearBlocked(island: number, q: number, r: number): void {
+    const cell = this.get(island, q, r);
+    if (!cell) return;
+    for (const dir of cell.blocked) {
+      const t = applyDirection({ q, r }, dir);
+      const target = this.get(island, t.q, t.r);
+      if (target) {
+        const opp = oppositeDirection(dir);
+        target.blocked = target.blocked.filter((d) => d !== opp);
+      }
+    }
+    cell.blocked = [];
+  }
+
   setNotes(island: number, q: number, r: number, notes: string): void {
     const cell = this.cells.get(cellKey(island, q, r));
     if (cell) cell.notes = notes;

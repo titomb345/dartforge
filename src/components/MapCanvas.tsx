@@ -85,7 +85,8 @@ interface MapCanvasProps {
 
 export function MapCanvas({ width, height, showLabels, showFog, onWalkTo }: MapCanvasProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  const { version, currentPos, centerVersion, getCells, getCellAt } = useMapContext();
+  const { version, currentPos, centerVersion, getCells, getCellAt, clearBlockedAt } =
+    useMapContext();
 
   // Pan/zoom state
   const panRef = useRef({ x: 0, y: 0 });
@@ -236,13 +237,19 @@ export function MapCanvas({ width, height, showLabels, showFog, onWalkTo }: MapC
       if (!hex || !canvas) return;
       const rect = canvas.getBoundingClientRect();
       const cell = getCellAt(hex.q, hex.r);
-      if (cell) {
-        setTooltip({ x: e.clientX - rect.left, y: e.clientY - rect.top, cell });
-      } else {
+      if (!cell) {
         setTooltip(null);
+        return;
       }
+      // Ctrl+click clears incorrect blocked-direction marks on the hex
+      if ((e.ctrlKey || e.altKey) && cell.blocked.length > 0) {
+        clearBlockedAt(hex.q, hex.r);
+        setTooltip(null);
+        return;
+      }
+      setTooltip({ x: e.clientX - rect.left, y: e.clientY - rect.top, cell });
     },
-    [hexAtMouse, getCellAt]
+    [hexAtMouse, getCellAt, clearBlockedAt]
   );
 
   const handleContextMenu = useCallback(
@@ -575,7 +582,12 @@ function CellTooltip({
       {cell.description && (
         <div className="text-[9px] opacity-60 mb-1 line-clamp-2">{cell.description}</div>
       )}
-      {blocked && <div className="text-[9px] opacity-50 text-red-400">Blocked: {blocked}</div>}
+      {blocked && (
+        <div className="text-[9px] opacity-50 text-red-400">
+          Blocked: {blocked}
+          <span className="opacity-70 italic"> — Ctrl+click to clear</span>
+        </div>
+      )}
       <div className="text-[9px] opacity-40 mt-0.5">
         {cell.visited ? `Visited ${cell.visitCount}x` : 'Seen from afar'}
         {cell.notes ? ' · Has notes' : ''}

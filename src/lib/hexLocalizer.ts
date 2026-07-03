@@ -102,6 +102,13 @@ export function parseRiverDirections(description: string): Direction[] {
 export class HexLocalizer {
   private queue: PendingMove[] = [];
   lost = false;
+  /**
+   * True after a town/building room was seen and until the next survey.
+   * While indoors, direction commands move you through ROOMS, not hexes —
+   * they must not enter the queue, and their failures must not mark the
+   * outdoor hex the map is still parked on.
+   */
+  indoors = false;
 
   constructor(private map: HexMapStore) {}
 
@@ -132,6 +139,7 @@ export class HexLocalizer {
     }
     const dir = parseDirection(dirWord);
     if (!dir) return false;
+    if (this.indoors) return false; // room movement, not hex movement
     this.pushMove(dir, now);
     return true;
   }
@@ -148,28 +156,39 @@ export class HexLocalizer {
 
   /**
    * A movement-failure message arrived — drop the oldest pending move.
-   * Hard failures (physical terrain) also record a blocked edge.
+   * Hard failures (physical terrain) also record a blocked edge — but never
+   * while indoors, where failures belong to rooms, not hexes.
    */
   onMoveFailed(hard: boolean): Direction | null {
     const failed = this.queue.shift();
-    if (hard && failed && this.map.pos && !this.lost) {
+    if (hard && failed && this.map.pos && !this.lost && !this.indoors) {
       this.map.markBlocked(this.map.pos, failed.dir);
     }
     return failed?.dir ?? null;
   }
 
   /**
-   * A non-hex room (town/dungeon) was entered — any pending hex moves were
-   * consumed by indoor movement and would poison the next wilderness survey.
+   * A non-hex room (town/dungeon) was entered. The move that led inside is
+   * recorded as a blocked hex edge (that direction enters a building, not
+   * the neighboring hex — walks must not route through it), pending moves
+   * are dropped, and the localizer goes indoors until the next survey.
    */
-  onTownRoom(): void {
+  onTownRoom(now: number): void {
+    if (!this.indoors && this.map.pos && !this.lost) {
+      const head = this.queue[0];
+      if (head && now - head.at < 5_000) {
+        this.map.markBlocked(this.map.pos, head.dir);
+      }
+    }
     this.queue = [];
+    this.indoors = true;
   }
 
   /** Reset transient state (new connection/character). Map data is untouched. */
   reset(): void {
     this.queue = [];
     this.lost = false;
+    this.indoors = false;
   }
 
   /**
@@ -178,6 +197,7 @@ export class HexLocalizer {
    */
   onSurvey(input: SurveyInput): SurveyResolution {
     const { art, description, now } = input;
+    this.indoors = false; // surveys only happen in the wilderness
     this.expireQueue(now);
 
     // --- Blind survey (no art): advance along the chain without painting ---
@@ -287,6 +307,15 @@ export class HexLocalizer {
         else this.queue.shift(); // forced/unexpected move — drop the stale head
       } else if (now - this.queue[0].at > STALE_MOVE_AGE) {
         this.queue.shift(); // move silently failed / never happened
+      }
+    }
+
+    // Auto-heal stale blocked marks: we just moved through this edge, so it
+    // clearly isn't blocked (marks can go stale from mis-attribution).
+    if (accepted.dir !== null) {
+      const fromCell = this.map.getAt(pos);
+      if (fromCell?.blocked.includes(accepted.dir)) {
+        this.map.unmarkBlocked(pos, accepted.dir);
       }
     }
 

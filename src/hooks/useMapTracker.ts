@@ -58,6 +58,8 @@ export interface MapTrackerActions {
   walkTo: (q: number, r: number) => void;
   cancelWalk: () => void;
   setCellNotes: (q: number, r: number, notes: string) => void;
+  /** Clear all blocked-direction marks on a hex (both sides of each edge) */
+  clearBlockedAt: (q: number, r: number) => void;
   clearMap: () => void;
   /** Center request — bumps a counter to signal MapCanvas to re-center */
   centerOnPlayer: () => void;
@@ -238,8 +240,10 @@ export function useMapTracker(
           localizer.trackForcedMove(event.dir, Date.now());
           break;
         case 'town-room':
-          localizer.onTownRoom();
+          localizer.onTownRoom(Date.now());
           if (walkRef.current) cancelWalk('entered a building');
+          syncState();
+          scheduleSave();
           break;
       }
     });
@@ -356,6 +360,17 @@ export function useMapTracker(
     [syncState, scheduleSave]
   );
 
+  const clearBlockedAt = useCallback(
+    (q: number, r: number) => {
+      const map = mapRef.current;
+      const island = map.pos?.island ?? map.primaryIsland();
+      map.clearBlocked(island, q, r);
+      syncState();
+      scheduleSave();
+    },
+    [syncState, scheduleSave]
+  );
+
   const clearMap = useCallback(() => {
     cancelWalk();
     mapRef.current.clear();
@@ -381,6 +396,7 @@ export function useMapTracker(
       walkTo,
       cancelWalk: cancelWalkAction,
       setCellNotes,
+      clearBlockedAt,
       clearMap,
       centerOnPlayer,
       centerVersion,
@@ -395,6 +411,7 @@ export function useMapTracker(
       walkTo,
       cancelWalkAction,
       setCellNotes,
+      clearBlockedAt,
       clearMap,
       centerOnPlayer,
       centerVersion,
