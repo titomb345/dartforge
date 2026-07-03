@@ -45,7 +45,6 @@ const TERRAIN_FILL: Record<HexTerrainType, string> = {
   swamp: 'rgba(70, 100, 60, 0.45)',
   desert: 'rgba(190, 170, 110, 0.40)',
   wasteland: 'rgba(90, 65, 50, 0.45)',
-  snow: 'rgba(180, 200, 220, 0.40)',
   unknown: 'rgba(70, 70, 70, 0.30)',
 };
 
@@ -62,7 +61,6 @@ const TERRAIN_STROKE: Record<HexTerrainType, string> = {
   swamp: 'rgba(90, 120, 75, 0.5)',
   desert: 'rgba(210, 190, 130, 0.5)',
   wasteland: 'rgba(120, 90, 70, 0.5)',
-  snow: 'rgba(200, 215, 235, 0.5)',
   unknown: 'rgba(100, 100, 100, 0.4)',
 };
 

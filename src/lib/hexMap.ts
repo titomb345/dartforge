@@ -59,26 +59,34 @@ export interface SerializedHexMap {
 const MAX_LANDMARKS_PER_CELL = 4;
 
 /**
- * Relative movement cost per terrain for pathfinding. Terrain with
- * concentration hits (swamp, hills, mountains, wasteland) is expensive;
- * easy ground (plains, farmland, woods) is cheap. Minimum must stay 1
- * so the A* distance heuristic remains admissible.
+ * Relative movement cost per terrain for pathfinding. Concentration is
+ * worth far more than walking time in DartMUD, so terrain with
+ * concentration hits (swamp, hills, mountains, wasteland) costs roughly
+ * an order of magnitude more than easy ground — one hills hex trades
+ * against ~8 plains steps. Weights, not exclusions: a rough-only route
+ * still resolves. Minimum must stay 1 so the A* heuristic is admissible.
  */
+// Concentration-costing (per Bill): mountains, hills, swamp, wasteland,
+// desert, river crossings, and swimming through water hexes.
 const TERRAIN_COST: Record<HexTerrainType, number> = {
   plains: 1,
   farmland: 1,
   woods: 1.1,
-  desert: 1.6,
-  snow: 2,
-  hills: 3,
-  swamp: 3.5,
-  wasteland: 3.5,
-  mountains: 4,
-  river: 3, // crossable (auto-swim) but draining
-  water: 4, // only reachable when visited
-  ocean: 5,
-  unknown: 1.8,
+  desert: 8,
+  hills: 8,
+  wasteland: 8,
+  swamp: 9,
+  mountains: 10,
+  river: 8, // crossable (auto-swim) but drains concentration
+  water: 12, // swimming through — only reachable when visited
+  ocean: 14,
+  unknown: 2,
 };
+
+/** Extra cost for stepping across a river edge (swimming across) */
+const RIVER_CROSSING_COST = 8;
+/** Extra cost for entering a hex with a river running through it */
+const RIVER_INTERIOR_COST = 4;
 
 // ---------------------------------------------------------------------------
 // Store
@@ -496,11 +504,11 @@ export class HexMapStore {
         if (!isGoal && (nCell.terrain === 'water' || nCell.terrain === 'ocean') && !nCell.visited) {
           continue;
         }
-        let stepCost = TERRAIN_COST[nCell.terrain] ?? 1.8;
-        if (nCell.river) stepCost += 2; // river through the hex — swimming
+        let stepCost = TERRAIN_COST[nCell.terrain] ?? 2;
+        if (nCell.river) stepCost += RIVER_INTERIOR_COST;
         // Stepping across a river edge costs concentration (swim across)
         if (cell?.riverEdges.includes(dir) || nCell.riverEdges.includes(oppositeDirection(dir))) {
-          stepCost += 2.5;
+          stepCost += RIVER_CROSSING_COST;
         }
         if (!nCell.visited) stepCost *= 1.15;
         const g = best.g + stepCost;
