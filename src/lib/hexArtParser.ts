@@ -27,6 +27,12 @@ import { TERRAIN_CHAR_MAP, type HexTerrainType } from './hexTerrainPatterns';
 export interface ParsedHexArt {
   /** Terrain of each visible hex, keyed by "q,r" relative to center */
   hexes: Map<string, HexTerrainType>;
+  /**
+   * Hexes (by "q,r" rel key) containing river marks ('!'). Rivers run
+   * THROUGH hexes of other terrain, so they're an overlay, not a terrain —
+   * majority voting would otherwise hide them entirely.
+   */
+  rivers: string[];
   /** Number of rings visible (0, 1, or 2) */
   rings: number;
   /**
@@ -300,7 +306,7 @@ function assignCoordinates(
 function extractCellData(
   cell: HexCell,
   lines: string[]
-): { terrain: HexTerrainType; labelChars: Map<string, number> } {
+): { terrain: HexTerrainType; river: boolean; labelChars: Map<string, number> } {
   const terrainCounts = new Map<string, number>();
   const labelChars = new Map<string, number>();
 
@@ -341,7 +347,7 @@ function extractCellData(
 
   const terrain =
     bestChar && TERRAIN_CHAR_MAP[bestChar] ? TERRAIN_CHAR_MAP[bestChar] : ('unknown' as const);
-  return { terrain, labelChars };
+  return { terrain, river: (terrainCounts.get('!') ?? 0) >= 1, labelChars };
 }
 
 // ---------------------------------------------------------------------------
@@ -459,6 +465,7 @@ function parseHexArtTemplate(artLines: string[]): ParsedHexArt | null {
 
   // Extract terrain + labels per cell
   const hexes = new Map<string, HexTerrainType>();
+  const rivers: string[] = [];
   const labelOccurrences = new Map<string, { q: number; r: number; count: number }[]>();
 
   for (const spec of validCells) {
@@ -490,6 +497,7 @@ function parseHexArtTemplate(artLines: string[]): ParsedHexArt | null {
       `${spec.q},${spec.r}`,
       bestChar && TERRAIN_CHAR_MAP[bestChar] ? TERRAIN_CHAR_MAP[bestChar] : 'unknown'
     );
+    if ((terrainCounts.get('!') ?? 0) >= 1) rivers.push(`${spec.q},${spec.r}`);
 
     for (const [ch, count] of cellLabels) {
       const list = labelOccurrences.get(ch) ?? [];
@@ -507,7 +515,7 @@ function parseHexArtTemplate(artLines: string[]): ParsedHexArt | null {
     return { ...l, q: null, r: null };
   });
 
-  return { hexes, rings, landmarks, rawLines: artLines, source: 'template' };
+  return { hexes, rivers, rings, landmarks, rawLines: artLines, source: 'template' };
 }
 
 /**
@@ -560,10 +568,12 @@ function parseHexArtSearch(artLines: string[]): ParsedHexArt | null {
 
   // Step 5: Extract terrain + label chars for each cell (use cleaned lines)
   const hexes = new Map<string, HexTerrainType>();
+  const rivers: string[] = [];
   const labelOccurrences = new Map<string, { cell: HexCell; count: number }[]>();
   for (const cell of cells) {
-    const { terrain, labelChars } = extractCellData(cell, cleanedLines);
+    const { terrain, river, labelChars } = extractCellData(cell, cleanedLines);
     hexes.set(`${cell.q},${cell.r}`, terrain);
+    if (river) rivers.push(`${cell.q},${cell.r}`);
     for (const [ch, count] of labelChars) {
       const list = labelOccurrences.get(ch) ?? [];
       list.push({ cell, count });
@@ -586,6 +596,7 @@ function parseHexArtSearch(artLines: string[]): ParsedHexArt | null {
 
   return {
     hexes,
+    rivers,
     rings: ringCount,
     landmarks,
     rawLines: artLines,

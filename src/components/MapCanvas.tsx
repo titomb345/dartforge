@@ -69,6 +69,7 @@ const TERRAIN_STROKE: Record<HexTerrainType, string> = {
 const LABEL_COLOR = 'rgba(200, 185, 160, 0.85)';
 const LABEL_FONT = '9px "Courier New", monospace';
 const LANDMARK_COLOR = '#e8c97a';
+const RIVER_COLOR = 'rgba(96, 158, 214, 0.85)';
 const BLOCKED_COLOR = 'rgba(220, 80, 70, 0.7)';
 const TOOLTIP_BG = 'rgba(20, 18, 16, 0.95)';
 const TOOLTIP_BORDER = 'rgba(140, 125, 100, 0.5)';
@@ -145,8 +146,9 @@ export function MapCanvas({ width, height, showLabels, showFog, onWalkTo }: MapC
       drawHex(ctx, cell, isCurrent, showFog);
     }
 
-    // Blocked edges + landmarks on top
+    // Rivers, blocked edges, and landmarks on top
     for (const cell of cells) {
+      if (cell.river) drawRiver(ctx, cell);
       if (cell.blocked.length > 0) drawBlockedEdges(ctx, cell);
       if (cell.landmarks.length > 0) drawLandmarkMarker(ctx, cell);
     }
@@ -345,6 +347,27 @@ function drawHex(
   ctx.globalAlpha = 1;
 }
 
+/** Blue stream meandering across a hex (rivers run through other terrain) */
+function drawRiver(ctx: CanvasRenderingContext2D, cell: HexCell) {
+  const { x, y } = hexToPixel(cell.q, cell.r, HEX_SIZE);
+  const w = HEX_SIZE * 0.72;
+  ctx.strokeStyle = RIVER_COLOR;
+  ctx.lineWidth = 2.2;
+  ctx.lineCap = 'round';
+  ctx.beginPath();
+  ctx.moveTo(x - w, y + HEX_SIZE * 0.1);
+  ctx.bezierCurveTo(
+    x - w * 0.35,
+    y - HEX_SIZE * 0.28,
+    x + w * 0.35,
+    y + HEX_SIZE * 0.38,
+    x + w,
+    y - HEX_SIZE * 0.05
+  );
+  ctx.stroke();
+  ctx.lineCap = 'butt';
+}
+
 /** Red tick across each blocked edge */
 function drawBlockedEdges(ctx: CanvasRenderingContext2D, cell: HexCell) {
   const { x, y } = hexToPixel(cell.q, cell.r, HEX_SIZE);
@@ -503,6 +526,7 @@ function CellTooltip({
         style={{ color: isCurrent ? CURRENT_ROOM_GLOW : TOOLTIP_TEXT }}
       >
         {terrainLabel}
+        {cell.river && <span style={{ color: RIVER_COLOR }}> · river</span>}
         <span className="font-normal opacity-50 ml-1.5">
           ({cell.q}, {cell.r})
         </span>

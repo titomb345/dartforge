@@ -32,6 +32,8 @@ export interface HexCell {
   island: number;
   /** Terrain from hex art (authoritative; 'unknown' only if never resolved) */
   terrain: HexTerrainType;
+  /** True if a river runs through this hex (overlay on top of terrain) */
+  river: boolean;
   /** True if the player has stood in this hex */
   visited: boolean;
   visitCount: number;
@@ -143,6 +145,7 @@ export class HexMapStore {
         r,
         island,
         terrain,
+        river: false,
         visited: false,
         visitCount: 0,
         lastSeen: now,
@@ -164,6 +167,12 @@ export class HexMapStore {
     existing.terrain = terrain;
     this.indexTerrain(key, terrain);
     return conflict;
+  }
+
+  /** Mark a river running through a cell (sticky — rivers don't move). */
+  markRiver(island: number, q: number, r: number): void {
+    const cell = this.cells.get(cellKey(island, q, r));
+    if (cell) cell.river = true;
   }
 
   /** Mark a cell visited (creates it if needed) and store its description. */
@@ -245,6 +254,7 @@ export class HexMapStore {
           existing.terrain = cell.terrain;
           this.indexTerrain(targetKey, existing.terrain);
         }
+        existing.river = existing.river || cell.river;
         existing.visited = existing.visited || cell.visited;
         existing.visitCount += cell.visitCount;
         existing.lastSeen = Math.max(existing.lastSeen, cell.lastSeen);
@@ -386,6 +396,7 @@ export class HexMapStore {
         r: cell.r,
         island: cell.island ?? 0,
         terrain: cell.terrain ?? 'unknown',
+        river: !!cell.river,
         visited: !!cell.visited,
         visitCount: cell.visitCount ?? 0,
         lastSeen: cell.lastSeen ?? 0,

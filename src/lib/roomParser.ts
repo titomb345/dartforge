@@ -308,8 +308,31 @@ export class RoomParser {
 
     this.descLines.push(trimmed);
 
-    if (LIGHTING_RE.test(trimmed) || this.descLines.length >= MAX_DESC_LINES) {
+    // Test the lighting terminator against the JOINED description — the MUD
+    // wraps at 80 cols, so "It is extremely light\nhere." spans two lines and
+    // never matches per-line.
+    if (LIGHTING_RE.test(this.descLines.join(' ')) || this.descLines.length >= MAX_DESC_LINES) {
       this.emitSurvey();
+    }
+  }
+
+  /**
+   * True while a survey is mid-collection (art or description). The MUD's
+   * trailing prompt has no newline, so a survey whose description lacks a
+   * recognizable terminator would otherwise sit unemitted until the NEXT
+   * output burst. The owner should call flushPending() after a short idle.
+   */
+  hasPendingSurvey(): boolean {
+    return this.state === 'in-art' || this.state === 'post-art';
+  }
+
+  /** Force-emit a mid-collection survey (called after the stream goes idle). */
+  flushPending(): void {
+    if (this.state === 'post-art') {
+      this.emitSurvey();
+    } else if (this.state === 'in-art') {
+      if (this.artLines.length >= 5) this.emitSurvey();
+      else this.reset();
     }
   }
 

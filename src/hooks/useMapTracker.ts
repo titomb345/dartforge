@@ -271,8 +271,23 @@ export function useMapTracker(
   // Actions
   // ---------------------------------------------------------------------
 
+  const flushTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
   const feedLine = useCallback((line: string) => {
     parserRef.current?.feedLine(line);
+    // The MUD's trailing prompt has no newline, so a survey without a clean
+    // description terminator would wait for the NEXT output burst. Flush it
+    // once the stream goes idle instead.
+    if (flushTimerRef.current) {
+      clearTimeout(flushTimerRef.current);
+      flushTimerRef.current = null;
+    }
+    if (parserRef.current?.hasPendingSurvey()) {
+      flushTimerRef.current = setTimeout(() => {
+        flushTimerRef.current = null;
+        parserRef.current?.flushPending();
+      }, 400);
+    }
   }, []);
 
   const trackCommand = useCallback(

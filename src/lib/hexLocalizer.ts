@@ -458,6 +458,13 @@ export class HexLocalizer {
       }
     }
 
+    for (const rel of art.rivers) {
+      const comma = rel.indexOf(',');
+      const dq = Number(rel.slice(0, comma));
+      const dr = Number(rel.slice(comma + 1));
+      this.map.markRiver(pos.island, pos.q + dq, pos.r + dr);
+    }
+
     this.map.markVisited(pos.island, pos.q, pos.r, description, now);
 
     if (withLandmarks) {
