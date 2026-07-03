@@ -117,20 +117,20 @@ export function MapPanel({ mode = 'slideout' }: PinnablePanelProps) {
             height={size.height}
             showLabels={showLabels}
             showFog={showFog}
+            dimmed={indoors}
             onWalkTo={walkTo}
           />
         )}
         {indoors && (
           <div
             className="absolute inset-0 z-20 flex items-center justify-center"
-            style={{ background: 'rgba(15, 14, 13, 0.6)', backdropFilter: 'blur(1.5px)' }}
             title="Hex movement is unavailable indoors"
           >
-            <div className="flex flex-col items-center gap-1 px-4 py-3 rounded border border-[#e8a849]/35 bg-[#171512]/95">
-              <span className="text-[11px] font-mono font-semibold tracking-[0.14em] text-[#e8a849]">
+            <div className="flex flex-col items-center gap-0.5 px-3 py-1.5 rounded border border-[#e8a849]/30 bg-[#171512]/80">
+              <span className="text-[10px] font-mono font-semibold tracking-[0.14em] text-[#e8a849]">
                 IN TOWN
               </span>
-              <span className="text-[9px] font-mono text-text-dim">
+              <span className="text-[8px] font-mono text-text-dim">
                 step outside to resume mapping
               </span>
             </div>

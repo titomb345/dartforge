@@ -80,10 +80,19 @@ interface MapCanvasProps {
   height: number;
   showLabels: boolean;
   showFog: boolean;
+  /** Dim the terrain mosaic (drawn under icons/markers) — used while indoors */
+  dimmed?: boolean;
   onWalkTo?: (q: number, r: number) => void;
 }
 
-export function MapCanvas({ width, height, showLabels, showFog, onWalkTo }: MapCanvasProps) {
+export function MapCanvas({
+  width,
+  height,
+  showLabels,
+  showFog,
+  dimmed = false,
+  onWalkTo,
+}: MapCanvasProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const { version, currentPos, centerVersion, getCells, getCellAt, clearBlockedAt, toggleTownAt } =
     useMapContext();
@@ -167,6 +176,16 @@ export function MapCanvas({ width, height, showLabels, showFog, onWalkTo }: MapC
       const isCurrent =
         !!currentPos && cell.q === currentPos.q && cell.r === currentPos.r;
       drawHex(ctx, cell, isCurrent, showFog);
+    }
+
+    // Indoors: dim the terrain, but keep icons/edges/glow (drawn below)
+    // at full brightness
+    if (dimmed) {
+      ctx.save();
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      ctx.fillStyle = 'rgba(15, 14, 13, 0.45)';
+      ctx.fillRect(0, 0, width, height);
+      ctx.restore();
     }
 
     // Rivers, cliffs, blocked edges, and landmarks on top
