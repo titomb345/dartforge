@@ -14,7 +14,7 @@ export type Panel =
   | 'notes'
   | 'scripts'
   | 'settings'
-  // | 'map' // automapper disabled
+  | 'map'
   | 'alloc'
   | 'currency'
   | 'who'
@@ -28,7 +28,7 @@ export type PinnablePanel =
   | 'chat'
   | 'counter'
   | 'notes'
-  // | 'map' // automapper disabled
+  | 'map'
   | 'alloc'
   | 'currency'
   | 'who'

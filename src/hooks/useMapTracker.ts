@@ -1,57 +1,60 @@
 /**
- * useMapTracker — React hook that ties the room parser, movement tracker,
- * and map graph together for hex-only wilderness mapping.
+ * useMapTracker — React hook that ties the room parser, hex localizer,
+ * and hex map store together for hex-only wilderness mapping.
  *
- * Uses terrain fingerprints from hex art to verify and correct positions,
- * preventing drift from accumulated movement tracking errors.
+ * Every survey paints all visible hexes onto a global grid; position is
+ * resolved by correlating each view against the already-painted map
+ * (see hexLocalizer.ts). Also owns the click-to-walk executor.
  */
 
 import { useRef, useState, useCallback, useEffect, useMemo } from 'react';
-import { RoomParser, type ParsedHexRoom } from '../lib/roomParser';
-import { MovementTracker } from '../lib/movementTracker';
-import {
-  type MapGraph,
-  type MapRoom,
-  type FingerprintIndex,
-  createGraph,
-  upsertRoom,
-  linkRooms,
-  makeHexRoomId,
-  assignCoords,
-  findPath,
-  serializeGraph,
-  deserializeGraph,
-  buildFingerprintIndex,
-  indexFingerprint,
-  deindexFingerprint,
-  lookupFingerprint,
-  type PathResult,
-} from '../lib/mapGraph';
-import { coordKey, type HexCoord } from '../lib/hexUtils';
+import { RoomParser } from '../lib/roomParser';
+import { HexLocalizer, type SurveyResolution } from '../lib/hexLocalizer';
+import { HexMapStore, type HexCell, type HexPos } from '../lib/hexMap';
+import { parseDirection, type Direction } from '../lib/hexUtils';
 import { type DataStore } from '../contexts/DataStoreContext';
 
 function mapFilename(character: string): string {
   return `map-${character.toLowerCase()}.json`;
 }
 
+/** Max ms to wait for a survey to confirm a walk step before aborting */
+const WALK_STEP_TIMEOUT = 8_000;
+/** Delay between confirmed step and sending the next one */
+const WALK_STEP_DELAY = 250;
+
+export interface WalkState {
+  target: { q: number; r: number };
+  remaining: number;
+}
+
 export interface MapTrackerState {
-  graph: MapGraph;
-  currentRoomId: string | null;
-  roomCount: number;
+  /** Bumped on every map mutation — triggers canvas redraws */
+  version: number;
+  currentPos: HexPos | null;
+  cellCount: number;
+  visitedCount: number;
+  islandCount: number;
+  /** True when position is unknown (teleported into featureless terrain) */
+  lost: boolean;
+  walking: WalkState | null;
 }
 
 export interface MapTrackerActions {
-  /** Feed a stripped line from MUD output to the room parser */
+  /** Feed an ANSI-stripped line (leading whitespace preserved!) */
   feedLine: (line: string) => void;
-  /** Track a command being sent to the MUD */
+  /** Track an outgoing command (all sends — user, triggers, walk steps) */
   trackCommand: (command: string) => void;
-  /** Find a path between two rooms */
-  findPathTo: (targetRoomId: string) => PathResult | null;
-  /** Get a room by ID */
-  getRoom: (id: string) => MapRoom | undefined;
-  /** Update room notes */
-  setRoomNotes: (roomId: string, notes: string) => void;
-  /** Clear the entire map */
+  /** Cells of the island currently being displayed (the player's island) */
+  getCells: () => HexCell[];
+  /** Cell lookup on the current island */
+  getCellAt: (q: number, r: number) => HexCell | undefined;
+  /** Path from the player to a cell on the current island */
+  findPathTo: (q: number, r: number) => Direction[] | null;
+  /** Walk the player along a path, one confirmed step at a time */
+  walkTo: (q: number, r: number) => void;
+  cancelWalk: () => void;
+  setCellNotes: (q: number, r: number, notes: string) => void;
   clearMap: () => void;
   /** Center request — bumps a counter to signal MapCanvas to re-center */
   centerOnPlayer: () => void;
@@ -60,21 +63,40 @@ export interface MapTrackerActions {
 
 export function useMapTracker(
   dataStore: DataStore,
-  activeCharacter: string | null
+  activeCharacter: string | null,
+  sendDirection: (dir: Direction) => Promise<void>,
+  echo: (message: string) => void
 ): MapTrackerState & MapTrackerActions {
-  const graphRef = useRef<MapGraph>(createGraph());
-  const fpIndexRef = useRef<FingerprintIndex>({ exact: new Map(), prefix: new Map() });
+  const mapRef = useRef<HexMapStore>(new HexMapStore());
+  const localizerRef = useRef<HexLocalizer>(new HexLocalizer(mapRef.current));
   const [state, setState] = useState<MapTrackerState>({
-    graph: graphRef.current,
-    currentRoomId: null,
-    roomCount: 0,
+    version: 0,
+    currentPos: null,
+    cellCount: 0,
+    visitedCount: 0,
+    islandCount: 0,
+    lost: false,
+    walking: null,
   });
   const [centerVersion, setCenterVersion] = useState(0);
 
-  const movementTracker = useRef(new MovementTracker());
   const parserRef = useRef<RoomParser | null>(null);
   const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const loadedCharRef = useRef<string | null>(null);
+
+  // Walk executor state (refs — driven by parser events, not renders)
+  const walkRef = useRef<{
+    path: Direction[];
+    idx: number;
+    target: { q: number; r: number };
+    timeout: ReturnType<typeof setTimeout> | null;
+    stepDelay: ReturnType<typeof setTimeout> | null;
+  } | null>(null);
+  const walkSendingRef = useRef(false);
+  const sendDirectionRef = useRef(sendDirection);
+  sendDirectionRef.current = sendDirection;
+  const echoRef = useRef(echo);
+  echoRef.current = echo;
 
   // Debounced save
   const scheduleSave = useCallback(() => {
@@ -82,139 +104,139 @@ export function useMapTracker(
     saveTimerRef.current = setTimeout(() => {
       const char = loadedCharRef.current;
       if (!char) return;
-      const data = serializeGraph(graphRef.current);
+      const data = mapRef.current.serialize();
       dataStore.set(mapFilename(char), 'mapData', data).catch(console.error);
     }, 2000);
   }, [dataStore]);
 
-  // Sync state from ref to React state
+  // Sync summary state from refs to React state
   const syncState = useCallback(() => {
-    const g = graphRef.current;
-    setState({
-      graph: g,
-      currentRoomId: g.currentRoomId,
-      roomCount: Object.keys(g.rooms).length,
-    });
+    const map = mapRef.current;
+    let visited = 0;
+    for (const c of map.allCells()) {
+      if (c.visited) visited++;
+    }
+    const walk = walkRef.current;
+    setState((prev) => ({
+      version: prev.version + 1,
+      currentPos: map.pos,
+      cellCount: map.size,
+      visitedCount: visited,
+      islandCount: map.islandSizes().size,
+      lost: localizerRef.current.lost,
+      walking: walk
+        ? { target: walk.target, remaining: walk.path.length - walk.idx }
+        : null,
+    }));
   }, []);
 
-  // Handle parsed hex room — core positioning logic with fingerprint verification
-  const handleHexRoom = useCallback(
-    (parsed: ParsedHexRoom) => {
-      const graph = graphRef.current;
-      const fpIndex = fpIndexRef.current;
-      const tracker = movementTracker.current;
+  // ---------------------------------------------------------------------
+  // Walk executor
+  // ---------------------------------------------------------------------
 
-      // Get pending movement from tracker
-      const prevRoomId = tracker.getCurrentRoomId();
-      const movement = prevRoomId ? tracker.onRoomParsed('') : null;
+  const clearWalkTimers = () => {
+    const walk = walkRef.current;
+    if (walk?.timeout) clearTimeout(walk.timeout);
+    if (walk?.stepDelay) clearTimeout(walk.stepDelay);
+  };
 
-      // Step 1: Compute candidate position from movement chain
-      let chainCoords: HexCoord | null = null;
-      let chainRoomId: string | null = null;
-      let chainCollision: string | undefined;
-
-      if (movement && graph.rooms[movement.fromRoomId]) {
-        const fromRoom = graph.rooms[movement.fromRoomId];
-        const { coords: newCoords, collision } = assignCoords(graph, fromRoom, movement.direction);
-        chainCoords = newCoords;
-        chainCollision = collision;
-        chainRoomId = collision ?? makeHexRoomId(newCoords.q, newCoords.r);
-      }
-
-      // Step 2: Fingerprint verification
-      const fpMatch = parsed.fingerprint ? lookupFingerprint(fpIndex, parsed.fingerprint) : null;
-
-      let coords: HexCoord;
-      let roomId: string;
-      let fingerprintOverrodeChain = false;
-
-      if (fpMatch) {
-        // Known fingerprint — use fingerprint position
-        const fpRoom = graph.rooms[fpMatch.roomId];
-        if (fpRoom) {
-          coords = fpRoom.coords;
-          roomId = fpMatch.roomId;
-          // Check if fingerprint disagrees with chain
-          if (chainRoomId && chainRoomId !== fpMatch.roomId) {
-            const chainKey = chainCoords ? coordKey(chainCoords) : null;
-            const fpKey = coordKey(fpRoom.coords);
-            if (chainKey !== fpKey) {
-              // Chain drifted — fingerprint wins, don't link from prev room
-              fingerprintOverrodeChain = true;
-            }
-          }
-        } else if (chainCoords) {
-          // Fingerprint points to a deleted room — fall through to chain logic
-          coords = chainCoords;
-          roomId = chainCollision ?? makeHexRoomId(chainCoords.q, chainCoords.r);
-        } else if (prevRoomId && graph.rooms[prevRoomId]) {
-          coords = graph.rooms[prevRoomId].coords;
-          roomId = prevRoomId;
-        } else {
-          coords = { q: 0, r: 0 };
-          roomId = makeHexRoomId(0, 0);
-        }
-      } else {
-        // Unknown fingerprint (or no fingerprint) — use chain positioning
-        if (chainCoords) {
-          coords = chainCoords;
-          roomId = chainCollision ?? makeHexRoomId(chainCoords.q, chainCoords.r);
-        } else if (prevRoomId && graph.rooms[prevRoomId]) {
-          // No movement (look/survey) — stay at current position
-          coords = graph.rooms[prevRoomId].coords;
-          roomId = prevRoomId;
-        } else {
-          // First room or broken chain — place at origin
-          coords = { q: 0, r: 0 };
-          roomId = makeHexRoomId(0, 0);
-        }
-      }
-
-      // Step 3: Update fingerprint index before upsert (need old fingerprint)
-      const oldFingerprint = graph.rooms[roomId]?.fingerprint ?? null;
-
-      // Step 4: Upsert room with fingerprint
-      upsertRoom(graph, roomId, coords, parsed.terrain, parsed.description, parsed.landmarks, parsed.fingerprint);
-
-      // Step 5: Incrementally update fingerprint index
-      if (parsed.fingerprint) {
-        const newFingerprint = graph.rooms[roomId]?.fingerprint;
-        if (oldFingerprint && oldFingerprint !== newFingerprint) {
-          deindexFingerprint(fpIndex, oldFingerprint, roomId);
-        }
-        if (newFingerprint) {
-          indexFingerprint(fpIndex, newFingerprint, roomId);
-        }
-      }
-
-      // Step 6: Link rooms if we moved AND fingerprint didn't override chain
-      if (
-        movement &&
-        graph.rooms[movement.fromRoomId] &&
-        movement.fromRoomId !== roomId &&
-        !fingerprintOverrodeChain
-      ) {
-        linkRooms(graph, movement.fromRoomId, roomId, movement.direction);
-      }
-
-      // Step 7: Update tracker and state
-      tracker.setCurrentRoom(roomId);
-      graph.currentRoomId = roomId;
+  const cancelWalk = useCallback(
+    (reason?: string) => {
+      if (!walkRef.current) return;
+      clearWalkTimers();
+      walkRef.current = null;
+      if (reason) echoRef.current(`[Map] Walk stopped — ${reason}`);
       syncState();
-      scheduleSave();
     },
-    [syncState, scheduleSave]
+    [syncState]
   );
 
-  // Initialize parser
+  const sendWalkStep = useCallback(() => {
+    const walk = walkRef.current;
+    if (!walk) return;
+    const dir = walk.path[walk.idx];
+    if (!dir) {
+      cancelWalk();
+      return;
+    }
+    walk.timeout = setTimeout(() => cancelWalk('no response from the MUD'), WALK_STEP_TIMEOUT);
+    walkSendingRef.current = true;
+    Promise.resolve(sendDirectionRef.current(dir))
+      .catch(() => cancelWalk('send failed'))
+      .finally(() => {
+        walkSendingRef.current = false;
+      });
+  }, [cancelWalk]);
+
+  /** Called after each survey resolution while a walk is active. */
+  const advanceWalk = useCallback(
+    (res: SurveyResolution) => {
+      const walk = walkRef.current;
+      if (!walk) return;
+      if (walk.timeout) {
+        clearTimeout(walk.timeout);
+        walk.timeout = null;
+      }
+      const pos = res.pos;
+      if (!pos || res.kind === 'lost') {
+        cancelWalk('position lost');
+        return;
+      }
+      if (res.moved === null && res.kind === 'stationary') {
+        // A manual survey mid-walk — our step hasn't resolved yet; keep waiting
+        walk.timeout = setTimeout(() => cancelWalk('no response from the MUD'), WALK_STEP_TIMEOUT);
+        return;
+      }
+      if (res.moved !== walk.path[walk.idx]) {
+        cancelWalk('unexpected movement');
+        return;
+      }
+      walk.idx += 1;
+      if (walk.idx >= walk.path.length) {
+        walkRef.current = null;
+        echoRef.current('[Map] Arrived.');
+        syncState();
+        return;
+      }
+      walk.stepDelay = setTimeout(() => sendWalkStep(), WALK_STEP_DELAY);
+      syncState();
+    },
+    [cancelWalk, sendWalkStep, syncState]
+  );
+
+  // ---------------------------------------------------------------------
+  // Parser wiring
+  // ---------------------------------------------------------------------
+
   if (!parserRef.current) {
     parserRef.current = new RoomParser((event) => {
+      const localizer = localizerRef.current;
       switch (event.type) {
-        case 'hex-room':
-          handleHexRoom(event.room);
+        case 'survey': {
+          const res = localizer.onSurvey({
+            art: event.art,
+            description: event.description,
+            now: Date.now(),
+          });
+          advanceWalk(res);
+          syncState();
+          scheduleSave();
           break;
+        }
         case 'move-failed':
-          movementTracker.current.onMoveFailed();
+          localizer.onMoveFailed(event.hard);
+          if (walkRef.current) cancelWalk('movement blocked');
+          if (event.hard) {
+            syncState();
+            scheduleSave();
+          }
+          break;
+        case 'forced-move':
+          localizer.trackForcedMove(event.dir, Date.now());
+          break;
+        case 'town-room':
+          localizer.onTownRoom();
+          if (walkRef.current) cancelWalk('entered a building');
           break;
       }
     });
@@ -226,81 +248,121 @@ export function useMapTracker(
     loadedCharRef.current = activeCharacter;
 
     (async () => {
-      const data = await dataStore.get<{
-        rooms: Record<string, MapRoom>;
-        currentRoomId: string | null;
-      }>(mapFilename(activeCharacter), 'mapData');
-      if (data) {
-        graphRef.current = deserializeGraph(data);
-        fpIndexRef.current = buildFingerprintIndex(graphRef.current);
-        if (graphRef.current.currentRoomId) {
-          movementTracker.current.setCurrentRoom(graphRef.current.currentRoomId);
-        }
-      } else {
-        graphRef.current = createGraph();
-        fpIndexRef.current = { exact: new Map(), prefix: new Map() };
-      }
+      const data = await dataStore.get<unknown>(mapFilename(activeCharacter), 'mapData');
+      mapRef.current = HexMapStore.deserialize(data);
+      localizerRef.current = new HexLocalizer(mapRef.current);
       syncState();
     })().catch(console.error);
 
+    const char = activeCharacter;
     return () => {
+      // Flush any pending debounced save for this character before switching
+      // away (the map ref still holds this character's data at cleanup time)
       if (saveTimerRef.current) {
         clearTimeout(saveTimerRef.current);
         saveTimerRef.current = null;
+        const data = mapRef.current.serialize();
+        dataStore.set(mapFilename(char), 'mapData', data).catch(console.error);
       }
     };
   }, [activeCharacter, dataStore, syncState]);
+
+  // ---------------------------------------------------------------------
+  // Actions
+  // ---------------------------------------------------------------------
 
   const feedLine = useCallback((line: string) => {
     parserRef.current?.feedLine(line);
   }, []);
 
-  const trackCommand = useCallback((command: string) => {
-    movementTracker.current.trackCommand(command);
-  }, []);
-
-  const findPathTo = useCallback((targetRoomId: string): PathResult | null => {
-    const graph = graphRef.current;
-    if (!graph.currentRoomId) return null;
-    return findPath(graph, graph.currentRoomId, targetRoomId);
-  }, []);
-
-  const getRoom = useCallback((id: string): MapRoom | undefined => {
-    return graphRef.current.rooms[id];
-  }, []);
-
-  const setRoomNotes = useCallback(
-    (roomId: string, notes: string) => {
-      const room = graphRef.current.rooms[roomId];
-      if (room) {
-        room.notes = notes;
-        syncState();
-        scheduleSave();
+  const trackCommand = useCallback(
+    (command: string) => {
+      const isDir = parseDirection(command.trim().toLowerCase()) !== null;
+      if (isDir && walkRef.current && !walkSendingRef.current) {
+        // The user moved manually while auto-walking — stop the walk
+        cancelWalk('manual movement');
       }
+      localizerRef.current.trackCommand(command, Date.now());
+    },
+    [cancelWalk]
+  );
+
+  const getCells = useCallback((): HexCell[] => {
+    const map = mapRef.current;
+    const island = map.pos?.island ?? map.primaryIsland();
+    return map.cellsOfIsland(island);
+  }, []);
+
+  const getCellAt = useCallback((q: number, r: number): HexCell | undefined => {
+    const map = mapRef.current;
+    const island = map.pos?.island ?? map.primaryIsland();
+    return map.get(island, q, r);
+  }, []);
+
+  const findPathTo = useCallback((q: number, r: number): Direction[] | null => {
+    const map = mapRef.current;
+    if (!map.pos) return null;
+    return map.findPath(map.pos, { island: map.pos.island, q, r });
+  }, []);
+
+  const walkTo = useCallback(
+    (q: number, r: number) => {
+      const map = mapRef.current;
+      if (!map.pos) return;
+      if (localizerRef.current.lost) {
+        echoRef.current('[Map] Cannot walk — position unknown.');
+        return;
+      }
+      const path = map.findPath(map.pos, { island: map.pos.island, q, r });
+      if (!path || path.length === 0) {
+        echoRef.current('[Map] No known route there.');
+        return;
+      }
+      cancelWalk();
+      walkRef.current = { path, idx: 0, target: { q, r }, timeout: null, stepDelay: null };
+      echoRef.current(`[Map] Walking ${path.length} hex${path.length === 1 ? '' : 'es'}...`);
+      syncState();
+      sendWalkStep();
+    },
+    [cancelWalk, sendWalkStep, syncState]
+  );
+
+  const setCellNotes = useCallback(
+    (q: number, r: number, notes: string) => {
+      const map = mapRef.current;
+      const island = map.pos?.island ?? map.primaryIsland();
+      map.setNotes(island, q, r, notes);
+      syncState();
+      scheduleSave();
     },
     [syncState, scheduleSave]
   );
 
   const clearMap = useCallback(() => {
-    graphRef.current = createGraph();
-    fpIndexRef.current = { exact: new Map(), prefix: new Map() };
-    movementTracker.current = new MovementTracker();
+    cancelWalk();
+    mapRef.current.clear();
+    localizerRef.current = new HexLocalizer(mapRef.current);
     syncState();
     scheduleSave();
-  }, [syncState, scheduleSave]);
+  }, [cancelWalk, syncState, scheduleSave]);
 
   const centerOnPlayer = useCallback(() => {
     setCenterVersion((v) => v + 1);
   }, []);
+
+  const cancelWalkAction = useCallback(() => cancelWalk('cancelled'), [cancelWalk]);
 
   return useMemo(
     () => ({
       ...state,
       feedLine,
       trackCommand,
+      getCells,
+      getCellAt,
       findPathTo,
-      getRoom,
-      setRoomNotes,
+      walkTo,
+      cancelWalk: cancelWalkAction,
+      setCellNotes,
       clearMap,
       centerOnPlayer,
       centerVersion,
@@ -309,9 +371,12 @@ export function useMapTracker(
       state,
       feedLine,
       trackCommand,
+      getCells,
+      getCellAt,
       findPathTo,
-      getRoom,
-      setRoomNotes,
+      walkTo,
+      cancelWalkAction,
+      setCellNotes,
       clearMap,
       centerOnPlayer,
       centerVersion,

@@ -1,51 +1,64 @@
 /**
- * Room output parser — detects DartMUD hex wilderness room descriptions.
+ * Room output parser — detects DartMUD hex wilderness surveys.
  *
- * Hex-only mapper: only parses wilderness hex rooms. Towns/dungeons are ignored.
+ * Hex-only mapper: only parses wilderness hex surveys. Towns/dungeons are
+ * ignored ("You gaze at your surroundings." only appears in the wilderness).
  *
- * Detection flow:
- * 1. "You gaze at your surroundings." → enter collecting-hex-art mode
- * 2. Collect ASCII hex art lines into a buffer
- * 3. When hex art ends, parse it via hexArtParser → extract terrain fingerprint
- * 4. Collect wilderness description lines
- * 5. Extract terrain + landmarks + fingerprint, emit parsed hex room event
+ * IMPORTANT: feedLine must receive lines with leading whitespace intact —
+ * hex art is column-aligned ASCII and left-trimming destroys it. Use the
+ * OutputFilter's onMapLine callback (untrimmed), never the trimmed onLine
+ * variant.
  *
- * "You gaze at your surroundings." is the only entry point. It only appears
- * in the hex wilderness, so towns/dungeons are never processed.
+ * Corpus facts this parser relies on (validated against 158,914 surveys in
+ * 5 years of logs):
+ *  - Art blocks are always contiguous — nothing interleaves inside them.
+ *  - Only weather one-liners can appear between the gaze line and the art.
+ *  - The top border's column encodes the ring count (col = 6R + 2), and a
+ *    view with R rings is exactly 8R + 5 lines tall (R = 0, 1, or 2).
+ *  - In pitch black there is no gaze line at all; in dim light the art
+ *    shrinks to a single hex.
  */
 
-import { detectHexTerrain, type HexTerrainType } from './hexTerrainPatterns';
-import {
-  isHexArtLine,
-  parseHexArt,
-  generateFingerprint,
-  type ParsedHexArt,
-} from './hexArtParser';
+import { isHexArtLine, parseHexArt, type ParsedHexArt } from './hexArtParser';
+import { parseDirection, type Direction } from './hexUtils';
 
 // ---------------------------------------------------------------------------
 // Types
 // ---------------------------------------------------------------------------
 
-export interface ParsedHexRoom {
-  terrain: HexTerrainType;
-  description: string;
-  landmarks: string[];
-  /** Terrain fingerprint from hex art (null if no hex art was parsed) */
-  fingerprint: string | null;
-  /** Full parsed hex art data (null if no hex art was parsed) */
-  hexArt: ParsedHexArt | null;
-}
-
-export type RoomParserEvent = { type: 'hex-room'; room: ParsedHexRoom } | { type: 'move-failed' };
+export type RoomParserEvent =
+  | {
+      type: 'survey';
+      /** Parsed hex art, or null when no readable art followed the gaze line */
+      art: ParsedHexArt | null;
+      description: string;
+    }
+  | {
+      type: 'move-failed';
+      /** True when the block is physical terrain (worth marking on the map) */
+      hard: boolean;
+    }
+  | {
+      type: 'forced-move';
+      /** Someone led/dragged the player in this hex direction */
+      dir: Direction;
+    }
+  | {
+      /**
+       * A non-hex room was entered (towns/caves print an exits line;
+       * wilderness hexes never do). Pending hex moves are stale.
+       */
+      type: 'town-room';
+    };
 
 // ---------------------------------------------------------------------------
 // Patterns
 // ---------------------------------------------------------------------------
 
-/** Survey command trigger */
+/** Survey trigger — printed on every wilderness move and manual survey */
 const SURVEY_RE = /^(?:> )*You gaze at your surroundings\./;
 
-/** Wilderness room starts — description lines */
+/** Wilderness description start */
 const WILDERNESS_START_RE =
   /^(?:> )*(?:You are (?:in|on|at|standing)|This is (?:a |an |the )|The ground is |A vast |The )/;
 
@@ -55,27 +68,71 @@ const HEALTH_STATUS_RE =
 
 /** Lighting sentences that end room descriptions */
 const LIGHTING_RE =
-  /It is (?:shadowy|dim|bright|painfully bright|blindingly bright|extremely light here|well lit here|pitch black|dark here|dark)\./;
+  /It is (?:shadowy|dim|bright(?: here)?|painfully bright|blindingly bright|extremely light here|well lit here|dimly lit here|murky here|pitch black|dark here|dark)\./;
 
-/** Failed movement messages */
-const MOVE_FAIL_RE =
-  /^(?:> )*(?:There is no exit in that direction\.|The .+ is closed\.|You (?:can't|cannot) go that way\.|You can't see to move!|You must swim )/;
+/**
+ * Movement blocked by PHYSICAL TERRAIN — safe to record as a blocked edge.
+ * (Mined from 5 years of logs.)
+ */
+const MOVE_FAIL_HARD_RE =
+  /^(?:> )*(?:There is no exit in that direction\.|You must swim|You (?:can't|cannot) go that way\.|The exit \w+ is blocked!|The (?:shimmering red )?field sparks and (?:pushes you back|blocks you)|A shimmering field blocks your way\.)/;
+
+/**
+ * Movement failed for a TRANSIENT reason (mount, posture, exhaustion, NPC
+ * blockers, closed doors) — drop the pending move but don't mark the map.
+ */
+const MOVE_FAIL_SOFT_RE =
+  /^(?:> )*(?:The .{1,40} is closed\.|You can't see to move!|You'll have to dismount first\.|You cannot ride (?:indoors|a hitched mount)|Invalid direction to lead to\.|You are not allowed back there|The portcullis is lowered!|[^'"]{1,60} (?:moves to block your (?:way|path)|steps out of the back room and blocks your way)|You have no free hands with which to climb\.|You (?:have to stand|'ll have to get) up first|You are too (?:exhausted|tired)|You're too injured to move\.|You're unconscious!)/;
+
+/** Forced movement: a group leader moves the player */
+const FORCED_MOVE_RE =
+  /^(?:> )*\w+ leads you (north(?:east|west)?|south(?:east|west)?)\b/;
+
+/** Exits line — printed by town/dungeon rooms, never by wilderness hexes */
+const EXITS_LINE_RE =
+  /^(?:> )*There (?:is one obvious exit|are (?:two|three|four|five|six|seven|eight|nine|ten|many) exits):/;
 
 /** Lines that are clearly NOT part of a wilderness description */
 const NON_WILDERNESS_RE =
-  /^(?:> )*(?:There (?:is one obvious exit|are (?:two|three|four|five|six|seven|eight|nine|ten|many) exits):|< .+ >$|Held|Worn|Concentration|Encumbrance|Movement|Aura|Needs|\* |> $|\(|$)/;
+  /^(?:> )*(?:There (?:is one obvious exit|are (?:two|three|four|five|six|seven|eight|nine|ten|many) exits):|< .+ >$|Held|Worn|Concentration|Encumbrance|Movement|Aura|Needs|\* |> ?$|\()/;
 
 // ---------------------------------------------------------------------------
 // State machine
 // ---------------------------------------------------------------------------
 
-type ParserState = 'idle' | 'collecting-hex-art' | 'reading-description';
+type ParserState = 'idle' | 'awaiting-art' | 'in-art' | 'post-art';
+
+/** Max non-art lines tolerated between the gaze line and the art (weather) */
+const MAX_PRE_ART_LINES = 4;
+/** Max description lines */
+const MAX_DESC_LINES = 12;
+/** Max post-art lines to wait for a description before emitting without one */
+const MAX_POST_ART_WAIT = 3;
+
+/** Border/structural chars valid in a top border */
+const TOP_BORDER_RE = /^[-*cx=]{5}/;
+
+/**
+ * If `line` looks like the top border of hex art, return the total expected
+ * art line count (8R + 5), else null. The border column encodes ring count.
+ */
+function expectedArtLines(line: string): number | null {
+  const match = line.match(/^( *)([-*cx=]{4,})/);
+  if (!match) return null;
+  const col = match[1].length;
+  if (col < 2 || (col - 2) % 6 !== 0) return null;
+  const rings = (col - 2) / 6;
+  if (rings > 2) return null;
+  return 8 * rings + 5;
+}
 
 export class RoomParser {
   private state: ParserState = 'idle';
+  private artLines: string[] = [];
+  private artExpected: number | null = null;
   private descLines: string[] = [];
-  private hexArtLines: string[] = [];
   private linesSinceStart = 0;
+  private postArtWait = 0;
   private onEvent: (event: RoomParserEvent) => void;
 
   constructor(onEvent: (event: RoomParserEvent) => void) {
@@ -83,168 +140,192 @@ export class RoomParser {
   }
 
   /**
-   * Feed a stripped (no ANSI) line to the parser.
+   * Feed an ANSI-stripped line WITH leading whitespace preserved.
    */
   feedLine(rawLine: string): void {
-    const line = rawLine.replace(/^(?:> )+/, '').trimEnd();
-
-    // Check for failed movement (any state)
-    if (MOVE_FAIL_RE.test(rawLine)) {
-      this.reset();
-      this.onEvent({ type: 'move-failed' });
-      return;
-    }
+    // Strip trailing CR/LF only — leading whitespace is meaningful in hex art
+    const line = rawLine.replace(/[\r\n]+$/, '');
+    const trimmed = line.trim();
 
     switch (this.state) {
       case 'idle':
-        this.handleIdle(line, rawLine);
+        this.handleIdle(line);
         break;
-      case 'collecting-hex-art':
-        this.handleCollectingHexArt(line, rawLine);
+      case 'awaiting-art':
+        this.handleAwaitingArt(line, trimmed);
         break;
-      case 'reading-description':
-        this.handleDescription(line, rawLine);
+      case 'in-art':
+        this.handleInArt(line, trimmed);
+        break;
+      case 'post-art':
+        this.handlePostArt(line, trimmed);
         break;
     }
   }
 
-  private handleIdle(_line: string, rawLine: string): void {
-    // "You gaze at your surroundings." is the ONLY entry point.
-    // It always precedes hex art in the wilderness. Nothing else triggers collection.
-    if (SURVEY_RE.test(rawLine)) {
-      this.state = 'collecting-hex-art';
-      this.descLines = [];
-      this.hexArtLines = [];
-      this.linesSinceStart = 0;
+  private startSurvey(): void {
+    this.state = 'awaiting-art';
+    this.artLines = [];
+    this.artExpected = null;
+    this.descLines = [];
+    this.linesSinceStart = 0;
+    this.postArtWait = 0;
+  }
+
+  private handleIdle(line: string): void {
+    if (SURVEY_RE.test(line)) {
+      this.startSurvey();
+      return;
+    }
+    if (MOVE_FAIL_HARD_RE.test(line)) {
+      this.onEvent({ type: 'move-failed', hard: true });
+      return;
+    }
+    if (MOVE_FAIL_SOFT_RE.test(line)) {
+      this.onEvent({ type: 'move-failed', hard: false });
+      return;
+    }
+    const forced = FORCED_MOVE_RE.exec(line);
+    if (forced) {
+      const dir = parseDirection(forced[1]);
+      if (dir) this.onEvent({ type: 'forced-move', dir });
+      return;
+    }
+    if (EXITS_LINE_RE.test(line)) {
+      this.onEvent({ type: 'town-room' });
     }
   }
 
-  private handleCollectingHexArt(line: string, rawLine: string): void {
-    this.linesSinceStart++;
-
-    // Safety: if we've been in hex art too long, something went wrong
-    if (this.linesSinceStart > 30) {
-      this.reset();
+  private handleAwaitingArt(line: string, trimmed: string): void {
+    // A new gaze while waiting → previous survey had no art (blind)
+    if (SURVEY_RE.test(line)) {
+      this.onEvent({ type: 'survey', art: null, description: '' });
+      this.startSurvey();
       return;
     }
 
-    // Skip empty lines within hex art (padding before/between art)
-    if (!line) {
-      if (this.hexArtLines.length > 0 && this.hexArtLines.length < 3) return;
-      // Empty line after significant hex art — transition to description
-      if (this.hexArtLines.length >= 3) {
-        this.state = 'reading-description';
-        this.linesSinceStart = 0;
+    if (TOP_BORDER_RE.test(trimmed) && isHexArtLine(line)) {
+      this.state = 'in-art';
+      this.artLines = [line];
+      this.artExpected = expectedArtLines(line);
+      this.linesSinceStart = 0;
+      return;
+    }
+
+    this.linesSinceStart++;
+    // Tolerate blanks and weather one-liners ("You sweat in the heat.")
+    if (this.linesSinceStart <= MAX_PRE_ART_LINES && (!trimmed || trimmed.length < 60)) {
+      return;
+    }
+
+    // No art is coming — blind survey (mini-map mode or vision oddity)
+    this.onEvent({ type: 'survey', art: null, description: '' });
+    this.reset();
+    // Reprocess this line in idle so move-fail / new gaze lines aren't lost
+    this.handleIdle(line);
+  }
+
+  private handleInArt(line: string, trimmed: string): void {
+    if (SURVEY_RE.test(line)) {
+      // Next survey started immediately (spammed movement)
+      this.emitSurvey();
+      this.startSurvey();
+      return;
+    }
+
+    // Art blocks are contiguous (corpus-validated): collect until the
+    // expected line count is reached. Bail early only on lines that clearly
+    // can't be art (blank / description start).
+    if (this.artExpected !== null && this.artLines.length < this.artExpected) {
+      if (!trimmed) {
+        this.finishArt('');
         return;
       }
+      if (WILDERNESS_START_RE.test(line) && !HEALTH_STATUS_RE.test(line)) {
+        this.finishArt(line);
+        return;
+      }
+      this.artLines.push(line);
+      if (this.artLines.length >= this.artExpected) {
+        this.finishArt('');
+      }
       return;
     }
 
-    // Still in hex art?
+    // Unknown expected count (unrecognized top border) — heuristic collection
     if (isHexArtLine(line)) {
-      this.hexArtLines.push(line);
+      if (this.artLines.length > 40) {
+        this.finishArt('');
+        return;
+      }
+      this.artLines.push(line);
       return;
     }
-
-    // First non-hex-art, non-empty line: hex art is done, transition to description
-    if (
-      WILDERNESS_START_RE.test(rawLine) &&
-      !HEALTH_STATUS_RE.test(rawLine)
-    ) {
-      this.descLines = [line];
-      this.state = 'reading-description';
-      this.linesSinceStart = 1;
-      return;
-    }
-
-    if (!NON_WILDERNESS_RE.test(rawLine) && line.length > 0) {
-      this.descLines = [line];
-      this.state = 'reading-description';
-      this.linesSinceStart = 1;
-      return;
-    }
-
-    // Got something unexpected — reset
-    this.reset();
+    this.finishArt(trimmed ? line : '');
   }
 
-  private handleDescription(line: string, _rawLine: string): void {
-    this.linesSinceStart++;
-
-    // Limit description length
-    if (this.linesSinceStart > 12) {
-      this.emitHexRoom();
-      return;
+  private finishArt(pendingLine: string): void {
+    this.state = 'post-art';
+    this.postArtWait = 0;
+    this.descLines = [];
+    if (pendingLine) {
+      this.handlePostArt(pendingLine, pendingLine.trim());
     }
-
-    // Empty line ends description
-    if (!line) {
-      this.emitHexRoom();
-      return;
-    }
-
-    // Lighting sentence ends description
-    if (LIGHTING_RE.test(line)) {
-      this.descLines.push(line);
-      this.emitHexRoom();
-      return;
-    }
-
-    // Non-wilderness content (exit lines, status, etc.) ends description
-    if (NON_WILDERNESS_RE.test(line)) {
-      this.emitHexRoom();
-      return;
-    }
-
-    this.descLines.push(line);
   }
 
-  private emitHexRoom(): void {
+  private handlePostArt(line: string, trimmed: string): void {
+    if (SURVEY_RE.test(line)) {
+      this.emitSurvey();
+      this.startSurvey();
+      return;
+    }
+
     if (this.descLines.length === 0) {
-      this.reset();
+      // Waiting for the description to start
+      if (
+        WILDERNESS_START_RE.test(line) &&
+        !HEALTH_STATUS_RE.test(line) &&
+        !NON_WILDERNESS_RE.test(line)
+      ) {
+        this.descLines = [trimmed];
+        if (LIGHTING_RE.test(trimmed)) this.emitSurvey();
+        return;
+      }
+      this.postArtWait++;
+      if (this.postArtWait >= MAX_POST_ART_WAIT || NON_WILDERNESS_RE.test(line)) {
+        this.emitSurvey();
+        this.handleIdle(line);
+      }
       return;
     }
 
-    const fullDescription = this.descLines.join(' ');
-    const terrain = detectHexTerrain(fullDescription);
-
-    // Extract landmarks from lines after the first (main description)
-    const landmarks: string[] = [];
-    for (let i = 1; i < this.descLines.length; i++) {
-      const l = this.descLines[i].trim();
-      if (l && !LIGHTING_RE.test(l)) {
-        landmarks.push(l);
-      }
+    // Collecting description lines
+    if (!trimmed || NON_WILDERNESS_RE.test(line)) {
+      this.emitSurvey();
+      if (trimmed) this.handleIdle(line);
+      return;
     }
 
-    // Parse hex art and generate fingerprint if we collected art lines
-    let fingerprint: string | null = null;
-    let hexArt: ParsedHexArt | null = null;
-    if (this.hexArtLines.length >= 5) {
-      hexArt = parseHexArt(this.hexArtLines);
-      if (hexArt) {
-        fingerprint = generateFingerprint(hexArt);
-      }
+    this.descLines.push(trimmed);
+
+    if (LIGHTING_RE.test(trimmed) || this.descLines.length >= MAX_DESC_LINES) {
+      this.emitSurvey();
     }
+  }
 
-    this.onEvent({
-      type: 'hex-room',
-      room: {
-        terrain,
-        description: fullDescription,
-        landmarks,
-        fingerprint,
-        hexArt,
-      },
-    });
-
+  private emitSurvey(): void {
+    const art = this.artLines.length >= 5 ? parseHexArt(this.artLines) : null;
+    const description = this.descLines.join(' ');
+    this.onEvent({ type: 'survey', art, description });
     this.reset();
   }
 
   private reset(): void {
     this.state = 'idle';
+    this.artLines = [];
+    this.artExpected = null;
     this.descLines = [];
-    this.hexArtLines = [];
     this.linesSinceStart = 0;
+    this.postArtWait = 0;
   }
 }

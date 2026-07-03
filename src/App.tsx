@@ -95,11 +95,10 @@ import { stripAnsi } from './lib/ansiUtils';
 import { SignatureProvider } from './contexts/SignatureContext';
 import { parseConvertCommand, formatMultiConversion } from './lib/currency';
 import { dispatchBuiltinCommand, type BuiltinContext } from './lib/builtinCommands';
-// Automapper disabled
-// import { useMapTracker } from './hooks/useMapTracker';
-// import { MapProvider } from './contexts/MapContext';
+import { useMapTracker } from './hooks/useMapTracker';
+import { MapProvider } from './contexts/MapContext';
 import { PanelProvider } from './contexts/PanelLayoutContext';
-// import { MapPanel } from './components/MapPanel';
+import { MapPanel } from './components/MapPanel';
 import { useAllocations } from './hooks/useAllocations';
 import { AllocProvider } from './contexts/AllocContext';
 import { AllocPanel } from './components/AllocPanel';
@@ -593,6 +592,8 @@ function AppMain() {
       onAlignment: (match) => updateAlignmentRef.current(match),
       onChat: (msg) => handleChatMessageRef.current(msg),
       onWho: (snapshot) => updateWhoSnapshotRef.current(snapshot),
+      // Automapper feed — untrimmed lines (hex art needs its leading whitespace)
+      onMapLine: (line) => mapFeedLineRef.current(line),
       onLine: (stripped, raw) => {
         // Action blocker — check for unblock triggers
         const blocker = actionBlockerRef.current;
@@ -614,6 +615,7 @@ function AppMain() {
           // Flush queued commands via raw sendCommand (bypasses blocker)
           (async () => {
             for (const cmd of toSend) {
+              mapTrackCommandRef.current(cmd);
               await sendCommand(cmd);
             }
           })();
@@ -627,9 +629,6 @@ function AppMain() {
 
         // Auto-conc — watch for BEBT to execute action
         autoConcRef.current.processServerLine(stripped);
-
-        // Feed to automapper room parser — disabled
-        // mapFeedLineRef.current(stripped);
 
         // Feed to allocation parser
         const allocResult = allocParserRef.current?.feedLine(stripped);
@@ -997,10 +996,19 @@ function AppMain() {
   const { resolveSignature } = signatureState;
   const resolveSignatureRef = useLatestRef(resolveSignature);
 
-  // Map tracker — disabled (automapper not ready)
-  // const mapTracker = useMapTracker(dataStore, activeCharacter);
-  // const mapFeedLineRef = useLatestRef(mapTracker.feedLine);
-  // const mapTrackCommandRef = useLatestRef(mapTracker.trackCommand);
+  // Map tracker — hex wilderness automapper
+  const mapSendDirection = useCallback(async (dir: string) => {
+    await triggerRunnerRef.current.send(dir);
+  }, []);
+  const mapEcho = useCallback(
+    (message: string) => {
+      writeToTermRef.current(`\x1b[38;5;179m${message}\x1b[0m\r\n`);
+    },
+    [writeToTermRef]
+  );
+  const mapTracker = useMapTracker(dataStore, activeCharacter, mapSendDirection, mapEcho);
+  const mapFeedLineRef = useLatestRef(mapTracker.feedLine);
+  const mapTrackCommandRef = useLatestRef(mapTracker.trackCommand);
 
   // Allocation tracker
   const allocState = useAllocations(sendCommandRef, dataStore, activeCharacter);
@@ -1130,6 +1138,8 @@ function AppMain() {
       const cat = blocker.shouldBlock(command);
       if (cat) blocker.block(cat);
     }
+    // Automapper — track outgoing movement commands (post movement-mode)
+    mapTrackCommandRef.current(command);
     await sendCommand(command);
   };
 
@@ -1143,7 +1153,6 @@ function AppMain() {
         movementModeRef.current !== 'normal'
           ? applyMovementMode(text, movementModeRef.current)
           : text;
-      // mapTrackCommandRef.current(finalText); // automapper disabled
       await sendCommandRef.current?.(finalText);
     },
     echo: (text) => {
@@ -1494,7 +1503,6 @@ function AppMain() {
             movementModeRef.current !== 'normal'
               ? applyMovementMode(text, movementModeRef.current)
               : text;
-          // mapTrackCommandRef.current(finalText); // automapper disabled
           await sendCommandRef.current?.(finalText);
           // Update live allocs directly from outgoing set commands
           const parsed = parseAllocCommand(text);
@@ -2229,16 +2237,6 @@ function AppMain() {
     [appSettings, switchCharacter, connected]
   );
 
-  // Automapper disabled — leave for future use
-  // const handleMapWalkTo = useCallback(
-  //   async (directions: string[]) => {
-  //     for (const dir of directions) {
-  //       await sendCommand(dir);
-  //     }
-  //   },
-  //   [sendCommand]
-  // );
-
   return (
     <TerminalThemeProvider value={theme}>
       <AppSettingsProvider value={appSettingsWithExtras}>
@@ -2251,7 +2249,7 @@ function AppMain() {
                     <SkillTrackerProvider value={skillTrackerValue}>
                       <ChatProvider value={chatValue}>
                         <ImproveCounterProvider value={counterValue}>
-                          {/* MapProvider disabled — automapper not ready */}
+                          <MapProvider value={mapTracker}>
                             <AllocProvider value={allocState}>
                               <WhoProvider value={whoValue}>
                                 <WhoTitleProvider value={whoTitleState}>
@@ -2490,11 +2488,9 @@ function AppMain() {
                                             onClose={closePanel}
                                           />
                                         </SlideOut>
-                                        {/* Automapper disabled
                                         <SlideOut panel="map" pinnable="map">
-                                          <MapPanel mode="slideout" onWalkTo={handleMapWalkTo} />
+                                          <MapPanel mode="slideout" />
                                         </SlideOut>
-                                        */}
                                         <SlideOut panel="alloc" pinnable="alloc">
                                           <AllocPanel mode="slideout" />
                                         </SlideOut>
@@ -2524,7 +2520,7 @@ function AppMain() {
                                 </WhoTitleProvider>
                               </WhoProvider>
                             </AllocProvider>
-                          {/* </MapProvider> */}
+                          </MapProvider>
                         </ImproveCounterProvider>
                       </ChatProvider>
                     </SkillTrackerProvider>

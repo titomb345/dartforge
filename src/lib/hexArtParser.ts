@@ -29,10 +29,16 @@ export interface ParsedHexArt {
   hexes: Map<string, HexTerrainType>;
   /** Number of rings visible (0, 1, or 2) */
   rings: number;
-  /** Landmark entries found in the art legend */
-  landmarks: { label: string; description: string; q: number; r: number }[];
+  /**
+   * Landmark entries found in the art legend. q/r are the landmark's hex
+   * relative to center, or null when the label char couldn't be located
+   * unambiguously in the art.
+   */
+  landmarks: { label: string; description: string; q: number | null; r: number | null }[];
   /** The raw art lines (for debugging) */
   rawLines: string[];
+  /** Which parser produced this result (template = high confidence) */
+  source: 'template' | 'search';
 }
 
 /** A detected hex border in the art */
@@ -62,7 +68,7 @@ const TERRAIN_CHARS = new Set(Object.keys(TERRAIN_CHAR_MAP));
 const BORDER_RE = /[-*cx]{5}/g;
 
 /** Landmark annotation on the right side of hex art: "  X) description..." */
-const LANDMARK_SUFFIX_RE = /\s+[A-Za-z0-9#+]\)\s+\S.*$/;
+const LANDMARK_SUFFIX_RE = /\s+[A-Za-z0-9#+@?^~!]\)\s+\S.*$/;
 
 /**
  * Continuation text from multi-line landmark descriptions, e.g.:
@@ -288,10 +294,15 @@ function assignCoordinates(
 // ---------------------------------------------------------------------------
 
 /**
- * Extract terrain type from a hex cell by sampling characters between its borders.
+ * Extract terrain type from a hex cell by sampling characters between its
+ * borders, along with any landmark label characters found inside the cell.
  */
-function extractTerrain(cell: HexCell, lines: string[]): HexTerrainType {
+function extractCellData(
+  cell: HexCell,
+  lines: string[]
+): { terrain: HexTerrainType; labelChars: Map<string, number> } {
   const terrainCounts = new Map<string, number>();
+  const labelChars = new Map<string, number>();
 
   // Sample 3 content lines between top and bottom borders
   const startLine = cell.topBorder.line + 1;
@@ -312,6 +323,8 @@ function extractTerrain(cell: HexCell, lines: string[]): HexTerrainType {
       const ch = line[col];
       if (TERRAIN_CHARS.has(ch)) {
         terrainCounts.set(ch, (terrainCounts.get(ch) || 0) + 1);
+      } else if (/[0-9A-Z#+]/.test(ch)) {
+        labelChars.set(ch, (labelChars.get(ch) || 0) + 1);
       }
     }
   }
@@ -326,11 +339,9 @@ function extractTerrain(cell: HexCell, lines: string[]): HexTerrainType {
     }
   }
 
-  if (bestChar && TERRAIN_CHAR_MAP[bestChar]) {
-    return TERRAIN_CHAR_MAP[bestChar];
-  }
-
-  return 'unknown';
+  const terrain =
+    bestChar && TERRAIN_CHAR_MAP[bestChar] ? TERRAIN_CHAR_MAP[bestChar] : ('unknown' as const);
+  return { terrain, labelChars };
 }
 
 // ---------------------------------------------------------------------------
@@ -342,8 +353,9 @@ function parseLandmarks(
   lines: string[]
 ): { label: string; description: string }[] {
   const landmarks: { label: string; description: string }[] = [];
-  // Landmarks appear as "X) description" on the right side of art lines
-  const LANDMARK_RE = /\s+([A-Z0-9])\)\s+(.+)$/;
+  // Landmarks appear as "X) description" on the right side of art lines.
+  // Labels can be digits, letters, or symbols — even terrain chars (^ ~ !).
+  const LANDMARK_RE = /\s+([A-Za-z0-9#+@?^~!])\)\s+(\S.*)$/;
 
   for (const line of lines) {
     const match = LANDMARK_RE.exec(line);
@@ -359,13 +371,163 @@ function parseLandmarks(
 // Main parser
 // ---------------------------------------------------------------------------
 
+// ---------------------------------------------------------------------------
+// Template parser (primary)
+// ---------------------------------------------------------------------------
+//
+// DartMUD renders hex art from a fixed template. For a view with R rings:
+//   - the art is exactly 8R + 5 lines tall
+//   - the top border of cell (q, r) sits at line 4R + 2q + 4r, column 6q + 6R + 2
+//   - each border is 5 chars wide; cell content occupies the 3 lines between
+//     consecutive borders
+// This makes extraction deterministic and immune to terrain noise — critical
+// in deserts, where the terrain char '-' is the same as the border char.
+
+/** Border/structural chars that may appear at border positions */
+const BORDER_CHARS = new Set(['-', '*', 'c', 'x', '=']);
+
+/**
+ * Try to parse hex art using the fixed template. Returns null when the art
+ * doesn't validate against the template (caller falls back to search parsing).
+ */
+function parseHexArtTemplate(artLines: string[]): ParsedHexArt | null {
+  if (artLines.length < 5) return null;
+
+  // Locate the top border on the first line: a 5-char border run whose
+  // column encodes the ring count (col = 6R + 2).
+  const first = artLines[0];
+  let topCol = -1;
+  for (let col = 0; col + 5 <= first.length; col++) {
+    if (
+      BORDER_CHARS.has(first[col]) &&
+      BORDER_CHARS.has(first[col + 1]) &&
+      BORDER_CHARS.has(first[col + 2]) &&
+      BORDER_CHARS.has(first[col + 3]) &&
+      BORDER_CHARS.has(first[col + 4])
+    ) {
+      topCol = col;
+      break;
+    }
+    if (first[col] !== ' ') return null; // unexpected leading content
+  }
+  if (topCol < 2 || (topCol - 2) % 6 !== 0) return null;
+
+  const rings = (topCol - 2) / 6;
+  if (rings > 4) return null;
+
+  // Cell specs sorted by top-border line (top-to-bottom processing order)
+  const cellsSpec: { q: number; r: number; line: number; col: number }[] = [];
+  for (let q = -rings; q <= rings; q++) {
+    const rMin = Math.max(-rings, -rings - q);
+    const rMax = Math.min(rings, rings - q);
+    for (let r = rMin; r <= rMax; r++) {
+      cellsSpec.push({ q, r, line: 4 * rings + 2 * q + 4 * r, col: 6 * q + 6 * rings + 2 });
+    }
+  }
+  cellsSpec.sort((a, b) => a.line - b.line || a.col - b.col);
+
+  // Validate borders per cell (4 of 5 chars must be border chars — terrain
+  // noise can bleed 1 char). Line fragmentation shifts every row after the
+  // break, so stop at the first bad border row and keep only the clean top
+  // portion of the art. This turns interrupted/truncated art into a correct
+  // partial patch instead of a scrambled full one.
+  const validBorderRow = (lineIdx: number, col: number): boolean => {
+    const line = artLines[lineIdx];
+    if (line === undefined) return false;
+    let borderChars = 0;
+    for (let i = 0; i < 5; i++) {
+      const ch = line[col + i];
+      if (ch !== undefined && BORDER_CHARS.has(ch)) borderChars++;
+    }
+    return borderChars >= 4;
+  };
+
+  let firstBadLine = Infinity;
+  for (const spec of cellsSpec) {
+    for (const borderLine of [spec.line, spec.line + 4]) {
+      if (borderLine >= firstBadLine) continue;
+      if (!validBorderRow(borderLine, spec.col)) {
+        firstBadLine = Math.min(firstBadLine, borderLine);
+      }
+    }
+  }
+
+  const validCells = cellsSpec.filter((spec) => spec.line + 4 < firstBadLine);
+  // Not enough clean structure to trust the template — let the caller fall back
+  // (0-ring art has a single cell, so accept whatever the layout can hold)
+  if (validCells.length < Math.min(4, cellsSpec.length)) return null;
+
+  // Extract terrain + labels per cell
+  const hexes = new Map<string, HexTerrainType>();
+  const labelOccurrences = new Map<string, { q: number; r: number; count: number }[]>();
+
+  for (const spec of validCells) {
+    const terrainCounts = new Map<string, number>();
+    const cellLabels = new Map<string, number>();
+    for (let lineIdx = spec.line + 1; lineIdx <= spec.line + 3; lineIdx++) {
+      const line = artLines[lineIdx];
+      if (line === undefined) continue;
+      for (let col = spec.col - 1; col <= spec.col + 5; col++) {
+        if (col < 0 || col >= line.length) continue;
+        const ch = line[col];
+        if (TERRAIN_CHARS.has(ch)) {
+          terrainCounts.set(ch, (terrainCounts.get(ch) || 0) + 1);
+        } else if (/[0-9A-Z#+@?o]/.test(ch)) {
+          cellLabels.set(ch, (cellLabels.get(ch) || 0) + 1);
+        }
+      }
+    }
+
+    let bestChar = '';
+    let bestCount = 0;
+    for (const [ch, count] of terrainCounts) {
+      if (count > bestCount) {
+        bestChar = ch;
+        bestCount = count;
+      }
+    }
+    hexes.set(
+      `${spec.q},${spec.r}`,
+      bestChar && TERRAIN_CHAR_MAP[bestChar] ? TERRAIN_CHAR_MAP[bestChar] : 'unknown'
+    );
+
+    for (const [ch, count] of cellLabels) {
+      const list = labelOccurrences.get(ch) ?? [];
+      list.push({ q: spec.q, r: spec.r, count });
+      labelOccurrences.set(ch, list);
+    }
+  }
+
+  const rawLandmarks = parseLandmarks(artLines);
+  const landmarks = rawLandmarks.map((l) => {
+    const occurrences = labelOccurrences.get(l.label);
+    if (occurrences && occurrences.length === 1 && occurrences[0].count === 1) {
+      return { ...l, q: occurrences[0].q, r: occurrences[0].r };
+    }
+    return { ...l, q: null, r: null };
+  });
+
+  return { hexes, rings, landmarks, rawLines: artLines, source: 'template' };
+}
+
 /**
  * Parse DartMUD hex art lines into structured terrain data.
+ * Uses the fixed-template parser first; falls back to search-based parsing
+ * for art that doesn't match the template.
  *
  * @param artLines - The raw hex art lines (after "You gaze at your surroundings." and blank line)
  * @returns Parsed hex data with terrain for each visible hex, or null if parsing fails
  */
 export function parseHexArt(artLines: string[]): ParsedHexArt | null {
+  const templated = parseHexArtTemplate(artLines);
+  if (templated) return templated;
+  return parseHexArtSearch(artLines);
+}
+
+/**
+ * Search-based fallback parser (the original implementation).
+ */
+function parseHexArtSearch(artLines: string[]): ParsedHexArt | null {
   if (artLines.length < 5) return null;
 
   // Step 0: Strip landmark annotations from art lines for parsing
@@ -396,27 +558,38 @@ export function parseHexArt(artLines: string[]): ParsedHexArt | null {
   const cells = assignCoordinates(columnGroups, ringCount);
   if (cells.length === 0) return null;
 
-  // Step 5: Extract terrain for each cell (use cleaned lines for terrain detection)
+  // Step 5: Extract terrain + label chars for each cell (use cleaned lines)
   const hexes = new Map<string, HexTerrainType>();
+  const labelOccurrences = new Map<string, { cell: HexCell; count: number }[]>();
   for (const cell of cells) {
-    const terrain = extractTerrain(cell, cleanedLines);
+    const { terrain, labelChars } = extractCellData(cell, cleanedLines);
     hexes.set(`${cell.q},${cell.r}`, terrain);
+    for (const [ch, count] of labelChars) {
+      const list = labelOccurrences.get(ch) ?? [];
+      list.push({ cell, count });
+      labelOccurrences.set(ch, list);
+    }
   }
 
-  // Step 6: Parse landmarks
+  // Step 6: Parse landmarks and locate each label char in the art.
+  // A landmark gets a position only when its label char appears in exactly
+  // one cell (always true for digits/uppercase labels; lowercase labels that
+  // collide with terrain chars stay unpositioned).
   const rawLandmarks = parseLandmarks(artLines);
-  // TODO: Map landmarks to hex positions by finding their indicator chars in the art
-  const landmarks = rawLandmarks.map((l) => ({
-    ...l,
-    q: 0,
-    r: 0, // placeholder — needs hex position mapping
-  }));
+  const landmarks = rawLandmarks.map((l) => {
+    const occurrences = labelOccurrences.get(l.label);
+    if (occurrences && occurrences.length === 1 && occurrences[0].count === 1) {
+      return { ...l, q: occurrences[0].cell.q, r: occurrences[0].cell.r };
+    }
+    return { ...l, q: null, r: null };
+  });
 
   return {
     hexes,
     rings: ringCount,
     landmarks,
     rawLines: artLines,
+    source: 'search',
   };
 }
 

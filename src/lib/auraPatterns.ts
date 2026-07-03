@@ -277,7 +277,7 @@ export function matchAuraLine(line: string, rawLine?: string): AuraMatch | null 
   }
 
   // Strip optional "Aura : " prefix (score output keeps the full sentence after it)
-  let text = stripScorePrefix(cleaned, 'Aura');
+  const text = stripScorePrefix(cleaned, 'Aura');
   if (text !== cleaned) {
     // "Aura : None." / "Aura : You have no aura." / "Aura : You appear to have no aura."
     const lower = text.replace(/\.$/, '').toLowerCase();

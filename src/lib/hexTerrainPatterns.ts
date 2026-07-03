@@ -11,6 +11,7 @@ export type HexTerrainType =
   | 'plains'
   | 'mountains'
   | 'water'
+  | 'river'
   | 'ocean'
   | 'farmland'
   | 'woods'
@@ -26,6 +27,7 @@ export const TERRAIN_CHAR_MAP: Record<string, HexTerrainType> = {
   '.': 'plains',
   '^': 'mountains',
   '~': 'water',
+  '!': 'river',
   '"': 'farmland',
   w: 'woods',
   h: 'hills',
@@ -39,7 +41,7 @@ const TERRAIN_PATTERNS: [RegExp, HexTerrainType][] = [
   [/\bocean\b/i, 'ocean'],
   [/\bsea\b/i, 'ocean'],
   [/\bwater\b/i, 'water'],
-  [/\briver\b/i, 'water'],
+  [/\briver\b/i, 'river'],
   [/\blake\b/i, 'water'],
   [/\bstream\b/i, 'water'],
   [/\bmountain/i, 'mountains'],
@@ -92,6 +94,7 @@ export const TERRAIN_LABELS: Record<HexTerrainType, string> = {
   plains: 'Plains',
   mountains: 'Mtns',
   water: 'Water',
+  river: 'River',
   ocean: 'Ocean',
   farmland: 'Farm',
   woods: 'Woods',

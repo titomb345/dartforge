@@ -121,12 +121,12 @@ export const HELP_CATEGORIES: HelpCategory[] = [
         description: 'Free-form text notes saved per character. Auto-saves as you type.',
         helpId: 'toolbar-notes',
       },
-      // TODO: Re-enable when automapper is ready
-      // {
-      //   title: 'Map Panel',
-      //   description: 'Auto-mapping hex grid built as you explore. Shows terrain types, fog of war, and room labels. Click rooms to walk there.',
-      //   helpId: 'toolbar-map',
-      // },
+      {
+        title: 'Map Panel',
+        description:
+          'Auto-maps the hex wilderness as you explore. Every survey paints all visible hexes with their terrain, so the map fills in around your path. Landmarks (towns, caves, towers) are marked with a gold diamond. Hexes you have seen but never entered are dimmed (Fog toggle). If you teleport somewhere unrecognizable the map shows LOST until you reach distinctive terrain again.',
+        helpId: 'toolbar-map',
+      },
       {
         title: 'Allocations Panel',
         description:
@@ -175,6 +175,13 @@ export const HELP_CATEGORIES: HelpCategory[] = [
     title: 'Hidden Powers',
     iconName: 'sparkle',
     items: [
+      {
+        title: 'Walk Anywhere on the Map',
+        description:
+          'Right-click any mapped hex in the Map panel to auto-walk there. The route avoids water and known blocked edges, sends one direction at a time, and confirms each step before the next. It stops automatically if something blocks you — or click the Walking button to cancel. Left-click a hex to see its terrain, landmarks, and visit history.',
+        helpId: 'toolbar-map',
+        interaction: 'right-click',
+      },
       {
         title: 'Quick Character Switch',
         description:
