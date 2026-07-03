@@ -572,6 +572,13 @@ function parseHexArtTemplate(artLines: string[], ansiLines?: string[]): ParsedHe
   const rivers: string[] = [];
   const riverEdges: { q: number; r: number; dir: Direction }[] = [];
   const labelOccurrences = new Map<string, { q: number; r: number; count: number }[]>();
+  // Per-cell terrain char counts, kept for terrain-char landmark labels
+  const cellStats: {
+    q: number;
+    r: number;
+    terrain: HexTerrainType;
+    counts: Map<string, number>;
+  }[] = [];
 
   for (const spec of validCells) {
     if (haveColors) {
@@ -603,11 +610,11 @@ function parseHexArtTemplate(artLines: string[], ansiLines?: string[]): ParsedHe
         bestCount = count;
       }
     }
-    hexes.set(
-      `${spec.q},${spec.r}`,
-      bestChar && TERRAIN_CHAR_MAP[bestChar] ? TERRAIN_CHAR_MAP[bestChar] : 'unknown'
-    );
+    const cellTerrain =
+      bestChar && TERRAIN_CHAR_MAP[bestChar] ? TERRAIN_CHAR_MAP[bestChar] : 'unknown';
+    hexes.set(`${spec.q},${spec.r}`, cellTerrain);
     if ((terrainCounts.get('!') ?? 0) >= 1) rivers.push(`${spec.q},${spec.r}`);
+    cellStats.push({ q: spec.q, r: spec.r, terrain: cellTerrain, counts: terrainCounts });
 
     for (const [ch, count] of cellLabels) {
       const list = labelOccurrences.get(ch) ?? [];
@@ -621,6 +628,19 @@ function parseHexArtTemplate(artLines: string[], ansiLines?: string[]): ParsedHe
     const occurrences = labelOccurrences.get(l.label);
     if (occurrences && occurrences.length === 1 && occurrences[0].count === 1) {
       return { ...l, q: occurrences[0].q, r: occurrences[0].r };
+    }
+    // Terrain-char labels ("^) partially exposed ruins" in a desert): the
+    // marker is a SINGLE out-of-place terrain char inside a cell of a
+    // different terrain. Unique such cell → that's the landmark's hex;
+    // ambiguous (e.g. '^' anywhere near real mountains) → unpositioned.
+    const charTerrain = TERRAIN_CHAR_MAP[l.label];
+    if (charTerrain) {
+      const candidates = cellStats.filter(
+        (cs) => (cs.counts.get(l.label) ?? 0) === 1 && cs.terrain !== charTerrain
+      );
+      if (candidates.length === 1) {
+        return { ...l, q: candidates[0].q, r: candidates[0].r };
+      }
     }
     return { ...l, q: null, r: null };
   });
