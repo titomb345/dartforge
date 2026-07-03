@@ -405,51 +405,81 @@ const BORDER_CHARS = new Set(['-', '*', 'c', 'x', '=']);
 const RIVER_EDGE_COLORS = new Set<ThemeColorKey>(['blue', 'brightBlue', 'cyan', 'brightCyan']);
 
 /**
- * Edge chars that can carry a river when blue: '*' is the river course,
- * with '=' and '+' variants on some segments (still rivers — crossing them
- * costs concentration). Ordinary border dashes and slopes are NEVER rivers,
- * whatever their color.
- */
-const RIVER_EDGE_CHARS = new Set(['*', '=', '+']);
-
-/**
- * Detect river edges for a cell from art colors. Rivers are rendered as
- * blue chars substituted into the cell's borders and slopes.
+ * Detect river edges for a cell from art colors.
+ *
+ * The river COURSE is blue '*' chars substituted into borders/slopes.
+ * Blue '='/'+' chars are ambiguous: a bridge/segment ON the river course
+ * (counts) — or a ferry route drawn end-to-end across a lake (does NOT).
+ * The distinguisher is continuity: course segments touch blue '*' chars;
+ * ferry routes never do. Ordinary border dashes and slopes are never
+ * rivers, whatever their color.
  */
 function detectRiverEdges(
   spec: { q: number; r: number; line: number; col: number },
   artLines: string[],
   colorRows: ((ThemeColorKey | null)[] | null)[]
 ): Direction[] {
-  const isRiverChar = (lineIdx: number, col: number): boolean => {
-    const line = artLines[lineIdx];
-    if (!line || !RIVER_EDGE_CHARS.has(line[col])) return false;
+  const isBlue = (lineIdx: number, col: number): boolean => {
     const colors = colorRows[lineIdx];
     if (!colors) return false;
     const c = colors[col];
     return c !== null && c !== undefined && RIVER_EDGE_COLORS.has(c);
+  };
+  const charAt = (lineIdx: number, col: number): string | undefined => artLines[lineIdx]?.[col];
+  const isStar = (lineIdx: number, col: number): boolean =>
+    charAt(lineIdx, col) === '*' && isBlue(lineIdx, col);
+  const isConnector = (lineIdx: number, col: number): boolean => {
+    const ch = charAt(lineIdx, col);
+    return (ch === '=' || ch === '+') && isBlue(lineIdx, col);
+  };
+  /** Any blue '*' in the 8 chars around a position (course continuity)? */
+  const starNearby = (lineIdx: number, col: number): boolean => {
+    for (let dl = -1; dl <= 1; dl++) {
+      for (let dc = -1; dc <= 1; dc++) {
+        if (dl === 0 && dc === 0) continue;
+        if (isStar(lineIdx + dl, col + dc)) return true;
+      }
+    }
+    return false;
   };
 
   const edges: Direction[] = [];
   // N and S: the 5-char horizontal borders. A river ALONG the border colors
   // essentially the whole run ('*****'); a river merely passing the hex's
   // corner colors only the end chars ('----*') and must NOT count. Require
-  // 4 of 5 (tolerating one '='/glitch char mid-span).
+  // 4 of 5, and connector-only runs must touch the '*' course somewhere.
   for (const [dir, lineIdx] of [
     ['n', spec.line],
     ['s', spec.line + 4],
   ] as [Direction, number][]) {
-    let hits = 0;
+    let starHits = 0;
+    let connHits = 0;
     for (let i = 0; i < 5; i++) {
-      if (isRiverChar(lineIdx, spec.col + i)) hits++;
+      if (isStar(lineIdx, spec.col + i)) starHits++;
+      else if (isConnector(lineIdx, spec.col + i)) connHits++;
     }
-    if (hits >= 4) edges.push(dir);
+    if (starHits + connHits < 4) continue;
+    if (
+      starHits >= 1 ||
+      starNearby(lineIdx, spec.col) ||
+      starNearby(lineIdx, spec.col + 4)
+    ) {
+      edges.push(dir);
+    }
   }
-  // Diagonals: the slope chars at the cell's corners
-  if (isRiverChar(spec.line + 1, spec.col - 1)) edges.push('nw');
-  if (isRiverChar(spec.line + 1, spec.col + 5)) edges.push('ne');
-  if (isRiverChar(spec.line + 3, spec.col - 1)) edges.push('sw');
-  if (isRiverChar(spec.line + 3, spec.col + 5)) edges.push('se');
+  // Diagonals: the slope chars at the cell's corners. '*' counts directly;
+  // '='/'+' only when the '*' course continues right next to it.
+  const diagonals: [Direction, number, number][] = [
+    ['nw', spec.line + 1, spec.col - 1],
+    ['ne', spec.line + 1, spec.col + 5],
+    ['sw', spec.line + 3, spec.col - 1],
+    ['se', spec.line + 3, spec.col + 5],
+  ];
+  for (const [dir, lineIdx, col] of diagonals) {
+    if (isStar(lineIdx, col) || (isConnector(lineIdx, col) && starNearby(lineIdx, col))) {
+      edges.push(dir);
+    }
+  }
   return edges;
 }
 

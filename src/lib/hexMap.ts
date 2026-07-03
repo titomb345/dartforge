@@ -214,19 +214,20 @@ export class HexMapStore {
     source: 'art' | 'description' = 'description'
   ): void {
     const cell = this.cells.get(cellKey(island, q, r));
-    if (cell && !(source === 'art' && cell.visited) && !cell.riverEdges.includes(dir)) {
-      cell.riverEdges.push(dir);
-    }
     const n = applyDirection({ q, r }, dir);
     const neighbor = this.cells.get(cellKey(island, n.q, n.r));
     const opp = oppositeDirection(dir);
-    if (
-      neighbor &&
-      !(source === 'art' && neighbor.visited) &&
-      !neighbor.riverEdges.includes(opp)
-    ) {
-      neighbor.riverEdges.push(opp);
+
+    if (source === 'art') {
+      // A shared edge is OWNED by whichever side has been visited — its
+      // room description already ruled on it. Art previews may not add
+      // what a visited side's description didn't confirm, on EITHER side.
+      if (cell?.visited && !cell.riverEdges.includes(dir)) return;
+      if (neighbor?.visited && !neighbor.riverEdges.includes(opp)) return;
     }
+
+    if (cell && !cell.riverEdges.includes(dir)) cell.riverEdges.push(dir);
+    if (neighbor && !neighbor.riverEdges.includes(opp)) neighbor.riverEdges.push(opp);
   }
 
   /**
@@ -244,12 +245,17 @@ export class HexMapStore {
     for (const dir of COMPASS_DIRECTIONS) {
       const n = applyDirection({ q, r }, dir);
       const neighbor = this.cells.get(cellKey(island, n.q, n.r));
-      if (
-        neighbor?.visited &&
-        neighbor.riverEdges.includes(oppositeDirection(dir)) &&
-        !edges.includes(dir)
-      ) {
-        edges.push(dir);
+      if (!neighbor) continue;
+      const opp = oppositeDirection(dir);
+      if (neighbor.visited) {
+        // Keep edges confirmed by a visited neighbor's own description
+        if (neighbor.riverEdges.includes(opp) && !edges.includes(dir)) {
+          edges.push(dir);
+        }
+      } else if (!dirs.includes(dir)) {
+        // This description says NO river on that side — scrub the stale
+        // mirror off the unvisited neighbor (art previews there defer to us)
+        neighbor.riverEdges = neighbor.riverEdges.filter((d) => d !== opp);
       }
     }
     cell.riverEdges = edges;
