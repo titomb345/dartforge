@@ -26,6 +26,9 @@ export interface HexPos {
   r: number;
 }
 
+/** Kinds of per-edge overlay marks a hex side can carry */
+export type EdgeKind = 'river' | 'cliff' | 'bridge';
+
 export interface HexCell {
   q: number;
   r: number;
@@ -38,6 +41,8 @@ export interface HexCell {
   riverEdges: Direction[];
   /** Hex sides with a cliff (climbing across costs concentration) */
   cliffEdges: Direction[];
+  /** Hex sides with a bridge — a zero-concentration river crossing */
+  bridgeEdges: Direction[];
   /** True if the player has stood in this hex */
   visited: boolean;
   visitCount: number;
@@ -195,6 +200,7 @@ export class HexMapStore {
         river: false,
         riverEdges: [],
         cliffEdges: [],
+        bridgeEdges: [],
         marker: null,
         visited: false,
         visitCount: 0,
@@ -225,13 +231,16 @@ export class HexMapStore {
     if (cell) cell.river = true;
   }
 
-  private edgesOf(cell: HexCell, kind: 'river' | 'cliff'): Direction[] {
-    return kind === 'river' ? cell.riverEdges : cell.cliffEdges;
+  private edgesOf(cell: HexCell, kind: EdgeKind): Direction[] {
+    if (kind === 'river') return cell.riverEdges;
+    if (kind === 'cliff') return cell.cliffEdges;
+    return cell.bridgeEdges;
   }
 
-  private setEdgesOf(cell: HexCell, kind: 'river' | 'cliff', edges: Direction[]): void {
+  private setEdgesOf(cell: HexCell, kind: EdgeKind, edges: Direction[]): void {
     if (kind === 'river') cell.riverEdges = edges;
-    else cell.cliffEdges = edges;
+    else if (kind === 'cliff') cell.cliffEdges = edges;
+    else cell.bridgeEdges = edges;
   }
 
   /**
@@ -241,7 +250,7 @@ export class HexMapStore {
    * edges are owned by their room descriptions (see setVisitedEdges).
    */
   markEdge(
-    kind: 'river' | 'cliff',
+    kind: EdgeKind,
     island: number,
     q: number,
     r: number,
@@ -276,7 +285,7 @@ export class HexMapStore {
    * this cell's edges mirror onto its neighbors.
    */
   setVisitedEdges(
-    kind: 'river' | 'cliff',
+    kind: EdgeKind,
     island: number,
     q: number,
     r: number,
@@ -392,7 +401,7 @@ export class HexMapStore {
   clearOverlayMarks(island: number, q: number, r: number): void {
     const cell = this.get(island, q, r);
     if (!cell) return;
-    for (const kind of ['river', 'cliff'] as const) {
+    for (const kind of ['river', 'cliff', 'bridge'] as const) {
       for (const dir of this.edgesOf(cell, kind)) {
         const t = applyDirection({ q, r }, dir);
         const target = this.get(island, t.q, t.r);
@@ -463,6 +472,9 @@ export class HexMapStore {
         }
         for (const ce of cell.cliffEdges) {
           if (!existing.cliffEdges.includes(ce)) existing.cliffEdges.push(ce);
+        }
+        for (const be of cell.bridgeEdges) {
+          if (!existing.bridgeEdges.includes(be)) existing.bridgeEdges.push(be);
         }
         existing.visited = existing.visited || cell.visited;
         existing.visitCount += cell.visitCount;
@@ -571,11 +583,13 @@ export class HexMapStore {
         if (nCell.river) stepCost += RIVER_INTERIOR_COST;
         const opp = oppositeDirection(dir);
         // Crossing a river edge (swim) or a cliff edge (climb) is a
-        // concentration event, same as rough terrain
-        if (cell?.riverEdges.includes(dir) || nCell.riverEdges.includes(opp)) {
+        // concentration event, same as rough terrain — unless a bridge
+        // spans the edge (a zero-concentration crossing).
+        const bridged = cell?.bridgeEdges.includes(dir) || nCell.bridgeEdges.includes(opp);
+        if (!bridged && (cell?.riverEdges.includes(dir) || nCell.riverEdges.includes(opp))) {
           stepCost += RIVER_CROSSING_COST;
         }
-        if (cell?.cliffEdges.includes(dir) || nCell.cliffEdges.includes(opp)) {
+        if (!bridged && (cell?.cliffEdges.includes(dir) || nCell.cliffEdges.includes(opp))) {
           stepCost += CONC_HIT;
         }
         if (!nCell.visited) stepCost *= 1.15;
@@ -626,6 +640,7 @@ export class HexMapStore {
         river: !!cell.river,
         riverEdges: Array.isArray(cell.riverEdges) ? cell.riverEdges : [],
         cliffEdges: Array.isArray(cell.cliffEdges) ? cell.cliffEdges : [],
+        bridgeEdges: Array.isArray(cell.bridgeEdges) ? cell.bridgeEdges : [],
         visited: !!cell.visited,
         visitCount: cell.visitCount ?? 0,
         lastSeen: cell.lastSeen ?? 0,

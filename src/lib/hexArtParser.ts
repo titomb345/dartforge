@@ -47,6 +47,12 @@ export interface ParsedHexArt {
    * Unlike rivers these glyphs are unambiguous — no color needed.
    */
   cliffEdges: { q: number; r: number; dir: Direction }[];
+  /**
+   * Bridge edges: yellow/orange '^' chars on hex borders/slopes — a
+   * zero-concentration river crossing. Color-gated because '^' is also
+   * mountain terrain (which renders red). Needs ANSI lines.
+   */
+  bridgeEdges: { q: number; r: number; dir: Direction }[];
   /** Number of rings visible (0, 1, or 2) */
   rings: number;
   /**
@@ -488,6 +494,43 @@ function detectRiverEdges(
   return edges;
 }
 
+/** Colors marking a '^' edge char as a bridge (mountain '^' renders red) */
+const BRIDGE_EDGE_COLORS = new Set<ThemeColorKey>(['yellow', 'brightYellow']);
+
+/**
+ * Detect bridge edges for a cell: yellow/orange '^' chars substituted into
+ * borders or slopes (a stone bridge over the river along that edge).
+ */
+function detectBridgeEdges(
+  spec: { q: number; r: number; line: number; col: number },
+  artLines: string[],
+  colorRows: ((ThemeColorKey | null)[] | null)[]
+): Direction[] {
+  const isBridgeChar = (lineIdx: number, col: number): boolean => {
+    if (artLines[lineIdx]?.[col] !== '^') return false;
+    const c = colorRows[lineIdx]?.[col];
+    return c !== null && c !== undefined && BRIDGE_EDGE_COLORS.has(c);
+  };
+
+  const edges: Direction[] = [];
+  for (const [dir, lineIdx] of [
+    ['n', spec.line],
+    ['s', spec.line + 4],
+  ] as [Direction, number][]) {
+    for (let i = 0; i < 5; i++) {
+      if (isBridgeChar(lineIdx, spec.col + i)) {
+        edges.push(dir);
+        break;
+      }
+    }
+  }
+  if (isBridgeChar(spec.line + 1, spec.col - 1)) edges.push('nw');
+  if (isBridgeChar(spec.line + 1, spec.col + 5)) edges.push('ne');
+  if (isBridgeChar(spec.line + 3, spec.col - 1)) edges.push('sw');
+  if (isBridgeChar(spec.line + 3, spec.col + 5)) edges.push('se');
+  return edges;
+}
+
 /**
  * Detect cliff edges for a cell: 'x' (crag) and 'c' (cliff) chars
  * substituted into borders and slopes. The glyphs are unambiguous, so no
@@ -600,8 +643,8 @@ function parseHexArtTemplate(artLines: string[], ansiLines?: string[]): ParsedHe
   const haveColors = !!ansiLines && ansiLines.length === artLines.length;
   if (haveColors) {
     for (let i = 0; i < artLines.length; i++) {
-      // Only decode rows containing a river-capable char
-      if (/[*=+]/.test(artLines[i])) colorRows[i] = lineFgColors(ansiLines![i]);
+      // Only decode rows containing a river- or bridge-capable char
+      if (/[*=+^]/.test(artLines[i])) colorRows[i] = lineFgColors(ansiLines![i]);
     }
   }
 
@@ -610,6 +653,7 @@ function parseHexArtTemplate(artLines: string[], ansiLines?: string[]): ParsedHe
   const rivers: string[] = [];
   const riverEdges: { q: number; r: number; dir: Direction }[] = [];
   const cliffEdges: { q: number; r: number; dir: Direction }[] = [];
+  const bridgeEdges: { q: number; r: number; dir: Direction }[] = [];
   const labelOccurrences = new Map<string, { q: number; r: number; count: number }[]>();
   // Per-cell terrain char counts, kept for terrain-char landmark labels
   const cellStats: {
@@ -627,6 +671,11 @@ function parseHexArtTemplate(artLines: string[], ansiLines?: string[]): ParsedHe
     }
     for (const dir of detectCliffEdges(spec, artLines)) {
       cliffEdges.push({ q: spec.q, r: spec.r, dir });
+    }
+    if (haveColors) {
+      for (const dir of detectBridgeEdges(spec, artLines, colorRows)) {
+        bridgeEdges.push({ q: spec.q, r: spec.r, dir });
+      }
     }
     const terrainCounts = new Map<string, number>();
     const cellLabels = new Map<string, number>();
@@ -692,6 +741,7 @@ function parseHexArtTemplate(artLines: string[], ansiLines?: string[]): ParsedHe
     rivers,
     riverEdges,
     cliffEdges,
+    bridgeEdges,
     rings,
     landmarks,
     rawLines: artLines,
@@ -782,6 +832,7 @@ function parseHexArtSearch(artLines: string[]): ParsedHexArt | null {
     rivers,
     riverEdges: [],
     cliffEdges: [],
+    bridgeEdges: [],
     rings: ringCount,
     landmarks,
     rawLines: artLines,

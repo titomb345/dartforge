@@ -69,6 +69,7 @@ const LABEL_FONT = '9px "Courier New", monospace';
 const LANDMARK_COLOR = '#e8c97a';
 const RIVER_COLOR = 'rgba(96, 158, 214, 0.85)';
 const CLIFF_COLOR = 'rgba(205, 185, 150, 0.9)';
+const BRIDGE_COLOR = '#e8a849';
 const BLOCKED_COLOR = 'rgba(220, 80, 70, 0.7)';
 const TOOLTIP_BG = 'rgba(20, 18, 16, 0.95)';
 const TOOLTIP_BORDER = 'rgba(140, 125, 100, 0.5)';
@@ -151,6 +152,7 @@ export function MapCanvas({ width, height, showLabels, showFog, onWalkTo }: MapC
       if (cell.river) drawRiver(ctx, cell);
       if (cell.riverEdges.length > 0) drawRiverEdges(ctx, cell);
       if (cell.cliffEdges.length > 0) drawCliffEdges(ctx, cell);
+      if (cell.bridgeEdges.length > 0) drawBridgeEdges(ctx, cell);
       if (cell.blocked.length > 0) drawBlockedEdges(ctx, cell);
       if (cell.marker === 'town') drawTownMarker(ctx, cell);
       else if (cell.landmarks.length > 0) drawLandmarkMarker(ctx, cell);
@@ -254,6 +256,7 @@ export function MapCanvas({ width, height, showLabels, showFog, onWalkTo }: MapC
         (cell.blocked.length > 0 ||
           cell.riverEdges.length > 0 ||
           cell.cliffEdges.length > 0 ||
+          cell.bridgeEdges.length > 0 ||
           cell.river)
       ) {
         clearBlockedAt(hex.q, hex.r);
@@ -416,6 +419,35 @@ function drawRiver(ctx: CanvasRenderingContext2D, cell: HexCell) {
     y - HEX_SIZE * 0.05
   );
   ctx.stroke();
+  ctx.lineCap = 'butt';
+}
+
+/**
+ * Bridges: a short amber bar crossing the edge perpendicular to it —
+ * a plank over the river, marking the zero-concentration crossing.
+ */
+function drawBridgeEdges(ctx: CanvasRenderingContext2D, cell: HexCell) {
+  const { x, y } = hexToPixel(cell.q, cell.r, HEX_SIZE);
+  const corners = hexCorners(x, y, HEX_SIZE - 1);
+  ctx.strokeStyle = BRIDGE_COLOR;
+  ctx.lineWidth = 3.5;
+  ctx.lineCap = 'round';
+  for (const dir of cell.bridgeEdges) {
+    const [a, b] = EDGE_CORNERS[dir];
+    const mx = (corners[a].x + corners[b].x) / 2;
+    const my = (corners[a].y + corners[b].y) / 2;
+    // Perpendicular to the edge
+    const dx = corners[b].x - corners[a].x;
+    const dy = corners[b].y - corners[a].y;
+    const len = Math.sqrt(dx * dx + dy * dy) || 1;
+    const px = -dy / len;
+    const py = dx / len;
+    const half = HEX_SIZE * 0.22;
+    ctx.beginPath();
+    ctx.moveTo(mx - px * half, my - py * half);
+    ctx.lineTo(mx + px * half, my + py * half);
+    ctx.stroke();
+  }
   ctx.lineCap = 'butt';
 }
 
@@ -629,6 +661,12 @@ function CellTooltip({
             {' '}
             · cliff ({cell.cliffEdges.map((d) => directionLabel(d)).join(', ')})
             <span className="opacity-60 italic"> — Ctrl+click to clear</span>
+          </span>
+        )}
+        {cell.bridgeEdges.length > 0 && (
+          <span style={{ color: BRIDGE_COLOR }}>
+            {' '}
+            · bridge ({cell.bridgeEdges.map((d) => directionLabel(d)).join(', ')})
           </span>
         )}
         <span className="font-normal opacity-50 ml-1.5">

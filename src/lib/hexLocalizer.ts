@@ -83,6 +83,7 @@ export interface SurveyResolution {
 // drops "and" and any stray words.
 const RIVER_DESC_RE = /\brivers?(?: with an? [a-z ]{1,30}?)? to the ([a-z, ]+)/gi;
 const CLIFF_DESC_RE = /\bcliffs? to the ([a-z, ]+)/gi;
+const BRIDGE_DESC_RE = /\brivers? with an? [a-z ]{0,20}?bridge to the ([a-z, ]+)/gi;
 
 function parseEdgeDirections(description: string, re: RegExp): Direction[] {
   const dirs: Direction[] = [];
@@ -113,6 +114,15 @@ export function parseRiverDirections(description: string): Direction[] {
  */
 export function parseCliffDirections(description: string): Direction[] {
   return parseEdgeDirections(description, CLIFF_DESC_RE);
+}
+
+/**
+ * Extract BRIDGED river directions — "There is a swift river with a stone
+ * bridge to the northeast." → [ne]. A bridge is a zero-concentration
+ * crossing over the river edge.
+ */
+export function parseBridgeDirections(description: string): Direction[] {
+  return parseEdgeDirections(description, BRIDGE_DESC_RE);
 }
 
 // ---------------------------------------------------------------------------
@@ -567,6 +577,9 @@ export class HexLocalizer {
       for (const ce of art.cliffEdges) {
         this.map.markEdge('cliff', pos.island, pos.q + ce.q, pos.r + ce.r, ce.dir, 'art');
       }
+      for (const be of art.bridgeEdges) {
+        this.map.markEdge('bridge', pos.island, pos.q + be.q, pos.r + be.r, be.dir, 'art');
+      }
     }
 
     this.map.markVisited(pos.island, pos.q, pos.r, description, now);
@@ -579,6 +592,7 @@ export class HexLocalizer {
     if (confident && description) {
       this.map.setVisitedEdges('river', pos.island, pos.q, pos.r, parseRiverDirections(description));
       this.map.setVisitedEdges('cliff', pos.island, pos.q, pos.r, parseCliffDirections(description));
+      this.map.setVisitedEdges('bridge', pos.island, pos.q, pos.r, parseBridgeDirections(description));
     }
 
     if (confident) {
