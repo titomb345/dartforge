@@ -178,16 +178,6 @@ export function MapCanvas({
       drawHex(ctx, cell, isCurrent, showFog);
     }
 
-    // Indoors: dim the terrain, but keep icons/edges/glow (drawn below)
-    // at full brightness
-    if (dimmed) {
-      ctx.save();
-      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-      ctx.fillStyle = 'rgba(15, 14, 13, 0.45)';
-      ctx.fillRect(0, 0, width, height);
-      ctx.restore();
-    }
-
     // Rivers, cliffs, blocked edges, and landmarks on top
     for (const cell of cells) {
       if (cell.river) drawRiver(ctx, cell);
@@ -215,6 +205,13 @@ export function MapCanvas({
 
     // Compass rose
     drawCompassRose(ctx, width, height);
+
+    // Indoors: dim the whole map uniformly (the DOM popup/badge above the
+    // canvas stay at full brightness). Interaction is unaffected.
+    if (dimmed) {
+      ctx.fillStyle = 'rgba(15, 14, 13, 0.3)';
+      ctx.fillRect(0, 0, width, height);
+    }
     // The `version` dependency (from context) drives redraws on map changes
     void version;
   });

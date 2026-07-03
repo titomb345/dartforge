@@ -123,17 +123,12 @@ export function MapPanel({ mode = 'slideout' }: PinnablePanelProps) {
         )}
         {indoors && (
           <div
-            className="absolute inset-0 z-20 flex items-center justify-center"
+            className="absolute top-2 right-2 z-20 pointer-events-none px-2 py-0.5 rounded border border-[#e8a849]/35 bg-[#171512]/85"
             title="Hex movement is unavailable indoors"
           >
-            <div className="flex flex-col items-center gap-0.5 px-3 py-1.5 rounded border border-[#e8a849]/30 bg-[#171512]/80">
-              <span className="text-[10px] font-mono font-semibold tracking-[0.14em] text-[#e8a849]">
-                IN TOWN
-              </span>
-              <span className="text-[8px] font-mono text-text-dim">
-                step outside to resume mapping
-              </span>
-            </div>
+            <span className="text-[9px] font-mono font-semibold tracking-[0.14em] text-[#e8a849]">
+              IN TOWN
+            </span>
           </div>
         )}
       </div>
