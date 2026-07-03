@@ -71,7 +71,7 @@ const MAX_LANDMARKS_PER_CELL = 4;
 const TERRAIN_COST: Record<HexTerrainType, number> = {
   plains: 1,
   farmland: 1,
-  woods: 1.1,
+  woods: 1,
   desert: 8,
   hills: 8,
   wasteland: 8,
