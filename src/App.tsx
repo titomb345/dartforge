@@ -1002,7 +1002,13 @@ function AppMain() {
   }, []);
   const mapEcho = useCallback(
     (message: string) => {
-      writeToTermRef.current(`\x1b[38;5;179m${message}\x1b[0m\r\n`);
+      // Map events fire mid-chunk (while the output filter is still processing
+      // the incoming data), so a direct write would land BEFORE the chunk's
+      // own text — e.g. "[Map] Arrived." printing inside the hex art. Defer
+      // one macrotask so the echo prints after the survey block fully renders.
+      setTimeout(() => {
+        writeToTermRef.current(`\x1b[38;5;179m${message}\x1b[0m\r\n`);
+      }, 0);
     },
     [writeToTermRef]
   );
