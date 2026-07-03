@@ -121,12 +121,12 @@ export const HELP_CATEGORIES: HelpCategory[] = [
         description: 'Free-form text notes saved per character. Auto-saves as you type.',
         helpId: 'toolbar-notes',
       },
-      // TODO: Re-enable when automapper is ready
-      // {
-      //   title: 'Map Panel',
-      //   description: 'Auto-mapping hex grid built as you explore. Shows terrain types, fog of war, and room labels. Click rooms to walk there.',
-      //   helpId: 'toolbar-map',
-      // },
+      {
+        title: 'Map Panel',
+        description:
+          'Auto-maps the hex wilderness as you explore. Every survey paints all visible hexes with their terrain, so the map fills in around your path. Landmarks (towns, caves, towers) are marked with a gold diamond. Hexes you have seen but never entered are dimmed (Fog toggle). If you teleport somewhere unrecognizable the map shows LOST until you reach distinctive terrain again.',
+        helpId: 'toolbar-map',
+      },
       {
         title: 'Allocations Panel',
         description:
@@ -175,6 +175,27 @@ export const HELP_CATEGORIES: HelpCategory[] = [
     title: 'Hidden Powers',
     iconName: 'sparkle',
     items: [
+      {
+        title: 'Walk Anywhere on the Map',
+        description:
+          'Right-click any mapped hex in the Map panel to auto-walk there. Routes prefer easy ground (plains, farmland, woods) and steer around terrain with concentration hits (swamp, hills, mountains, wasteland) unless the detour would be far longer. Water and known blocked edges are avoided. Two moves are kept in flight at a time (as fast as spamming directions yourself) with every step verified against its survey. It stops automatically if something blocks you — or click the Walking button to cancel. Rest the cursor on a hex for a moment to see its terrain, landmarks, and visit history.',
+        helpId: 'toolbar-map',
+        interaction: 'right-click',
+      },
+      {
+        title: 'Mark Towns on the Map',
+        description:
+          'Hexes whose landmarks name a town, village, city, or hamlet automatically get a house icon instead of the landmark diamond. Shift+click any hex to toggle its town marker manually — turning one off tells the mapper not to re-add it.',
+        helpId: 'toolbar-map',
+        interaction: 'click',
+      },
+      {
+        title: 'Clear Wrong Map Marks',
+        description:
+          'Red edge ticks mark directions the map believes are blocked; blue edges mark rivers; dashed stone edges mark cliffs; an amber bar across a river edge marks a bridge (free crossing). If any is wrong on a hex, Ctrl+click (or Alt+click) it to clear all its marks — correct ones re-detect the next time you survey there. Blocked marks also heal themselves: successfully walking through a "blocked" edge removes the mark automatically.',
+        helpId: 'toolbar-map',
+        interaction: 'click',
+      },
       {
         title: 'Quick Character Switch',
         description:
@@ -518,7 +539,7 @@ export const HELP_CATEGORIES: HelpCategory[] = [
       {
         title: 'Script Mode',
         description:
-          'Triggers and aliases can use JavaScript instead of text expansion. Toggle "Script" in the editor to write JS bodies with: send(), echo(), delay(), setVar(), getVar(), spam(), lastUserInputTime(), getSkill/Count/Level/Tier/Next/Group(), readFile(path), writeFile(path, content), playSound(indexOrName) — e.g. playSound(1) or playSound("deathAlert"), startTimer(name), stopTimer(name), enableTrigger(name), disableTrigger(name), enableAlias(name), disableAlias(name), enableTriggerGroup(group), disableTriggerGroup(group), enableAliasGroup(group), disableAliasGroup(group), enableTimerGroup(group), disableTimerGroup(group), getGameTime(), getCounter(name), getMovementMode(), setMovementMode(mode), and capture variables ($0-$9, $line, $me). Define shared functions in the Global Script panel. Hover over any script editor to reveal an expand button that opens a large popout modal for comfortable editing. Errors appear in red in the terminal.',
+          'Triggers and aliases can use JavaScript instead of text expansion. Toggle "Script" in the editor to write JS bodies with: send(), echo(), delay(), setVar(), getVar(), spam(), lastUserInputTime(), getSkill/Count/Level/Tier/Next/Group(), readFile(path), writeFile(path, content), playSound(indexOrName) — e.g. playSound(1) or playSound("deathAlert"), enableTimer(name), disableTimer(name), enableTrigger(name), disableTrigger(name), enableAlias(name), disableAlias(name), enableTriggerGroup(group), disableTriggerGroup(group), enableAliasGroup(group), disableAliasGroup(group), enableTimerGroup(group), disableTimerGroup(group), getGameTime(), getCounter(name), getMovementMode(), setMovementMode(mode), and capture variables ($0-$9, $line, $me). Define shared functions in the Global Script panel. Hover over any script editor to reveal an expand button that opens a large popout modal for comfortable editing. Errors appear in red in the terminal.',
       },
       {
         title: 'Skill Functions (Text Mode)',

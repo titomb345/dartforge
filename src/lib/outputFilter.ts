@@ -76,6 +76,14 @@ export interface OutputFilterCallbacks {
   onWho?: (snapshot: WhoSnapshot) => void;
   /** Fired for every complete line with stripped + raw text. Return gag/highlight directives. */
   onLine?: (stripped: string, raw: string) => LineCallbackResult | void;
+  /**
+   * Fired for every complete line with ANSI stripped but leading whitespace
+   * PRESERVED (only trailing CR/LF removed). Required by the automapper —
+   * hex art is column-aligned ASCII and trimming destroys it.
+   * `raw` is the same line WITH ANSI codes, for color-based art parsing
+   * (rivers and paths share the '*' char and differ only by color).
+   */
+  onMapLine?: (line: string, raw: string) => void;
 }
 
 /** Per-status filter flags — controls which status types get stripped from terminal. */
@@ -483,7 +491,12 @@ export class OutputFilter {
       }
 
       // Reuse rawStripped when segment wasn't modified; otherwise re-strip
-      let stripped = (seg === segment ? rawStripped : stripAnsi(seg)).trim();
+      const strippedFull = seg === segment ? rawStripped : stripAnsi(seg);
+
+      // Automapper feed — untrimmed (leading whitespace is significant in hex art)
+      this.callbacks.onMapLine?.(strippedFull.replace(/[\r\n]+$/, ''), seg);
+
+      let stripped = strippedFull.trim();
       // Always strip server prompt prefix for parsing, even when display keeps it.
       // Without this, "> upper left hand:" won't match limb/magic header regexes.
       // A bare "> " prompt (no content) becomes just ">" after trim — normalize to "".

@@ -25,6 +25,8 @@ export const SCRIPT_API_HELP_ROWS: HelpRow[] = [
   { token: 'disableTrigger(name)', desc: 'Disable a trigger by name' },
   { token: 'enableAlias(name)', desc: 'Enable an alias by name' },
   { token: 'disableAlias(name)', desc: 'Disable an alias by name' },
+  { token: 'enableTimer(name)', desc: 'Enable a timer by name (restarts its full interval)' },
+  { token: 'disableTimer(name)', desc: 'Disable a timer by name' },
   { token: 'enableTriggerGroup(g)', desc: 'Enable all triggers in a group' },
   { token: 'disableTriggerGroup(g)', desc: 'Disable all triggers in a group' },
   { token: 'enableAliasGroup(g)', desc: 'Enable all aliases in a group' },

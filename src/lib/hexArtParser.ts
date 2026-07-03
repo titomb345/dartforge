@@ -19,6 +19,9 @@
  */
 
 import { TERRAIN_CHAR_MAP, type HexTerrainType } from './hexTerrainPatterns';
+import { lineFgColors } from './ansiColorExtract';
+import type { ThemeColorKey } from './defaultTheme';
+import type { Direction } from './hexUtils';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -27,12 +30,41 @@ import { TERRAIN_CHAR_MAP, type HexTerrainType } from './hexTerrainPatterns';
 export interface ParsedHexArt {
   /** Terrain of each visible hex, keyed by "q,r" relative to center */
   hexes: Map<string, HexTerrainType>;
+  /**
+   * Hexes (by "q,r" rel key) containing river marks ('!'). Rivers run
+   * THROUGH hexes of other terrain, so they're an overlay, not a terrain —
+   * majority voting would otherwise hide them entirely.
+   */
+  rivers: string[];
+  /**
+   * River edges detected from art colors: rivers are drawn as BLUE '*'
+   * chars substituted into hex borders/slopes (paths use the same char in
+   * other colors). Only populated when the parser was given ANSI lines.
+   */
+  riverEdges: { q: number; r: number; dir: Direction }[];
+  /**
+   * Cliff edges: 'x'/'c' chars substituted into hex borders/slopes.
+   * Unlike rivers these glyphs are unambiguous — no color needed.
+   */
+  cliffEdges: { q: number; r: number; dir: Direction }[];
+  /**
+   * Bridge edges: yellow/orange '^' chars on hex borders/slopes — a
+   * zero-concentration river crossing. Color-gated because '^' is also
+   * mountain terrain (which renders red). Needs ANSI lines.
+   */
+  bridgeEdges: { q: number; r: number; dir: Direction }[];
   /** Number of rings visible (0, 1, or 2) */
   rings: number;
-  /** Landmark entries found in the art legend */
-  landmarks: { label: string; description: string; q: number; r: number }[];
+  /**
+   * Landmark entries found in the art legend. q/r are the landmark's hex
+   * relative to center, or null when the label char couldn't be located
+   * unambiguously in the art.
+   */
+  landmarks: { label: string; description: string; q: number | null; r: number | null }[];
   /** The raw art lines (for debugging) */
   rawLines: string[];
+  /** Which parser produced this result (template = high confidence) */
+  source: 'template' | 'search';
 }
 
 /** A detected hex border in the art */
@@ -62,7 +94,7 @@ const TERRAIN_CHARS = new Set(Object.keys(TERRAIN_CHAR_MAP));
 const BORDER_RE = /[-*cx]{5}/g;
 
 /** Landmark annotation on the right side of hex art: "  X) description..." */
-const LANDMARK_SUFFIX_RE = /\s+[A-Za-z0-9#+]\)\s+\S.*$/;
+const LANDMARK_SUFFIX_RE = /\s+[A-Za-z0-9#+@?^~!]\)\s+\S.*$/;
 
 /**
  * Continuation text from multi-line landmark descriptions, e.g.:
@@ -288,10 +320,15 @@ function assignCoordinates(
 // ---------------------------------------------------------------------------
 
 /**
- * Extract terrain type from a hex cell by sampling characters between its borders.
+ * Extract terrain type from a hex cell by sampling characters between its
+ * borders, along with any landmark label characters found inside the cell.
  */
-function extractTerrain(cell: HexCell, lines: string[]): HexTerrainType {
+function extractCellData(
+  cell: HexCell,
+  lines: string[]
+): { terrain: HexTerrainType; river: boolean; labelChars: Map<string, number> } {
   const terrainCounts = new Map<string, number>();
+  const labelChars = new Map<string, number>();
 
   // Sample 3 content lines between top and bottom borders
   const startLine = cell.topBorder.line + 1;
@@ -312,6 +349,8 @@ function extractTerrain(cell: HexCell, lines: string[]): HexTerrainType {
       const ch = line[col];
       if (TERRAIN_CHARS.has(ch)) {
         terrainCounts.set(ch, (terrainCounts.get(ch) || 0) + 1);
+      } else if (/[0-9A-Z#+]/.test(ch)) {
+        labelChars.set(ch, (labelChars.get(ch) || 0) + 1);
       }
     }
   }
@@ -326,11 +365,9 @@ function extractTerrain(cell: HexCell, lines: string[]): HexTerrainType {
     }
   }
 
-  if (bestChar && TERRAIN_CHAR_MAP[bestChar]) {
-    return TERRAIN_CHAR_MAP[bestChar];
-  }
-
-  return 'unknown';
+  const terrain =
+    bestChar && TERRAIN_CHAR_MAP[bestChar] ? TERRAIN_CHAR_MAP[bestChar] : ('unknown' as const);
+  return { terrain, river: (terrainCounts.get('!') ?? 0) >= 1, labelChars };
 }
 
 // ---------------------------------------------------------------------------
@@ -342,8 +379,9 @@ function parseLandmarks(
   lines: string[]
 ): { label: string; description: string }[] {
   const landmarks: { label: string; description: string }[] = [];
-  // Landmarks appear as "X) description" on the right side of art lines
-  const LANDMARK_RE = /\s+([A-Z0-9])\)\s+(.+)$/;
+  // Landmarks appear as "X) description" on the right side of art lines.
+  // Labels can be digits, letters, or symbols — even terrain chars (^ ~ !).
+  const LANDMARK_RE = /\s+([A-Za-z0-9#+@?^~!])\)\s+(\S.*)$/;
 
   for (const line of lines) {
     const match = LANDMARK_RE.exec(line);
@@ -359,13 +397,378 @@ function parseLandmarks(
 // Main parser
 // ---------------------------------------------------------------------------
 
+// ---------------------------------------------------------------------------
+// Template parser (primary)
+// ---------------------------------------------------------------------------
+//
+// DartMUD renders hex art from a fixed template. For a view with R rings:
+//   - the art is exactly 8R + 5 lines tall
+//   - the top border of cell (q, r) sits at line 4R + 2q + 4r, column 6q + 6R + 2
+//   - each border is 5 chars wide; cell content occupies the 3 lines between
+//     consecutive borders
+// This makes extraction deterministic and immune to terrain noise — critical
+// in deserts, where the terrain char '-' is the same as the border char.
+
+/** Border/structural chars that may appear at border positions */
+const BORDER_CHARS = new Set(['-', '*', 'c', 'x', '=']);
+
+/** Colors that mark an edge char as river (water) rather than path/road */
+const RIVER_EDGE_COLORS = new Set<ThemeColorKey>(['blue', 'brightBlue', 'cyan', 'brightCyan']);
+
+/**
+ * Detect river edges for a cell from art colors.
+ *
+ * The river COURSE is blue '*' chars substituted into borders/slopes.
+ * Blue '='/'+' chars are ambiguous: a bridge/segment ON the river course
+ * (counts) — or a ferry route drawn end-to-end across a lake (does NOT).
+ * The distinguisher is continuity: course segments touch blue '*' chars;
+ * ferry routes never do. Ordinary border dashes and slopes are never
+ * rivers, whatever their color.
+ */
+function detectRiverEdges(
+  spec: { q: number; r: number; line: number; col: number },
+  artLines: string[],
+  colorRows: ((ThemeColorKey | null)[] | null)[]
+): Direction[] {
+  const isBlue = (lineIdx: number, col: number): boolean => {
+    const colors = colorRows[lineIdx];
+    if (!colors) return false;
+    const c = colors[col];
+    return c !== null && c !== undefined && RIVER_EDGE_COLORS.has(c);
+  };
+  const charAt = (lineIdx: number, col: number): string | undefined => artLines[lineIdx]?.[col];
+  const isStar = (lineIdx: number, col: number): boolean =>
+    charAt(lineIdx, col) === '*' && isBlue(lineIdx, col);
+  const isConnector = (lineIdx: number, col: number): boolean => {
+    const ch = charAt(lineIdx, col);
+    return (ch === '=' || ch === '+') && isBlue(lineIdx, col);
+  };
+  /** Any blue '*' in the 8 chars around a position (course continuity)? */
+  const starNearby = (lineIdx: number, col: number): boolean => {
+    for (let dl = -1; dl <= 1; dl++) {
+      for (let dc = -1; dc <= 1; dc++) {
+        if (dl === 0 && dc === 0) continue;
+        if (isStar(lineIdx + dl, col + dc)) return true;
+      }
+    }
+    return false;
+  };
+
+  const edges: Direction[] = [];
+  // N and S: the 5-char horizontal borders. A river ALONG the border colors
+  // essentially the whole run ('*****'); a river merely passing the hex's
+  // corner colors only the end chars ('----*') and must NOT count. Require
+  // 4 of 5, and connector-only runs must touch the '*' course somewhere.
+  for (const [dir, lineIdx] of [
+    ['n', spec.line],
+    ['s', spec.line + 4],
+  ] as [Direction, number][]) {
+    let starHits = 0;
+    let connHits = 0;
+    for (let i = 0; i < 5; i++) {
+      if (isStar(lineIdx, spec.col + i)) starHits++;
+      else if (isConnector(lineIdx, spec.col + i)) connHits++;
+    }
+    if (starHits + connHits < 4) continue;
+    if (
+      starHits >= 1 ||
+      starNearby(lineIdx, spec.col) ||
+      starNearby(lineIdx, spec.col + 4)
+    ) {
+      edges.push(dir);
+    }
+  }
+  // Diagonals: the slope chars at the cell's corners. '*' counts directly;
+  // '='/'+' only when the '*' course continues right next to it.
+  const diagonals: [Direction, number, number][] = [
+    ['nw', spec.line + 1, spec.col - 1],
+    ['ne', spec.line + 1, spec.col + 5],
+    ['sw', spec.line + 3, spec.col - 1],
+    ['se', spec.line + 3, spec.col + 5],
+  ];
+  for (const [dir, lineIdx, col] of diagonals) {
+    if (isStar(lineIdx, col) || (isConnector(lineIdx, col) && starNearby(lineIdx, col))) {
+      edges.push(dir);
+    }
+  }
+  return edges;
+}
+
+/** Colors marking a '^' edge char as a bridge (mountain '^' renders red) */
+const BRIDGE_EDGE_COLORS = new Set<ThemeColorKey>(['yellow', 'brightYellow']);
+
+/**
+ * Detect bridge edges for a cell: yellow/orange '^' chars substituted into
+ * borders or slopes (a stone bridge over the river along that edge).
+ */
+function detectBridgeEdges(
+  spec: { q: number; r: number; line: number; col: number },
+  artLines: string[],
+  colorRows: ((ThemeColorKey | null)[] | null)[]
+): Direction[] {
+  const isBridgeChar = (lineIdx: number, col: number): boolean => {
+    if (artLines[lineIdx]?.[col] !== '^') return false;
+    const c = colorRows[lineIdx]?.[col];
+    return c !== null && c !== undefined && BRIDGE_EDGE_COLORS.has(c);
+  };
+
+  const edges: Direction[] = [];
+  for (const [dir, lineIdx] of [
+    ['n', spec.line],
+    ['s', spec.line + 4],
+  ] as [Direction, number][]) {
+    for (let i = 0; i < 5; i++) {
+      if (isBridgeChar(lineIdx, spec.col + i)) {
+        edges.push(dir);
+        break;
+      }
+    }
+  }
+  if (isBridgeChar(spec.line + 1, spec.col - 1)) edges.push('nw');
+  if (isBridgeChar(spec.line + 1, spec.col + 5)) edges.push('ne');
+  if (isBridgeChar(spec.line + 3, spec.col - 1)) edges.push('sw');
+  if (isBridgeChar(spec.line + 3, spec.col + 5)) edges.push('se');
+  return edges;
+}
+
+/**
+ * Detect cliff edges for a cell: 'x' (crag) and 'c' (cliff) chars
+ * substituted into borders and slopes. The glyphs are unambiguous, so no
+ * color is needed. Borders require 2+ cliff chars ('x---x' is a real
+ * cliff border; a single corner char is a neighbor's cliff passing by).
+ */
+function detectCliffEdges(
+  spec: { q: number; r: number; line: number; col: number },
+  artLines: string[]
+): Direction[] {
+  const isCliffChar = (lineIdx: number, col: number): boolean => {
+    const ch = artLines[lineIdx]?.[col];
+    return ch === 'x' || ch === 'c';
+  };
+
+  const edges: Direction[] = [];
+  for (const [dir, lineIdx] of [
+    ['n', spec.line],
+    ['s', spec.line + 4],
+  ] as [Direction, number][]) {
+    let hits = 0;
+    for (let i = 0; i < 5; i++) {
+      if (isCliffChar(lineIdx, spec.col + i)) hits++;
+    }
+    if (hits >= 2) edges.push(dir);
+  }
+  if (isCliffChar(spec.line + 1, spec.col - 1)) edges.push('nw');
+  if (isCliffChar(spec.line + 1, spec.col + 5)) edges.push('ne');
+  if (isCliffChar(spec.line + 3, spec.col - 1)) edges.push('sw');
+  if (isCliffChar(spec.line + 3, spec.col + 5)) edges.push('se');
+  return edges;
+}
+
+/**
+ * Try to parse hex art using the fixed template. Returns null when the art
+ * doesn't validate against the template (caller falls back to search parsing).
+ * `ansiLines` (same lines with ANSI codes) enables color-based river-edge
+ * detection.
+ */
+function parseHexArtTemplate(artLines: string[], ansiLines?: string[]): ParsedHexArt | null {
+  if (artLines.length < 5) return null;
+
+  // Locate the top border on the first line: a 5-char border run whose
+  // column encodes the ring count (col = 6R + 2).
+  const first = artLines[0];
+  let topCol = -1;
+  for (let col = 0; col + 5 <= first.length; col++) {
+    if (
+      BORDER_CHARS.has(first[col]) &&
+      BORDER_CHARS.has(first[col + 1]) &&
+      BORDER_CHARS.has(first[col + 2]) &&
+      BORDER_CHARS.has(first[col + 3]) &&
+      BORDER_CHARS.has(first[col + 4])
+    ) {
+      topCol = col;
+      break;
+    }
+    if (first[col] !== ' ') return null; // unexpected leading content
+  }
+  if (topCol < 2 || (topCol - 2) % 6 !== 0) return null;
+
+  const rings = (topCol - 2) / 6;
+  if (rings > 4) return null;
+
+  // Cell specs sorted by top-border line (top-to-bottom processing order)
+  const cellsSpec: { q: number; r: number; line: number; col: number }[] = [];
+  for (let q = -rings; q <= rings; q++) {
+    const rMin = Math.max(-rings, -rings - q);
+    const rMax = Math.min(rings, rings - q);
+    for (let r = rMin; r <= rMax; r++) {
+      cellsSpec.push({ q, r, line: 4 * rings + 2 * q + 4 * r, col: 6 * q + 6 * rings + 2 });
+    }
+  }
+  cellsSpec.sort((a, b) => a.line - b.line || a.col - b.col);
+
+  // Validate borders per cell (4 of 5 chars must be border chars — terrain
+  // noise can bleed 1 char). Line fragmentation shifts every row after the
+  // break, so stop at the first bad border row and keep only the clean top
+  // portion of the art. This turns interrupted/truncated art into a correct
+  // partial patch instead of a scrambled full one.
+  const validBorderRow = (lineIdx: number, col: number): boolean => {
+    const line = artLines[lineIdx];
+    if (line === undefined) return false;
+    let borderChars = 0;
+    for (let i = 0; i < 5; i++) {
+      const ch = line[col + i];
+      if (ch !== undefined && BORDER_CHARS.has(ch)) borderChars++;
+    }
+    return borderChars >= 4;
+  };
+
+  let firstBadLine = Infinity;
+  for (const spec of cellsSpec) {
+    for (const borderLine of [spec.line, spec.line + 4]) {
+      if (borderLine >= firstBadLine) continue;
+      if (!validBorderRow(borderLine, spec.col)) {
+        firstBadLine = Math.min(firstBadLine, borderLine);
+      }
+    }
+  }
+
+  const validCells = cellsSpec.filter((spec) => spec.line + 4 < firstBadLine);
+  // Not enough clean structure to trust the template — let the caller fall back
+  // (0-ring art has a single cell, so accept whatever the layout can hold)
+  if (validCells.length < Math.min(4, cellsSpec.length)) return null;
+
+  // Per-line color arrays for river-edge detection (lazy: only when ANSI
+  // lines were provided and alignment holds)
+  const colorRows: ((ThemeColorKey | null)[] | null)[] = new Array(artLines.length).fill(null);
+  const haveColors = !!ansiLines && ansiLines.length === artLines.length;
+  if (haveColors) {
+    for (let i = 0; i < artLines.length; i++) {
+      // Only decode rows containing a river- or bridge-capable char
+      if (/[*=+^]/.test(artLines[i])) colorRows[i] = lineFgColors(ansiLines![i]);
+    }
+  }
+
+  // Extract terrain + labels per cell
+  const hexes = new Map<string, HexTerrainType>();
+  const rivers: string[] = [];
+  const riverEdges: { q: number; r: number; dir: Direction }[] = [];
+  const cliffEdges: { q: number; r: number; dir: Direction }[] = [];
+  const bridgeEdges: { q: number; r: number; dir: Direction }[] = [];
+  const labelOccurrences = new Map<string, { q: number; r: number; count: number }[]>();
+  // Per-cell terrain char counts, kept for terrain-char landmark labels
+  const cellStats: {
+    q: number;
+    r: number;
+    terrain: HexTerrainType;
+    counts: Map<string, number>;
+  }[] = [];
+
+  for (const spec of validCells) {
+    if (haveColors) {
+      for (const dir of detectRiverEdges(spec, artLines, colorRows)) {
+        riverEdges.push({ q: spec.q, r: spec.r, dir });
+      }
+    }
+    for (const dir of detectCliffEdges(spec, artLines)) {
+      cliffEdges.push({ q: spec.q, r: spec.r, dir });
+    }
+    if (haveColors) {
+      for (const dir of detectBridgeEdges(spec, artLines, colorRows)) {
+        bridgeEdges.push({ q: spec.q, r: spec.r, dir });
+      }
+    }
+    const terrainCounts = new Map<string, number>();
+    const cellLabels = new Map<string, number>();
+    for (let lineIdx = spec.line + 1; lineIdx <= spec.line + 3; lineIdx++) {
+      const line = artLines[lineIdx];
+      if (line === undefined) continue;
+      for (let col = spec.col - 1; col <= spec.col + 5; col++) {
+        if (col < 0 || col >= line.length) continue;
+        const ch = line[col];
+        if (TERRAIN_CHARS.has(ch)) {
+          terrainCounts.set(ch, (terrainCounts.get(ch) || 0) + 1);
+        } else if (/[0-9A-Z#+@?o]/.test(ch)) {
+          cellLabels.set(ch, (cellLabels.get(ch) || 0) + 1);
+        }
+      }
+    }
+
+    let bestChar = '';
+    let bestCount = 0;
+    for (const [ch, count] of terrainCounts) {
+      if (count > bestCount) {
+        bestChar = ch;
+        bestCount = count;
+      }
+    }
+    const cellTerrain =
+      bestChar && TERRAIN_CHAR_MAP[bestChar] ? TERRAIN_CHAR_MAP[bestChar] : 'unknown';
+    hexes.set(`${spec.q},${spec.r}`, cellTerrain);
+    if ((terrainCounts.get('!') ?? 0) >= 1) rivers.push(`${spec.q},${spec.r}`);
+    cellStats.push({ q: spec.q, r: spec.r, terrain: cellTerrain, counts: terrainCounts });
+
+    for (const [ch, count] of cellLabels) {
+      const list = labelOccurrences.get(ch) ?? [];
+      list.push({ q: spec.q, r: spec.r, count });
+      labelOccurrences.set(ch, list);
+    }
+  }
+
+  const rawLandmarks = parseLandmarks(artLines);
+  const landmarks = rawLandmarks.map((l) => {
+    const occurrences = labelOccurrences.get(l.label);
+    if (occurrences && occurrences.length === 1 && occurrences[0].count === 1) {
+      return { ...l, q: occurrences[0].q, r: occurrences[0].r };
+    }
+    // Terrain-char labels ("^) partially exposed ruins" in a desert): the
+    // marker is a SINGLE out-of-place terrain char inside a cell of a
+    // different terrain. Unique such cell → that's the landmark's hex;
+    // ambiguous (e.g. '^' anywhere near real mountains) → unpositioned.
+    const charTerrain = TERRAIN_CHAR_MAP[l.label];
+    if (charTerrain) {
+      const candidates = cellStats.filter(
+        (cs) => (cs.counts.get(l.label) ?? 0) === 1 && cs.terrain !== charTerrain
+      );
+      if (candidates.length === 1) {
+        return { ...l, q: candidates[0].q, r: candidates[0].r };
+      }
+    }
+    return { ...l, q: null, r: null };
+  });
+
+  return {
+    hexes,
+    rivers,
+    riverEdges,
+    cliffEdges,
+    bridgeEdges,
+    rings,
+    landmarks,
+    rawLines: artLines,
+    source: 'template',
+  };
+}
+
 /**
  * Parse DartMUD hex art lines into structured terrain data.
+ * Uses the fixed-template parser first; falls back to search-based parsing
+ * for art that doesn't match the template.
  *
  * @param artLines - The raw hex art lines (after "You gaze at your surroundings." and blank line)
+ * @param ansiLines - The same lines with ANSI codes (optional; enables
+ *   color-based river-edge detection)
  * @returns Parsed hex data with terrain for each visible hex, or null if parsing fails
  */
-export function parseHexArt(artLines: string[]): ParsedHexArt | null {
+export function parseHexArt(artLines: string[], ansiLines?: string[]): ParsedHexArt | null {
+  const templated = parseHexArtTemplate(artLines, ansiLines);
+  if (templated) return templated;
+  return parseHexArtSearch(artLines);
+}
+
+/**
+ * Search-based fallback parser (the original implementation).
+ */
+function parseHexArtSearch(artLines: string[]): ParsedHexArt | null {
   if (artLines.length < 5) return null;
 
   // Step 0: Strip landmark annotations from art lines for parsing
@@ -396,27 +799,44 @@ export function parseHexArt(artLines: string[]): ParsedHexArt | null {
   const cells = assignCoordinates(columnGroups, ringCount);
   if (cells.length === 0) return null;
 
-  // Step 5: Extract terrain for each cell (use cleaned lines for terrain detection)
+  // Step 5: Extract terrain + label chars for each cell (use cleaned lines)
   const hexes = new Map<string, HexTerrainType>();
+  const rivers: string[] = [];
+  const labelOccurrences = new Map<string, { cell: HexCell; count: number }[]>();
   for (const cell of cells) {
-    const terrain = extractTerrain(cell, cleanedLines);
+    const { terrain, river, labelChars } = extractCellData(cell, cleanedLines);
     hexes.set(`${cell.q},${cell.r}`, terrain);
+    if (river) rivers.push(`${cell.q},${cell.r}`);
+    for (const [ch, count] of labelChars) {
+      const list = labelOccurrences.get(ch) ?? [];
+      list.push({ cell, count });
+      labelOccurrences.set(ch, list);
+    }
   }
 
-  // Step 6: Parse landmarks
+  // Step 6: Parse landmarks and locate each label char in the art.
+  // A landmark gets a position only when its label char appears in exactly
+  // one cell (always true for digits/uppercase labels; lowercase labels that
+  // collide with terrain chars stay unpositioned).
   const rawLandmarks = parseLandmarks(artLines);
-  // TODO: Map landmarks to hex positions by finding their indicator chars in the art
-  const landmarks = rawLandmarks.map((l) => ({
-    ...l,
-    q: 0,
-    r: 0, // placeholder — needs hex position mapping
-  }));
+  const landmarks = rawLandmarks.map((l) => {
+    const occurrences = labelOccurrences.get(l.label);
+    if (occurrences && occurrences.length === 1 && occurrences[0].count === 1) {
+      return { ...l, q: occurrences[0].cell.q, r: occurrences[0].cell.r };
+    }
+    return { ...l, q: null, r: null };
+  });
 
   return {
     hexes,
+    rivers,
+    riverEdges: [],
+    cliffEdges: [],
+    bridgeEdges: [],
     rings: ringCount,
     landmarks,
     rawLines: artLines,
+    source: 'search',
   };
 }
 

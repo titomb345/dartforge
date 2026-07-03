@@ -2,9 +2,11 @@
  * MapCanvas — HTML5 Canvas hex grid renderer for the auto-mapper.
  *
  * Design: "Explorer's Chart" — dark background, muted earthy terrain colors,
- * hand-drawn map feel, current room glow, fog of war.
+ * hand-drawn map feel, current position glow, fog of war.
  *
- * Hex-only: renders wilderness hexes with terrain-based coloring and 6-direction exits.
+ * Renders the player's current island as a terrain mosaic: visited hexes at
+ * full strength, seen-but-unvisited hexes dimmed (fog), landmark markers,
+ * and learned blocked edges.
  */
 
 import { useRef, useEffect, useCallback, useState } from 'react';
@@ -13,12 +15,12 @@ import {
   hexToPixel,
   hexCorners,
   pixelToHex,
-  type Direction,
-  COMPASS_DIRECTIONS,
   getDirectionOffset,
   directionLabel,
+  COMPASS_DIRECTIONS,
+  type Direction,
 } from '../lib/hexUtils';
-import type { MapRoom, MapGraph } from '../lib/mapGraph';
+import type { HexCell } from '../lib/hexMap';
 import { TERRAIN_LABELS, type HexTerrainType } from '../lib/hexTerrainPatterns';
 
 // ---------------------------------------------------------------------------
@@ -29,22 +31,21 @@ const HEX_SIZE = 32;
 const BG_COLOR = '#0f0e0d';
 const GRID_COLOR = 'rgba(80, 70, 55, 0.12)';
 const CURRENT_ROOM_GLOW = '#e8a849';
-const CURRENT_ROOM_FILL = 'rgba(232, 168, 73, 0.25)';
 
 /** Terrain fill colors */
 const TERRAIN_FILL: Record<HexTerrainType, string> = {
-  plains: 'rgba(120, 130, 60, 0.35)',
-  mountains: 'rgba(130, 115, 95, 0.40)',
-  water: 'rgba(60, 100, 160, 0.35)',
-  ocean: 'rgba(30, 60, 130, 0.40)',
-  farmland: 'rgba(180, 160, 70, 0.30)',
-  woods: 'rgba(40, 100, 45, 0.40)',
-  hills: 'rgba(170, 145, 100, 0.35)',
-  swamp: 'rgba(70, 100, 60, 0.35)',
-  desert: 'rgba(190, 170, 110, 0.30)',
-  wasteland: 'rgba(90, 65, 50, 0.35)',
-  snow: 'rgba(180, 200, 220, 0.30)',
-  unknown: 'rgba(70, 70, 70, 0.25)',
+  plains: 'rgba(120, 130, 60, 0.45)',
+  mountains: 'rgba(130, 115, 95, 0.50)',
+  water: 'rgba(60, 100, 160, 0.45)',
+  river: 'rgba(80, 140, 190, 0.45)',
+  ocean: 'rgba(30, 60, 130, 0.50)',
+  farmland: 'rgba(180, 160, 70, 0.40)',
+  woods: 'rgba(40, 100, 45, 0.50)',
+  hills: 'rgba(170, 145, 100, 0.45)',
+  swamp: 'rgba(70, 100, 60, 0.45)',
+  desert: 'rgba(190, 170, 110, 0.40)',
+  wasteland: 'rgba(90, 65, 50, 0.45)',
+  unknown: 'rgba(70, 70, 70, 0.30)',
 };
 
 /** Terrain stroke colors */
@@ -52,6 +53,7 @@ const TERRAIN_STROKE: Record<HexTerrainType, string> = {
   plains: 'rgba(140, 160, 80, 0.6)',
   mountains: 'rgba(160, 140, 115, 0.6)',
   water: 'rgba(80, 130, 200, 0.6)',
+  river: 'rgba(100, 160, 210, 0.6)',
   ocean: 'rgba(50, 80, 170, 0.6)',
   farmland: 'rgba(200, 180, 90, 0.5)',
   woods: 'rgba(60, 130, 65, 0.6)',
@@ -59,13 +61,16 @@ const TERRAIN_STROKE: Record<HexTerrainType, string> = {
   swamp: 'rgba(90, 120, 75, 0.5)',
   desert: 'rgba(210, 190, 130, 0.5)',
   wasteland: 'rgba(120, 90, 70, 0.5)',
-  snow: 'rgba(200, 215, 235, 0.5)',
   unknown: 'rgba(100, 100, 100, 0.4)',
 };
 
-const EXIT_LINE_COLOR = 'rgba(120, 105, 80, 0.35)';
 const LABEL_COLOR = 'rgba(200, 185, 160, 0.85)';
 const LABEL_FONT = '9px "Courier New", monospace';
+const LANDMARK_COLOR = '#e8c97a';
+const RIVER_COLOR = 'rgba(96, 158, 214, 0.85)';
+const CLIFF_COLOR = 'rgba(205, 185, 150, 0.9)';
+const BRIDGE_COLOR = '#e8a849';
+const BLOCKED_COLOR = 'rgba(220, 80, 70, 0.7)';
 const TOOLTIP_BG = 'rgba(20, 18, 16, 0.95)';
 const TOOLTIP_BORDER = 'rgba(140, 125, 100, 0.5)';
 const TOOLTIP_TEXT = '#c8b9a0';
@@ -75,12 +80,22 @@ interface MapCanvasProps {
   height: number;
   showLabels: boolean;
   showFog: boolean;
-  onWalkTo?: (roomId: string, directions: Direction[]) => void;
+  /** Dim the terrain mosaic (drawn under icons/markers) — used while indoors */
+  dimmed?: boolean;
+  onWalkTo?: (q: number, r: number) => void;
 }
 
-export function MapCanvas({ width, height, showLabels, showFog, onWalkTo }: MapCanvasProps) {
+export function MapCanvas({
+  width,
+  height,
+  showLabels,
+  showFog,
+  dimmed = false,
+  onWalkTo,
+}: MapCanvasProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  const { graph, currentRoomId, centerVersion, findPathTo } = useMapContext();
+  const { version, currentPos, centerVersion, getCells, getCellAt, clearBlockedAt, toggleTownAt } =
+    useMapContext();
 
   // Pan/zoom state
   const panRef = useRef({ x: 0, y: 0 });
@@ -88,21 +103,42 @@ export function MapCanvas({ width, height, showLabels, showFog, onWalkTo }: MapC
   const dragRef = useRef<{ startX: number; startY: number; panX: number; panY: number } | null>(
     null
   );
-  const [tooltip, setTooltip] = useState<{ x: number; y: number; room: MapRoom } | null>(null);
+  const [tooltip, setTooltip] = useState<{ x: number; y: number; cell: HexCell } | null>(null);
   const animFrameRef = useRef<number>(0);
+  // Hover-to-inspect: the tooltip only appears after the cursor rests on a
+  // hex for a moment (clicking is for drag/walk/marking, not inspecting)
+  const hoverRef = useRef<{
+    key: string | null;
+    shownKey: string | null;
+    timer: ReturnType<typeof setTimeout> | null;
+  }>({ key: null, shownKey: null, timer: null });
+
+  const cancelHover = useCallback((hide: boolean) => {
+    const h = hoverRef.current;
+    if (h.timer) {
+      clearTimeout(h.timer);
+      h.timer = null;
+    }
+    h.key = null;
+    if (hide) {
+      h.shownKey = null;
+      setTooltip(null);
+    }
+  }, []);
+
+  useEffect(() => () => cancelHover(false), [cancelHover]);
 
   // Force redraw trigger
   const [, setRedraw] = useState(0);
   const requestRedraw = useCallback(() => setRedraw((v) => v + 1), []);
 
-  // Center on current room
+  // Center on current position
   useEffect(() => {
-    if (!currentRoomId || !graph.rooms[currentRoomId]) return;
-    const room = graph.rooms[currentRoomId];
-    const px = hexToPixel(room.coords.q, room.coords.r, HEX_SIZE);
+    if (!currentPos) return;
+    const px = hexToPixel(currentPos.q, currentPos.r, HEX_SIZE);
     panRef.current = { x: -px.x, y: -px.y };
     requestRedraw();
-  }, [currentRoomId, centerVersion, graph, requestRedraw]);
+  }, [currentPos, centerVersion, requestRedraw]);
 
   // Draw
   useEffect(() => {
@@ -133,48 +169,106 @@ export function MapCanvas({ width, height, showLabels, showFog, onWalkTo }: MapC
     ctx.translate(centerX, centerY);
     ctx.scale(zoom, zoom);
 
-    const rooms = Object.values(graph.rooms);
+    const cells = getCells();
 
-    // Draw exit lines first (under hexes)
-    for (const room of rooms) {
-      drawExitLines(ctx, room, graph);
+    // Terrain mosaic
+    for (const cell of cells) {
+      const isCurrent =
+        !!currentPos && cell.q === currentPos.q && cell.r === currentPos.r;
+      drawHex(ctx, cell, isCurrent, showFog);
     }
 
-    // Draw hex cells
-    for (const room of rooms) {
-      const isCurrent = room.id === currentRoomId;
-      drawHex(ctx, room, isCurrent, showFog);
+    // Rivers, cliffs, blocked edges, and landmarks on top
+    for (const cell of cells) {
+      if (cell.river) drawRiver(ctx, cell);
+      if (cell.riverEdges.length > 0) drawRiverEdges(ctx, cell);
+      if (cell.cliffEdges.length > 0) drawCliffEdges(ctx, cell);
+      if (cell.bridgeEdges.length > 0) drawBridgeEdges(ctx, cell);
+      if (cell.blocked.length > 0) drawBlockedEdges(ctx, cell);
+      if (cell.marker === 'town') drawTownMarker(ctx, cell);
+      else if (cell.landmarks.length > 0) drawLandmarkMarker(ctx, cell);
     }
 
-    // Draw labels
-    if (showLabels) {
-      for (const room of rooms) {
-        drawLabel(ctx, room);
+    // Labels
+    if (showLabels && zoom >= 0.6) {
+      for (const cell of cells) {
+        drawLabel(ctx, cell);
       }
     }
 
-    // Draw current room glow
-    if (currentRoomId && graph.rooms[currentRoomId]) {
-      drawCurrentGlow(ctx, graph.rooms[currentRoomId]);
+    // Current position glow
+    if (currentPos) {
+      drawCurrentGlow(ctx, currentPos.q, currentPos.r);
     }
 
     ctx.restore();
 
     // Compass rose
     drawCompassRose(ctx, width, height);
+
+    // Indoors: dim the whole map uniformly (the DOM popup/badge above the
+    // canvas stay at full brightness). Interaction is unaffected.
+    if (dimmed) {
+      ctx.fillStyle = 'rgba(15, 14, 13, 0.42)';
+      ctx.fillRect(0, 0, width, height);
+    }
+    // The `version` dependency (from context) drives redraws on map changes
+    void version;
   });
 
   // Mouse handlers
-  const handleMouseDown = useCallback((e: React.MouseEvent) => {
-    setTooltip(null);
-    dragRef.current = {
-      startX: e.clientX,
-      startY: e.clientY,
-      panX: panRef.current.x,
-      panY: panRef.current.y,
-    };
+  const handleMouseDown = useCallback(
+    (e: React.MouseEvent) => {
+      cancelHover(true);
+      dragRef.current = {
+        startX: e.clientX,
+        startY: e.clientY,
+        panX: panRef.current.x,
+        panY: panRef.current.y,
+      };
+    },
+    [cancelHover]
+  );
+
+  const handleMouseUp = useCallback(() => {
+    dragRef.current = null;
   }, []);
 
+  const handleMouseLeave = useCallback(() => {
+    dragRef.current = null;
+    cancelHover(true);
+  }, [cancelHover]);
+
+  const handleWheel = useCallback(
+    (e: React.WheelEvent) => {
+      e.preventDefault();
+      const delta = e.deltaY > 0 ? 0.9 : 1.1;
+      zoomRef.current = Math.max(0.2, Math.min(4, zoomRef.current * delta));
+      cancelHover(true); // tooltip position would go stale under the new zoom
+      requestRedraw();
+    },
+    [requestRedraw, cancelHover]
+  );
+
+  const hexAtMouse = useCallback(
+    (e: React.MouseEvent): { q: number; r: number } | null => {
+      const canvas = canvasRef.current;
+      if (!canvas) return null;
+      const rect = canvas.getBoundingClientRect();
+      const zoom = zoomRef.current;
+      const pan = panRef.current;
+      const worldX = (e.clientX - rect.left - rect.width / 2) / zoom - pan.x;
+      const worldY = (e.clientY - rect.top - rect.height / 2) / zoom - pan.y;
+      return pixelToHex(worldX, worldY, HEX_SIZE);
+    },
+    []
+  );
+
+  /** How long the cursor must rest on a hex before its info popup shows */
+  const HOVER_DELAY = 800;
+
+  // Drag-pan + hover-to-inspect. The tooltip appears only after the cursor
+  // rests on a mapped hex, so click-dragging the map never pops it up.
   const handleMouseMove = useCallback(
     (e: React.MouseEvent) => {
       if (dragRef.current) {
@@ -186,82 +280,77 @@ export function MapCanvas({ width, height, showLabels, showFog, onWalkTo }: MapC
         };
         if (animFrameRef.current) cancelAnimationFrame(animFrameRef.current);
         animFrameRef.current = requestAnimationFrame(() => requestRedraw());
+        return;
       }
-    },
-    [requestRedraw]
-  );
 
-  const handleMouseUp = useCallback(() => {
-    dragRef.current = null;
-  }, []);
+      const canvas = canvasRef.current;
+      const hex = hexAtMouse(e);
+      const cell = hex ? getCellAt(hex.q, hex.r) : undefined;
+      if (!canvas || !hex || !cell) {
+        cancelHover(true);
+        return;
+      }
+      const key = `${hex.q},${hex.r}`;
+      const h = hoverRef.current;
+      // Moving within the hex the tooltip is already shown for — keep it
+      if (h.shownKey === key) return;
+      // Already counting down on this hex — let the timer run
+      if (h.key === key && h.timer) return;
 
-  const handleWheel = useCallback(
-    (e: React.WheelEvent) => {
-      e.preventDefault();
-      const delta = e.deltaY > 0 ? 0.9 : 1.1;
-      zoomRef.current = Math.max(0.2, Math.min(4, zoomRef.current * delta));
-      requestRedraw();
+      cancelHover(true);
+      h.key = key;
+      const rect = canvas.getBoundingClientRect();
+      const tipX = e.clientX - rect.left;
+      const tipY = e.clientY - rect.top;
+      h.timer = setTimeout(() => {
+        h.timer = null;
+        h.shownKey = key;
+        // Re-read the cell so the popup shows fresh data at display time
+        const fresh = getCellAt(hex.q, hex.r);
+        if (fresh) setTooltip({ x: tipX, y: tipY, cell: fresh });
+      }, HOVER_DELAY);
     },
-    [requestRedraw]
+    [hexAtMouse, getCellAt, cancelHover, requestRedraw]
   );
 
   const handleClick = useCallback(
     (e: React.MouseEvent) => {
-      const canvas = canvasRef.current;
-      if (!canvas) return;
-      const rect = canvas.getBoundingClientRect();
-      const zoom = zoomRef.current;
-      const pan = panRef.current;
-
-      // Convert click position to world coordinates
-      const worldX = (e.clientX - rect.left - rect.width / 2) / zoom - pan.x;
-      const worldY = (e.clientY - rect.top - rect.height / 2) / zoom - pan.y;
-
-      const hex = pixelToHex(worldX, worldY, HEX_SIZE);
-
-      // Find room at this hex
-      const room = Object.values(graph.rooms).find(
-        (r) => r.coords.q === hex.q && r.coords.r === hex.r
-      );
-
-      if (room) {
-        setTooltip({
-          x: e.clientX - rect.left,
-          y: e.clientY - rect.top,
-          room,
-        });
-      } else {
-        setTooltip(null);
+      const hex = hexAtMouse(e);
+      if (!hex) return;
+      const cell = getCellAt(hex.q, hex.r);
+      if (!cell) return;
+      // Shift+click toggles the town marker (house icon)
+      if (e.shiftKey) {
+        toggleTownAt(hex.q, hex.r);
+        cancelHover(true);
+        return;
       }
+      // Ctrl+click clears incorrect blocked/river/cliff marks on the hex
+      if (
+        (e.ctrlKey || e.altKey) &&
+        (cell.blocked.length > 0 ||
+          cell.riverEdges.length > 0 ||
+          cell.cliffEdges.length > 0 ||
+          cell.bridgeEdges.length > 0 ||
+          cell.river)
+      ) {
+        clearBlockedAt(hex.q, hex.r);
+        cancelHover(true);
+      }
+      // Plain clicks are for dragging — inspection happens on hover
     },
-    [graph]
+    [hexAtMouse, getCellAt, clearBlockedAt, toggleTownAt, cancelHover]
   );
 
   const handleContextMenu = useCallback(
     (e: React.MouseEvent) => {
       e.preventDefault();
-      const canvas = canvasRef.current;
-      if (!canvas) return;
-      const rect = canvas.getBoundingClientRect();
-      const zoom = zoomRef.current;
-      const pan = panRef.current;
-
-      const worldX = (e.clientX - rect.left - rect.width / 2) / zoom - pan.x;
-      const worldY = (e.clientY - rect.top - rect.height / 2) / zoom - pan.y;
-      const hex = pixelToHex(worldX, worldY, HEX_SIZE);
-
-      const room = Object.values(graph.rooms).find(
-        (r) => r.coords.q === hex.q && r.coords.r === hex.r
-      );
-
-      if (room && onWalkTo) {
-        const path = findPathTo(room.id);
-        if (path && path.directions.length > 0) {
-          onWalkTo(room.id, path.directions);
-        }
-      }
+      const hex = hexAtMouse(e);
+      if (!hex || !onWalkTo) return;
+      const cell = getCellAt(hex.q, hex.r);
+      if (cell) onWalkTo(hex.q, hex.r);
     },
-    [graph, findPathTo, onWalkTo]
+    [hexAtMouse, getCellAt, onWalkTo]
   );
 
   return (
@@ -275,19 +364,21 @@ export function MapCanvas({ width, height, showLabels, showFog, onWalkTo }: MapC
         onMouseDown={handleMouseDown}
         onMouseMove={handleMouseMove}
         onMouseUp={handleMouseUp}
-        onMouseLeave={handleMouseUp}
+        onMouseLeave={handleMouseLeave}
         onWheel={handleWheel}
         onClick={handleClick}
         onContextMenu={handleContextMenu}
       />
       {tooltip && (
-        <RoomTooltip
-          room={tooltip.room}
+        <CellTooltip
+          cell={tooltip.cell}
           x={tooltip.x}
           y={tooltip.y}
           containerWidth={width}
           containerHeight={height}
-          isCurrent={tooltip.room.id === currentRoomId}
+          isCurrent={
+            !!currentPos && tooltip.cell.q === currentPos.q && tooltip.cell.r === currentPos.r
+          }
         />
       )}
     </div>
@@ -325,54 +416,13 @@ function drawBackgroundGrid(
   ctx.stroke();
 }
 
-function drawExitLines(ctx: CanvasRenderingContext2D, room: MapRoom, graph: MapGraph) {
-  const from = hexToPixel(room.coords.q, room.coords.r, HEX_SIZE);
-
-  for (const dir of COMPASS_DIRECTIONS) {
-    const targetId = room.exits[dir];
-    if (!targetId) continue;
-    const target = graph.rooms[targetId];
-    if (!target) continue;
-
-    const to = hexToPixel(target.coords.q, target.coords.r, HEX_SIZE);
-
-    ctx.beginPath();
-    ctx.strokeStyle = EXIT_LINE_COLOR;
-    ctx.lineWidth = 1.5;
-    ctx.moveTo(from.x, from.y);
-    ctx.lineTo(to.x, to.y);
-    ctx.stroke();
-  }
-
-  // Draw stubs for exits that don't have a linked target yet
-  for (const dir of COMPASS_DIRECTIONS) {
-    if (dir in room.exits && !room.exits[dir]) {
-      const offset = getDirectionOffset(dir);
-      const stubLen = HEX_SIZE * 0.6;
-      // Convert axial offset to approximate pixel direction
-      const dx = offset.dq * 1.5 + offset.dr * -0.5;
-      const dy = offset.dr * Math.sqrt(3) * 0.5 + offset.dq * Math.sqrt(3) * 0.25;
-      const len = Math.sqrt(dx * dx + dy * dy) || 1;
-
-      ctx.beginPath();
-      ctx.strokeStyle = 'rgba(120, 105, 80, 0.2)';
-      ctx.lineWidth = 1;
-      ctx.setLineDash([3, 3]);
-      ctx.moveTo(from.x, from.y);
-      ctx.lineTo(from.x + (dx / len) * stubLen, from.y + (dy / len) * stubLen);
-      ctx.stroke();
-      ctx.setLineDash([]);
-    }
-  }
-}
-
 function drawHex(
   ctx: CanvasRenderingContext2D,
-  room: MapRoom,
+  cell: HexCell,
   isCurrent: boolean,
   showFog: boolean
 ) {
-  const { x, y } = hexToPixel(room.coords.q, room.coords.r, HEX_SIZE);
+  const { x, y } = hexToPixel(cell.q, cell.r, HEX_SIZE);
   const corners = hexCorners(x, y, HEX_SIZE - 1);
 
   ctx.beginPath();
@@ -382,26 +432,179 @@ function drawHex(
   }
   ctx.closePath();
 
-  // Fill with terrain color
-  if (isCurrent) {
-    ctx.fillStyle = CURRENT_ROOM_FILL;
-  } else if (showFog && room.visitCount <= 1) {
-    ctx.fillStyle = 'rgba(40, 38, 35, 0.3)';
-  } else {
-    ctx.fillStyle = TERRAIN_FILL[room.terrain] ?? TERRAIN_FILL.unknown;
-  }
+  const dimmed = showFog && !cell.visited;
+  ctx.globalAlpha = dimmed ? 0.45 : 1;
+  ctx.fillStyle = TERRAIN_FILL[cell.terrain] ?? TERRAIN_FILL.unknown;
   ctx.fill();
 
-  // Stroke with terrain color
   ctx.strokeStyle = isCurrent
     ? CURRENT_ROOM_GLOW
-    : (TERRAIN_STROKE[room.terrain] ?? TERRAIN_STROKE.unknown);
+    : (TERRAIN_STROKE[cell.terrain] ?? TERRAIN_STROKE.unknown);
   ctx.lineWidth = isCurrent ? 2 : 1;
   ctx.stroke();
+  ctx.globalAlpha = 1;
 }
 
-function drawCurrentGlow(ctx: CanvasRenderingContext2D, room: MapRoom) {
-  const { x, y } = hexToPixel(room.coords.q, room.coords.r, HEX_SIZE);
+/**
+ * Which hex corners bound each edge (flat-top layout, hexCorners order:
+ * 0=E, 1=SE-bottom, 2=SW-bottom, 3=W, 4=NW-top, 5=NE-top).
+ */
+const EDGE_CORNERS: Record<Direction, [number, number]> = {
+  n: [4, 5],
+  ne: [5, 0],
+  se: [0, 1],
+  s: [1, 2],
+  sw: [2, 3],
+  nw: [3, 4],
+};
+
+/** Rivers running along hex sides — drawn as thick blue edge segments */
+function drawRiverEdges(ctx: CanvasRenderingContext2D, cell: HexCell) {
+  const { x, y } = hexToPixel(cell.q, cell.r, HEX_SIZE);
+  const corners = hexCorners(x, y, HEX_SIZE - 1);
+  ctx.strokeStyle = RIVER_COLOR;
+  ctx.lineWidth = 3;
+  ctx.lineCap = 'round';
+  for (const dir of cell.riverEdges) {
+    const [a, b] = EDGE_CORNERS[dir];
+    ctx.beginPath();
+    ctx.moveTo(corners[a].x, corners[a].y);
+    ctx.lineTo(corners[b].x, corners[b].y);
+    ctx.stroke();
+  }
+  ctx.lineCap = 'butt';
+}
+
+/** Blue stream meandering across a hex (rivers run through other terrain) */
+function drawRiver(ctx: CanvasRenderingContext2D, cell: HexCell) {
+  const { x, y } = hexToPixel(cell.q, cell.r, HEX_SIZE);
+  const w = HEX_SIZE * 0.72;
+  ctx.strokeStyle = RIVER_COLOR;
+  ctx.lineWidth = 2.2;
+  ctx.lineCap = 'round';
+  ctx.beginPath();
+  ctx.moveTo(x - w, y + HEX_SIZE * 0.1);
+  ctx.bezierCurveTo(
+    x - w * 0.35,
+    y - HEX_SIZE * 0.28,
+    x + w * 0.35,
+    y + HEX_SIZE * 0.38,
+    x + w,
+    y - HEX_SIZE * 0.05
+  );
+  ctx.stroke();
+  ctx.lineCap = 'butt';
+}
+
+/**
+ * Bridges: a short amber bar crossing the edge perpendicular to it —
+ * a plank over the river, marking the zero-concentration crossing.
+ */
+function drawBridgeEdges(ctx: CanvasRenderingContext2D, cell: HexCell) {
+  const { x, y } = hexToPixel(cell.q, cell.r, HEX_SIZE);
+  const corners = hexCorners(x, y, HEX_SIZE - 1);
+  ctx.strokeStyle = BRIDGE_COLOR;
+  ctx.lineWidth = 3.5;
+  ctx.lineCap = 'round';
+  for (const dir of cell.bridgeEdges) {
+    const [a, b] = EDGE_CORNERS[dir];
+    const mx = (corners[a].x + corners[b].x) / 2;
+    const my = (corners[a].y + corners[b].y) / 2;
+    // Perpendicular to the edge
+    const dx = corners[b].x - corners[a].x;
+    const dy = corners[b].y - corners[a].y;
+    const len = Math.sqrt(dx * dx + dy * dy) || 1;
+    const px = -dy / len;
+    const py = dx / len;
+    const half = HEX_SIZE * 0.22;
+    ctx.beginPath();
+    ctx.moveTo(mx - px * half, my - py * half);
+    ctx.lineTo(mx + px * half, my + py * half);
+    ctx.stroke();
+  }
+  ctx.lineCap = 'butt';
+}
+
+/** Cliffs along hex sides — dashed stone-colored edge segments */
+function drawCliffEdges(ctx: CanvasRenderingContext2D, cell: HexCell) {
+  const { x, y } = hexToPixel(cell.q, cell.r, HEX_SIZE);
+  const corners = hexCorners(x, y, HEX_SIZE - 1);
+  ctx.strokeStyle = CLIFF_COLOR;
+  ctx.lineWidth = 2.5;
+  ctx.setLineDash([4, 3]);
+  for (const dir of cell.cliffEdges) {
+    const [a, b] = EDGE_CORNERS[dir];
+    ctx.beginPath();
+    ctx.moveTo(corners[a].x, corners[a].y);
+    ctx.lineTo(corners[b].x, corners[b].y);
+    ctx.stroke();
+  }
+  ctx.setLineDash([]);
+}
+
+/** Red tick across each blocked edge */
+function drawBlockedEdges(ctx: CanvasRenderingContext2D, cell: HexCell) {
+  const { x, y } = hexToPixel(cell.q, cell.r, HEX_SIZE);
+  ctx.strokeStyle = BLOCKED_COLOR;
+  ctx.lineWidth = 2.5;
+  for (const dir of COMPASS_DIRECTIONS) {
+    if (!cell.blocked.includes(dir)) continue;
+    // Midpoint toward the neighbor, drawn as a short perpendicular tick
+    const o = getDirectionOffset(dir as Direction);
+    const n = hexToPixel(cell.q + o.dq, cell.r + o.dr, HEX_SIZE);
+    const mx = (x + n.x) / 2;
+    const my = (y + n.y) / 2;
+    const dx = n.x - x;
+    const dy = n.y - y;
+    const len = Math.sqrt(dx * dx + dy * dy) || 1;
+    // Perpendicular
+    const px = -dy / len;
+    const py = dx / len;
+    const tick = HEX_SIZE * 0.28;
+    ctx.beginPath();
+    ctx.moveTo(mx - px * tick, my - py * tick);
+    ctx.lineTo(mx + px * tick, my + py * tick);
+    ctx.stroke();
+  }
+}
+
+/** Town marker: a small house (roof + walls + door) in landmark gold */
+function drawTownMarker(ctx: CanvasRenderingContext2D, cell: HexCell) {
+  const { x, y } = hexToPixel(cell.q, cell.r, HEX_SIZE);
+  const s = HEX_SIZE * 0.22;
+  const baseY = y + s * 0.9;
+  const wallTop = y - s * 0.1;
+
+  // Walls
+  ctx.fillStyle = LANDMARK_COLOR;
+  ctx.fillRect(x - s * 0.8, wallTop, s * 1.6, baseY - wallTop);
+  // Roof
+  ctx.beginPath();
+  ctx.moveTo(x - s * 1.1, wallTop);
+  ctx.lineTo(x, y - s * 1.1);
+  ctx.lineTo(x + s * 1.1, wallTop);
+  ctx.closePath();
+  ctx.fill();
+  // Door (punched out in the background color)
+  ctx.fillStyle = BG_COLOR;
+  ctx.fillRect(x - s * 0.22, baseY - s * 0.8, s * 0.44, s * 0.8);
+}
+
+function drawLandmarkMarker(ctx: CanvasRenderingContext2D, cell: HexCell) {
+  const { x, y } = hexToPixel(cell.q, cell.r, HEX_SIZE);
+  const size = 4;
+  ctx.fillStyle = LANDMARK_COLOR;
+  ctx.beginPath();
+  ctx.moveTo(x, y - HEX_SIZE * 0.55 - size);
+  ctx.lineTo(x + size, y - HEX_SIZE * 0.55);
+  ctx.lineTo(x, y - HEX_SIZE * 0.55 + size);
+  ctx.lineTo(x - size, y - HEX_SIZE * 0.55);
+  ctx.closePath();
+  ctx.fill();
+}
+
+function drawCurrentGlow(ctx: CanvasRenderingContext2D, q: number, r: number) {
+  const { x, y } = hexToPixel(q, r, HEX_SIZE);
 
   ctx.save();
   ctx.globalAlpha = 0.3;
@@ -414,9 +617,9 @@ function drawCurrentGlow(ctx: CanvasRenderingContext2D, room: MapRoom) {
   ctx.restore();
 }
 
-function drawLabel(ctx: CanvasRenderingContext2D, room: MapRoom) {
-  const { x, y } = hexToPixel(room.coords.q, room.coords.r, HEX_SIZE);
-  const label = TERRAIN_LABELS[room.terrain] ?? '?';
+function drawLabel(ctx: CanvasRenderingContext2D, cell: HexCell) {
+  const { x, y } = hexToPixel(cell.q, cell.r, HEX_SIZE);
+  const label = TERRAIN_LABELS[cell.terrain] ?? '?';
 
   ctx.font = LABEL_FONT;
   ctx.fillStyle = LABEL_COLOR;
@@ -447,7 +650,6 @@ function drawCompassRose(ctx: CanvasRenderingContext2D, w: number, h: number) {
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
 
-  // N/S along vertical axis, NE/NW/SE/SW at 60-degree angles
   const dirs: { label: string; angle: number }[] = [
     { label: 'N', angle: -Math.PI / 2 },
     { label: 'NE', angle: -Math.PI / 6 },
@@ -480,15 +682,15 @@ function drawCompassRose(ctx: CanvasRenderingContext2D, w: number, h: number) {
 // Tooltip component
 // ---------------------------------------------------------------------------
 
-function RoomTooltip({
-  room,
+function CellTooltip({
+  cell,
   x,
   y,
   containerWidth,
   containerHeight,
   isCurrent,
 }: {
-  room: MapRoom;
+  cell: HexCell;
   x: number;
   y: number;
   containerWidth: number;
@@ -496,15 +698,12 @@ function RoomTooltip({
   isCurrent: boolean;
 }) {
   const tipW = 220;
-  const tipH = 100;
+  const tipH = 110;
   const tx = x + tipW > containerWidth ? x - tipW - 8 : x + 8;
   const ty = y + tipH > containerHeight ? containerHeight - tipH - 8 : y + 8;
 
-  const exits = Object.entries(room.exits)
-    .filter(([, target]) => target)
-    .map(([dir]) => directionLabel(dir as Direction));
-
-  const terrainLabel = TERRAIN_LABELS[room.terrain] ?? 'Unknown';
+  const terrainLabel = TERRAIN_LABELS[cell.terrain] ?? 'Unknown';
+  const blocked = cell.blocked.map((d) => directionLabel(d)).join(', ');
 
   return (
     <div
@@ -523,22 +722,53 @@ function RoomTooltip({
         style={{ color: isCurrent ? CURRENT_ROOM_GLOW : TOOLTIP_TEXT }}
       >
         {terrainLabel}
+        {cell.marker === 'town' && <span style={{ color: LANDMARK_COLOR }}> · Town</span>}
+        {(cell.river || cell.riverEdges.length > 0) && (
+          <span style={{ color: RIVER_COLOR }}>
+            {' '}
+            · river{cell.riverEdges.length > 0 ? ` (${cell.riverEdges.map((d) => directionLabel(d)).join(', ')})` : ''}
+            <span className="opacity-60 italic"> — Ctrl+click to clear</span>
+          </span>
+        )}
+        {cell.cliffEdges.length > 0 && (
+          <span style={{ color: CLIFF_COLOR }}>
+            {' '}
+            · cliff ({cell.cliffEdges.map((d) => directionLabel(d)).join(', ')})
+            <span className="opacity-60 italic"> — Ctrl+click to clear</span>
+          </span>
+        )}
+        {cell.bridgeEdges.length > 0 && (
+          <span style={{ color: BRIDGE_COLOR }}>
+            {' '}
+            · bridge ({cell.bridgeEdges.map((d) => directionLabel(d)).join(', ')})
+          </span>
+        )}
         <span className="font-normal opacity-50 ml-1.5">
-          ({room.coords.q}, {room.coords.r})
+          ({cell.q}, {cell.r})
         </span>
       </div>
-      {room.description && (
-        <div className="text-[9px] opacity-60 mb-1 line-clamp-2">{room.description}</div>
+      {cell.landmarks.length > 0 && (
+        <div className="text-[9px] mb-1" style={{ color: LANDMARK_COLOR }}>
+          {cell.landmarks.slice(0, 2).join(' · ')}
+        </div>
       )}
-      {room.landmarks.length > 0 && (
-        <div className="text-[9px] opacity-50 mb-1 italic">{room.landmarks[0]}</div>
+      {cell.description && (
+        <div className="text-[9px] opacity-60 mb-1 line-clamp-2">{cell.description}</div>
       )}
-      {exits.length > 0 && <div className="text-[9px] opacity-50">Exits: {exits.join(', ')}</div>}
+      {blocked && (
+        <div className="text-[9px] opacity-50 text-red-400">
+          Blocked: {blocked}
+          <span className="opacity-70 italic"> — Ctrl+click to clear</span>
+        </div>
+      )}
       <div className="text-[9px] opacity-40 mt-0.5">
-        Visited {room.visitCount}x{room.notes ? ' · Has notes' : ''}
+        {cell.visited ? `Visited ${cell.visitCount}x` : 'Seen from afar'}
+        {cell.notes ? ' · Has notes' : ''}
       </div>
       {!isCurrent && (
-        <div className="text-[9px] opacity-40 mt-0.5 italic">Right-click to walk here</div>
+        <div className="text-[9px] opacity-40 mt-0.5 italic">
+          Right-click to walk here · Shift+click to toggle town
+        </div>
       )}
     </div>
   );

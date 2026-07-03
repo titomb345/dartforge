@@ -15,7 +15,7 @@ import {
   GearIcon,
   CoinIcon,
   WhoIcon,
-  // MapIcon, // automapper disabled
+  MapIcon,
   AllocIcon,
   BabelIcon,
   HelpIcon,
@@ -119,7 +119,6 @@ export function Toolbar({ connected, onReconnect, onDisconnect, onScreenshot }: 
           pinned={isPinned('notes')}
           onClick={() => togglePanel('notes')}
         />
-        {/* Automapper disabled — leave code intact for future use
         <IconButton
           icon={<MapIcon />}
           title="Map"
@@ -130,7 +129,6 @@ export function Toolbar({ connected, onReconnect, onDisconnect, onScreenshot }: 
           pinned={isPinned('map')}
           onClick={() => togglePanel('map')}
         />
-        */}
         <IconButton
           icon={<AllocIcon />}
           title="Allocations"

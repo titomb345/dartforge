@@ -8,20 +8,29 @@ import { panelRootClass } from '../lib/panelUtils';
 import { PanelHeader } from './PanelHeader';
 import { MapIcon } from './icons';
 import { MapCanvas } from './MapCanvas';
+import { ConfirmDeleteButton } from './ConfirmDeleteButton';
 import { useMapContext } from '../contexts/MapContext';
 import { TERRAIN_LABELS } from '../lib/hexTerrainPatterns';
-import type { Direction } from '../lib/hexUtils';
 
-type MapPanelProps = PinnablePanelProps & {
-  onWalkTo?: (directions: Direction[]) => void;
-};
-
-export function MapPanel({ mode = 'slideout', onWalkTo }: MapPanelProps) {
+export function MapPanel({ mode = 'slideout' }: PinnablePanelProps) {
   const isPinned = mode === 'pinned';
-  const { currentRoomId, roomCount, getRoom, centerOnPlayer, clearMap } = useMapContext();
+  const {
+    currentPos,
+    cellCount,
+    visitedCount,
+    islandCount,
+    lost,
+    indoors,
+    walking,
+    getCellAt,
+    centerOnPlayer,
+    clearMap,
+    walkTo,
+    cancelWalk,
+  } = useMapContext();
   const bodyRef = useRef<HTMLDivElement>(null);
   const [size, setSize] = useState({ width: 400, height: 300 });
-  const [showLabels, setShowLabels] = useState(true);
+  const [showLabels, setShowLabels] = useState(false);
   const [showFog, setShowFog] = useState(true);
 
   // Resize observer to fill available space
@@ -40,67 +49,90 @@ export function MapPanel({ mode = 'slideout', onWalkTo }: MapPanelProps) {
     return () => observer.disconnect();
   }, []);
 
-  const currentRoom = currentRoomId ? getRoom(currentRoomId) : null;
+  const currentCell = currentPos ? getCellAt(currentPos.q, currentPos.r) : undefined;
 
-  const handleWalkTo = (_roomId: string, directions: Direction[]) => {
-    if (onWalkTo) onWalkTo(directions);
-  };
-
-  const mapTitle = currentRoom
-    ? `Map — ${TERRAIN_LABELS[currentRoom.terrain] ?? 'Hex'} (${currentRoom.coords.q}, ${currentRoom.coords.r})`
+  const mapTitle = currentCell
+    ? `Map — ${TERRAIN_LABELS[currentCell.terrain] ?? 'Hex'} (${currentPos!.q}, ${currentPos!.r})`
     : 'Map';
 
   return (
     <div className={panelRootClass(isPinned)} style={!isPinned ? { width: 480 } : undefined}>
-      {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
-      <PanelHeader icon={<MapIcon size={12} />} title={mapTitle} panel={'map' as any} mode={mode} />
+      <PanelHeader icon={<MapIcon size={12} />} title={mapTitle} panel="map" mode={mode} />
 
       {/* Toolbar row */}
       <div className="flex items-center gap-1 px-2 py-1 border-b border-border-subtle shrink-0 text-[10px]">
         <button
           onClick={centerOnPlayer}
           className="px-1.5 py-0.5 rounded border border-border-dim text-text-dim hover:text-text-label hover:border-border-subtle transition-colors cursor-pointer"
-          title="Center on current room"
+          title="Center on current position"
         >
           Center
         </button>
         <button
           onClick={() => setShowLabels((v) => !v)}
           className={`px-1.5 py-0.5 rounded border transition-colors cursor-pointer ${showLabels ? 'border-[#e8a849]/30 text-[#e8a849] bg-[#e8a849]/10' : 'border-border-dim text-text-dim'}`}
-          title="Toggle room labels"
+          title="Toggle terrain labels"
         >
           Labels
         </button>
         <button
           onClick={() => setShowFog((v) => !v)}
           className={`px-1.5 py-0.5 rounded border transition-colors cursor-pointer ${showFog ? 'border-[#e8a849]/30 text-[#e8a849] bg-[#e8a849]/10' : 'border-border-dim text-text-dim'}`}
-          title="Toggle fog of war"
+          title="Dim hexes you've seen but never entered"
         >
           Fog
         </button>
-        <div className="flex-1" />
-        <span className="text-text-dim">{roomCount} hexes</span>
-        {roomCount > 0 && (
+        {walking && (
           <button
-            onClick={clearMap}
-            className="px-1.5 py-0.5 rounded border border-border-dim text-text-dim hover:text-red hover:border-red/30 transition-colors cursor-pointer"
-            title="Clear all map data"
+            onClick={cancelWalk}
+            className="px-1.5 py-0.5 rounded border border-[#e8a849]/40 text-[#e8a849] bg-[#e8a849]/10 hover:bg-[#e8a849]/20 transition-colors cursor-pointer animate-pulse"
+            title="Stop auto-walking"
           >
-            Clear
+            Walking ({walking.remaining}) ✕
           </button>
+        )}
+        {lost && (
+          <span
+            className="px-1.5 py-0.5 rounded border border-red/40 text-red text-[9px]"
+            title="Position unknown — move to distinctive terrain to re-locate"
+          >
+            LOST
+          </span>
+        )}
+        <div className="flex-1" />
+        <span className="text-text-dim" title="Visited / total mapped hexes">
+          {visitedCount}/{cellCount} hexes
+          {islandCount > 1 ? ` · ${islandCount} regions` : ''}
+        </span>
+        {cellCount > 0 && (
+          <ConfirmDeleteButton onDelete={clearMap} variant="fixed" title="Clear all map data" />
         )}
       </div>
 
       {/* Canvas body */}
-      <div ref={bodyRef} data-help-id="map-canvas" className="flex-1 overflow-hidden">
+      <div ref={bodyRef} data-help-id="map-canvas" className="relative flex-1 overflow-hidden">
         {size.width > 0 && size.height > 0 && (
           <MapCanvas
             width={size.width}
             height={size.height}
             showLabels={showLabels}
             showFog={showFog}
-            onWalkTo={handleWalkTo}
+            dimmed={indoors}
+            onWalkTo={walkTo}
           />
+        )}
+        {indoors && (
+          <div
+            className="absolute top-2 right-2 z-20 pointer-events-none flex items-center justify-center px-2.5 py-1 rounded border border-[#e8a849]/35 bg-[#171512]/85"
+            title="Hex movement is unavailable indoors"
+          >
+            <span
+              className="text-[9px] font-mono font-semibold tracking-[0.14em] leading-none text-[#e8a849]"
+              style={{ marginRight: '-0.14em' }}
+            >
+              IN TOWN
+            </span>
+          </div>
         )}
       </div>
     </div>
