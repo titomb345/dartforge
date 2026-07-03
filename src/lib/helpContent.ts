@@ -178,7 +178,7 @@ export const HELP_CATEGORIES: HelpCategory[] = [
       {
         title: 'Walk Anywhere on the Map',
         description:
-          'Right-click any mapped hex in the Map panel to auto-walk there. The route avoids water and known blocked edges, sends one direction at a time, and confirms each step before the next. It stops automatically if something blocks you — or click the Walking button to cancel. Left-click a hex to see its terrain, landmarks, and visit history.',
+          'Right-click any mapped hex in the Map panel to auto-walk there. Routes prefer easy ground (plains, farmland, woods) and steer around terrain with concentration hits (swamp, hills, mountains, wasteland) unless the detour would be far longer. Water and known blocked edges are avoided; one direction is sent at a time and each step is confirmed before the next. It stops automatically if something blocks you — or click the Walking button to cancel. Left-click a hex to see its terrain, landmarks, and visit history.',
         helpId: 'toolbar-map',
         interaction: 'right-click',
       },

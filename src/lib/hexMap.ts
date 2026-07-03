@@ -56,6 +56,28 @@ export interface SerializedHexMap {
 
 const MAX_LANDMARKS_PER_CELL = 4;
 
+/**
+ * Relative movement cost per terrain for pathfinding. Terrain with
+ * concentration hits (swamp, hills, mountains, wasteland) is expensive;
+ * easy ground (plains, farmland, woods) is cheap. Minimum must stay 1
+ * so the A* distance heuristic remains admissible.
+ */
+const TERRAIN_COST: Record<HexTerrainType, number> = {
+  plains: 1,
+  farmland: 1,
+  woods: 1.1,
+  desert: 1.6,
+  snow: 2,
+  hills: 3,
+  swamp: 3.5,
+  wasteland: 3.5,
+  mountains: 4,
+  river: 3, // crossable (auto-swim) but draining
+  water: 4, // only reachable when visited
+  ocean: 5,
+  unknown: 1.8,
+};
+
 // ---------------------------------------------------------------------------
 // Store
 // ---------------------------------------------------------------------------
@@ -285,6 +307,12 @@ export class HexMapStore {
    * Find a path from `from` to `to` (same island) through known cells.
    * Water/ocean cells are only passable if previously visited.
    * Blocked edges are respected. Returns null if unreachable.
+   *
+   * Step costs are terrain-aware: swamp/hills/mountains/wasteland carry
+   * concentration hits in DartMUD, so routes prefer plains/farmland/woods
+   * and only cut through rough terrain when the detour would be far longer.
+   * Costs are weights, not exclusions — if the only route is rough, it's
+   * still taken. The minimum cost is 1, keeping the A* heuristic admissible.
    */
   findPath(from: HexPos, to: HexPos, maxNodes = 30000): Direction[] | null {
     if (from.island !== to.island) return null;
@@ -351,7 +379,9 @@ export class HexMapStore {
         if (!isGoal && (nCell.terrain === 'water' || nCell.terrain === 'ocean') && !nCell.visited) {
           continue;
         }
-        const stepCost = nCell.visited ? 1 : 1.4;
+        let stepCost = TERRAIN_COST[nCell.terrain] ?? 1.8;
+        if (nCell.river) stepCost += 2; // crossing means swimming
+        if (!nCell.visited) stepCost *= 1.15;
         const g = best.g + stepCost;
         const existing = open.get(nKey);
         if (!existing || g < existing.g) {
