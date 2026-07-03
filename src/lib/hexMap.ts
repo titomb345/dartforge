@@ -59,34 +59,38 @@ export interface SerializedHexMap {
 const MAX_LANDMARKS_PER_CELL = 4;
 
 /**
- * Relative movement cost per terrain for pathfinding. Concentration is
- * worth far more than walking time in DartMUD, so terrain with
- * concentration hits (swamp, hills, mountains, wasteland) costs roughly
- * an order of magnitude more than easy ground — one hills hex trades
- * against ~8 plains steps. Weights, not exclusions: a rough-only route
- * still resolves. Minimum must stay 1 so the A* heuristic is admissible.
+ * Movement is binary in DartMUD: a step either costs concentration or it
+ * doesn't, and every concentration event (any rough hex, any river
+ * crossing, any water swim) hurts the same. Routing therefore minimizes
+ * the NUMBER of concentration events first — one event costs as much as
+ * 1000 free steps, so no realistic detour length ever trades against an
+ * extra hit — and uses free-step count only as a tiebreaker among routes
+ * with equally many events. Free terrain stays at 1 (not 0) for exactly
+ * that tiebreak, and so the A* distance heuristic remains admissible.
  */
-// Concentration-costing (per Bill): mountains, hills, swamp, wasteland,
-// desert, river crossings, and swimming through water hexes.
+const CONC_HIT = 1000;
+
+// Concentration terrain (per Bill): mountains, hills, swamp, wasteland,
+// desert — all identical. Plains, farmland, woods are free and equal.
 const TERRAIN_COST: Record<HexTerrainType, number> = {
   plains: 1,
   farmland: 1,
   woods: 1,
-  desert: 8,
-  hills: 8,
-  wasteland: 8,
-  swamp: 9,
-  mountains: 10,
-  river: 8, // crossable (auto-swim) but drains concentration
-  water: 12, // swimming through — only reachable when visited
-  ocean: 14,
+  desert: CONC_HIT,
+  hills: CONC_HIT,
+  wasteland: CONC_HIT,
+  swamp: CONC_HIT,
+  mountains: CONC_HIT,
+  river: CONC_HIT, // crossable (auto-swim) but a concentration event
+  water: CONC_HIT, // swimming through — only reachable when visited
+  ocean: CONC_HIT,
   unknown: 2,
 };
 
-/** Extra cost for stepping across a river edge (swimming across) */
-const RIVER_CROSSING_COST = 8;
-/** Extra cost for entering a hex with a river running through it */
-const RIVER_INTERIOR_COST = 4;
+/** Stepping across a river edge is a concentration event (swim across) */
+const RIVER_CROSSING_COST = CONC_HIT;
+/** A hex with a river through it likely means crossing it — same event */
+const RIVER_INTERIOR_COST = CONC_HIT;
 
 // ---------------------------------------------------------------------------
 // Store
