@@ -96,6 +96,28 @@ export function MapCanvas({ width, height, showLabels, showFog, onWalkTo }: MapC
   );
   const [tooltip, setTooltip] = useState<{ x: number; y: number; cell: HexCell } | null>(null);
   const animFrameRef = useRef<number>(0);
+  // Hover-to-inspect: the tooltip only appears after the cursor rests on a
+  // hex for a moment (clicking is for drag/walk/marking, not inspecting)
+  const hoverRef = useRef<{
+    key: string | null;
+    shownKey: string | null;
+    timer: ReturnType<typeof setTimeout> | null;
+  }>({ key: null, shownKey: null, timer: null });
+
+  const cancelHover = useCallback((hide: boolean) => {
+    const h = hoverRef.current;
+    if (h.timer) {
+      clearTimeout(h.timer);
+      h.timer = null;
+    }
+    h.key = null;
+    if (hide) {
+      h.shownKey = null;
+      setTooltip(null);
+    }
+  }, []);
+
+  useEffect(() => () => cancelHover(false), [cancelHover]);
 
   // Force redraw trigger
   const [, setRedraw] = useState(0);
@@ -179,44 +201,37 @@ export function MapCanvas({ width, height, showLabels, showFog, onWalkTo }: MapC
   });
 
   // Mouse handlers
-  const handleMouseDown = useCallback((e: React.MouseEvent) => {
-    setTooltip(null);
-    dragRef.current = {
-      startX: e.clientX,
-      startY: e.clientY,
-      panX: panRef.current.x,
-      panY: panRef.current.y,
-    };
-  }, []);
-
-  const handleMouseMove = useCallback(
+  const handleMouseDown = useCallback(
     (e: React.MouseEvent) => {
-      if (dragRef.current) {
-        const dx = (e.clientX - dragRef.current.startX) / zoomRef.current;
-        const dy = (e.clientY - dragRef.current.startY) / zoomRef.current;
-        panRef.current = {
-          x: dragRef.current.panX + dx,
-          y: dragRef.current.panY + dy,
-        };
-        if (animFrameRef.current) cancelAnimationFrame(animFrameRef.current);
-        animFrameRef.current = requestAnimationFrame(() => requestRedraw());
-      }
+      cancelHover(true);
+      dragRef.current = {
+        startX: e.clientX,
+        startY: e.clientY,
+        panX: panRef.current.x,
+        panY: panRef.current.y,
+      };
     },
-    [requestRedraw]
+    [cancelHover]
   );
 
   const handleMouseUp = useCallback(() => {
     dragRef.current = null;
   }, []);
 
+  const handleMouseLeave = useCallback(() => {
+    dragRef.current = null;
+    cancelHover(true);
+  }, [cancelHover]);
+
   const handleWheel = useCallback(
     (e: React.WheelEvent) => {
       e.preventDefault();
       const delta = e.deltaY > 0 ? 0.9 : 1.1;
       zoomRef.current = Math.max(0.2, Math.min(4, zoomRef.current * delta));
+      cancelHover(true); // tooltip position would go stale under the new zoom
       requestRedraw();
     },
-    [requestRedraw]
+    [requestRedraw, cancelHover]
   );
 
   const hexAtMouse = useCallback(
@@ -233,21 +248,65 @@ export function MapCanvas({ width, height, showLabels, showFog, onWalkTo }: MapC
     []
   );
 
+  /** How long the cursor must rest on a hex before its info popup shows */
+  const HOVER_DELAY = 800;
+
+  // Drag-pan + hover-to-inspect. The tooltip appears only after the cursor
+  // rests on a mapped hex, so click-dragging the map never pops it up.
+  const handleMouseMove = useCallback(
+    (e: React.MouseEvent) => {
+      if (dragRef.current) {
+        const dx = (e.clientX - dragRef.current.startX) / zoomRef.current;
+        const dy = (e.clientY - dragRef.current.startY) / zoomRef.current;
+        panRef.current = {
+          x: dragRef.current.panX + dx,
+          y: dragRef.current.panY + dy,
+        };
+        if (animFrameRef.current) cancelAnimationFrame(animFrameRef.current);
+        animFrameRef.current = requestAnimationFrame(() => requestRedraw());
+        return;
+      }
+
+      const canvas = canvasRef.current;
+      const hex = hexAtMouse(e);
+      const cell = hex ? getCellAt(hex.q, hex.r) : undefined;
+      if (!canvas || !hex || !cell) {
+        cancelHover(true);
+        return;
+      }
+      const key = `${hex.q},${hex.r}`;
+      const h = hoverRef.current;
+      // Moving within the hex the tooltip is already shown for — keep it
+      if (h.shownKey === key) return;
+      // Already counting down on this hex — let the timer run
+      if (h.key === key && h.timer) return;
+
+      cancelHover(true);
+      h.key = key;
+      const rect = canvas.getBoundingClientRect();
+      const tipX = e.clientX - rect.left;
+      const tipY = e.clientY - rect.top;
+      h.timer = setTimeout(() => {
+        h.timer = null;
+        h.shownKey = key;
+        // Re-read the cell so the popup shows fresh data at display time
+        const fresh = getCellAt(hex.q, hex.r);
+        if (fresh) setTooltip({ x: tipX, y: tipY, cell: fresh });
+      }, HOVER_DELAY);
+    },
+    [hexAtMouse, getCellAt, cancelHover, requestRedraw]
+  );
+
   const handleClick = useCallback(
     (e: React.MouseEvent) => {
       const hex = hexAtMouse(e);
-      const canvas = canvasRef.current;
-      if (!hex || !canvas) return;
-      const rect = canvas.getBoundingClientRect();
+      if (!hex) return;
       const cell = getCellAt(hex.q, hex.r);
-      if (!cell) {
-        setTooltip(null);
-        return;
-      }
+      if (!cell) return;
       // Shift+click toggles the town marker (house icon)
       if (e.shiftKey) {
         toggleTownAt(hex.q, hex.r);
-        setTooltip(null);
+        cancelHover(true);
         return;
       }
       // Ctrl+click clears incorrect blocked/river/cliff marks on the hex
@@ -260,12 +319,11 @@ export function MapCanvas({ width, height, showLabels, showFog, onWalkTo }: MapC
           cell.river)
       ) {
         clearBlockedAt(hex.q, hex.r);
-        setTooltip(null);
-        return;
+        cancelHover(true);
       }
-      setTooltip({ x: e.clientX - rect.left, y: e.clientY - rect.top, cell });
+      // Plain clicks are for dragging — inspection happens on hover
     },
-    [hexAtMouse, getCellAt, clearBlockedAt, toggleTownAt]
+    [hexAtMouse, getCellAt, clearBlockedAt, toggleTownAt, cancelHover]
   );
 
   const handleContextMenu = useCallback(
@@ -290,7 +348,7 @@ export function MapCanvas({ width, height, showLabels, showFog, onWalkTo }: MapC
         onMouseDown={handleMouseDown}
         onMouseMove={handleMouseMove}
         onMouseUp={handleMouseUp}
-        onMouseLeave={handleMouseUp}
+        onMouseLeave={handleMouseLeave}
         onWheel={handleWheel}
         onClick={handleClick}
         onContextMenu={handleContextMenu}

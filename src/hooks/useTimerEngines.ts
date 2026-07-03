@@ -178,44 +178,75 @@ export function useTimerEngines({
     // eslint-disable-next-line react-hooks/exhaustive-deps -- babelPhrasesRef used inside callback; no restart needed on phrase edits
   }, [connected, loggedIn, babelEnabled, babelLanguage, babelIntervalSeconds]);
 
-  // Custom timer engine — manages per-timer setIntervals, only fires when connected + logged in
+  // Custom timer engine — manages per-timer setIntervals, only fires when connected + logged in.
+  // Reconciles incrementally: toggling, editing, adding, or deleting one timer must not restart
+  // the countdowns of the others. Only timers that were added, removed, or had their interval
+  // changed are touched; every other running timer keeps ticking undisturbed.
   const timerIntervalsRef = useRef<Map<string, ReturnType<typeof setInterval>>>(new Map());
+  // id -> interval (ms) the running setInterval was created with, so we can detect interval changes
+  const timerIntervalMsRef = useRef<Map<string, number>>(new Map());
   const clearTimerIntervals = useCallback(() => {
     for (const id of timerIntervalsRef.current.values()) clearInterval(id);
     timerIntervalsRef.current.clear();
+    timerIntervalMsRef.current.clear();
   }, []);
   const mergedTimersRef = useLatestRef(mergedTimers);
   const [timerNextFires, setTimerNextFires] = useState<Record<string, number>>({});
 
   useEffect(() => {
-    clearTimerIntervals();
-
+    // Not connected / not logged in: everything stops.
     if (!connected || !loggedIn) {
-      setTimerNextFires({});
+      clearTimerIntervals();
+      setTimerNextFires((prev) => (Object.keys(prev).length ? {} : prev));
       return;
     }
 
-    const enabledTimers = mergedTimersRef.current.filter((t) => t.enabled);
-    const nextFires: Record<string, number> = {};
+    const desired = new Map<string, Timer>();
+    for (const t of mergedTimers) {
+      if (t.enabled) desired.set(t.id, t);
+    }
 
-    for (const timer of enabledTimers) {
+    const running = timerIntervalsRef.current;
+    const runningMs = timerIntervalMsRef.current;
+    const removedIds: string[] = [];
+    const addedFires: Record<string, number> = {};
+
+    // Stop timers that are no longer enabled, were deleted, or whose interval changed.
+    // (Interval changes are re-added below with a fresh countdown, which is the desired behavior.)
+    for (const [id, handle] of running) {
+      const want = desired.get(id);
+      const newMs = want ? want.intervalSeconds * 1000 : undefined;
+      if (!want || newMs !== runningMs.get(id)) {
+        clearInterval(handle);
+        running.delete(id);
+        runningMs.delete(id);
+        removedIds.push(id);
+      }
+    }
+
+    // Start timers that should be running but aren't (newly added, re-enabled, or interval-changed).
+    // Timers already running with an unchanged interval are left alone — their countdown continues.
+    for (const [id, timer] of desired) {
+      if (running.has(id)) continue;
       const ms = timer.intervalSeconds * 1000;
-      nextFires[timer.id] = Date.now() + ms;
 
       const intervalId = setInterval(() => {
         if (!sendCommandRef.current) return;
+        // Read the timer fresh so body/bodyMode edits take effect without restarting the countdown.
+        const current = mergedTimersRef.current.find((t) => t.id === id);
+        if (!current || !current.enabled) return;
 
-        if (timer.bodyMode === 'script') {
+        if (current.bodyMode === 'script') {
           // Execute JavaScript body via script engine
           executeTimerScript(
-            timer.body,
+            current.body,
             activeCharacterRef.current,
             triggerRunnerRef.current,
             globalScriptRef.current
           );
         } else {
           // Expand body through alias engine, then execute via the shared runner
-          const result = expandInput(timer.body, mergedAliasesRef.current, {
+          const result = expandInput(current.body, mergedAliasesRef.current, {
             enableSpeedwalk: enableSpeedwalkRef.current,
             activeCharacter: activeCharacterRef.current,
             separator: commandSeparatorRef.current,
@@ -223,19 +254,27 @@ export function useTimerEngines({
           executeCommands(result.commands, triggerRunnerRef.current);
         }
 
-        setTimerNextFires((prev) => ({ ...prev, [timer.id]: Date.now() + ms }));
+        setTimerNextFires((prev) => ({ ...prev, [id]: Date.now() + ms }));
       }, ms);
 
-      timerIntervalsRef.current.set(timer.id, intervalId);
+      running.set(id, intervalId);
+      runningMs.set(id, ms);
+      addedFires[id] = Date.now() + ms;
     }
 
-    setTimerNextFires(nextFires);
+    // Apply next-fire changes without disturbing the timers that kept running.
+    if (removedIds.length || Object.keys(addedFires).length) {
+      setTimerNextFires((prev) => {
+        const next = { ...prev };
+        for (const id of removedIds) delete next[id];
+        Object.assign(next, addedFires);
+        return next;
+      });
+    }
+  }, [connected, loggedIn, mergedTimers, clearTimerIntervals]);
 
-    return () => {
-      clearTimerIntervals();
-      setTimerNextFires({});
-    };
-  }, [connected, loggedIn, mergedTimers]);
+  // Tear everything down on unmount (the reconcile effect intentionally has no per-run cleanup).
+  useEffect(() => clearTimerIntervals, [clearTimerIntervals]);
 
   // Active timer badges for CommandInput (sorted by soonest-to-fire first)
   const activeTimerBadges = useMemo(
