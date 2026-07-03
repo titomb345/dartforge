@@ -64,10 +64,12 @@ export interface MapTrackerActions {
   cancelWalk: () => void;
   setCellNotes: (q: number, r: number, notes: string) => void;
   /**
-   * Clear a hex's blocked-direction AND river marks (both sides of each
-   * edge). Correct data re-detects on the next survey there.
+   * Clear a hex's blocked-direction AND river/cliff marks (both sides of
+   * each edge). Correct data re-detects on the next survey there.
    */
   clearBlockedAt: (q: number, r: number) => void;
+  /** Toggle a hex's town marker (house icon) */
+  toggleTownAt: (q: number, r: number) => void;
   clearMap: () => void;
   /** Center request — bumps a counter to signal MapCanvas to re-center */
   centerOnPlayer: () => void;
@@ -387,6 +389,17 @@ export function useMapTracker(
     [syncState, scheduleSave]
   );
 
+  const toggleTownAt = useCallback(
+    (q: number, r: number) => {
+      const map = mapRef.current;
+      const island = map.pos?.island ?? map.primaryIsland();
+      map.toggleTownMarker(island, q, r);
+      syncState();
+      scheduleSave();
+    },
+    [syncState, scheduleSave]
+  );
+
   const clearMap = useCallback(() => {
     cancelWalk();
     mapRef.current.clear();
@@ -413,6 +426,7 @@ export function useMapTracker(
       cancelWalk: cancelWalkAction,
       setCellNotes,
       clearBlockedAt,
+      toggleTownAt,
       clearMap,
       centerOnPlayer,
       centerVersion,
@@ -428,6 +442,7 @@ export function useMapTracker(
       cancelWalkAction,
       setCellNotes,
       clearBlockedAt,
+      toggleTownAt,
       clearMap,
       centerOnPlayer,
       centerVersion,

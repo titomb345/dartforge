@@ -84,7 +84,7 @@ interface MapCanvasProps {
 
 export function MapCanvas({ width, height, showLabels, showFog, onWalkTo }: MapCanvasProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  const { version, currentPos, centerVersion, getCells, getCellAt, clearBlockedAt } =
+  const { version, currentPos, centerVersion, getCells, getCellAt, clearBlockedAt, toggleTownAt } =
     useMapContext();
 
   // Pan/zoom state
@@ -152,7 +152,8 @@ export function MapCanvas({ width, height, showLabels, showFog, onWalkTo }: MapC
       if (cell.riverEdges.length > 0) drawRiverEdges(ctx, cell);
       if (cell.cliffEdges.length > 0) drawCliffEdges(ctx, cell);
       if (cell.blocked.length > 0) drawBlockedEdges(ctx, cell);
-      if (cell.landmarks.length > 0) drawLandmarkMarker(ctx, cell);
+      if (cell.marker === 'town') drawTownMarker(ctx, cell);
+      else if (cell.landmarks.length > 0) drawLandmarkMarker(ctx, cell);
     }
 
     // Labels
@@ -241,6 +242,12 @@ export function MapCanvas({ width, height, showLabels, showFog, onWalkTo }: MapC
         setTooltip(null);
         return;
       }
+      // Shift+click toggles the town marker (house icon)
+      if (e.shiftKey) {
+        toggleTownAt(hex.q, hex.r);
+        setTooltip(null);
+        return;
+      }
       // Ctrl+click clears incorrect blocked/river/cliff marks on the hex
       if (
         (e.ctrlKey || e.altKey) &&
@@ -255,7 +262,7 @@ export function MapCanvas({ width, height, showLabels, showFog, onWalkTo }: MapC
       }
       setTooltip({ x: e.clientX - rect.left, y: e.clientY - rect.top, cell });
     },
-    [hexAtMouse, getCellAt, clearBlockedAt]
+    [hexAtMouse, getCellAt, clearBlockedAt, toggleTownAt]
   );
 
   const handleContextMenu = useCallback(
@@ -455,6 +462,28 @@ function drawBlockedEdges(ctx: CanvasRenderingContext2D, cell: HexCell) {
   }
 }
 
+/** Town marker: a small house (roof + walls + door) in landmark gold */
+function drawTownMarker(ctx: CanvasRenderingContext2D, cell: HexCell) {
+  const { x, y } = hexToPixel(cell.q, cell.r, HEX_SIZE);
+  const s = HEX_SIZE * 0.22;
+  const baseY = y + s * 0.9;
+  const wallTop = y - s * 0.1;
+
+  // Walls
+  ctx.fillStyle = LANDMARK_COLOR;
+  ctx.fillRect(x - s * 0.8, wallTop, s * 1.6, baseY - wallTop);
+  // Roof
+  ctx.beginPath();
+  ctx.moveTo(x - s * 1.1, wallTop);
+  ctx.lineTo(x, y - s * 1.1);
+  ctx.lineTo(x + s * 1.1, wallTop);
+  ctx.closePath();
+  ctx.fill();
+  // Door (punched out in the background color)
+  ctx.fillStyle = BG_COLOR;
+  ctx.fillRect(x - s * 0.22, baseY - s * 0.8, s * 0.44, s * 0.8);
+}
+
 function drawLandmarkMarker(ctx: CanvasRenderingContext2D, cell: HexCell) {
   const { x, y } = hexToPixel(cell.q, cell.r, HEX_SIZE);
   const size = 4;
@@ -587,6 +616,7 @@ function CellTooltip({
         style={{ color: isCurrent ? CURRENT_ROOM_GLOW : TOOLTIP_TEXT }}
       >
         {terrainLabel}
+        {cell.marker === 'town' && <span style={{ color: LANDMARK_COLOR }}> · Town</span>}
         {(cell.river || cell.riverEdges.length > 0) && (
           <span style={{ color: RIVER_COLOR }}>
             {' '}
@@ -624,7 +654,9 @@ function CellTooltip({
         {cell.notes ? ' · Has notes' : ''}
       </div>
       {!isCurrent && (
-        <div className="text-[9px] opacity-40 mt-0.5 italic">Right-click to walk here</div>
+        <div className="text-[9px] opacity-40 mt-0.5 italic">
+          Right-click to walk here · Shift+click to toggle town
+        </div>
       )}
     </div>
   );

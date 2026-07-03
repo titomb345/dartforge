@@ -44,6 +44,12 @@ export interface HexCell {
   lastSeen: number;
   /** Landmark descriptions seen for this hex (deduped, capped) */
   landmarks: string[];
+  /**
+   * Point-of-interest marker. 'town' renders a house icon instead of the
+   * landmark diamond; 'none' means the user explicitly unmarked it (auto
+   * classification must not re-add); null = unclassified.
+   */
+  marker: 'town' | 'none' | null;
   notes: string;
   /** Directions confirmed blocked from this cell (failed moves) */
   blocked: Direction[];
@@ -59,6 +65,9 @@ export interface SerializedHexMap {
 }
 
 const MAX_LANDMARKS_PER_CELL = 4;
+
+/** Landmark texts that clearly name a settlement → auto-mark as town */
+const TOWN_RE = /\b(?:town|village|city|hamlet)\b/i;
 
 /**
  * Movement is binary in DartMUD: a step either costs concentration or it
@@ -186,6 +195,7 @@ export class HexMapStore {
         river: false,
         riverEdges: [],
         cliffEdges: [],
+        marker: null,
         visited: false,
         visitCount: 0,
         lastSeen: now,
@@ -322,10 +332,22 @@ export class HexMapStore {
     if (!trimmed) return;
     this.paint(island, q, r, 'unknown', now);
     const cell = this.cells.get(cellKey(island, q, r))!;
+    // Auto-classify settlements (never overrides a user's explicit choice)
+    if (cell.marker === null && TOWN_RE.test(trimmed)) cell.marker = 'town';
     const lower = trimmed.toLowerCase();
     if (cell.landmarks.some((l) => l.toLowerCase() === lower)) return;
     cell.landmarks.push(trimmed);
     if (cell.landmarks.length > MAX_LANDMARKS_PER_CELL) cell.landmarks.shift();
+  }
+
+  /**
+   * Toggle a hex's town marker. Turning it off records 'none' so auto
+   * classification won't re-add it.
+   */
+  toggleTownMarker(island: number, q: number, r: number): void {
+    const cell = this.cells.get(cellKey(island, q, r));
+    if (!cell) return;
+    cell.marker = cell.marker === 'town' ? 'none' : 'town';
   }
 
   /** Record a blocked exit (both sides if the target cell exists). */
@@ -451,6 +473,7 @@ export class HexMapStore {
           }
         }
         existing.landmarks = existing.landmarks.slice(-MAX_LANDMARKS_PER_CELL);
+        if (existing.marker === null) existing.marker = cell.marker;
         if (!existing.notes) existing.notes = cell.notes;
         if (!existing.description) existing.description = cell.description;
         for (const b of cell.blocked) {
@@ -607,6 +630,12 @@ export class HexMapStore {
         visitCount: cell.visitCount ?? 0,
         lastSeen: cell.lastSeen ?? 0,
         landmarks: Array.isArray(cell.landmarks) ? cell.landmarks : [],
+        // Classify pre-existing saved landmarks on first load after upgrade
+        marker:
+          cell.marker ??
+          (Array.isArray(cell.landmarks) && cell.landmarks.some((l) => TOWN_RE.test(l))
+            ? 'town'
+            : null),
         notes: cell.notes ?? '',
         blocked: Array.isArray(cell.blocked) ? cell.blocked : [],
         description: cell.description ?? '',

@@ -183,6 +183,13 @@ export const HELP_CATEGORIES: HelpCategory[] = [
         interaction: 'right-click',
       },
       {
+        title: 'Mark Towns on the Map',
+        description:
+          'Hexes whose landmarks name a town, village, city, or hamlet automatically get a house icon instead of the landmark diamond. Shift+click any hex to toggle its town marker manually — turning one off tells the mapper not to re-add it.',
+        helpId: 'toolbar-map',
+        interaction: 'click',
+      },
+      {
         title: 'Clear Wrong Map Marks',
         description:
           'Red edge ticks mark directions the map believes are blocked; blue edges mark rivers; dashed stone edges mark cliffs. If any is wrong on a hex, Ctrl+click (or Alt+click) it to clear all its marks — correct ones re-detect the next time you survey there. Blocked marks also heal themselves: successfully walking through a "blocked" edge removes the mark automatically.',
