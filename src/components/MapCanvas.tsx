@@ -209,7 +209,7 @@ export function MapCanvas({
     // Indoors: dim the whole map uniformly (the DOM popup/badge above the
     // canvas stay at full brightness). Interaction is unaffected.
     if (dimmed) {
-      ctx.fillStyle = 'rgba(15, 14, 13, 0.3)';
+      ctx.fillStyle = 'rgba(15, 14, 13, 0.55)';
       ctx.fillRect(0, 0, width, height);
     }
     // The `version` dependency (from context) drives redraws on map changes
