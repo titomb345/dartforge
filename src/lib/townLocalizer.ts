@@ -454,6 +454,19 @@ export class TownLocalizer {
       return { kind: 'relocalized', pos: this.map.pos, moved: null };
     }
 
+    // Generic teleport heuristic (recall spells, mage portals with unknown
+    // messages): an unexplainable arrival — nothing pending, nothing
+    // matching here — that uniquely entry-grade matches a room in ANOTHER
+    // town means we were teleported there. Recall marks are places the
+    // player knows well, so the destination is almost always mapped.
+    if (!move) {
+      const global = this.map.findEntryMatchGlobal(block);
+      if (global && global.town.id !== town.id) {
+        this.active = false;
+        return this.enterTown(block, null, now, false);
+      }
+    }
+
     // Continuity gap: an unexplainable room long after the last one means
     // the player TRAVELLED (boat, portal, long idle) — re-enter instead of
     // gluing a foreign room into this town.

@@ -131,11 +131,14 @@ const EXITS_START_RE =
 
 /**
  * Portal transit — "You step into the north portal." (hub side, direction
- * named) or "You step into the portal." (spoke side). Portals teleport
- * between distant towns; the owner must call TownLocalizer.onPortalTransit
- * when this line arrives so the arrival room starts a fresh town entry.
+ * named) or "You step into the portal." (spoke side); into/through and an
+ * optional adjective cover mage-portal variants. Portals teleport between
+ * distant towns; the owner must call TownLocalizer.onPortalTransit when
+ * this line arrives so the arrival room starts a fresh town entry.
+ * (Teleports with unknown messages — recall spells — are caught by the
+ * localizer's generic teleport heuristic instead.)
  */
-export const PORTAL_TRANSIT_RE = /^(?:> )*You step into the(?: \w+)? portal\.\s*$/;
+export const PORTAL_TRANSIT_RE = /^(?:> )*You step (?:into|through) the(?: \w+)? portal\.\s*$/;
 
 const DIR_WORD_RE = /\b(north(?:east|west)?|south(?:east|west)?|east|west|up|down)\b/g;
 
