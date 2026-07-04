@@ -9,6 +9,13 @@ The `[Unreleased]` header controls automatic version bumping on merge:
 - `[Unreleased-minor]` → 0.1.0 → 0.2.0
 - `[Unreleased-major]` → 0.1.0 → 1.0.0
 
+## [Unreleased-minor]
+
+### Added
+- Town mapper — the Map panel now maps towns, buildings, and dungeons room by room, alongside the hex wilderness map. Step through a doorway and the panel switches to a room map automatically (Auto view; Hex/Town buttons force either view). Rooms you walk through are laid out on a grid — corpus analysis of 5 years of logs showed DartMUD towns are grid-consistent for n/s/e/w/up/down (98%+ of round trips close), while diagonal exits are shortcuts that get drawn as thin connector lines instead of constraining the layout. Buildings with multiple floors render one level at a time with stair glyphs (▲▼) on stair rooms and a floor stepper in the toolbar that follows you as you climb. Doors draw as amber ticks across their corridor, unexplored exits as faint stubs, and non-directional exits ("back", "out", boats you can enter) as dashed purple lines. Each town is remembered by the hexes you've entered or left it from, so walking back in from the wilderness re-localizes you instantly — and the hex map's anchor means the same town can have any number of entrances. Same-named rooms (a street of "Market" rooms) are told apart by their exits and grid position; if fragments of one town get mapped separately they fuse automatically the moment their room neighborhoods are recognized as the same place. Town maps persist per character next to the hex map
+- Right-click-to-walk in towns — right-click any mapped room to auto-walk there, exactly like the hex map: BFS over the exits you've actually walked (including stairs across floors and named exits like "back"), two moves in flight, every step verified against the room that actually prints. The walk stops cleanly on closed doors, blocked movement, manual movement, or anything unexpected. Hover a room for its description, exits, and visit count; the town name in the toolbar is click-to-rename, and a confirm-guarded delete button removes a town's map entirely
+- Town mapper validation harness (`scripts/replay-town.ts`) — replays the full production parser → localizer → store pipeline against the historical log corpora (340k room blocks across 927 MUSHclient logs; 19k command-paired blocks across 166 DartForge session logs). Final corpus numbers: 99.9% of exits lines parse into room blocks, 75% of room arrivals confirm the predicted room, 0 permanently-lost resolutions, and duplicate-room creation reduced to 1.3% of blocks
+
 ## [1.12.0] - 2026-07-03
 
 ### Added
