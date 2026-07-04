@@ -124,7 +124,7 @@ export const HELP_CATEGORIES: HelpCategory[] = [
       {
         title: 'Map Panel',
         description:
-          'Auto-maps the hex wilderness as you explore. Every survey paints all visible hexes with their terrain, so the map fills in around your path. Landmarks (towns, caves, towers) are marked with a gold diamond. Hexes you have seen but never entered are dimmed (Fog toggle). If you teleport somewhere unrecognizable the map shows LOST until you reach distinctive terrain again. Step into a town or building and the panel switches to a room map (Auto view): rooms you walk through are laid out on a grid, one floor at a time, with stair glyphs (▲▼), amber door ticks, and dashed purple lines for special exits like "back" or boats. Each town is remembered by the hexes you enter it from, so the map picks you right back up next visit.',
+          'Auto-maps the hex wilderness as you explore. Every survey paints all visible hexes with their terrain, so the map fills in around your path. Landmarks (towns, caves, towers) are marked with a gold diamond. If you teleport somewhere unrecognizable the map shows LOST until you reach distinctive terrain again. Step into a town or building and the panel switches to a room map (Auto view — the view being shown gets a cyan tint on its Hex/Town button): rooms you walk through are laid out on a grid, one floor at a time, with stair glyphs (▲▼), amber door ticks, and dashed purple lines for special exits like "back" or boats. Each town is remembered by the hexes you enter it from, so the map picks you right back up next visit. The gear menu holds the view options: terrain/room name labels, fog of war (dim hexes seen but never entered — off by default), renaming a town, and the map delete actions.',
         helpId: 'toolbar-map',
       },
       {
@@ -185,7 +185,7 @@ export const HELP_CATEGORIES: HelpCategory[] = [
       {
         title: 'Walk Through Towns Too',
         description:
-          'In the town view, right-click any mapped room to auto-walk there — the route follows the exits you have actually used, climbs stairs across floors, and even takes special exits like "back". Steps are verified room by room and the walk stops cleanly at closed doors or anything unexpected. The floor stepper (F0 ▲▼) browses other levels and snaps back to your floor when you take stairs. Rest the cursor on a room to see its description, exits, and visit count. The town name in the toolbar is editable — click it to rename a town.',
+          'In the town view, right-click any mapped room to auto-walk there — the route follows the exits you have actually used, climbs stairs across floors, and even takes special exits like "back". Steps are verified room by room and the walk stops cleanly at closed doors or anything unexpected. The floor stepper (F0 ▲▼) browses other levels and snaps back to your floor when you take stairs. Rest the cursor on a room to see its description, exits, and visit count. Rename or delete a town from the map gear menu.',
         helpId: 'toolbar-map',
         interaction: 'right-click',
       },

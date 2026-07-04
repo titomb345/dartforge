@@ -93,6 +93,11 @@ export interface AppSettingsState {
   // Panel font size (global default for all panels)
   panelFontSize: number;
   updatePanelFontSize: (v: number) => void;
+  // Map panel view options
+  mapShowFog: boolean;
+  mapShowLabels: boolean;
+  updateMapShowFog: (v: boolean) => void;
+  updateMapShowLabels: (v: boolean) => void;
   // Who list
   whoAutoRefreshEnabled: boolean;
   whoRefreshMinutes: number;

@@ -18,7 +18,13 @@
  * Purely a town module: never touches the hex engine.
  */
 
-import { TOWN_DIR_ALIASES, TOWN_DIR_VEC, type TownDir, type TownRoomBlock } from './townParser';
+import {
+  TOWN_DIR_ALIASES,
+  TOWN_DIR_VEC,
+  TOWN_REVERSE,
+  type TownDir,
+  type TownRoomBlock,
+} from './townParser';
 import { TownMapStore, type Town, type TownRoom, type TownPos } from './townMap';
 
 // ---------------------------------------------------------------------------
@@ -265,7 +271,24 @@ export class TownLocalizer {
           const occupantId = town.grid.get(`${target.x},${target.y},${target.z}`);
           const occupant = occupantId !== undefined ? town.rooms.get(occupantId) : undefined;
           this.queue.shift();
-          if (gridVec && occupant && this.map.matches(occupant, block)) {
+          // Reciprocity guard: only reuse a room as the destination of
+          // `dir` if its reverse link is unset, points back at us, or
+          // points at a room with OUR fingerprint (i.e. we are standing on
+          // a duplicate of its true neighbor — reusing heals the dup).
+          // Switchback trails ("Path [s,se]" twice in a row) produce
+          // identical fingerprints a cell apart — there the reverse
+          // neighbor's fingerprint differs from ours, so they stay apart.
+          const reciprocal = (r: TownRoom) => {
+            const backId = r.links[TOWN_REVERSE[move.dir]];
+            if (backId === undefined || backId === current.id) return true;
+            const back = town.rooms.get(backId);
+            return (
+              !!back &&
+              back.name === current.name &&
+              back.exits.join(',') === current.exits.join(',')
+            );
+          };
+          if (gridVec && occupant && this.map.matches(occupant, block) && reciprocal(occupant)) {
             // Loop closed — link and move there
             this.map.link(town, current, move.dir, occupant);
             this.map.touchRoom(occupant, block, now);
@@ -276,17 +299,11 @@ export class TownLocalizer {
           // strictly-matching room near the target before creating. (Grid
           // occupancy alone breaks down after a nudge, and rooms would then
           // duplicate on every lap of a loop.)
-          const near = this.map.findMatchesNear(
-            town,
-            block,
-            target.x,
-            target.y,
-            target.z,
-            NEAR_RADIUS,
-            2
-          );
+          const near = this.map
+            .findMatchesNear(town, block, target.x, target.y, target.z, NEAR_RADIUS, 4)
+            .filter((r) => r.id !== current.id && reciprocal(r));
           const reuse = near.length === 1 ? near[0] : null;
-          if (reuse && reuse.id !== current.id) {
+          if (reuse) {
             this.map.link(town, current, move.dir, reuse);
             this.map.touchRoom(reuse, block, now);
             this.map.pos = { townId: town.id, roomId: reuse.id };

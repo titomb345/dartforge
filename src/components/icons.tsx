@@ -1314,3 +1314,39 @@ export function SmartphoneIcon({ size = 16 }: IconProps) {
     </svg>
   );
 }
+
+export function HexGridIcon({ size = 16 }: IconProps) {
+  return (
+    <svg
+      width={size}
+      height={size}
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
+      <polygon points="12 2.5 20.2 7.25 20.2 16.75 12 21.5 3.8 16.75 3.8 7.25" />
+    </svg>
+  );
+}
+
+export function HouseIcon({ size = 16 }: IconProps) {
+  return (
+    <svg
+      width={size}
+      height={size}
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
+      <path d="M3 10.5 12 3l9 7.5" />
+      <path d="M5.5 9v11h13V9" />
+      <path d="M10 20v-6h4v6" />
+    </svg>
+  );
+}
