@@ -33,6 +33,9 @@ export interface TownRoom {
   z: number;
   /** Directions listed in the latest exits line */
   exits: TownDir[];
+  /** Union of every direction this room has ever listed (exit sets vary
+   *  with world state — portcullises, darkness — but never grow lies) */
+  exitsEver: TownDir[];
   /** Directions that go through a door/gate */
   doorDirs: TownDir[];
   /** Non-directional exits ("back", "out", "exit") */
@@ -173,6 +176,7 @@ export class TownMapStore {
       y: spot.y,
       z,
       exits: block.exits.dirs,
+      exitsEver: [...block.exits.dirs],
       doorDirs: block.exits.doorDirs,
       namedExits: block.exits.named,
       links: {},
@@ -231,6 +235,9 @@ export class TownMapStore {
   /** Refresh a room's volatile fields from a fresh sighting. */
   touchRoom(room: TownRoom, block: TownRoomBlock, now: number): void {
     room.exits = block.exits.dirs;
+    for (const d of block.exits.dirs) {
+      if (!room.exitsEver.includes(d)) room.exitsEver.push(d);
+    }
     room.doorDirs = block.exits.doorDirs;
     room.namedExits = block.exits.named;
     room.descFirst = block.descFirst || room.descFirst;
@@ -583,6 +590,7 @@ export class TownMapStore {
       for (const r of t.rooms ?? []) {
         town.rooms.set(r.id, {
           ...r,
+          exitsEver: r.exitsEver ?? [...(r.exits ?? [])],
           links: r.links ?? {},
           namedLinks: r.namedLinks ?? {},
           notes: r.notes ?? '',

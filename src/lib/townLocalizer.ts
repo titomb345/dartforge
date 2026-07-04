@@ -318,6 +318,20 @@ export class TownLocalizer {
             const backId = r.links[TOWN_REVERSE[move.dir]];
             return backId === undefined || backId === current.id;
           };
+          // Ground truth from the exits line: we cannot have arrived
+          // going `dir` into a room whose own exits don't include the way
+          // back. This is what separates two same-named streets whose
+          // routes collide on one grid cell (Eris: e,e,e vs s,e,e,e,n end
+          // on the same coordinate but in different rooms) — without it
+          // they merge and grow exits that don't exist. A recorded link in
+          // the return direction also counts: exit sets vary with world
+          // state (portcullises, darkness) but a walked link is proof.
+          const backDir = TOWN_REVERSE[move.dir];
+          const hasReturnExit = (r: TownRoom) =>
+            r.exitsEver.length === 0 ||
+            r.exitsEver.includes(backDir) ||
+            r.links[backDir] !== undefined ||
+            r.namedExits.length > 0;
           // The duplicate-healing exception: the candidate's recorded
           // neighbor has OUR fingerprint, i.e. we may be standing on a
           // duplicate of it. Mirror TWINS (the keep's symmetric bedroom
@@ -348,7 +362,11 @@ export class TownLocalizer {
             gridVec &&
             occupant &&
             occupant.id !== current.id &&
+            // Name-lenient on purpose: rooms change their exit sets with
+            // world state (the Gatehouse loses exits when the portcullis
+            // drops) and exact-cell occupancy is already strong evidence.
             this.map.matches(occupant, block) &&
+            hasReturnExit(occupant) &&
             relaxedReciprocal(occupant)
           ) {
             // Loop closed — (re)link and move there
@@ -375,10 +393,17 @@ export class TownLocalizer {
             }
             return false;
           };
+          // Near-reuse covers DISPLACED candidates only — the exact-cell
+          // occupant already got the strictest treatment above, and must
+          // not be resurrected here without its return-exit proof.
           const near = this.map
             .findMatchesNear(town, block, target.x, target.y, target.z, NEAR_RADIUS, 4)
             .filter(
-              (r) => r.id !== current.id && relaxedReciprocal(r) && !alreadyNeighborElsewhere(r)
+              (r) =>
+                r.id !== current.id &&
+                r.id !== occupantId &&
+                relaxedReciprocal(r) &&
+                !alreadyNeighborElsewhere(r)
             );
           const reuse = near.length === 1 ? near[0] : null;
           if (reuse) {

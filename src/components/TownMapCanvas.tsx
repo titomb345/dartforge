@@ -429,16 +429,30 @@ function drawBackgroundGrid(
   ctx.stroke();
 }
 
+const CARDINAL_VEC: Partial<Record<TownDir, [number, number]>> = {
+  n: [0, -1],
+  s: [0, 1],
+  e: [1, 0],
+  w: [-1, 0],
+};
+
 function drawLink(ctx: CanvasRenderingContext2D, from: TownRoom, to: TownRoom, dir: TownDir) {
   const a = px(from);
   const b = px(to);
   const diag = isDiagonal(dir);
-  ctx.strokeStyle = diag ? LINK_DIAG_COLOR : LINK_COLOR;
-  ctx.lineWidth = diag ? 1.2 : 3;
+  // A cardinal link whose rooms aren't grid-adjacent was displaced by a
+  // collision nudge (non-Euclidean overlap) — draw it thin and dashed so
+  // it doesn't read as a straight corridor through unrelated rooms.
+  const vec = CARDINAL_VEC[dir];
+  const displaced = !!vec && (to.x !== from.x + vec[0] || to.y !== from.y + vec[1]);
+  ctx.strokeStyle = diag || displaced ? LINK_DIAG_COLOR : LINK_COLOR;
+  ctx.lineWidth = diag || displaced ? 1.2 : 3;
+  if (displaced) ctx.setLineDash([3, 3]);
   ctx.beginPath();
   ctx.moveTo(a.x, a.y);
   ctx.lineTo(b.x, b.y);
   ctx.stroke();
+  if (displaced) ctx.setLineDash([]);
 
   // Door tick across the link near the from-side
   if (from.doorDirs.includes(dir)) {
