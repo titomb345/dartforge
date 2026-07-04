@@ -16,7 +16,15 @@ import { createPortal } from 'react-dom';
 import type { PinnablePanelProps } from '../types';
 import { panelRootClass } from '../lib/panelUtils';
 import { PanelHeader } from './PanelHeader';
-import { FocusIcon, GearIcon, HexGridIcon, HouseIcon, MapIcon } from './icons';
+import {
+  CollapseIcon,
+  ExpandIcon,
+  FocusIcon,
+  GearIcon,
+  HexGridIcon,
+  HouseIcon,
+  MapIcon,
+} from './icons';
 import { MapCanvas } from './MapCanvas';
 import { TownMapCanvas } from './TownMapCanvas';
 import { ConfirmDeleteButton } from './ConfirmDeleteButton';
@@ -71,6 +79,18 @@ export function MapPanel({ mode = 'slideout' }: PinnablePanelProps) {
   const [nameDraft, setNameDraft] = useState<string | null>(null);
   const [roomSearch, setRoomSearch] = useState('');
   const [focusRoom, setFocusRoom] = useState<{ roomId: number; nonce: number } | null>(null);
+  /** Full-screen popout (same pattern as the script editor's expand) */
+  const [fullscreen, setFullscreen] = useState(false);
+
+  // Esc leaves full screen
+  useEffect(() => {
+    if (!fullscreen) return;
+    const handler = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setFullscreen(false);
+    };
+    document.addEventListener('keydown', handler);
+    return () => document.removeEventListener('keydown', handler);
+  }, [fullscreen]);
 
   // Kill switch off → v1.12 behavior: always the hex map, with the
   // IN TOWN badge overlay while indoors (below).
@@ -134,7 +154,9 @@ export function MapPanel({ mode = 'slideout' }: PinnablePanelProps) {
     if (target !== null) setFloorOverride(target);
   };
 
-  // Resize observer to fill available space
+  // Resize observer to fill available space. Re-armed on fullscreen toggle —
+  // the body div remounts into (or out of) the portal, so the old observed
+  // element is gone.
   useEffect(() => {
     const el = bodyRef.current;
     if (!el) return;
@@ -148,7 +170,7 @@ export function MapPanel({ mode = 'slideout' }: PinnablePanelProps) {
     });
     observer.observe(el);
     return () => observer.disconnect();
-  }, []);
+  }, [fullscreen]);
 
   const currentCell = currentPos ? getCellAt(currentPos.q, currentPos.r) : undefined;
 
@@ -183,10 +205,10 @@ export function MapPanel({ mode = 'slideout' }: PinnablePanelProps) {
     setNameDraft(null);
   };
 
-  return (
-    <div className={panelRootClass(isPinned)} style={!isPinned ? { width: 480 } : undefined}>
-      <PanelHeader icon={<MapIcon size={12} />} title="Map" panel="map" mode={mode} />
-
+  // Toolbar + canvas body — rendered either inside the normal panel shell or
+  // inside the full-screen popout (widescreen, like the script editor's).
+  const content = (
+    <>
       {/* Toolbar row */}
       <div className="flex items-center gap-1 px-2 py-1 border-b border-border-subtle shrink-0 text-[10px]">
         <button
@@ -311,6 +333,17 @@ export function MapPanel({ mode = 'slideout' }: PinnablePanelProps) {
             </span>
           )
         )}
+
+        <button
+          onClick={() => {
+            setMenuOpen(false);
+            setFullscreen((v) => !v);
+          }}
+          className={plainIconBtn}
+          title={fullscreen ? 'Exit full screen (Esc)' : 'Full screen map'}
+        >
+          {fullscreen ? <CollapseIcon size={11} /> : <ExpandIcon size={11} />}
+        </button>
 
         {/* Options menu (Labels / Fog / rename / delete) — far right.
             Rendered through a portal so a small pinned panel can't clip it. */}
@@ -557,6 +590,35 @@ export function MapPanel({ mode = 'slideout' }: PinnablePanelProps) {
           </div>
         )}
       </div>
+    </>
+  );
+
+  if (fullscreen) {
+    // Widescreen popout — the DartMUD world is much wider than it is tall.
+    // Everything works exactly as in the panel: pan/zoom, hover-to-inspect,
+    // right-click walks, Ctrl+click clears, the gear menu, the works.
+    return createPortal(
+      <div
+        className="fixed inset-0 z-[9990] bg-black/60 flex items-center justify-center"
+        onMouseDown={(e) => {
+          if (e.target === e.currentTarget) setFullscreen(false);
+        }}
+      >
+        <div
+          className="border border-[#e8a849]/30 rounded-lg bg-bg-primary flex flex-col overflow-hidden shadow-2xl"
+          style={{ width: '94vw', height: '86vh', minWidth: 640, minHeight: 400 }}
+        >
+          {content}
+        </div>
+      </div>,
+      document.body
+    );
+  }
+
+  return (
+    <div className={panelRootClass(isPinned)} style={!isPinned ? { width: 480 } : undefined}>
+      <PanelHeader icon={<MapIcon size={12} />} title="Map" panel="map" mode={mode} />
+      {content}
     </div>
   );
 }
