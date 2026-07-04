@@ -295,24 +295,53 @@ export class TownLocalizer {
           const occupantId = town.grid.get(`${target.x},${target.y},${target.z}`);
           const occupant = occupantId !== undefined ? town.rooms.get(occupantId) : undefined;
           this.queue.shift();
-          // Reciprocity guard: only reuse a room as the destination of
-          // `dir` if its reverse link is unset, points back at us, or
-          // points at a room with OUR fingerprint (i.e. we are standing on
-          // a duplicate of its true neighbor — reusing heals the dup).
-          // Switchback trails ("Path [s,se]" twice in a row) produce
-          // identical fingerprints a cell apart — there the reverse
-          // neighbor's fingerprint differs from ours, so they stay apart.
-          const reciprocal = (r: TownRoom) => {
+          // Reciprocity guards: only reuse a room as the destination of
+          // `dir` if its reverse link agrees.
+          //  - EXACT-CELL occupants (real loop closure) use the relaxed
+          //    rule: reverse link unset, pointing at us, or pointing at a
+          //    room with OUR fingerprint (we're standing on a duplicate of
+          //    its true neighbor — reusing heals the dup).
+          //  - NEAR-CELL candidates use the STRICT rule (unset or us).
+          //    Mirror-symmetric buildings (the keep's twin bedroom wings:
+          //    identical Vestibules, identical Bedchambers) defeat the
+          //    relaxed rule at near range — the other wing's bedroom
+          //    points back at a Vestibule that looks exactly like ours.
+          const strictReciprocal = (r: TownRoom) => {
             const backId = r.links[TOWN_REVERSE[move.dir]];
-            if (backId === undefined || backId === current.id) return true;
-            const back = town.rooms.get(backId);
+            return backId === undefined || backId === current.id;
+          };
+          // The duplicate-healing exception: the candidate's recorded
+          // neighbor has OUR fingerprint, i.e. we may be standing on a
+          // duplicate of it. Mirror TWINS (the keep's symmetric bedroom
+          // wings) also look like that — but twins betray themselves by
+          // attaching the SAME physical neighbor on DIFFERENT sides (the
+          // north vestibule has the Landing to its south, the south one
+          // to its north). A true duplicate's neighbors are duplicate ids,
+          // never shared ones.
+          const sharedNeighborConflict = (a: TownRoom, b: TownRoom) => {
+            for (const [d1, n1] of Object.entries(a.links)) {
+              for (const [d2, n2] of Object.entries(b.links)) {
+                if (n1 === n2 && d1 !== d2) return true;
+              }
+            }
+            return false;
+          };
+          const relaxedReciprocal = (r: TownRoom) => {
+            if (strictReciprocal(r)) return true;
+            const back = town.rooms.get(r.links[TOWN_REVERSE[move.dir]]!);
             return (
               !!back &&
               back.name === current.name &&
-              back.exits.join(',') === current.exits.join(',')
+              back.exits.join(',') === current.exits.join(',') &&
+              !sharedNeighborConflict(current, back)
             );
           };
-          if (gridVec && occupant && this.map.matches(occupant, block) && reciprocal(occupant)) {
+          if (
+            gridVec &&
+            occupant &&
+            this.map.matches(occupant, block) &&
+            relaxedReciprocal(occupant)
+          ) {
             // Loop closed — link and move there
             this.map.link(town, current, move.dir, occupant);
             this.map.touchRoom(occupant, block, now);
@@ -322,10 +351,24 @@ export class TownLocalizer {
           // Loop closure across nudged terrain / diagonal shortcuts: reuse a
           // strictly-matching room near the target before creating. (Grid
           // occupancy alone breaks down after a nudge, and rooms would then
-          // duplicate on every lap of a loop.)
+          // duplicate on every lap of a loop.) A room current already links
+          // to in a DIFFERENT direction can never be this move's
+          // destination (the Landing knows the north wing's vestibule is
+          // north — it cannot also be south), and vice versa.
+          const alreadyNeighborElsewhere = (r: TownRoom) => {
+            for (const [d, id] of Object.entries(current.links)) {
+              if (id === r.id && d !== move.dir) return true;
+            }
+            for (const [d, id] of Object.entries(r.links)) {
+              if (id === current.id && d !== TOWN_REVERSE[move.dir]) return true;
+            }
+            return false;
+          };
           const near = this.map
             .findMatchesNear(town, block, target.x, target.y, target.z, NEAR_RADIUS, 4)
-            .filter((r) => r.id !== current.id && reciprocal(r));
+            .filter(
+              (r) => r.id !== current.id && relaxedReciprocal(r) && !alreadyNeighborElsewhere(r)
+            );
           const reuse = near.length === 1 ? near[0] : null;
           if (reuse) {
             this.map.link(town, current, move.dir, reuse);
