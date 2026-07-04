@@ -54,6 +54,8 @@ const DIR_LABELS: Record<TownDir, string> = {
 interface TownMapCanvasProps {
   width: number;
   height: number;
+  /** Town being displayed (may differ from the player's town when browsing) */
+  townId: number;
   /** Floor (z) being displayed */
   floor: number;
   showLabels: boolean;
@@ -65,6 +67,7 @@ interface TownMapCanvasProps {
 export function TownMapCanvas({
   width,
   height,
+  townId,
   floor,
   showLabels,
   dimmed = false,
@@ -72,6 +75,8 @@ export function TownMapCanvas({
 }: TownMapCanvasProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const { version, town, townWalking, centerVersion, getTownRooms } = useMapContext();
+  /** Is the displayed town the one the player is (last) in? */
+  const isPlayerTown = town !== null && town.id === townId;
 
   // Pan/zoom state
   const panRef = useRef({ x: 0, y: 0 });
@@ -107,18 +112,19 @@ export function TownMapCanvas({
 
   // Center on the current room (same trigger discipline as the hex canvas)
   useEffect(() => {
-    if (!town) return;
-    const rooms = getTownRooms();
+    if (!town || town.id !== townId) return;
+    const rooms = getTownRooms(townId);
     const cur = rooms.find((r) => r.id === town.roomId);
     if (!cur) return;
     panRef.current = { x: -cur.x * CELL, y: -cur.y * CELL };
     requestRedraw();
-  }, [town, centerVersion, getTownRooms, requestRedraw]);
+  }, [town, townId, centerVersion, getTownRooms, requestRedraw]);
 
-  // Browsing a floor the player isn't on: center on that floor's rooms
+  // Browsing a floor (or a whole town) the player isn't in: center on the
+  // displayed floor's rooms instead
   useEffect(() => {
-    if (town && floor === town.floor) return; // player floor — handled above
-    const rooms = getTownRooms().filter((r) => r.z === floor);
+    if (town && town.id === townId && floor === town.floor) return; // player view — handled above
+    const rooms = getTownRooms(townId).filter((r) => r.z === floor);
     if (rooms.length === 0) return;
     let sx = 0;
     let sy = 0;
@@ -128,7 +134,7 @@ export function TownMapCanvas({
     }
     panRef.current = { x: (-sx / rooms.length) * CELL, y: (-sy / rooms.length) * CELL };
     requestRedraw();
-  }, [floor, town, getTownRooms, requestRedraw]);
+  }, [floor, town, townId, getTownRooms, requestRedraw]);
 
   // Draw
   useEffect(() => {
@@ -155,7 +161,7 @@ export function TownMapCanvas({
     ctx.translate(centerX, centerY);
     ctx.scale(zoom, zoom);
 
-    const rooms = getTownRooms();
+    const rooms = getTownRooms(townId);
     const byId = new Map<number, TownRoom>();
     for (const r of rooms) byId.set(r.id, r);
     const floorRooms = rooms.filter((r) => r.z === floor);
@@ -178,7 +184,7 @@ export function TownMapCanvas({
 
     // Room boxes
     for (const room of floorRooms) {
-      drawRoom(ctx, room, !!town && room.id === town.roomId);
+      drawRoom(ctx, room, isPlayerTown && !!town && room.id === town.roomId);
     }
 
     // Labels
@@ -189,7 +195,7 @@ export function TownMapCanvas({
     // Active walk route preview — dashed gold line through the remaining
     // rooms plus a dot on each (segments only where both ends share the
     // displayed floor; stairs break the line, the dots carry on).
-    if (townWalking && town) {
+    if (townWalking && town && isPlayerTown) {
       const pathRooms = [town.roomId, ...townWalking.path]
         .map((id) => byId.get(id))
         .filter((r): r is TownRoom => !!r);
@@ -217,8 +223,8 @@ export function TownMapCanvas({
       ctx.globalAlpha = 1;
     }
 
-    // Current room glow
-    if (town) {
+    // Current room glow (only when displaying the player's town)
+    if (town && isPlayerTown) {
       const cur = byId.get(town.roomId);
       if (cur && cur.z === floor) drawCurrentGlow(ctx, cur);
     }
@@ -249,12 +255,12 @@ export function TownMapCanvas({
       const gy = Math.round(worldY / CELL);
       if (Math.abs(worldX - gx * CELL) > ROOM_HALF + 4) return null;
       if (Math.abs(worldY - gy * CELL) > ROOM_HALF + 4) return null;
-      for (const r of getTownRooms()) {
+      for (const r of getTownRooms(townId)) {
         if (r.z === floor && r.x === gx && r.y === gy) return r;
       }
       return null;
     },
-    [getTownRooms, floor]
+    [getTownRooms, townId, floor]
   );
 
   const handleMouseDown = useCallback(
@@ -361,7 +367,8 @@ export function TownMapCanvas({
           y={tooltip.y}
           containerWidth={width}
           containerHeight={height}
-          isCurrent={!!town && tooltip.room.id === town.roomId}
+          isCurrent={isPlayerTown && !!town && tooltip.room.id === town.roomId}
+          showWalkHint={!!onWalkTo}
         />
       )}
     </div>
@@ -567,6 +574,7 @@ function RoomTooltip({
   containerWidth,
   containerHeight,
   isCurrent,
+  showWalkHint,
 }: {
   room: TownRoom;
   x: number;
@@ -574,6 +582,7 @@ function RoomTooltip({
   containerWidth: number;
   containerHeight: number;
   isCurrent: boolean;
+  showWalkHint: boolean;
 }) {
   const tipW = 230;
   const tipH = 100;
@@ -609,7 +618,7 @@ function RoomTooltip({
         </div>
       )}
       <div className="text-[9px] opacity-40 mt-0.5">Visited {room.visits}x</div>
-      {!isCurrent && (
+      {!isCurrent && showWalkHint && (
         <div className="text-[9px] opacity-40 mt-0.5 italic">Right-click to walk here</div>
       )}
     </div>

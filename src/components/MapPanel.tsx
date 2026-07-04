@@ -3,10 +3,12 @@
  *
  * Two views: the hex wilderness map and the town room map. "Auto" follows
  * the player — town view while indoors, hex view outside (the view actually
- * being shown gets a cyan tint on its button). The toolbar stays compact
- * enough for a pinned sidebar: Hex/Town/Center are icons, the gear menu
- * (far right) holds Labels/Fog, town rename, and the delete actions, and
- * the current location is an overlay on the canvas instead of the title.
+ * being shown gets a cyan tint on its button). In town view a picker
+ * browses ANY mapped town from anywhere; walking is only offered in the
+ * town you're physically in. The toolbar stays compact enough for a pinned
+ * sidebar: Hex/Town/Center are icons, the gear menu (far right) holds
+ * Labels/Fog, town rename, and the delete actions, and the current
+ * location is an overlay on the canvas instead of the title.
  */
 
 import { useRef, useState, useEffect } from 'react';
@@ -41,6 +43,7 @@ export function MapPanel({ mode = 'slideout' }: PinnablePanelProps) {
     townLost,
     townWalking,
     getCellAt,
+    getTowns,
     getTownFloors,
     centerOnPlayer,
     clearMap,
@@ -57,20 +60,37 @@ export function MapPanel({ mode = 'slideout' }: PinnablePanelProps) {
   const [size, setSize] = useState({ width: 400, height: 300 });
   const [viewMode, setViewMode] = useState<ViewMode>('auto');
   const [menuOpen, setMenuOpen] = useState(false);
+  /** Town being browsed; null = follow the player's town */
+  const [browseTownId, setBrowseTownId] = useState<number | null>(null);
   /** Floor being browsed; null = follow the player's floor */
   const [floorOverride, setFloorOverride] = useState<number | null>(null);
   const [nameDraft, setNameDraft] = useState<string | null>(null);
 
   const townView = viewMode === 'town' || (viewMode === 'auto' && indoors && town !== null);
   const effectiveView: 'hex' | 'town' = townView ? 'town' : 'hex';
-  const playerFloor = town?.floor ?? 0;
-  const floor = floorOverride ?? playerFloor;
 
-  // Moving to another floor in-game (or switching towns) snaps the view
-  // back to the player's floor
+  const towns = getTowns();
+  const displayedTownId = browseTownId ?? town?.id ?? towns[0]?.id;
+  const displayed = towns.find((t) => t.id === displayedTownId);
+  /** Browsing a town other than the one the player is (last) in */
+  const browsing = townView && displayedTownId !== undefined && displayedTownId !== town?.id;
+
+  const floors = townView && displayedTownId !== undefined ? getTownFloors(displayedTownId) : [];
+  const playerFloor = town?.floor ?? 0;
+  const defaultFloor = browsing ? (floors.includes(0) ? 0 : (floors[0] ?? 0)) : playerFloor;
+  const floor = floorOverride ?? defaultFloor;
+  const floorIdx = floors.indexOf(floor);
+
+  // Entering a different town follows the player again
+  useEffect(() => {
+    setBrowseTownId(null);
+  }, [town?.id]);
+
+  // Moving to another floor in-game (or switching displayed towns) snaps
+  // the floor back to the default
   useEffect(() => {
     setFloorOverride(null);
-  }, [playerFloor, town?.id]);
+  }, [playerFloor, displayedTownId]);
 
   // Resize observer to fill available space
   useEffect(() => {
@@ -92,15 +112,16 @@ export function MapPanel({ mode = 'slideout' }: PinnablePanelProps) {
 
   /** Current location, shown as a canvas overlay (keeps the title short) */
   const locationLabel = townView
-    ? town
-      ? `${town.roomName} — ${town.name}${floorOverride !== null && floor !== playerFloor ? ` (viewing F${floor})` : ''}`
-      : null
+    ? browsing
+      ? displayed
+        ? `Viewing ${displayed.name}`
+        : null
+      : town
+        ? `${town.roomName} — ${town.name}${floorOverride !== null && floor !== playerFloor ? ` (viewing F${floor})` : ''}`
+        : null
     : currentCell
       ? `${TERRAIN_LABELS[currentCell.terrain] ?? 'Hex'} (${currentPos!.q}, ${currentPos!.r})`
       : null;
-
-  const floors = townView ? getTownFloors() : [];
-  const floorIdx = floors.indexOf(floor);
 
   /** Selected mode is amber; in Auto, the view actually shown is cyan. */
   const viewBtnColor = (m: ViewMode) => {
@@ -114,8 +135,8 @@ export function MapPanel({ mode = 'slideout' }: PinnablePanelProps) {
   const plainIconBtn = `${iconBtnBase} border-border-dim text-text-dim hover:text-text-label hover:border-border-subtle`;
 
   const commitRename = () => {
-    if (town && nameDraft !== null && nameDraft.trim() && nameDraft !== town.name) {
-      renameTown(nameDraft);
+    if (displayed && nameDraft !== null && nameDraft.trim() && nameDraft !== displayed.name) {
+      renameTown(nameDraft, displayed.id);
     }
     setNameDraft(null);
   };
@@ -168,7 +189,7 @@ export function MapPanel({ mode = 'slideout' }: PinnablePanelProps) {
               ▼
             </button>
             <span
-              className={`min-w-[22px] text-center ${floor === playerFloor ? 'text-[#e8a849]' : 'text-text-label'}`}
+              className={`min-w-[22px] text-center ${!browsing && floor === playerFloor ? 'text-[#e8a849]' : 'text-text-label'}`}
             >
               F{floor}
             </span>
@@ -204,7 +225,7 @@ export function MapPanel({ mode = 'slideout' }: PinnablePanelProps) {
             Walking ({townWalking.remaining}) ✕
           </button>
         )}
-        {((townView && townLost) || (!townView && lost)) && (
+        {((townView && townLost && !browsing) || (!townView && lost)) && (
           <span
             className="px-1.5 py-0.5 rounded border border-red/40 text-red text-[9px]"
             title={
@@ -218,16 +239,34 @@ export function MapPanel({ mode = 'slideout' }: PinnablePanelProps) {
         )}
 
         <div className="flex-1" />
-        <span
-          className="text-text-dim text-[9px]"
-          title={
-            townView
-              ? 'Mapped rooms in this town'
-              : `Visited/mapped hexes${islandCount > 1 ? ` (${islandCount} regions)` : ''}`
-          }
-        >
-          {townView ? (town ? town.roomCount : '') : `${visitedCount}/${cellCount}`}
-        </span>
+
+        {townView && towns.length > 0 ? (
+          <select
+            value={displayedTownId}
+            onChange={(e) => {
+              const id = Number(e.target.value);
+              setBrowseTownId(id === town?.id ? null : id);
+            }}
+            className="max-w-[110px] text-[10px] px-1 py-0.5 rounded border border-border-dim bg-bg-input text-text-dim hover:text-text-label focus:outline-none focus:border-border-subtle transition-colors cursor-pointer"
+            title="Browse any mapped town (• marks where you are)"
+          >
+            {towns.map((t) => (
+              <option key={t.id} value={t.id}>
+                {t.id === town?.id ? '• ' : ''}
+                {t.name} ({t.roomCount})
+              </option>
+            ))}
+          </select>
+        ) : (
+          !townView && (
+            <span
+              className="text-text-dim text-[9px]"
+              title={`Visited/mapped hexes${islandCount > 1 ? ` (${islandCount} regions)` : ''}`}
+            >
+              {visitedCount}/{cellCount}
+            </span>
+          )
+        )}
 
         {/* Options menu (Labels / Fog / rename / delete) — far right */}
         <div className="relative">
@@ -244,8 +283,8 @@ export function MapPanel({ mode = 'slideout' }: PinnablePanelProps) {
               <div className="absolute top-full right-0 mt-1 z-50 flex flex-col gap-1.5 bg-bg-secondary border border-border rounded-md p-2 shadow-lg min-w-[180px] text-[10px]">
                 <div className="text-text-dim text-[9px]">
                   {townView
-                    ? town
-                      ? `${town.roomCount} room${town.roomCount === 1 ? '' : 's'} · ${floors.length} floor${floors.length === 1 ? '' : 's'} · ${townCount} town${townCount === 1 ? '' : 's'} mapped`
+                    ? displayed
+                      ? `${displayed.roomCount} room${displayed.roomCount === 1 ? '' : 's'} · ${floors.length} floor${floors.length === 1 ? '' : 's'} · ${townCount} town${townCount === 1 ? '' : 's'} mapped`
                       : 'No town mapped yet'
                     : `${visitedCount}/${cellCount} hexes${islandCount > 1 ? ` · ${islandCount} regions` : ''}${townCount > 0 ? ` · ${townCount} town${townCount === 1 ? '' : 's'}` : ''}`}
                 </div>
@@ -275,11 +314,11 @@ export function MapPanel({ mode = 'slideout' }: PinnablePanelProps) {
                     />
                   </div>
                 )}
-                {townView && town && (
+                {townView && displayed && (
                   <div className="flex items-center justify-between gap-2">
                     <span className="text-text-label shrink-0">Name</span>
                     <input
-                      value={nameDraft ?? town.name}
+                      value={nameDraft ?? displayed.name}
                       onChange={(e) => setNameDraft(e.target.value)}
                       onBlur={commitRename}
                       onKeyDown={(e) => {
@@ -296,16 +335,17 @@ export function MapPanel({ mode = 'slideout' }: PinnablePanelProps) {
                 )}
                 <div className="h-px bg-border-subtle" />
                 {townView ? (
-                  town && (
+                  displayed && (
                     <div className="flex items-center justify-between gap-3">
                       <span className="text-text-dim">Delete town map</span>
                       <ConfirmDeleteButton
                         onDelete={() => {
-                          deleteTown();
+                          deleteTown(displayed.id);
+                          setBrowseTownId(null);
                           setMenuOpen(false);
                         }}
                         variant="fixed"
-                        title="Delete this town's map (it re-maps as you walk)"
+                        title={`Delete "${displayed.name}" (it re-maps as you walk)`}
                       />
                     </div>
                   )
@@ -333,14 +373,17 @@ export function MapPanel({ mode = 'slideout' }: PinnablePanelProps) {
         {size.width > 0 &&
           size.height > 0 &&
           (townView ? (
-            <TownMapCanvas
-              width={size.width}
-              height={size.height}
-              floor={floor}
-              showLabels={mapShowLabels}
-              dimmed={!indoors}
-              onWalkTo={walkToRoom}
-            />
+            displayedTownId !== undefined && (
+              <TownMapCanvas
+                width={size.width}
+                height={size.height}
+                townId={displayedTownId}
+                floor={floor}
+                showLabels={mapShowLabels}
+                dimmed={!browsing && !indoors}
+                onWalkTo={browsing ? undefined : walkToRoom}
+              />
+            )
           ) : (
             <MapCanvas
               width={size.width}
@@ -374,7 +417,20 @@ export function MapPanel({ mode = 'slideout' }: PinnablePanelProps) {
             </span>
           </div>
         )}
-        {townView && !indoors && (
+        {townView && browsing && (
+          <div
+            className="absolute top-2 right-2 z-20 pointer-events-none flex items-center justify-center px-2.5 py-1 rounded border border-cyan/35 bg-[#121517]/85"
+            title="Browsing another town's map — walking is unavailable"
+          >
+            <span
+              className="text-[9px] font-mono font-semibold tracking-[0.14em] leading-none text-cyan"
+              style={{ marginRight: '-0.14em' }}
+            >
+              BROWSING
+            </span>
+          </div>
+        )}
+        {townView && !browsing && !indoors && (
           <div
             className="absolute top-2 right-2 z-20 pointer-events-none flex items-center justify-center px-2.5 py-1 rounded border border-[#e8a849]/35 bg-[#171512]/85"
             title="Room movement is unavailable outdoors"

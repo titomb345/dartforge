@@ -101,16 +101,18 @@ export interface MapTrackerActions {
   centerOnPlayer: () => void;
   centerVersion: number;
   // --- Town mapper ---
-  /** All rooms of the displayed town (canvas filters by floor) */
-  getTownRooms: () => TownRoom[];
-  /** Sorted floor indices of the displayed town */
-  getTownFloors: () => number[];
+  /** All mapped towns (for the browse picker), biggest first */
+  getTowns: () => { id: number; name: string; roomCount: number }[];
+  /** Rooms of a town (default: the player's town; canvas filters by floor) */
+  getTownRooms: (townId?: number) => TownRoom[];
+  /** Sorted floor indices of a town (default: the player's town) */
+  getTownFloors: (townId?: number) => number[];
   /** Walk the player to a room in the current town, one confirmed step at a time */
   walkToRoom: (roomId: number) => void;
   cancelTownWalk: () => void;
-  renameTown: (name: string) => void;
-  /** Delete the displayed town's map entirely */
-  deleteTown: () => void;
+  renameTown: (name: string, townId?: number) => void;
+  /** Delete a town's map entirely (default: the player's town) */
+  deleteTown: (townId?: number) => void;
 }
 
 export function useMapTracker(
@@ -639,17 +641,33 @@ export function useMapTracker(
   // Town actions
   // ---------------------------------------------------------------------
 
-  const getTownRooms = useCallback((): TownRoom[] => {
-    const map = townMapRef.current;
-    const town = map.pos ? map.get(map.pos.townId) : undefined;
-    return town ? [...town.rooms.values()] : [];
+  const getTowns = useCallback((): { id: number; name: string; roomCount: number }[] => {
+    return [...townMapRef.current.towns.values()]
+      .map((t) => ({ id: t.id, name: t.name, roomCount: t.rooms.size }))
+      .sort((a, b) => b.roomCount - a.roomCount);
   }, []);
 
-  const getTownFloors = useCallback((): number[] => {
+  const resolveTown = useCallback((townId?: number) => {
     const map = townMapRef.current;
-    const town = map.pos ? map.get(map.pos.townId) : undefined;
-    return town ? map.floorsOf(town) : [];
+    if (townId !== undefined) return map.get(townId);
+    return map.pos ? map.get(map.pos.townId) : undefined;
   }, []);
+
+  const getTownRooms = useCallback(
+    (townId?: number): TownRoom[] => {
+      const town = resolveTown(townId);
+      return town ? [...town.rooms.values()] : [];
+    },
+    [resolveTown]
+  );
+
+  const getTownFloors = useCallback(
+    (townId?: number): number[] => {
+      const town = resolveTown(townId);
+      return town ? townMapRef.current.floorsOf(town) : [];
+    },
+    [resolveTown]
+  );
 
   const walkToRoom = useCallback(
     (roomId: number) => {
@@ -683,25 +701,33 @@ export function useMapTracker(
   );
 
   const renameTown = useCallback(
-    (name: string) => {
+    (name: string, townId?: number) => {
       const map = townMapRef.current;
-      if (!map.pos) return;
-      map.renameTown(map.pos.townId, name.trim() || 'Town');
+      const id = townId ?? map.pos?.townId;
+      if (id === undefined) return;
+      map.renameTown(id, name.trim() || 'Town');
       syncState();
       scheduleSave();
     },
     [syncState, scheduleSave]
   );
 
-  const deleteTown = useCallback(() => {
-    const map = townMapRef.current;
-    if (!map.pos) return;
-    cancelTownWalk();
-    map.deleteTown(map.pos.townId);
-    townLocalizerRef.current.reset();
-    syncState();
-    scheduleSave();
-  }, [cancelTownWalk, syncState, scheduleSave]);
+  const deleteTown = useCallback(
+    (townId?: number) => {
+      const map = townMapRef.current;
+      const id = townId ?? map.pos?.townId;
+      if (id === undefined) return;
+      // Only disturb live tracking when deleting the town we're standing in
+      if (map.pos?.townId === id) {
+        cancelTownWalk();
+        townLocalizerRef.current.reset();
+      }
+      map.deleteTown(id);
+      syncState();
+      scheduleSave();
+    },
+    [cancelTownWalk, syncState, scheduleSave]
+  );
 
   const cancelTownWalkAction = useCallback(() => cancelTownWalk('cancelled'), [cancelTownWalk]);
 
@@ -721,6 +747,7 @@ export function useMapTracker(
       clearMap,
       centerOnPlayer,
       centerVersion,
+      getTowns,
       getTownRooms,
       getTownFloors,
       walkToRoom,
@@ -743,6 +770,7 @@ export function useMapTracker(
       clearMap,
       centerOnPlayer,
       centerVersion,
+      getTowns,
       getTownRooms,
       getTownFloors,
       walkToRoom,
