@@ -56,7 +56,7 @@ export function MapPanel({ mode = 'slideout' }: PinnablePanelProps) {
     renameTown,
     deleteTown,
   } = useMapContext();
-  const { mapShowFog, updateMapShowFog, mapShowLabels, updateMapShowLabels } =
+  const { mapShowFog, updateMapShowFog, mapShowLabels, updateMapShowLabels, townMapperEnabled } =
     useAppSettingsContext();
   const bodyRef = useRef<HTMLDivElement>(null);
   const [size, setSize] = useState({ width: 400, height: 300 });
@@ -72,7 +72,10 @@ export function MapPanel({ mode = 'slideout' }: PinnablePanelProps) {
   const [roomSearch, setRoomSearch] = useState('');
   const [focusRoom, setFocusRoom] = useState<{ roomId: number; nonce: number } | null>(null);
 
-  const townView = viewMode === 'town' || (viewMode === 'auto' && indoors && town !== null);
+  // Kill switch off → v1.12 behavior: always the hex map, with the
+  // IN TOWN badge overlay while indoors (below).
+  const townView =
+    townMapperEnabled && (viewMode === 'town' || (viewMode === 'auto' && indoors && town !== null));
   const effectiveView: 'hex' | 'town' = townView ? 'town' : 'hex';
 
   const towns = getTowns();
@@ -91,6 +94,11 @@ export function MapPanel({ mode = 'slideout' }: PinnablePanelProps) {
   useEffect(() => {
     setBrowseTownId(null);
   }, [town?.id]);
+
+  // Kill switch flipped off while Town view was selected — back to Auto
+  useEffect(() => {
+    if (!townMapperEnabled) setViewMode((m) => (m === 'town' ? 'auto' : m));
+  }, [townMapperEnabled]);
 
   // Moving to another floor in-game (or switching displayed towns) snaps
   // the floor back to the default
@@ -195,13 +203,15 @@ export function MapPanel({ mode = 'slideout' }: PinnablePanelProps) {
         >
           <HexGridIcon size={12} />
         </button>
-        <button
-          onClick={() => setViewMode('town')}
-          className={`${iconBtnBase} ${viewBtnColor('town')}`}
-          title="Town room map"
-        >
-          <HouseIcon size={12} />
-        </button>
+        {townMapperEnabled && (
+          <button
+            onClick={() => setViewMode('town')}
+            className={`${iconBtnBase} ${viewBtnColor('town')}`}
+            title="Town room map"
+          >
+            <HouseIcon size={12} />
+          </button>
+        )}
         <button
           onClick={centerOnPlayer}
           className={plainIconBtn}

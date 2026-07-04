@@ -17,6 +17,7 @@ import {
   PlusIcon,
   SmartphoneIcon,
   HouseIcon,
+  MapIcon,
 } from './icons';
 import type { CustomSoundEntry } from '../hooks/useSoundLibrary';
 import { PanelHeader } from './PanelHeader';
@@ -288,6 +289,8 @@ export function SettingsPanel({ onClose }: { onClose: () => void }) {
     updateCounterColdThreshold,
     doorKeys,
     updateDoorKeys,
+    townMapperEnabled,
+    updateTownMapperEnabled,
     postSyncEnabled,
     postSyncCommands,
     updatePostSyncEnabled,
@@ -636,6 +639,27 @@ export function SettingsPanel({ onClose }: { onClose: () => void }) {
             /door &lt;dir&gt; unlocks with key, key 2 … key N, opens, steps through, then closes and
             locks behind you. The town map's auto-walk runs the same sequence when a route crosses a
             known door.
+          </div>
+        </SettingsSection>
+
+        {/* Map */}
+        <SettingsSection
+          icon={<MapIcon size={13} />}
+          title="Map"
+          accent="#e8a849"
+          open={openSection === 'map'}
+          onToggle={() => toggle('map')}
+        >
+          <ToggleRow
+            label="Town mapper"
+            checked={townMapperEnabled}
+            onChange={updateTownMapperEnabled}
+            accent="#e8a849"
+          />
+          <div className="text-[9px] text-text-dim font-mono leading-relaxed mt-1">
+            Maps towns and buildings room by room. Turn off if it misbehaves — the Map panel shows
+            only the hex map with an IN TOWN badge while indoors. Mapped town data is kept, and
+            mapping picks back up when re-enabled.
           </div>
         </SettingsSection>
 

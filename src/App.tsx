@@ -1046,7 +1046,8 @@ function AppMain() {
     activeCharacter,
     mapSendDirection,
     mapEcho,
-    appSettings.doorKeys
+    appSettings.doorKeys,
+    appSettings.townMapperEnabled
   );
   const mapFeedLineRef = useLatestRef(mapTracker.feedLine);
   const mapTrackCommandRef = useLatestRef(mapTracker.trackCommand);

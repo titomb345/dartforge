@@ -101,6 +101,9 @@ export interface AppSettingsState {
   // /door command — keyring slots to try when unlocking/locking
   doorKeys: number;
   updateDoorKeys: (v: number) => void;
+  // Town mapper kill switch (off = hex map only, IN TOWN badge indoors)
+  townMapperEnabled: boolean;
+  updateTownMapperEnabled: (v: boolean) => void;
   // Who list
   whoAutoRefreshEnabled: boolean;
   whoRefreshMinutes: number;

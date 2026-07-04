@@ -125,7 +125,9 @@ export function useMapTracker(
   sendDirection: (dir: string) => Promise<void>,
   echo: (message: string) => void,
   /** Keyring slots the auto-door sequence tries (see /door) */
-  doorKeys = 5
+  doorKeys = 5,
+  /** Kill switch: false = hex mapping only, town blocks are ignored */
+  townMapperEnabled = true
 ): MapTrackerState & MapTrackerActions {
   const mapRef = useRef<HexMapStore>(new HexMapStore());
   const localizerRef = useRef<HexLocalizer>(new HexLocalizer(mapRef.current));
@@ -178,6 +180,8 @@ export function useMapTracker(
   sendDirectionRef.current = sendDirection;
   const doorKeysRef = useRef(doorKeys);
   doorKeysRef.current = doorKeys;
+  const townEnabledRef = useRef(townMapperEnabled);
+  townEnabledRef.current = townMapperEnabled;
   const echoRef = useRef(echo);
   echoRef.current = echo;
 
@@ -515,6 +519,16 @@ export function useMapTracker(
     };
   }, [activeCharacter, dataStore, syncState]);
 
+  // Kill switch flip: stop any town walk and clear transient localizer
+  // state (queue, indoors flag). Mapped town data is untouched — turning
+  // the mapper back on resumes exactly where the persisted map left off.
+  useEffect(() => {
+    if (townMapperEnabled) return;
+    cancelTownWalk();
+    townLocalizerRef.current.reset();
+    syncState();
+  }, [townMapperEnabled, cancelTownWalk, syncState]);
+
   // ---------------------------------------------------------------------
   // Actions
   // ---------------------------------------------------------------------
@@ -524,12 +538,14 @@ export function useMapTracker(
   const feedLine = useCallback(
     (line: string, raw?: string) => {
       parserRef.current?.feedLine(line, raw);
-      townParserRef.current?.feedLine(line);
-      // Portal transits teleport between towns — the next room block must
-      // start a fresh town entry instead of gluing into the current town.
-      if (PORTAL_TRANSIT_RE.test(line)) {
-        townLocalizerRef.current.onPortalTransit();
-        if (townWalkRef.current) cancelTownWalk('stepped through a portal');
+      if (townEnabledRef.current) {
+        townParserRef.current?.feedLine(line);
+        // Portal transits teleport between towns — the next room block must
+        // start a fresh town entry instead of gluing into the current town.
+        if (PORTAL_TRANSIT_RE.test(line)) {
+          townLocalizerRef.current.onPortalTransit();
+          if (townWalkRef.current) cancelTownWalk('stepped through a portal');
+        }
       }
       // The MUD's trailing prompt has no newline, so a survey (or wrapped
       // exits line) without a clean terminator would wait for the NEXT output
@@ -567,7 +583,7 @@ export function useMapTracker(
       }
       // Each localizer gates itself (town only queues while indoors, hex
       // only while outdoors), so both can safely see every command.
-      if (!townLocalizerRef.current.trackCommand(command, now)) {
+      if (!townEnabledRef.current || !townLocalizerRef.current.trackCommand(command, now)) {
         localizerRef.current.trackCommand(command, now);
       }
     },
@@ -701,6 +717,10 @@ export function useMapTracker(
 
   const walkToRoom = useCallback(
     (roomId: number) => {
+      if (!townEnabledRef.current) {
+        echoRef.current('[Map] Town mapper is disabled (Settings > Map).');
+        return;
+      }
       const map = townMapRef.current;
       const pos = map.pos;
       if (!pos) return;

@@ -322,6 +322,10 @@ const MIGRATIONS: MigrationFn[] = [
     // /door command — keyring slots to try when unlocking/locking
     if (!('doorKeys' in data)) data.doorKeys = 5;
 
+    // Town mapper kill switch (hex-only fallback while the town mapper
+    // is field-tested)
+    if (!('townMapperEnabled' in data)) data.townMapperEnabled = true;
+
     return data;
   },
 ];

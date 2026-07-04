@@ -130,6 +130,9 @@ export function useAppSettings() {
   // /door command — keyring slots to try when unlocking/locking
   const [doorKeys, setDoorKeys] = useState(5);
 
+  // Town mapper kill switch (off = hex map only, IN TOWN badge indoors)
+  const [townMapperEnabled, setTownMapperEnabled] = useState(true);
+
   // Who list
   const [whoAutoRefreshEnabled, setWhoAutoRefreshEnabled] = useState(true);
   const [whoRefreshMinutes, setWhoRefreshMinutes] = useState(5);
@@ -255,6 +258,7 @@ export function useAppSettings() {
       await load('mapShowFog', setMapShowFog);
       await load('mapShowLabels', setMapShowLabels);
       await load('doorKeys', setDoorKeys, (v) => v >= 1 && v <= 10);
+      await load('townMapperEnabled', setTownMapperEnabled);
       await load('whoAutoRefreshEnabled', setWhoAutoRefreshEnabled);
       await load('babelEnabled', setBabelEnabled);
       await load('selectOnSend', setSelectOnSend);
@@ -406,6 +410,8 @@ export function useAppSettings() {
       updateMapShowLabels: make(setMapShowLabels, 'mapShowLabels'),
       // /door keyring slots
       updateDoorKeys: make(setDoorKeys, 'doorKeys'),
+      // Town mapper kill switch
+      updateTownMapperEnabled: make(setTownMapperEnabled, 'townMapperEnabled'),
       // Who list
       updateWhoAutoRefreshEnabled: make(setWhoAutoRefreshEnabled, 'whoAutoRefreshEnabled'),
       updateWhoRefreshMinutes: make(setWhoRefreshMinutes, 'whoRefreshMinutes'),
@@ -591,6 +597,8 @@ export function useAppSettings() {
       mapShowLabels,
       // /door keyring slots
       doorKeys,
+      // Town mapper kill switch
+      townMapperEnabled,
       // Who list
       whoAutoRefreshEnabled,
       whoRefreshMinutes,
@@ -677,6 +685,7 @@ export function useAppSettings() {
       mapShowFog,
       mapShowLabels,
       doorKeys,
+      townMapperEnabled,
       whoAutoRefreshEnabled,
       whoRefreshMinutes,
       whoFontSize,
