@@ -456,7 +456,7 @@ export class TownLocalizer {
           }
           if (!missedLink) {
             this.queue.shift();
-            const room = this.map.addRoom(town, block, target.x, target.y, target.z, now);
+            const room = this.map.addRoom(town, block, target.x, target.y, target.z, now, move.dir);
             this.map.link(town, current, move.dir, room);
             this.map.pos = { townId: town.id, roomId: room.id };
             return { kind: 'new-room', pos: this.map.pos, moved: move };

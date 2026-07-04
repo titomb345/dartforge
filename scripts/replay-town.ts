@@ -261,8 +261,52 @@ for (const [k, v] of Object.entries(metrics.kinds).sort((a, b) => b[1] - a[1])) 
 console.log(`\nLink misses (known link, wrong room): ${townLocalizer.linkMisses}`);
 console.log(`Link heals (stale links re-pointed): ${townLocalizer.linkHeals}`);
 console.log(`Placement nudges: ${townMap.nudges}`);
+console.log(`Placement stretches: ${townMap.stretches}`);
 console.log(`Town merges: ${metrics.merges}`);
 console.log(`Portal transits: ${metrics.portals}`);
+
+// Layout quality: how faithfully does the drawn grid reflect the graph?
+// A cardinal link is "exact" when its rooms sit one cell apart along that
+// axis; "long" when collinear but stretched (truthful long street); the
+// rest are off-axis (drawn dashed — non-Euclidean or scarred layout).
+{
+  let exact = 0;
+  let long = 0;
+  let offAxis = 0;
+  const CARD: Record<string, [number, number, number]> = {
+    n: [0, -1, 0],
+    s: [0, 1, 0],
+    e: [1, 0, 0],
+    w: [-1, 0, 0],
+    u: [0, 0, 1],
+    d: [0, 0, -1],
+  };
+  for (const town of townMap.towns.values()) {
+    for (const room of town.rooms.values()) {
+      for (const [dir, destId] of Object.entries(room.links)) {
+        const vec = CARD[dir];
+        if (!vec) continue;
+        const dest = town.rooms.get(destId as number);
+        if (!dest) continue;
+        const dx = dest.x - room.x;
+        const dy = dest.y - room.y;
+        const dz = dest.z - room.z;
+        if (dx === vec[0] && dy === vec[1] && dz === vec[2]) exact++;
+        else {
+          const along = dx * vec[0] + dy * vec[1] + dz * vec[2];
+          if (along > 1 && dx === along * vec[0] && dy === along * vec[1] && dz === along * vec[2])
+            long++;
+          else offAxis++;
+        }
+      }
+    }
+  }
+  const total = Math.max(1, exact + long + offAxis);
+  console.log(
+    `\nLayout quality (cardinal links): ${exact} exact (${((exact / total) * 100).toFixed(1)}%), ` +
+      `${long} long-street, ${offAxis} off-axis`
+  );
+}
 
 console.log(`\nTowns mapped: ${townMap.towns.size}`);
 const townsBySize = [...townMap.towns.values()].sort((a, b) => b.rooms.size - a.rooms.size);

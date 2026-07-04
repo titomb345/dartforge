@@ -10,6 +10,12 @@ The `[Unreleased]` header controls automatic version bumping on merge:
 - `[Unreleased-minor]` → 0.1.0 → 0.2.0
 - `[Unreleased-major]` → 0.1.0 → 1.0.0
 
+## [Unreleased-patch]
+
+### Fixed
+
+- Town maps no longer go wonky at layout collisions. Previously, when a walk arrived at a cell another room already occupied (non-Euclidean loops, converging streets), the new room was shoved to the nearest free cell — bending straight streets and disjointing the map more with every collision. Now the map **stretches** instead: the rooms beyond the collision shift one cell out of the way and the new room lands exactly where the move says, so streets stay straight and north stays up. A collinear stretched connection now draws as a normal solid corridor (it's a truthful long street); only genuinely non-Euclidean links keep the thin dashed style. Existing town maps are healed automatically: the first load re-derives every town's layout from its walked connections (one-time migration — corpus-replay validated at no loss of mapping accuracy), and a rebuilt layout also repairs maps scarred by older versions' collisions
+
 ## [1.13.1] - 2026-07-04
 
 ### Added
