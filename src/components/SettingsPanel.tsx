@@ -16,6 +16,7 @@ import {
   UserIcon,
   PlusIcon,
   SmartphoneIcon,
+  HouseIcon,
 } from './icons';
 import type { CustomSoundEntry } from '../hooks/useSoundLibrary';
 import { PanelHeader } from './PanelHeader';
@@ -285,6 +286,8 @@ export function SettingsPanel({ onClose }: { onClose: () => void }) {
     counterColdThreshold,
     updateCounterHotThreshold,
     updateCounterColdThreshold,
+    doorKeys,
+    updateDoorKeys,
     postSyncEnabled,
     postSyncCommands,
     updatePostSyncEnabled,
@@ -357,7 +360,12 @@ export function SettingsPanel({ onClose }: { onClose: () => void }) {
           open={openSection === 'characters'}
           onToggle={() => toggle('characters')}
         >
-          <ToggleRow label="Auto-login" checked={autoLoginEnabled} onChange={updateAutoLoginEnabled} accent="#56b6c2" />
+          <ToggleRow
+            label="Auto-login"
+            checked={autoLoginEnabled}
+            onChange={updateAutoLoginEnabled}
+            accent="#56b6c2"
+          />
 
           {([0, 1] as const).map((slot) => {
             const char1Set = !!(autoLoginCharacters[0]?.name && autoLoginCharacters[0]?.password);
@@ -457,8 +465,22 @@ export function SettingsPanel({ onClose }: { onClose: () => void }) {
           <div className="text-[10px] font-semibold text-text-muted tracking-wide uppercase mb-1">
             Alignment Tracking
           </div>
-          <ToggleRow label="Enabled" checked={alignmentTrackingEnabled} onChange={updateAlignmentTrackingEnabled} accent="#80e080" />
-          <NumberRow label="Interval" value={alignmentTrackingMinutes} onChange={updateAlignmentTrackingMinutes} accent="green" min={1} max={14} unit="min" dimmed={!alignmentTrackingEnabled} />
+          <ToggleRow
+            label="Enabled"
+            checked={alignmentTrackingEnabled}
+            onChange={updateAlignmentTrackingEnabled}
+            accent="#80e080"
+          />
+          <NumberRow
+            label="Interval"
+            value={alignmentTrackingMinutes}
+            onChange={updateAlignmentTrackingMinutes}
+            accent="green"
+            min={1}
+            max={14}
+            unit="min"
+            dimmed={!alignmentTrackingEnabled}
+          />
           <div className="text-[9px] text-text-dim font-mono leading-relaxed mt-1 mb-3">
             Polls alignment at the configured interval. Also prevents idle disconnect.
           </div>
@@ -467,8 +489,22 @@ export function SettingsPanel({ onClose }: { onClose: () => void }) {
           <div className="text-[10px] font-semibold text-text-muted tracking-wide uppercase mb-1">
             Who List
           </div>
-          <ToggleRow label="Auto-refresh" checked={whoAutoRefreshEnabled} onChange={updateWhoAutoRefreshEnabled} accent="#61afef" />
-          <NumberRow label="Interval" value={whoRefreshMinutes} onChange={updateWhoRefreshMinutes} accent="cyan" min={1} max={30} unit="min" dimmed={!whoAutoRefreshEnabled} />
+          <ToggleRow
+            label="Auto-refresh"
+            checked={whoAutoRefreshEnabled}
+            onChange={updateWhoAutoRefreshEnabled}
+            accent="#61afef"
+          />
+          <NumberRow
+            label="Interval"
+            value={whoRefreshMinutes}
+            onChange={updateWhoRefreshMinutes}
+            accent="cyan"
+            min={1}
+            max={30}
+            unit="min"
+            dimmed={!whoAutoRefreshEnabled}
+          />
           <div className="text-[9px] text-text-dim font-mono leading-relaxed mt-1 mb-3">
             Silently refreshes the who list in the background.
           </div>
@@ -482,7 +518,14 @@ export function SettingsPanel({ onClose }: { onClose: () => void }) {
               Disabled — alignment tracking is active.
             </div>
           )}
-          <ToggleRow label="Enabled" checked={antiIdleEnabled} onChange={onAntiIdleEnabledChange} accent="#bd93f9" dimmed={alignmentTrackingEnabled} disabled={alignmentTrackingEnabled} />
+          <ToggleRow
+            label="Enabled"
+            checked={antiIdleEnabled}
+            onChange={onAntiIdleEnabledChange}
+            accent="#bd93f9"
+            dimmed={alignmentTrackingEnabled}
+            disabled={alignmentTrackingEnabled}
+          />
           <FieldRow label="Command" dimmed={!antiIdleEnabled || alignmentTrackingEnabled}>
             <MudInput
               accent="purple"
@@ -493,7 +536,16 @@ export function SettingsPanel({ onClose }: { onClose: () => void }) {
               className="w-[120px] text-right"
             />
           </FieldRow>
-          <NumberRow label="Interval" value={antiIdleMinutes} onChange={onAntiIdleMinutesChange} accent="purple" min={1} max={14} unit="min" dimmed={!antiIdleEnabled || alignmentTrackingEnabled} />
+          <NumberRow
+            label="Interval"
+            value={antiIdleMinutes}
+            onChange={onAntiIdleMinutesChange}
+            accent="purple"
+            min={1}
+            max={14}
+            unit="min"
+            dimmed={!antiIdleEnabled || alignmentTrackingEnabled}
+          />
           <div className="text-[9px] text-text-dim font-mono leading-relaxed mt-1 mb-3">
             Sends the command at the configured interval to prevent idle disconnect.
           </div>
@@ -502,7 +554,12 @@ export function SettingsPanel({ onClose }: { onClose: () => void }) {
           <div className="text-[10px] font-semibold text-text-muted tracking-wide uppercase mb-1">
             Action Blocking
           </div>
-          <ToggleRow label="Enabled" checked={actionBlockingEnabled} onChange={updateActionBlockingEnabled} accent="#f59e0b" />
+          <ToggleRow
+            label="Enabled"
+            checked={actionBlockingEnabled}
+            onChange={updateActionBlockingEnabled}
+            accent="#f59e0b"
+          />
           <div className="text-[9px] text-text-dim font-mono leading-relaxed mt-1 mb-3">
             Queues commands during channeled actions (cast, study, hunt, etc.) to prevent
             interruption. Use /block and /unblock for manual control.
@@ -512,7 +569,12 @@ export function SettingsPanel({ onClose }: { onClose: () => void }) {
           <div className="text-[10px] font-semibold text-text-muted tracking-wide uppercase mb-1">
             Display
           </div>
-          <ToggleRow label="Timer countdowns" checked={showTimerBadges} onChange={updateShowTimerBadges} accent="#f97316" />
+          <ToggleRow
+            label="Timer countdowns"
+            checked={showTimerBadges}
+            onChange={updateShowTimerBadges}
+            accent="#f97316"
+          />
           <div className="text-[9px] text-text-dim font-mono leading-relaxed mt-1">
             Show timer countdowns (anti-idle, alignment, and custom timers) next to the command
             input.
@@ -527,7 +589,12 @@ export function SettingsPanel({ onClose }: { onClose: () => void }) {
           open={openSection === 'post-sync'}
           onToggle={() => toggle('post-sync')}
         >
-          <ToggleRow label="Enabled" checked={postSyncEnabled} onChange={updatePostSyncEnabled} accent="#ff79c6" />
+          <ToggleRow
+            label="Enabled"
+            checked={postSyncEnabled}
+            onChange={updatePostSyncEnabled}
+            accent="#ff79c6"
+          />
           <FieldRow label="Commands" dimmed={!postSyncEnabled}>
             <div className="w-full" />
           </FieldRow>
@@ -548,6 +615,30 @@ export function SettingsPanel({ onClose }: { onClose: () => void }) {
           </div>
         </SettingsSection>
 
+        {/* Doors */}
+        <SettingsSection
+          icon={<HouseIcon size={13} />}
+          title="Doors"
+          accent="#e8a849"
+          open={openSection === 'doors'}
+          onToggle={() => toggle('doors')}
+        >
+          <NumberRow
+            label="Keyring slots"
+            value={doorKeys}
+            onChange={updateDoorKeys}
+            accent="orange"
+            min={1}
+            max={10}
+            unit="keys"
+          />
+          <div className="text-[9px] text-text-dim font-mono leading-relaxed mt-1">
+            /door &lt;dir&gt; unlocks with key, key 2 … key N, opens, steps through, then closes and
+            locks behind you. The town map's auto-walk runs the same sequence when a route crosses a
+            known door.
+          </div>
+        </SettingsSection>
+
         {/* Output transformations */}
         <SettingsSection
           icon={<FilterIcon size={13} />}
@@ -556,19 +647,39 @@ export function SettingsPanel({ onClose }: { onClose: () => void }) {
           open={openSection === 'output'}
           onToggle={() => toggle('output')}
         >
-          <ToggleRow label="Convert board dates" checked={boardDatesEnabled} onChange={onBoardDatesEnabledChange} accent="#50fa7b" />
+          <ToggleRow
+            label="Convert board dates"
+            checked={boardDatesEnabled}
+            onChange={onBoardDatesEnabledChange}
+            accent="#50fa7b"
+          />
           <div className="text-[9px] text-text-dim font-mono leading-relaxed mt-1">
             Replace in-game bulletin board dates with real-world dates.
           </div>
-          <ToggleRow label="Strip prompts" checked={stripPromptsEnabled} onChange={onStripPromptsEnabledChange} accent="#50fa7b" />
+          <ToggleRow
+            label="Strip prompts"
+            checked={stripPromptsEnabled}
+            onChange={onStripPromptsEnabledChange}
+            accent="#50fa7b"
+          />
           <div className="text-[9px] text-text-dim font-mono leading-relaxed mt-1">
             Remove the server prompt (&gt;) from terminal output.
           </div>
-          <ToggleRow label="Command echo" checked={commandEchoEnabled} onChange={updateCommandEchoEnabled} accent="#50fa7b" />
+          <ToggleRow
+            label="Command echo"
+            checked={commandEchoEnabled}
+            onChange={updateCommandEchoEnabled}
+            accent="#50fa7b"
+          />
           <div className="text-[9px] text-text-dim font-mono leading-relaxed mt-1">
             Show your sent commands as dimmed lines in the terminal.
           </div>
-          <ToggleRow label="Select on send" checked={selectOnSend} onChange={updateSelectOnSend} accent="#50fa7b" />
+          <ToggleRow
+            label="Select on send"
+            checked={selectOnSend}
+            onChange={updateSelectOnSend}
+            accent="#50fa7b"
+          />
           <div className="text-[9px] text-text-dim font-mono leading-relaxed mt-1">
             After sending a command, keep it selected in the input instead of clearing. Type to
             replace, or press Enter to resend.
@@ -585,16 +696,25 @@ export function SettingsPanel({ onClose }: { onClose: () => void }) {
             />
           </FieldRow>
           <div className="text-[9px] text-text-dim font-mono leading-relaxed mt-1">
-            Character(s) used to chain multiple commands (e.g. &quot;kill
-            rat{commandSeparator}loot corpse&quot;). Prefix with \ to use
-            literally. If you change this, update existing alias/trigger bodies
-            to match.
+            Character(s) used to chain multiple commands (e.g. &quot;kill rat{commandSeparator}loot
+            corpse&quot;). Prefix with \ to use literally. If you change this, update existing
+            alias/trigger bodies to match.
           </div>
-          <ToggleRow label="Anti-spam" checked={antiSpamEnabled} onChange={updateAntiSpamEnabled} accent="#50fa7b" />
+          <ToggleRow
+            label="Anti-spam"
+            checked={antiSpamEnabled}
+            onChange={updateAntiSpamEnabled}
+            accent="#50fa7b"
+          />
           <div className="text-[9px] text-text-dim font-mono leading-relaxed mt-1">
             Collapse consecutive identical lines with a repeat count.
           </div>
-          <ToggleRow label="Show skill counts" checked={showSkillCounts} onChange={updateShowSkillCounts} accent="#50fa7b" />
+          <ToggleRow
+            label="Show skill counts"
+            checked={showSkillCounts}
+            onChange={updateShowSkillCounts}
+            accent="#50fa7b"
+          />
           <div className="text-[9px] text-text-dim font-mono leading-relaxed mt-1">
             Append tracked improve counts to &quot;show skills&quot; and &quot;show quick
             skills&quot; readouts.
@@ -609,11 +729,33 @@ export function SettingsPanel({ onClose }: { onClose: () => void }) {
           open={openSection === 'counters'}
           onToggle={() => toggle('counters')}
         >
-          <NumberRow label="Hot threshold" value={counterHotThreshold} onChange={updateCounterHotThreshold} accent="purple" min={0} max={99} step={0.5} parse={parseFloat} unit="/pd" width="w-[56px]" />
+          <NumberRow
+            label="Hot threshold"
+            value={counterHotThreshold}
+            onChange={updateCounterHotThreshold}
+            accent="purple"
+            min={0}
+            max={99}
+            step={0.5}
+            parse={parseFloat}
+            unit="/pd"
+            width="w-[56px]"
+          />
           <div className="text-[9px] text-text-dim font-mono leading-relaxed mt-1">
             Skills at or above this rate glow warm. Set to 0 to disable.
           </div>
-          <NumberRow label="Cold threshold" value={counterColdThreshold} onChange={updateCounterColdThreshold} accent="cyan" min={0} max={99} step={0.5} parse={parseFloat} unit="/pd" width="w-[56px]" />
+          <NumberRow
+            label="Cold threshold"
+            value={counterColdThreshold}
+            onChange={updateCounterColdThreshold}
+            accent="cyan"
+            min={0}
+            max={99}
+            step={0.5}
+            parse={parseFloat}
+            unit="/pd"
+            width="w-[56px]"
+          />
           <div className="text-[9px] text-text-dim font-mono leading-relaxed mt-1">
             Skills at or below this rate (but &gt; 0) glow cool. Set to 0 to disable.
           </div>
@@ -627,14 +769,40 @@ export function SettingsPanel({ onClose }: { onClose: () => void }) {
           open={openSection === 'buffers'}
           onToggle={() => toggle('buffers')}
         >
-          <NumberRow label="Scrollback" value={terminalScrollback} onChange={updateTerminalScrollback} accent="cyan" min={1000} max={100000} unit="lines" width="w-[72px]" />
+          <NumberRow
+            label="Scrollback"
+            value={terminalScrollback}
+            onChange={updateTerminalScrollback}
+            accent="cyan"
+            min={1000}
+            max={100000}
+            unit="lines"
+            width="w-[72px]"
+          />
           <div className="text-[9px] text-text-dim font-mono leading-relaxed mt-1">
             Terminal scrollback history. Takes effect on next session.
           </div>
-          <NumberRow label="Command history" value={commandHistorySize} onChange={updateCommandHistorySize} accent="cyan" min={50} max={5000} unit="cmds" width="w-[72px]" />
-          <NumberRow label="Chat history" value={chatHistorySize} onChange={updateChatHistorySize} accent="cyan" min={50} max={5000} unit="msgs" width="w-[72px]" />
+          <NumberRow
+            label="Command history"
+            value={commandHistorySize}
+            onChange={updateCommandHistorySize}
+            accent="cyan"
+            min={50}
+            max={5000}
+            unit="cmds"
+            width="w-[72px]"
+          />
+          <NumberRow
+            label="Chat history"
+            value={chatHistorySize}
+            onChange={updateChatHistorySize}
+            accent="cyan"
+            min={50}
+            max={5000}
+            unit="msgs"
+            width="w-[72px]"
+          />
         </SettingsSection>
-
 
         {/* Session Logging */}
         <SettingsSection
@@ -644,7 +812,12 @@ export function SettingsPanel({ onClose }: { onClose: () => void }) {
           open={openSection === 'logging'}
           onToggle={() => toggle('logging')}
         >
-          <ToggleRow label="Enable logging" checked={sessionLoggingEnabled} onChange={updateSessionLoggingEnabled} accent="#f1fa8c" />
+          <ToggleRow
+            label="Enable logging"
+            checked={sessionLoggingEnabled}
+            onChange={updateSessionLoggingEnabled}
+            accent="#f1fa8c"
+          />
           <div className="text-[9px] text-text-dim font-mono leading-relaxed mt-1">
             Logs session output (ANSI stripped) and your commands to the sessions/ folder in your
             data directory.
@@ -682,7 +855,13 @@ export function SettingsPanel({ onClose }: { onClose: () => void }) {
           onToggle={() => toggle('notifications')}
         >
           {(['say', 'shout', 'ooc', 'tell', 'sz'] as const).map((type) => (
-            <ToggleRow key={type} label={type.toUpperCase()} checked={chatNotifications[type]} onChange={() => toggleChatNotification(type)} accent="#ffb86c" />
+            <ToggleRow
+              key={type}
+              label={type.toUpperCase()}
+              checked={chatNotifications[type]}
+              onChange={() => toggleChatNotification(type)}
+              accent="#ffb86c"
+            />
           ))}
           <div className="text-[9px] text-text-dim font-mono leading-relaxed mt-1">
             Flashes the taskbar icon when a message arrives while DartForge is unfocused.
@@ -967,7 +1146,10 @@ function CustomSoundRow({
       <span className="text-[10px] font-mono text-text-label flex-1 truncate" title={entry.name}>
         {entry.name}
       </span>
-      <span className="text-[9px] font-mono text-text-dim truncate max-w-[80px]" title={entry.fileName}>
+      <span
+        className="text-[9px] font-mono text-text-dim truncate max-w-[80px]"
+        title={entry.fileName}
+      >
         {entry.fileName}
       </span>
       <button onClick={onPreview} className={CHIME_BTN} title="Preview">
@@ -1069,7 +1251,9 @@ function CustomSoundsSection({
       }
       const audio = new Audio(url);
       previewRef.current = audio;
-      const done = () => { previewRef.current = null; };
+      const done = () => {
+        previewRef.current = null;
+      };
       audio.onended = done;
       audio.onerror = done;
       audio.play().catch(done);
@@ -1129,16 +1313,14 @@ function CustomSoundsSection({
               if (e.key === 'Enter') handleAddSound();
             }}
           />
-          <button
-            onClick={handleAddSound}
-            className={CHIME_BTN}
-            title="Add custom sound"
-          >
+          <button onClick={handleAddSound} className={CHIME_BTN} title="Add custom sound">
             <PlusIcon size={9} />
             Add
           </button>
         </div>
-        {error && <div className="text-[9px] font-mono text-red-400 leading-relaxed mt-1">{error}</div>}
+        {error && (
+          <div className="text-[9px] font-mono text-red-400 leading-relaxed mt-1">{error}</div>
+        )}
       </div>
 
       <div className="text-[9px] text-text-dim font-mono leading-relaxed mt-2">
@@ -1404,7 +1586,12 @@ function BackupsSection({ open, onToggle }: { open: boolean; onToggle: () => voi
       title="Backups"
       accent="#f59e0b"
     >
-      <ToggleRow label="Auto-backup" checked={autoBackupEnabled} onChange={updateAutoBackupEnabled} accent="#f59e0b" />
+      <ToggleRow
+        label="Auto-backup"
+        checked={autoBackupEnabled}
+        onChange={updateAutoBackupEnabled}
+        accent="#f59e0b"
+      />
       <div className="text-[9px] text-text-dim font-mono leading-relaxed mt-1">
         Automatically creates backups at session start and every hour.
       </div>
@@ -1473,12 +1660,8 @@ function BackupsSection({ open, onToggle }: { open: boolean; onToggle: () => voi
 /* ── Mobile Companion Section ──────────────────────────────── */
 
 function CompanionSection({ open, onToggle }: { open: boolean; onToggle: () => void }) {
-  const {
-    companionEnabled,
-    companionPort,
-    updateCompanionEnabled,
-    updateCompanionPort,
-  } = useAppSettingsContext();
+  const { companionEnabled, companionPort, updateCompanionEnabled, updateCompanionPort } =
+    useAppSettingsContext();
 
   const [companionInfo, setCompanionInfo] = useState<{
     running: boolean;
@@ -1517,7 +1700,9 @@ function CompanionSection({ open, onToggle }: { open: boolean; onToggle: () => v
     }
 
     syncServer();
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true;
+    };
   }, [companionEnabled, companionPort]);
 
   return (
@@ -1546,15 +1731,11 @@ function CompanionSection({ open, onToggle }: { open: boolean; onToggle: () => v
         dimmed={!companionEnabled}
       />
       <div className="text-[9px] text-text-dim font-mono leading-relaxed mt-1">
-        Opens a web server on your local network. Visit the URL below on your phone to see MUD output
-        and send commands. Only works on the same WiFi network.
+        Opens a web server on your local network. Visit the URL below on your phone to see MUD
+        output and send commands. Only works on the same WiFi network.
       </div>
 
-      {error && (
-        <div className="text-[10px] font-mono text-red-400 mt-1">
-          {error}
-        </div>
-      )}
+      {error && <div className="text-[10px] font-mono text-red-400 mt-1">{error}</div>}
 
       {companionInfo?.running && (
         <div className="mt-2 flex flex-col items-center gap-2">
@@ -1567,10 +1748,7 @@ function CompanionSection({ open, onToggle }: { open: boolean; onToggle: () => v
             {companionInfo.url}
           </a>
           {companionInfo.qr_svg && (
-            <div
-              className="mt-1"
-              dangerouslySetInnerHTML={{ __html: companionInfo.qr_svg }}
-            />
+            <div className="mt-1" dangerouslySetInnerHTML={{ __html: companionInfo.qr_svg }} />
           )}
           <div className="text-[9px] text-text-dim font-mono">
             Scan with your phone camera to connect

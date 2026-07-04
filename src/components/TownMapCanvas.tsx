@@ -571,12 +571,27 @@ function drawRoom(ctx: CanvasRenderingContext2D, room: TownRoom, isCurrent: bool
     ctx.fillText(glyph, x, y - ROOM_HALF + 5);
   }
 
-  // Named-exit badge (boats, "back" rooms, portals)
+  // Named-exit badge (boats, "back" rooms)
   if (room.namedExits.length > 0) {
     ctx.fillStyle = NAMED_COLOR;
     ctx.beginPath();
     ctx.arc(x + ROOM_HALF - 4, y + ROOM_HALF - 4, 2.2, 0, Math.PI * 2);
     ctx.fill();
+  }
+
+  // Portal landmark: a purple arch (the portal itself)
+  if (room.portal) {
+    ctx.strokeStyle = NAMED_COLOR;
+    ctx.lineWidth = 1.6;
+    const ax = x - ROOM_HALF + 6;
+    const ay = y + ROOM_HALF - 4;
+    const r2 = 4;
+    ctx.beginPath();
+    ctx.moveTo(ax - r2, ay);
+    ctx.lineTo(ax - r2, ay - 2);
+    ctx.arc(ax, ay - 2, r2, Math.PI, 0);
+    ctx.lineTo(ax + r2, ay);
+    ctx.stroke();
   }
 
   // Unexplored exits: faint stubs for directions with no learned link yet
@@ -678,6 +693,7 @@ function RoomTooltip({
         style={{ color: isCurrent ? CURRENT_ROOM_GLOW : TOOLTIP_TEXT }}
       >
         {room.name}
+        {room.portal && <span style={{ color: NAMED_COLOR }}> · portal</span>}
         <span className="font-normal opacity-50 ml-1.5">F{room.z}</span>
       </div>
       {room.desc && <div className="text-[9px] opacity-60 mb-1 line-clamp-3">{room.desc}</div>}

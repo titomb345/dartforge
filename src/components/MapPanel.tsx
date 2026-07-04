@@ -442,6 +442,8 @@ export function MapPanel({ mode = 'slideout' }: PinnablePanelProps) {
                       <br />
                       <span style={{ color: '#e8a849' }}>●</span> walk route{'  '}
                       <span style={{ color: 'rgba(150, 135, 110, 0.5)' }}>╶</span> unexplored exit
+                      {'  '}
+                      <span style={{ color: 'rgba(160, 120, 200, 0.9)' }}>∩</span> portal
                     </div>
                   </>
                 )}

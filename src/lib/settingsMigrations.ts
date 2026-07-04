@@ -319,6 +319,9 @@ const MIGRATIONS: MigrationFn[] = [
     if (!('mapShowFog' in data)) data.mapShowFog = false;
     if (!('mapShowLabels' in data)) data.mapShowLabels = false;
 
+    // /door command — keyring slots to try when unlocking/locking
+    if (!('doorKeys' in data)) data.doorKeys = 5;
+
     return data;
   },
 ];

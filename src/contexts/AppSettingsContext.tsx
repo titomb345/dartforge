@@ -98,6 +98,9 @@ export interface AppSettingsState {
   mapShowLabels: boolean;
   updateMapShowFog: (v: boolean) => void;
   updateMapShowLabels: (v: boolean) => void;
+  // /door command — keyring slots to try when unlocking/locking
+  doorKeys: number;
+  updateDoorKeys: (v: number) => void;
   // Who list
   whoAutoRefreshEnabled: boolean;
   whoRefreshMinutes: number;

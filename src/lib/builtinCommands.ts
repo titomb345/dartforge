@@ -1,4 +1,5 @@
 import type { ActionBlocker } from './actionBlocker';
+import { buildDoorSequence } from './doorSequence';
 import type { AutoInscriber } from './autoInscriber';
 import type { AutoCaster } from './autoCaster';
 import type { AutoConc } from './autoConc';
@@ -25,6 +26,7 @@ export interface BuiltinContext {
     announceMode: AnnounceMode;
     announcePetMode: AnnounceMode;
     autoConcAction: string;
+    doorKeys: number;
     updateAnnounceMode: (m: AnnounceMode) => void;
     updateAnnouncePetMode: (m: AnnounceMode) => void;
     updateAutoConcAction: (a: string) => void;
@@ -91,7 +93,8 @@ const handleUnblock: Handler = async (trimmed, ctx) => {
   if (!/^\/unblock\b/i.test(trimmed)) return false;
   const blocker = ctx.actionBlocker;
   const queued = blocker.forceUnblock();
-  ctx.writeToTerm( // green — intentionally different from echo
+  ctx.writeToTerm(
+    // green — intentionally different from echo
     `\x1b[32m[UNBLOCKED — ${queued.length} queued command(s) released]\x1b[0m\r\n`
   );
   for (const cmd of queued) {
@@ -140,12 +143,13 @@ const handleAutoinscribe: Handler = async (trimmed, ctx) => {
 
   const parts = args.split(/\s+/);
   if (parts.length < 2) {
-    error(ctx,
+    error(
+      ctx,
       '[Autoinscribe] Usage:\r\n' +
-      '  /autoinscribe <spell> @<power>  Start inscribe loop\r\n' +
-      '  /autoinscribe off               Stop inscribing\r\n' +
-      '  /autoinscribe status             Show current state\r\n' +
-      '  /autoinscribe power @<n>         Adjust power mid-loop'
+        '  /autoinscribe <spell> @<power>  Start inscribe loop\r\n' +
+        '  /autoinscribe off               Stop inscribing\r\n' +
+        '  /autoinscribe status             Show current state\r\n' +
+        '  /autoinscribe power @<n>         Adjust power mid-loop'
     );
     return true;
   }
@@ -194,7 +198,10 @@ const handleAutocast: Handler = async (trimmed, ctx) => {
       if (adjustParts.length === 1) {
         const p = parseInt(adjustParts[0], 10);
         if (isNaN(p) || p < 1) {
-          error(ctx, '[Autocast] Usage: /autocast adjust power @<n> | /autocast adjust power <up> <down>');
+          error(
+            ctx,
+            '[Autocast] Usage: /autocast adjust power @<n> | /autocast adjust power <up> <down>'
+          );
         } else {
           caster.setPower(p, echoFn(ctx));
         }
@@ -202,7 +209,10 @@ const handleAutocast: Handler = async (trimmed, ctx) => {
         const up = parseInt(adjustParts[0], 10);
         const down = parseInt(adjustParts[1], 10);
         if (isNaN(up) || isNaN(down) || up < 1 || down < 1) {
-          error(ctx, '[Autocast] Usage: /autocast adjust power @<n> | /autocast adjust power <up> <down>');
+          error(
+            ctx,
+            '[Autocast] Usage: /autocast adjust power @<n> | /autocast adjust power <up> <down>'
+          );
         } else {
           caster.setAdjust(up, down, echoFn(ctx));
         }
@@ -215,7 +225,10 @@ const handleAutocast: Handler = async (trimmed, ctx) => {
       if (adjustParts.length === 1) {
         const w = parseInt(adjustParts[0], 10);
         if (isNaN(w) || w < 0) {
-          error(ctx, '[Autocast] Usage: /autocast adjust weight <n> | /autocast adjust weight <up> <down>');
+          error(
+            ctx,
+            '[Autocast] Usage: /autocast adjust weight <n> | /autocast adjust weight <up> <down>'
+          );
         } else {
           caster.setCarriedWeight(w, echoFn(ctx));
         }
@@ -223,7 +236,10 @@ const handleAutocast: Handler = async (trimmed, ctx) => {
         const up = parseInt(adjustParts[0], 10);
         const down = parseInt(adjustParts[1], 10);
         if (isNaN(up) || isNaN(down) || up < 1 || down < 1) {
-          error(ctx, '[Autocast] Usage: /autocast adjust weight <n> | /autocast adjust weight <up> <down>');
+          error(
+            ctx,
+            '[Autocast] Usage: /autocast adjust weight <n> | /autocast adjust weight <up> <down>'
+          );
         } else {
           caster.setWeightAdjust(up, down, echoFn(ctx));
           ctx.appSettings.updateCasterWeightAdjustUp(up);
@@ -233,7 +249,10 @@ const handleAutocast: Handler = async (trimmed, ctx) => {
       return true;
     }
 
-    error(ctx, '[Autocast] Usage:\r\n  /autocast adjust power @<n>\r\n  /autocast adjust power <up> <down>\r\n  /autocast adjust weight <n>\r\n  /autocast adjust weight <up> <down>');
+    error(
+      ctx,
+      '[Autocast] Usage:\r\n  /autocast adjust power @<n>\r\n  /autocast adjust power <up> <down>\r\n  /autocast adjust weight <n>\r\n  /autocast adjust weight <up> <down>'
+    );
     return true;
   }
 
@@ -255,7 +274,10 @@ const handleAutocast: Handler = async (trimmed, ctx) => {
     if (setRestLower.startsWith('container ')) {
       const containerName = setRest.slice(10).trim();
       if (!containerName) {
-        error(ctx, '[Autocast] Usage: /autocast set container <name> | /autocast clear container\r\n  Use "none" or "clear" to remove the container.');
+        error(
+          ctx,
+          '[Autocast] Usage: /autocast set container <name> | /autocast clear container\r\n  Use "none" or "clear" to remove the container.'
+        );
       } else {
         const val = /^(none|null|clear)$/i.test(containerName) ? null : containerName;
         caster.setWeightContainer(val, echoFn(ctx));
@@ -264,7 +286,10 @@ const handleAutocast: Handler = async (trimmed, ctx) => {
       return true;
     }
 
-    error(ctx, '[Autocast] Usage:\r\n  /autocast set item <item>\r\n  /autocast set container <name>');
+    error(
+      ctx,
+      '[Autocast] Usage:\r\n  /autocast set item <item>\r\n  /autocast set container <name>'
+    );
     return true;
   }
 
@@ -282,14 +307,20 @@ const handleAutocast: Handler = async (trimmed, ctx) => {
       if (s.weightItem) {
         const loc = s.weightContainer ? ` from ${s.weightContainer}` : '';
         echo(ctx, `  Weight item:  ${s.weightItem}${loc}`);
-        echo(ctx, `  Weight adjust: take ${s.weightAdjustUp} on success, put ${s.weightAdjustDown} on fail`);
+        echo(
+          ctx,
+          `  Weight adjust: take ${s.weightAdjustUp} on success, put ${s.weightAdjustDown} on fail`
+        );
       } else {
         echo(ctx, '  Weight: not configured');
       }
     } else {
       const argsStr = s.args ? ` ${s.args}` : '';
       echo(ctx, `[Autocast: ${s.spell} @${s.power}${argsStr}]`);
-      echo(ctx, `  Phase: ${s.phase} | Cycles: ${s.cycleCount} | Success: ${s.successCount} | Fail: ${s.failCount}`);
+      echo(
+        ctx,
+        `  Phase: ${s.phase} | Cycles: ${s.cycleCount} | Success: ${s.successCount} | Fail: ${s.failCount}`
+      );
       echo(ctx, `  Power adjust: +${s.adjustUp} on fail / -${s.adjustDown} on success`);
       if (s.weightMode) {
         echo(ctx, `  WEIGHT MODE: carrying ${s.carriedWeight} ${s.weightItem}`);
@@ -297,7 +328,10 @@ const handleAutocast: Handler = async (trimmed, ctx) => {
       if (s.weightItem) {
         const loc = s.weightContainer ? ` from ${s.weightContainer}` : '';
         echo(ctx, `  Weight item:  ${s.weightItem}${loc}`);
-        echo(ctx, `  Weight adjust: take ${s.weightAdjustUp} on success, put ${s.weightAdjustDown} on fail`);
+        echo(
+          ctx,
+          `  Weight adjust: take ${s.weightAdjustUp} on success, put ${s.weightAdjustDown} on fail`
+        );
       }
     }
     return true;
@@ -305,18 +339,19 @@ const handleAutocast: Handler = async (trimmed, ctx) => {
 
   const parts = args.split(/\s+/);
   if (parts.length < 2) {
-    error(ctx,
+    error(
+      ctx,
       '[Autocast] Usage:\r\n' +
-      '  /autocast <spell> @<power> [args]   Start casting\r\n' +
-      '  /autocast off                       Stop casting\r\n' +
-      '  /autocast status                    Show current state\r\n' +
-      '  /autocast adjust power @<n>         Set power directly\r\n' +
-      '  /autocast adjust power <up> <down>  Set power adjust steps\r\n' +
-      '  /autocast adjust weight <n>         Set carried weight\r\n' +
-      '  /autocast adjust weight <up> <down> Set weight adjust steps\r\n' +
-      '  /autocast set item <item>        Set weight item\r\n' +
-      '  /autocast set container <name>      Set weight container\r\n' +
-      '  /autocast clear container            Clear container (ground)'
+        '  /autocast <spell> @<power> [args]   Start casting\r\n' +
+        '  /autocast off                       Stop casting\r\n' +
+        '  /autocast status                    Show current state\r\n' +
+        '  /autocast adjust power @<n>         Set power directly\r\n' +
+        '  /autocast adjust power <up> <down>  Set power adjust steps\r\n' +
+        '  /autocast adjust weight <n>         Set carried weight\r\n' +
+        '  /autocast adjust weight <up> <down> Set weight adjust steps\r\n' +
+        '  /autocast set item <item>        Set weight item\r\n' +
+        '  /autocast set container <name>      Set weight container\r\n' +
+        '  /autocast clear container            Clear container (ground)'
     );
     return true;
   }
@@ -388,12 +423,13 @@ const handleAutoconc: Handler = async (trimmed, ctx) => {
   }
 
   if (!args) {
-    error(ctx,
+    error(
+      ctx,
       '[Autoconc] Usage:\r\n' +
-      '  /autoconc <action>    Set action (does not start)\r\n' +
-      '  /autoconc on          Start with saved action\r\n' +
-      '  /autoconc off         Stop the loop\r\n' +
-      '  /autoconc status      Show current state'
+        '  /autoconc <action>    Set action (does not start)\r\n' +
+        '  /autoconc on          Start with saved action\r\n' +
+        '  /autoconc off         Stop the loop\r\n' +
+        '  /autoconc status      Show current state'
     );
     return true;
   }
@@ -414,7 +450,10 @@ const handleAnnounce: Handler = async (trimmed, ctx) => {
   const args = trimmed.slice(9).trim().toLowerCase();
 
   if (!args || args === 'status') {
-    echo(ctx, `[Announce: ${ctx.appSettings.announceMode} | Pets: ${ctx.appSettings.announcePetMode}]`);
+    echo(
+      ctx,
+      `[Announce: ${ctx.appSettings.announceMode} | Pets: ${ctx.appSettings.announcePetMode}]`
+    );
     return true;
   }
 
@@ -435,7 +474,10 @@ const handleAnnounce: Handler = async (trimmed, ctx) => {
     return true;
   }
 
-  error(ctx, '[Announce] Usage: /announce on|off|brief|verbose | /announce pet on|off|brief|verbose | /announce status');
+  error(
+    ctx,
+    '[Announce] Usage: /announce on|off|brief|verbose | /announce pet on|off|brief|verbose | /announce status'
+  );
   return true;
 };
 
@@ -486,9 +528,7 @@ const handleVar: Handler = async (trimmed, ctx) => {
       } catch {
         re = new RegExp(query.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i');
       }
-      const matches = ctx.mergedVariables().filter(
-        (v) => v.enabled && re.test(v.name)
-      );
+      const matches = ctx.mergedVariables().filter((v) => v.enabled && re.test(v.name));
       if (matches.length === 0) {
         echo(ctx, `No variables matching "${query}".`);
       } else {
@@ -516,7 +556,7 @@ const handleApt: Handler = async (trimmed, ctx) => {
   }
   const spell = getSpellByAbbr(arg) ?? findSpellFuzzy(arg);
   const skill = !spell ? (getSkillByAbbr(arg) ?? findSkillFuzzy(arg)) : null;
-  const resolved = spell ? spell.name : skill ?? arg;
+  const resolved = spell ? spell.name : (skill ?? arg);
   echo(ctx, `[Aptitude: ${resolved}]`);
   await ctx.sendCommand(`show aptitude:${resolved}`);
   return true;
@@ -560,7 +600,11 @@ function fmtDur(ms: number): string {
 }
 
 function statusIcon(st: string): string {
-  return st === 'running' ? '\x1b[32m●\x1b[36m' : st === 'paused' ? '\x1b[33m❚❚\x1b[36m' : '\x1b[90m■\x1b[36m';
+  return st === 'running'
+    ? '\x1b[32m●\x1b[36m'
+    : st === 'paused'
+      ? '\x1b[33m❚❚\x1b[36m'
+      : '\x1b[90m■\x1b[36m';
 }
 
 const handleCounter: Handler = async (trimmed, ctx) => {
@@ -569,7 +613,16 @@ const handleCounter: Handler = async (trimmed, ctx) => {
   const argsLower = args.toLowerCase();
   const ic = ctx.improveCounters();
   const cv = ctx.counterValue();
-  const { counters, activeCounterId, getElapsedMs, getPerMinuteRate, getPerPeriodRate, getPerHourRate, getSkillsSorted, periodLengthMinutes } = ic;
+  const {
+    counters,
+    activeCounterId,
+    getElapsedMs,
+    getPerMinuteRate,
+    getPerPeriodRate,
+    getPerHourRate,
+    getSkillsSorted,
+    periodLengthMinutes,
+  } = ic;
 
   /** Find the active counter or show an error. */
   const requireActive = (): ImproveCounter | null => {
@@ -597,7 +650,10 @@ const handleCounter: Handler = async (trimmed, ctx) => {
     if (!ac) return true;
     const perMin = getPerMinuteRate(ac).toFixed(2);
     const perHr = getPerHourRate(ac).toFixed(1);
-    echo(ctx, `[${statusIcon(ac.status)} ${ac.name}]  ${ac.status}  ${ac.totalImps} imps  ${fmtDur(getElapsedMs(ac))}  ${perMin}/min  ${perHr}/hr`);
+    echo(
+      ctx,
+      `[${statusIcon(ac.status)} ${ac.name}]  ${ac.status}  ${ac.totalImps} imps  ${fmtDur(getElapsedMs(ac))}  ${perMin}/min  ${perHr}/hr`
+    );
     return true;
   }
 
@@ -605,9 +661,8 @@ const handleCounter: Handler = async (trimmed, ctx) => {
     const ac = requireActive();
     if (!ac) return true;
     const skills = getSkillsSorted(ac);
-    const skillStr = skills.length > 0
-      ? skills.map((s) => `${s.skill} (${s.count})`).join(', ')
-      : 'none';
+    const skillStr =
+      skills.length > 0 ? skills.map((s) => `${s.skill} (${s.count})`).join(', ') : 'none';
     const perMin = getPerMinuteRate(ac).toFixed(2);
     const perPer = getPerPeriodRate(ac).toFixed(1);
     const perHr = getPerHourRate(ac).toFixed(1);
@@ -625,7 +680,10 @@ const handleCounter: Handler = async (trimmed, ctx) => {
   if (argsLower === 'start') {
     const ac = requireActive();
     if (!ac) return true;
-    if (ac.status === 'running') { echo(ctx, `[Counter "${ac.name}" already running]`); return true; }
+    if (ac.status === 'running') {
+      echo(ctx, `[Counter "${ac.name}" already running]`);
+      return true;
+    }
     if (ac.status === 'paused') cv.resumeCounter(ac.id);
     else cv.startCounter(ac.id);
     return true;
@@ -643,7 +701,10 @@ const handleCounter: Handler = async (trimmed, ctx) => {
   if (argsLower === 'pause') {
     const ac = requireActive();
     if (!ac) return true;
-    if (ac.status !== 'running') { echo(ctx, `[Counter "${ac.name}" not running]`); return true; }
+    if (ac.status !== 'running') {
+      echo(ctx, `[Counter "${ac.name}" not running]`);
+      return true;
+    }
     cv.pauseCounter(ac.id);
     return true;
   }
@@ -651,7 +712,10 @@ const handleCounter: Handler = async (trimmed, ctx) => {
   if (argsLower === 'stop') {
     const ac = requireActive();
     if (!ac) return true;
-    if (ac.status === 'stopped') { echo(ctx, `[Counter "${ac.name}" already stopped]`); return true; }
+    if (ac.status === 'stopped') {
+      echo(ctx, `[Counter "${ac.name}" already stopped]`);
+      return true;
+    }
     cv.stopCounter(ac.id);
     return true;
   }
@@ -665,10 +729,14 @@ const handleCounter: Handler = async (trimmed, ctx) => {
 
   if (argsLower.startsWith('switch ')) {
     const name = args.slice(7).trim();
-    if (!name) { error(ctx, '[Counter] Usage: /counter switch <name>'); return true; }
+    if (!name) {
+      error(ctx, '[Counter] Usage: /counter switch <name>');
+      return true;
+    }
     const nameLower = name.toLowerCase();
-    const match = counters.find((c) => c.name.toLowerCase() === nameLower)
-      ?? counters.find((c) => c.name.toLowerCase().includes(nameLower));
+    const match =
+      counters.find((c) => c.name.toLowerCase() === nameLower) ??
+      counters.find((c) => c.name.toLowerCase().includes(nameLower));
     if (!match) {
       error(ctx, `[Counter] No counter matching "${name}".`);
     } else {
@@ -678,17 +746,18 @@ const handleCounter: Handler = async (trimmed, ctx) => {
     return true;
   }
 
-  error(ctx,
+  error(
+    ctx,
     '[Counter] Usage:\r\n' +
-    '  /counter list            List all counters\r\n' +
-    '  /counter status          Active counter one-liner\r\n' +
-    '  /counter info            Detailed stats for active counter\r\n' +
-    '  /counter start           Start/resume active counter\r\n' +
-    '  /counter toggle          Toggle start/pause\r\n' +
-    '  /counter pause           Pause active counter\r\n' +
-    '  /counter stop            Stop active counter\r\n' +
-    '  /counter clear           Clear active counter\r\n' +
-    '  /counter switch <name>   Switch active counter by name'
+      '  /counter list            List all counters\r\n' +
+      '  /counter status          Active counter one-liner\r\n' +
+      '  /counter info            Detailed stats for active counter\r\n' +
+      '  /counter start           Start/resume active counter\r\n' +
+      '  /counter toggle          Toggle start/pause\r\n' +
+      '  /counter pause           Pause active counter\r\n' +
+      '  /counter stop            Stop active counter\r\n' +
+      '  /counter clear           Clear active counter\r\n' +
+      '  /counter switch <name>   Switch active counter by name'
   );
   return true;
 };
@@ -702,7 +771,10 @@ const handlePowercast: Handler = async (trimmed, ctx) => {
   if (arg) {
     adjustment = parseInt(arg, 10);
     if (isNaN(adjustment)) {
-      error(ctx, '[Powercast] Adjustment must be a number (e.g. /powercast -5, /powercast +3, /powercast 0).');
+      error(
+        ctx,
+        '[Powercast] Adjustment must be a number (e.g. /powercast -5, /powercast +3, /powercast 0).'
+      );
       return true;
     }
   }
@@ -710,13 +782,19 @@ const handlePowercast: Handler = async (trimmed, ctx) => {
   // Look up spell casting skill count
   const scCount = ctx.skillData().skills['spell casting']?.count ?? 0;
   if (scCount === 0) {
-    error(ctx, '[Powercast] No spell casting data tracked. Improve spell casting first so DartForge can track it.');
+    error(
+      ctx,
+      '[Powercast] No spell casting data tracked. Improve spell casting first so DartForge can track it.'
+    );
     return true;
   }
 
   const power = (scCount + adjustment) * 100;
   if (power <= 0) {
-    error(ctx, `[Powercast] Computed power ${power} is invalid (spell casting: ${scCount}, adjustment: ${adjustment}).`);
+    error(
+      ctx,
+      `[Powercast] Computed power ${power} is invalid (spell casting: ${scCount}, adjustment: ${adjustment}).`
+    );
     return true;
   }
 
@@ -765,8 +843,33 @@ const handleLevels: Handler = async (trimmed, ctx) => {
   return true;
 };
 
+/**
+ * /door <dir> — pass through a (possibly locked) door: unlock with each
+ * keyring slot, open, step through, then close and lock behind. The town
+ * auto-walker fires the same sequence when a route crosses a known door.
+ */
+const handleDoor: Handler = async (trimmed, ctx) => {
+  const m = /^\/door(?:\s+(\S+))?\s*$/i.exec(trimmed);
+  if (!m) return false;
+  if (!m[1]) {
+    error(ctx, 'Usage: /door <direction>  (n/s/e/w/u/d, diagonals, in/out)');
+    return true;
+  }
+  const cmds = buildDoorSequence(m[1], ctx.appSettings.doorKeys);
+  if (!cmds) {
+    error(ctx, `/door: unknown direction "${m[1]}"`);
+    return true;
+  }
+  const send = await ctx.sendCommandViaRef();
+  for (const cmd of cmds) {
+    await send(cmd);
+  }
+  return true;
+};
+
 /** Ordered list of built-in command handlers. Returns true if command was handled. */
 const BUILTIN_HANDLERS: Handler[] = [
+  handleDoor,
   handleBlock,
   handleUnblock,
   handleMovemode,

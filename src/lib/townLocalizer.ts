@@ -138,6 +138,11 @@ export class TownLocalizer {
    * fresh town entry instead of being filed into the current town.
    */
   onPortalTransit(): void {
+    // The room we're leaving through the portal is a portal room
+    if (this.active) {
+      const room = this.map.room(this.map.pos);
+      if (room) room.portal = true;
+    }
     this.queue = [];
     this.portalJump = true;
   }
@@ -234,7 +239,10 @@ export class TownLocalizer {
     if (this.portalJump) {
       this.portalJump = false;
       this.active = false;
-      return this.enterTown(block, null, now, false);
+      const res = this.enterTown(block, null, now, false);
+      const arrival = this.map.room(res.pos);
+      if (arrival) arrival.portal = true; // ... and so is the arrival room
+      return res;
     }
 
     if (!this.active) {

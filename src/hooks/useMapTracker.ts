@@ -12,7 +12,8 @@ import { RoomParser } from '../lib/roomParser';
 import { HexLocalizer, type SurveyResolution } from '../lib/hexLocalizer';
 import { HexMapStore, type HexCell, type HexPos } from '../lib/hexMap';
 import { parseDirection, getDirectionOffset, type Direction } from '../lib/hexUtils';
-import { TownParser, PORTAL_TRANSIT_RE } from '../lib/townParser';
+import { TownParser, PORTAL_TRANSIT_RE, TOWN_DIR_ALIASES, type TownDir } from '../lib/townParser';
+import { buildDoorSequence } from '../lib/doorSequence';
 import { TownLocalizer, classifyTownCommand, type TownResolution } from '../lib/townLocalizer';
 import { TownMapStore, hexAnchorKey, type TownRoom, type TownWalkStep } from '../lib/townMap';
 import { type DataStore } from '../contexts/DataStoreContext';
@@ -122,7 +123,9 @@ export function useMapTracker(
   activeCharacter: string | null,
   /** Sends a movement command (hex dirs, room dirs, or named exits like "back") */
   sendDirection: (dir: string) => Promise<void>,
-  echo: (message: string) => void
+  echo: (message: string) => void,
+  /** Keyring slots the auto-door sequence tries (see /door) */
+  doorKeys = 5
 ): MapTrackerState & MapTrackerActions {
   const mapRef = useRef<HexMapStore>(new HexMapStore());
   const localizerRef = useRef<HexLocalizer>(new HexLocalizer(mapRef.current));
@@ -160,9 +163,11 @@ export function useMapTracker(
     timeout: ReturnType<typeof setTimeout> | null;
   } | null>(null);
   const walkSendingRef = useRef(false);
-  // Town walk executor state — same shape, steps carry commands not dirs
+  // Town walk executor state — same shape, steps carry commands not dirs.
+  // Each step may expand to several commands (door steps send the full
+  // unlock/open/move/close/lock sequence).
   const townWalkRef = useRef<{
-    steps: TownWalkStep[];
+    steps: (TownWalkStep & { cmds: string[] })[];
     confirmed: number;
     sent: number;
     targetRoomId: number;
@@ -171,6 +176,8 @@ export function useMapTracker(
   const townWalkSendingRef = useRef(false);
   const sendDirectionRef = useRef(sendDirection);
   sendDirectionRef.current = sendDirection;
+  const doorKeysRef = useRef(doorKeys);
+  doorKeysRef.current = doorKeys;
   const echoRef = useRef(echo);
   echoRef.current = echo;
 
@@ -357,10 +364,14 @@ export function useMapTracker(
     if (!walk) return;
     if (walk.sent >= walk.steps.length) return;
     if (walk.sent - walk.confirmed >= WALK_PIPELINE) return;
-    const cmd = walk.steps[walk.sent].cmd;
+    const cmds = walk.steps[walk.sent].cmds;
     walk.sent += 1;
     townWalkSendingRef.current = true;
-    Promise.resolve(sendDirectionRef.current(cmd))
+    (async () => {
+      for (const cmd of cmds) {
+        await sendDirectionRef.current(cmd);
+      }
+    })()
       .catch(() => cancelTownWalk('send failed'))
       .finally(() => {
         townWalkSendingRef.current = false;
@@ -708,10 +719,32 @@ export function useMapTracker(
         echoRef.current('[Map] No known route there.');
         return;
       }
+      // Expand door crossings into the full unlock/open/move/close/lock
+      // sequence (the /door built-in) — the room being left knows which of
+      // its exits are doors from its own exits line.
+      let doors = 0;
+      const enriched = steps.map((s, i) => {
+        const fromId = i === 0 ? pos.roomId : steps[i - 1].toRoomId;
+        const fromRoom = town.rooms.get(fromId);
+        const dir = TOWN_DIR_ALIASES[s.cmd] as TownDir | undefined;
+        if (fromRoom && dir && fromRoom.doorDirs.includes(dir)) {
+          doors++;
+          return { ...s, cmds: buildDoorSequence(s.cmd, doorKeysRef.current) ?? [s.cmd] };
+        }
+        return { ...s, cmds: [s.cmd] };
+      });
       cancelWalk();
       cancelTownWalk();
-      townWalkRef.current = { steps, confirmed: 0, sent: 0, targetRoomId: roomId, timeout: null };
-      echoRef.current(`[Map] Walking ${steps.length} room${steps.length === 1 ? '' : 's'}...`);
+      townWalkRef.current = {
+        steps: enriched,
+        confirmed: 0,
+        sent: 0,
+        targetRoomId: roomId,
+        timeout: null,
+      };
+      echoRef.current(
+        `[Map] Walking ${steps.length} room${steps.length === 1 ? '' : 's'}${doors > 0 ? ` (${doors} door${doors === 1 ? '' : 's'})` : ''}...`
+      );
       syncState();
       armTownWalkTimeout();
       pumpTownWalkSends();

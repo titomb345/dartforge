@@ -40,6 +40,8 @@ export interface TownRoom {
   doorDirs: TownDir[];
   /** Non-directional exits ("back", "out", "exit") */
   namedExits: string[];
+  /** A portal transit departed from or arrived at this room */
+  portal: boolean;
   /** Confirmed connections: dir → destination room id */
   links: Partial<Record<TownDir, number>>;
   /** Confirmed non-directional connections: command → destination room id */
@@ -179,6 +181,7 @@ export class TownMapStore {
       exitsEver: [...block.exits.dirs],
       doorDirs: block.exits.doorDirs,
       namedExits: block.exits.named,
+      portal: false,
       links: {},
       namedLinks: {},
       visits: 1,
@@ -591,6 +594,7 @@ export class TownMapStore {
         town.rooms.set(r.id, {
           ...r,
           exitsEver: r.exitsEver ?? [...(r.exits ?? [])],
+          portal: r.portal ?? false,
           links: r.links ?? {},
           namedLinks: r.namedLinks ?? {},
           notes: r.notes ?? '',

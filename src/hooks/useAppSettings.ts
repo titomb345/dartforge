@@ -127,6 +127,9 @@ export function useAppSettings() {
   const [mapShowFog, setMapShowFog] = useState(false);
   const [mapShowLabels, setMapShowLabels] = useState(false);
 
+  // /door command — keyring slots to try when unlocking/locking
+  const [doorKeys, setDoorKeys] = useState(5);
+
   // Who list
   const [whoAutoRefreshEnabled, setWhoAutoRefreshEnabled] = useState(true);
   const [whoRefreshMinutes, setWhoRefreshMinutes] = useState(5);
@@ -251,6 +254,7 @@ export function useAppSettings() {
       await load('actionBlockingEnabled', setActionBlockingEnabled);
       await load('mapShowFog', setMapShowFog);
       await load('mapShowLabels', setMapShowLabels);
+      await load('doorKeys', setDoorKeys, (v) => v >= 1 && v <= 10);
       await load('whoAutoRefreshEnabled', setWhoAutoRefreshEnabled);
       await load('babelEnabled', setBabelEnabled);
       await load('selectOnSend', setSelectOnSend);
@@ -400,6 +404,8 @@ export function useAppSettings() {
       // Map panel view options
       updateMapShowFog: make(setMapShowFog, 'mapShowFog'),
       updateMapShowLabels: make(setMapShowLabels, 'mapShowLabels'),
+      // /door keyring slots
+      updateDoorKeys: make(setDoorKeys, 'doorKeys'),
       // Who list
       updateWhoAutoRefreshEnabled: make(setWhoAutoRefreshEnabled, 'whoAutoRefreshEnabled'),
       updateWhoRefreshMinutes: make(setWhoRefreshMinutes, 'whoRefreshMinutes'),
@@ -583,6 +589,8 @@ export function useAppSettings() {
       // Map panel view options
       mapShowFog,
       mapShowLabels,
+      // /door keyring slots
+      doorKeys,
       // Who list
       whoAutoRefreshEnabled,
       whoRefreshMinutes,
@@ -668,6 +676,7 @@ export function useAppSettings() {
       updatePanelFontSize,
       mapShowFog,
       mapShowLabels,
+      doorKeys,
       whoAutoRefreshEnabled,
       whoRefreshMinutes,
       whoFontSize,
