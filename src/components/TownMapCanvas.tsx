@@ -10,6 +10,7 @@
  */
 
 import { useRef, useEffect, useCallback, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { useMapContext } from '../contexts/MapContext';
 import type { TownRoom } from '../lib/townMap';
 import type { TownDir } from '../lib/townParser';
@@ -356,9 +357,10 @@ export function TownMapCanvas({
 
       cancelHover(true);
       h.key = room.id;
-      const rect = canvas.getBoundingClientRect();
-      const tipX = e.clientX - rect.left;
-      const tipY = e.clientY - rect.top;
+      // Viewport coords — the tooltip renders through a portal (like the
+      // gear menu) so a small pinned panel can't clip it.
+      const tipX = e.clientX;
+      const tipY = e.clientY;
       h.timer = setTimeout(() => {
         h.timer = null;
         h.shownKey = room.id;
@@ -410,8 +412,6 @@ export function TownMapCanvas({
           room={tooltip.room}
           x={tooltip.x}
           y={tooltip.y}
-          containerWidth={width}
-          containerHeight={height}
           isCurrent={isPlayerTown && !!town && tooltip.room.id === town.roomId}
           showWalkHint={!!onWalkTo}
         />
@@ -656,29 +656,26 @@ function RoomTooltip({
   room,
   x,
   y,
-  containerWidth,
-  containerHeight,
   isCurrent,
   showWalkHint,
 }: {
   room: TownRoom;
+  /** Viewport (client) coords — rendered via portal with fixed positioning */
   x: number;
   y: number;
-  containerWidth: number;
-  containerHeight: number;
   isCurrent: boolean;
   showWalkHint: boolean;
 }) {
   const tipW = 230;
   const tipH = 100;
-  const tx = x + tipW > containerWidth ? x - tipW - 8 : x + 8;
-  const ty = y + tipH > containerHeight ? containerHeight - tipH - 8 : y + 8;
+  const tx = x + tipW + 16 > window.innerWidth ? x - tipW - 8 : x + 8;
+  const ty = y + tipH + 16 > window.innerHeight ? window.innerHeight - tipH - 8 : y + 8;
 
   const exits = room.exits.map((d) => DIR_LABELS[d]).join(', ');
 
-  return (
+  return createPortal(
     <div
-      className="absolute pointer-events-none z-10 rounded px-3 py-2 max-w-[230px]"
+      className="fixed pointer-events-none z-[10000] rounded px-3 py-2 max-w-[230px]"
       style={{
         left: tx,
         top: ty,
@@ -707,6 +704,7 @@ function RoomTooltip({
       {!isCurrent && showWalkHint && (
         <div className="text-[9px] opacity-40 mt-0.5 italic">Right-click to walk here</div>
       )}
-    </div>
+    </div>,
+    document.body
   );
 }

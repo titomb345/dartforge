@@ -10,6 +10,7 @@
  */
 
 import { useRef, useEffect, useCallback, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { useMapContext } from '../contexts/MapContext';
 import {
   hexToPixel,
@@ -325,9 +326,10 @@ export function MapCanvas({
 
       cancelHover(true);
       h.key = key;
-      const rect = canvas.getBoundingClientRect();
-      const tipX = e.clientX - rect.left;
-      const tipY = e.clientY - rect.top;
+      // Viewport coords — the tooltip renders through a portal (like the
+      // gear menu) so a small pinned panel can't clip it.
+      const tipX = e.clientX;
+      const tipY = e.clientY;
       h.timer = setTimeout(() => {
         h.timer = null;
         h.shownKey = key;
@@ -400,8 +402,6 @@ export function MapCanvas({
           cell={tooltip.cell}
           x={tooltip.x}
           y={tooltip.y}
-          containerWidth={width}
-          containerHeight={height}
           isCurrent={
             !!currentPos && tooltip.cell.q === currentPos.q && tooltip.cell.r === currentPos.r
           }
@@ -712,28 +712,25 @@ function CellTooltip({
   cell,
   x,
   y,
-  containerWidth,
-  containerHeight,
   isCurrent,
 }: {
-  cell: HexCell;
+  /** Viewport (client) coords — rendered via portal with fixed positioning */
   x: number;
   y: number;
-  containerWidth: number;
-  containerHeight: number;
+  cell: HexCell;
   isCurrent: boolean;
 }) {
   const tipW = 220;
   const tipH = 110;
-  const tx = x + tipW > containerWidth ? x - tipW - 8 : x + 8;
-  const ty = y + tipH > containerHeight ? containerHeight - tipH - 8 : y + 8;
+  const tx = x + tipW + 16 > window.innerWidth ? x - tipW - 8 : x + 8;
+  const ty = y + tipH + 16 > window.innerHeight ? window.innerHeight - tipH - 8 : y + 8;
 
   const terrainLabel = TERRAIN_LABELS[cell.terrain] ?? 'Unknown';
   const blocked = cell.blocked.map((d) => directionLabel(d)).join(', ');
 
-  return (
+  return createPortal(
     <div
-      className="absolute pointer-events-none z-10 rounded px-3 py-2 max-w-[220px]"
+      className="fixed pointer-events-none z-[10000] rounded px-3 py-2 max-w-[220px]"
       style={{
         left: tx,
         top: ty,
@@ -799,6 +796,7 @@ function CellTooltip({
           Right-click to walk here · Shift+click to toggle town
         </div>
       )}
-    </div>
+    </div>,
+    document.body
   );
 }

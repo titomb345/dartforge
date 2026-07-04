@@ -10,6 +10,16 @@ The `[Unreleased]` header controls automatic version bumping on merge:
 - `[Unreleased-minor]` → 0.1.0 → 0.2.0
 - `[Unreleased-major]` → 0.1.0 → 1.0.0
 
+## [Unreleased-patch]
+
+### Added
+
+- Full-screen map view — an expand button in the Map panel toolbar (same idea as the script editor's popout) opens the map in a large widescreen overlay, since the DartMUD world is far wider than it is tall. Everything works exactly like the in-panel map: pan/zoom, hover-to-inspect, right-click auto-walk, Shift/Ctrl+click marker editing, the floor stepper, town picker, and the gear menu. Esc, clicking the backdrop, or the collapse button returns to the normal panel
+
+### Fixed
+
+- The map's hover info popups (hex terrain and town room details) now render through a portal like the gear menu, so a small pinned Map panel can't clip them at its edges
+
 ## [1.13.0] - 2026-07-04
 
 ### Added
