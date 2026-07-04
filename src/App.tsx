@@ -87,7 +87,12 @@ import { AutoInscriber } from './lib/autoInscriber';
 import { AutoCaster } from './lib/autoCaster';
 import { AutoConc } from './lib/autoConc';
 import { useEngineRef } from './hooks/useEngineRef';
-import { type MovementMode, getNextMode, applyMovementMode, movementModeLabel } from './lib/movementMode';
+import {
+  type MovementMode,
+  getNextMode,
+  applyMovementMode,
+  movementModeLabel,
+} from './lib/movementMode';
 import { queryHour, getTimeOfDay, formatDate, getHoliday, Reckoning } from './lib/dartDate';
 import { shouldGagLine, NpcGagTracker } from './lib/gagPatterns';
 import { transformSkillReadout } from './lib/skillReadoutTransform';
@@ -142,12 +147,18 @@ import { hotkeyToString, hotkeyFromEvent, isNumpadKey } from './types';
 
 /* ── Lazy Tauri imports for companion integration ────────────── */
 let tauriInvoke: ((cmd: string, args?: Record<string, unknown>) => Promise<unknown>) | null = null;
-let tauriListen: ((event: string, handler: (e: { payload: unknown }) => void) => Promise<() => void>) | null = null;
+let tauriListen:
+  | ((event: string, handler: (e: { payload: unknown }) => void) => Promise<() => void>)
+  | null = null;
 let tauriReady: Promise<void> = Promise.resolve();
 if (getPlatform() === 'tauri') {
   tauriReady = Promise.all([
-    import('@tauri-apps/api/core').then((m) => { tauriInvoke = m.invoke; }),
-    import('@tauri-apps/api/event').then((m) => { tauriListen = m.listen; }),
+    import('@tauri-apps/api/core').then((m) => {
+      tauriInvoke = m.invoke;
+    }),
+    import('@tauri-apps/api/event').then((m) => {
+      tauriListen = m.listen;
+    }),
   ]).then(() => {});
 }
 
@@ -205,15 +216,15 @@ function AppMain() {
   const [debugMode, setDebugMode] = useState(false);
   const [activePanel, setActivePanel] = useState<Panel | null>(null);
   const [showCompanionQR, setShowCompanionQR] = useState(false);
-  const togglePanel = useCallback((panel: Panel) => setActivePanel((v) => (v === panel ? null : panel)), []);
-  const closePanel = useCallback(() => setActivePanel(null), []);
-  const writeToTerm = useCallback(
-    (text: string) => {
-      if (terminalRef.current) smartWrite(terminalRef.current, text);
-      tauriInvoke?.('broadcast_companion_output', { data: text });
-    },
+  const togglePanel = useCallback(
+    (panel: Panel) => setActivePanel((v) => (v === panel ? null : panel)),
     []
   );
+  const closePanel = useCallback(() => setActivePanel(null), []);
+  const writeToTerm = useCallback((text: string) => {
+    if (terminalRef.current) smartWrite(terminalRef.current, text);
+    tauriInvoke?.('broadcast_companion_output', { data: text });
+  }, []);
   const writeToTermRef = useLatestRef(writeToTerm);
   const [panelLayout, setPanelLayout] = useState<PanelLayout>({ left: [], right: [] });
   const [pinnedWidths, setPinnedWidths] = useState<{ left: number; right: number }>({
@@ -272,10 +283,13 @@ function AppMain() {
   const dataStore = useDataStore();
   const settingsLoadedRef = useRef(false);
   const { commandHistory, handleHistoryChange: rawHistoryChange } = useCommandHistory(dataStore);
-  const handleHistoryChange = useCallback((history: string[]) => {
-    rawHistoryChange(history);
-    tauriInvoke?.('broadcast_companion_history', { history });
-  }, [rawHistoryChange]);
+  const handleHistoryChange = useCallback(
+    (history: string[]) => {
+      rawHistoryChange(history);
+      tauriInvoke?.('broadcast_companion_history', { history });
+    },
+    [rawHistoryChange]
+  );
 
   // Broadcast command history to companion whenever it changes
   useEffect(() => {
@@ -549,7 +563,12 @@ function AppMain() {
     deleteMessage,
     addOutgoingMessage,
     deleteOutgoingMessage,
-  } = useChatMessages(appSettings.chatHistorySize, chatNotificationsRef, soundLibraryRef, chatGaggedNpcsRef);
+  } = useChatMessages(
+    appSettings.chatHistorySize,
+    chatNotificationsRef,
+    soundLibraryRef,
+    chatGaggedNpcsRef
+  );
   const addOutgoingMessageRef = useLatestRef(addOutgoingMessage);
   const handleChatMessageRef = useLatestRef(handleChatMessage);
 
@@ -644,18 +663,21 @@ function AppMain() {
         }
 
         // Gag groups + NPC gags — suppress line before trigger evaluation
-        if (shouldGagLine(stripped, gagGroupsRef.current, npcGagTrackerRef.current, chatGaggedNpcsRef.current)) {
+        if (
+          shouldGagLine(
+            stripped,
+            gagGroupsRef.current,
+            npcGagTrackerRef.current,
+            chatGaggedNpcsRef.current
+          )
+        ) {
           return { gag: true, highlight: null };
         }
 
         // Skill count injection — transform skill readout lines
         let replacement: string | undefined;
         if (showSkillCountsRef.current) {
-          const transformed = transformSkillReadout(
-            stripped,
-            raw,
-            skillDataRef.current.skills,
-          );
+          const transformed = transformSkillReadout(stripped, raw, skillDataRef.current.skills);
           if (transformed) replacement = transformed;
         }
 
@@ -680,7 +702,8 @@ function AppMain() {
             );
           }
           // Play sound: new soundName field takes priority, fall back to legacy soundAlert
-          const soundToPlay = match.trigger.soundName ?? (match.trigger.soundAlert ? 'chime1' : null);
+          const soundToPlay =
+            match.trigger.soundName ?? (match.trigger.soundAlert ? 'chime1' : null);
           if (soundToPlay) {
             soundLibraryRef.current.play(soundToPlay);
           }
@@ -697,7 +720,12 @@ function AppMain() {
                     globalScriptRef.current
                   )
                 : (() => {
-                    const raw = expandTriggerBody(match.trigger.body, match, activeCharacterRef.current, commandSeparatorRef.current);
+                    const raw = expandTriggerBody(
+                      match.trigger.body,
+                      match,
+                      activeCharacterRef.current,
+                      commandSeparatorRef.current
+                    );
                     const commands = raw.flatMap((cmd) =>
                       cmd.type === 'send' ? triggerRunnerRef.current.expand(cmd.text) : [cmd]
                     );
@@ -1013,7 +1041,14 @@ function AppMain() {
     },
     [writeToTermRef]
   );
-  const mapTracker = useMapTracker(dataStore, activeCharacter, mapSendDirection, mapEcho);
+  const mapTracker = useMapTracker(
+    dataStore,
+    activeCharacter,
+    mapSendDirection,
+    mapEcho,
+    appSettings.doorKeys,
+    appSettings.townMapperEnabled
+  );
   const mapFeedLineRef = useLatestRef(mapTracker.feedLine);
   const mapTrackCommandRef = useLatestRef(mapTracker.trackCommand);
 
@@ -1119,7 +1154,7 @@ function AppMain() {
       outputFilterRef,
       onLogin,
       autoLoginRef,
-      onFilteredOutput,
+      onFilteredOutput
     );
 
   // Session logger
@@ -1154,7 +1189,8 @@ function AppMain() {
   triggerRunnerRef.current = {
     send: async (text) => {
       // Dispatch built-in slash commands produced by triggers/aliases
-      if (text.startsWith('/') && await dispatchBuiltinCommand(text, builtinCtxRef.current)) return;
+      if (text.startsWith('/') && (await dispatchBuiltinCommand(text, builtinCtxRef.current)))
+        return;
       // Apply movement mode to any bare direction commands (from triggers/aliases)
       const finalText =
         movementModeRef.current !== 'normal'
@@ -1358,7 +1394,9 @@ function AppMain() {
       const valid: MovementMode[] = ['normal', 'leading', 'rowing', 'sneaking'];
       if (valid.includes(mode as MovementMode)) {
         setMovementMode(mode as MovementMode);
-        writeToTerm(`\x1b[36m[Movement mode: ${movementModeLabel(mode as MovementMode)}]\x1b[0m\r\n`);
+        writeToTerm(
+          `\x1b[36m[Movement mode: ${movementModeLabel(mode as MovementMode)}]\x1b[0m\r\n`
+        );
       }
     },
   };
@@ -1404,6 +1442,7 @@ function AppMain() {
       announceMode: appSettings.announceMode,
       announcePetMode: appSettings.announcePetMode,
       autoConcAction: appSettings.autoConcAction,
+      doorKeys: appSettings.doorKeys,
       updateAnnounceMode: appSettings.updateAnnounceMode,
       updateAnnouncePetMode: appSettings.updateAnnouncePetMode,
       updateAutoConcAction: appSettings.updateAutoConcAction,
@@ -1449,11 +1488,12 @@ function AppMain() {
       // Idle tracking — stamp on any keypress-driven send (even empty Enter)
       stampUserInput();
 
-
       // Capture outgoing chat commands for the Outgoing tab
       // say/shout/ooc are direct commands; tell and sz are spells (cast tell, cast sz, cast skrydin's_zephyr)
-      if (/^(say|'|shout|ooc)\b/i.test(trimmed) ||
-          /^cast\s+(tell|t|sz|skyrdin'?s?_?zephyr)\b/i.test(trimmed)) {
+      if (
+        /^(say|'|shout|ooc)\b/i.test(trimmed) ||
+        /^cast\s+(tell|t|sz|skyrdin'?s?_?zephyr)\b/i.test(trimmed)
+      ) {
         addOutgoingMessageRef.current?.(trimmed);
       }
 
@@ -1504,7 +1544,8 @@ function AppMain() {
         ...triggerRunnerRef.current,
         send: async (text) => {
           // Dispatch built-in slash commands produced by alias expansion
-          if (text.startsWith('/') && await dispatchBuiltinCommand(text, builtinCtxRef.current)) return;
+          if (text.startsWith('/') && (await dispatchBuiltinCommand(text, builtinCtxRef.current)))
+            return;
           // Apply movement mode to any bare direction commands produced by alias expansion
           const finalText =
             movementModeRef.current !== 'normal'
@@ -1658,13 +1699,15 @@ function AppMain() {
         const cmd = payload.command.trim();
         if (cmd) {
           const current = commandHistoryRef.current;
-          handleHistoryChangeRef.current(
-            [cmd, ...current.filter((h) => h !== cmd)].slice(0, 500)
-          );
+          handleHistoryChangeRef.current([cmd, ...current.filter((h) => h !== cmd)].slice(0, 500));
         }
       }
-    }).then((fn) => { unlisten = fn; });
-    return () => { unlisten?.(); };
+    }).then((fn) => {
+      unlisten = fn;
+    });
+    return () => {
+      unlisten?.();
+    };
   }, [handleSendRef]);
 
   // Companion reconnect/disconnect listeners
@@ -1676,11 +1719,18 @@ function AppMain() {
     let unlistenDisconnect: (() => void) | null = null;
     tauriListen('companion:reconnect', () => {
       reconnectRef.current();
-    }).then((fn) => { unlistenReconnect = fn; });
+    }).then((fn) => {
+      unlistenReconnect = fn;
+    });
     tauriListen('companion:disconnect', () => {
       disconnectRef.current();
-    }).then((fn) => { unlistenDisconnect = fn; });
-    return () => { unlistenReconnect?.(); unlistenDisconnect?.(); };
+    }).then((fn) => {
+      unlistenDisconnect = fn;
+    });
+    return () => {
+      unlistenReconnect?.();
+      unlistenDisconnect?.();
+    };
   }, [reconnectRef, disconnectRef]);
 
   // Global macro hotkey listener
@@ -1728,9 +1778,7 @@ function AppMain() {
       if (isNumpadKey(combo.key)) return; // numpad handled by CommandInput
 
       const key = hotkeyToString(combo);
-      const macro = macrosRef.current.find(
-        (m) => m.enabled && hotkeyToString(m.hotkey) === key
-      );
+      const macro = macrosRef.current.find((m) => m.enabled && hotkeyToString(m.hotkey) === key);
       if (!macro) return;
 
       e.preventDefault();
@@ -1856,7 +1904,18 @@ function AppMain() {
         dangerThreshold: 99,
       },
     ],
-    [health, concentration, aura, auraMudColor, auraMudColors, hunger, thirst, encumbrance, movement, alignment]
+    [
+      health,
+      concentration,
+      aura,
+      auraMudColor,
+      auraMudColors,
+      hunger,
+      thirst,
+      encumbrance,
+      movement,
+      alignment,
+    ]
   );
 
   // Push parsed character vitals to Mobile Companion clients whenever a readout
@@ -2083,7 +2142,12 @@ function AppMain() {
       },
     }),
     // eslint-disable-next-line react-hooks/exhaustive-deps -- callbacks are stable (useCallback), only state values change
-    [improveCounters.counters, improveCounters.activeCounterId, improveCounters.periodLengthMinutes, counterEcho]
+    [
+      improveCounters.counters,
+      improveCounters.activeCounterId,
+      improveCounters.periodLengthMinutes,
+      counterEcho,
+    ]
   );
   const counterValueRef = useLatestRef(counterValue);
 
@@ -2156,8 +2220,7 @@ function AppMain() {
       concActive: concState.active,
       concAction: concState.action,
       concCycleCount: concState.cycleCount,
-      onStopConc: () =>
-        autoConcRef.current.stop((msg) => writeToTerm(`\x1b[36m${msg}\x1b[0m\r\n`)),
+      onStopConc: () => autoConcRef.current.stop((msg) => writeToTerm(`\x1b[36m${msg}\x1b[0m\r\n`)),
       announceMode: appSettings.announceMode,
       onStopAnnounce: () => {
         appSettings.updateAnnounceMode('off');
@@ -2260,270 +2323,271 @@ function AppMain() {
                             <AllocProvider value={allocState}>
                               <WhoProvider value={whoValue}>
                                 <WhoTitleProvider value={whoTitleState}>
-                                <PanelProvider
-                                  layout={panelLayout}
-                                  activePanel={activePanel}
-                                  togglePanel={togglePanel}
-                                  pinPanel={pinPanel}
-                                >
-                                  <SpotlightProvider>
-                                    <div className="flex flex-col h-dvh bg-bg-canvas text-text-primary relative p-1 gap-1 overflow-hidden">
-                                      <Toolbar
-                                        connected={connected}
-                                        onReconnect={handleReconnect}
-                                        onDisconnect={handleDisconnect}
-                                        onScreenshot={handleScreenshot}
-                                      />
-                                      <div className="flex-1 overflow-hidden flex flex-row gap-1 relative">
-                                        {/* Left pinned region — full, collapsed strip, or hidden */}
-                                        {effectiveLeftWidth > 0 ? (
-                                          <>
-                                            <PinnedRegion
+                                  <PanelProvider
+                                    layout={panelLayout}
+                                    activePanel={activePanel}
+                                    togglePanel={togglePanel}
+                                    pinPanel={pinPanel}
+                                  >
+                                    <SpotlightProvider>
+                                      <div className="flex flex-col h-dvh bg-bg-canvas text-text-primary relative p-1 gap-1 overflow-hidden">
+                                        <Toolbar
+                                          connected={connected}
+                                          onReconnect={handleReconnect}
+                                          onDisconnect={handleDisconnect}
+                                          onScreenshot={handleScreenshot}
+                                        />
+                                        <div className="flex-1 overflow-hidden flex flex-row gap-1 relative">
+                                          {/* Left pinned region — full, collapsed strip, or hidden */}
+                                          {effectiveLeftWidth > 0 ? (
+                                            <>
+                                              <PinnedRegion
+                                                side="left"
+                                                panels={panelLayout.left}
+                                                width={effectiveLeftWidth}
+                                                otherSidePanels={panelLayout.right}
+                                                onUnpin={unpinPanel}
+                                                onSwapSide={swapPanelSide}
+                                                onSwapWith={swapPanelsWith}
+                                                onMovePanel={movePanel}
+                                                heightRatios={panelHeights.left}
+                                                onHeightRatiosChange={onLeftHeightRatiosChange}
+                                              />
+                                              {panelLayout.left.length > 0 && (
+                                                <ResizeHandle
+                                                  side="left"
+                                                  onMouseDown={leftResize.handleMouseDown}
+                                                  isDragging={leftResize.isDragging}
+                                                  constrained={
+                                                    effectiveLeftWidth < pinnedWidths.left
+                                                  }
+                                                  onCollapse={collapseLeft}
+                                                />
+                                              )}
+                                            </>
+                                          ) : leftIsCollapsed && panelLayout.left.length > 0 ? (
+                                            <CollapsedPanelStrip
                                               side="left"
                                               panels={panelLayout.left}
-                                              width={effectiveLeftWidth}
+                                              panelWidth={pinnedWidths.left}
                                               otherSidePanels={panelLayout.right}
                                               onUnpin={unpinPanel}
                                               onSwapSide={swapPanelSide}
                                               onSwapWith={swapPanelsWith}
                                               onMovePanel={movePanel}
-                                              heightRatios={panelHeights.left}
-                                              onHeightRatiosChange={onLeftHeightRatiosChange}
+                                              onExpand={
+                                                collapsedSides.left && !budget.leftCollapsed
+                                                  ? expandLeft
+                                                  : undefined
+                                              }
                                             />
-                                            {panelLayout.left.length > 0 && (
-                                              <ResizeHandle
-                                                side="left"
-                                                onMouseDown={leftResize.handleMouseDown}
-                                                isDragging={leftResize.isDragging}
-                                                constrained={
-                                                  effectiveLeftWidth < pinnedWidths.left
-                                                }
-                                                onCollapse={collapseLeft}
-                                              />
-                                            )}
-                                          </>
-                                        ) : leftIsCollapsed && panelLayout.left.length > 0 ? (
-                                          <CollapsedPanelStrip
-                                            side="left"
-                                            panels={panelLayout.left}
-                                            panelWidth={pinnedWidths.left}
-                                            otherSidePanels={panelLayout.right}
-                                            onUnpin={unpinPanel}
-                                            onSwapSide={swapPanelSide}
-                                            onSwapWith={swapPanelsWith}
-                                            onMovePanel={movePanel}
-                                            onExpand={
-                                              collapsedSides.left && !budget.leftCollapsed
-                                                ? expandLeft
-                                                : undefined
-                                            }
-                                          />
-                                        ) : null}
+                                          ) : null}
 
-                                        {/* Center: Terminal + bottom controls */}
-                                        <div
-                                          className="flex-1 overflow-hidden flex flex-col"
-                                          style={{ minWidth: MIN_TERMINAL_WIDTH }}
-                                        >
-                                          <div className="flex-1 overflow-hidden rounded-lg flex flex-col">
-                                            <Terminal
-                                              terminalRef={terminalRef}
-                                              inputRef={inputRef}
-                                              theme={xtermTheme}
-                                              display={display}
-                                              onUpdateDisplay={updateDisplay}
-                                              onAddToTrigger={handleAddToTrigger}
-                                              onGagLine={handleGagLine}
-                                              onOpenInNotes={handleOpenInNotes}
-                                              onScreenshot={handleScreenshot}
+                                          {/* Center: Terminal + bottom controls */}
+                                          <div
+                                            className="flex-1 overflow-hidden flex flex-col"
+                                            style={{ minWidth: MIN_TERMINAL_WIDTH }}
+                                          >
+                                            <div className="flex-1 overflow-hidden rounded-lg flex flex-col">
+                                              <Terminal
+                                                terminalRef={terminalRef}
+                                                inputRef={inputRef}
+                                                theme={xtermTheme}
+                                                display={display}
+                                                onUpdateDisplay={updateDisplay}
+                                                onAddToTrigger={handleAddToTrigger}
+                                                onGagLine={handleGagLine}
+                                                onOpenInNotes={handleOpenInNotes}
+                                                onScreenshot={handleScreenshot}
+                                              />
+                                            </div>
+                                            {/* Quick buttons */}
+                                            <QuickButtonBar
+                                              buttons={quickButtonsCRUD.items}
+                                              onFire={fireQuickButton}
+                                              onAdd={quickButtonsCRUD.add}
+                                              onUpdate={quickButtonsCRUD.update}
+                                              onDelete={quickButtonsCRUD.remove}
+                                              onReorder={quickButtonsCRUD.reorder}
+                                              getVariable={getVariableByName}
                                             />
+                                            {/* Status bar + command input */}
+                                            <div className="rounded-lg bg-bg-primary overflow-hidden shrink-0">
+                                              <div
+                                                ref={statusBarRef}
+                                                data-help-id="status-bar"
+                                                className="flex items-center gap-1 px-1.5 py-0.5"
+                                                style={{
+                                                  background:
+                                                    'linear-gradient(to bottom, #1e1e1e, #1a1a1a)',
+                                                }}
+                                              >
+                                                {loggedIn && (
+                                                  <SortableStatusBar
+                                                    items={readoutConfigs}
+                                                    order={statusBarOrder}
+                                                    onReorder={reorderStatusBar}
+                                                    theme={theme}
+                                                    autoCompact={autoCompact}
+                                                    compactReadouts={compactReadouts}
+                                                    filterFlags={filterFlags}
+                                                    toggleFilter={toggleFilter}
+                                                    toggleCompactReadout={toggleCompactReadout}
+                                                  />
+                                                )}
+                                                <div className="ml-auto">
+                                                  <GameClock
+                                                    compact={autoCompact || !!compactReadouts.clock}
+                                                    onToggleCompact={() =>
+                                                      toggleCompactReadout('clock')
+                                                    }
+                                                  />
+                                                </div>
+                                              </div>
+                                              <CommandInput
+                                                ref={inputRef}
+                                                onSend={handleSend}
+                                                onReconnect={reconnect}
+                                                promptChar={display.promptChar}
+                                                promptColor={display.promptColor}
+                                              />
+                                            </div>
                                           </div>
-                                          {/* Quick buttons */}
-                                          <QuickButtonBar
-                                            buttons={quickButtonsCRUD.items}
-                                            onFire={fireQuickButton}
-                                            onAdd={quickButtonsCRUD.add}
-                                            onUpdate={quickButtonsCRUD.update}
-                                            onDelete={quickButtonsCRUD.remove}
-                                            onReorder={quickButtonsCRUD.reorder}
-                                            getVariable={getVariableByName}
-                                          />
-                                          {/* Status bar + command input */}
-                                          <div className="rounded-lg bg-bg-primary overflow-hidden shrink-0">
-                                            <div
-                                              ref={statusBarRef}
-                                              data-help-id="status-bar"
-                                              className="flex items-center gap-1 px-1.5 py-0.5"
-                                              style={{
-                                                background:
-                                                  'linear-gradient(to bottom, #1e1e1e, #1a1a1a)',
-                                              }}
-                                            >
-                                              {loggedIn && (
-                                                <SortableStatusBar
-                                                  items={readoutConfigs}
-                                                  order={statusBarOrder}
-                                                  onReorder={reorderStatusBar}
-                                                  theme={theme}
-                                                  autoCompact={autoCompact}
-                                                  compactReadouts={compactReadouts}
-                                                  filterFlags={filterFlags}
-                                                  toggleFilter={toggleFilter}
-                                                  toggleCompactReadout={toggleCompactReadout}
+
+                                          {/* Right pinned region — full, collapsed strip, or hidden */}
+                                          {effectiveRightWidth > 0 ? (
+                                            <>
+                                              {panelLayout.right.length > 0 && (
+                                                <ResizeHandle
+                                                  side="right"
+                                                  onMouseDown={rightResize.handleMouseDown}
+                                                  isDragging={rightResize.isDragging}
+                                                  constrained={
+                                                    effectiveRightWidth < pinnedWidths.right
+                                                  }
+                                                  onCollapse={collapseRight}
                                                 />
                                               )}
-                                              <div className="ml-auto">
-                                                <GameClock
-                                                  compact={autoCompact || !!compactReadouts.clock}
-                                                  onToggleCompact={() =>
-                                                    toggleCompactReadout('clock')
-                                                  }
-                                                />
-                                              </div>
-                                            </div>
-                                            <CommandInput
-                                              ref={inputRef}
-                                              onSend={handleSend}
-                                              onReconnect={reconnect}
-                                              promptChar={display.promptChar}
-                                              promptColor={display.promptColor}
-                                            />
-                                          </div>
-                                        </div>
-
-                                        {/* Right pinned region — full, collapsed strip, or hidden */}
-                                        {effectiveRightWidth > 0 ? (
-                                          <>
-                                            {panelLayout.right.length > 0 && (
-                                              <ResizeHandle
+                                              <PinnedRegion
                                                 side="right"
-                                                onMouseDown={rightResize.handleMouseDown}
-                                                isDragging={rightResize.isDragging}
-                                                constrained={
-                                                  effectiveRightWidth < pinnedWidths.right
-                                                }
-                                                onCollapse={collapseRight}
+                                                panels={panelLayout.right}
+                                                width={effectiveRightWidth}
+                                                otherSidePanels={panelLayout.left}
+                                                onUnpin={unpinPanel}
+                                                onSwapSide={swapPanelSide}
+                                                onSwapWith={swapPanelsWith}
+                                                onMovePanel={movePanel}
+                                                heightRatios={panelHeights.right}
+                                                onHeightRatiosChange={onRightHeightRatiosChange}
                                               />
-                                            )}
-                                            <PinnedRegion
+                                            </>
+                                          ) : rightIsCollapsed && panelLayout.right.length > 0 ? (
+                                            <CollapsedPanelStrip
                                               side="right"
                                               panels={panelLayout.right}
-                                              width={effectiveRightWidth}
+                                              panelWidth={pinnedWidths.right}
                                               otherSidePanels={panelLayout.left}
                                               onUnpin={unpinPanel}
                                               onSwapSide={swapPanelSide}
                                               onSwapWith={swapPanelsWith}
                                               onMovePanel={movePanel}
-                                              heightRatios={panelHeights.right}
-                                              onHeightRatiosChange={onRightHeightRatiosChange}
+                                              onExpand={
+                                                collapsedSides.right && !budget.rightCollapsed
+                                                  ? expandRight
+                                                  : undefined
+                                              }
                                             />
-                                          </>
-                                        ) : rightIsCollapsed &&
-                                          panelLayout.right.length > 0 ? (
-                                          <CollapsedPanelStrip
-                                            side="right"
-                                            panels={panelLayout.right}
-                                            panelWidth={pinnedWidths.right}
-                                            otherSidePanels={panelLayout.left}
-                                            onUnpin={unpinPanel}
-                                            onSwapSide={swapPanelSide}
-                                            onSwapWith={swapPanelsWith}
-                                            onMovePanel={movePanel}
-                                            onExpand={
-                                              collapsedSides.right && !budget.rightCollapsed
-                                                ? expandRight
-                                                : undefined
-                                            }
-                                          />
-                                        ) : null}
+                                          ) : null}
 
-                                        {/* Slide-out overlays */}
-                                        <SlideOut panel="appearance">
-                                          <ColorSettings
-                                            theme={theme}
-                                            onUpdateColor={updateColor}
-                                            onResetColor={resetColor}
-                                            onReset={resetAll}
-                                            display={display}
-                                            onUpdateDisplay={updateDisplay}
-                                            onResetDisplay={resetDisplay}
-                                            debugMode={debugMode}
-                                            onToggleDebug={toggleDebug}
-                                            onClose={closePanel}
-                                          />
-                                        </SlideOut>
-                                        <SlideOut panel="settings">
-                                          <SettingsPanel onClose={closePanel} />
-                                        </SlideOut>
-                                        <SlideOut panel="skills" pinnable="skills">
-                                          <SkillPanel mode="slideout" />
-                                        </SlideOut>
-                                        <SlideOut panel="chat" pinnable="chat">
-                                          <ChatPanel mode="slideout" />
-                                        </SlideOut>
-                                        <SlideOut panel="counter" pinnable="counter">
-                                          <CounterPanel mode="slideout" />
-                                        </SlideOut>
-                                        <SlideOut panel="notes" pinnable="notes">
-                                          <NotesPanel mode="slideout" />
-                                        </SlideOut>
-                                        <SlideOut panel="aliases">
-                                          <AliasPanel onClose={closePanel} />
-                                        </SlideOut>
-                                        <SlideOut panel="triggers">
-                                          <TriggerPanel onClose={closePanel} />
-                                        </SlideOut>
-                                        <SlideOut panel="timers">
-                                          <TimerPanel onClose={closePanel} />
-                                        </SlideOut>
-                                        <SlideOut panel="macros">
-                                          <MacroPanel
-                                            onClose={closePanel}
-                                            macros={macrosCRUD.items}
-                                            onAdd={macrosCRUD.add}
-                                            onUpdate={macrosCRUD.update}
-                                            onDelete={macrosCRUD.remove}
-                                          />
-                                        </SlideOut>
-                                        <SlideOut panel="variables">
-                                          <VariablePanel onClose={closePanel} />
-                                        </SlideOut>
-                                        <SlideOut panel="scripts">
-                                          <ScriptPanel
-                                            script={globalScript}
-                                            onSave={saveGlobalScript}
-                                            onClose={closePanel}
-                                          />
-                                        </SlideOut>
-                                        <SlideOut panel="map" pinnable="map">
-                                          <MapPanel mode="slideout" />
-                                        </SlideOut>
-                                        <SlideOut panel="alloc" pinnable="alloc">
-                                          <AllocPanel mode="slideout" />
-                                        </SlideOut>
-                                        <SlideOut panel="currency" pinnable="currency">
-                                          <CurrencyPanel mode="slideout" />
-                                        </SlideOut>
-                                        <SlideOut panel="babel" pinnable="babel">
-                                          <BabelPanel mode="slideout" />
-                                        </SlideOut>
-                                        <SlideOut panel="who" pinnable="who">
-                                          <WhoPanel mode="slideout" />
-                                        </SlideOut>
-                                        {activePanel === 'logs' && (
-                                          <LogViewerModal onClose={closePanel} />
-                                        )}
-                                        <SlideOut panel="help">
-                                          <HelpPanel onClose={closePanel} />
-                                        </SlideOut>
+                                          {/* Slide-out overlays */}
+                                          <SlideOut panel="appearance">
+                                            <ColorSettings
+                                              theme={theme}
+                                              onUpdateColor={updateColor}
+                                              onResetColor={resetColor}
+                                              onReset={resetAll}
+                                              display={display}
+                                              onUpdateDisplay={updateDisplay}
+                                              onResetDisplay={resetDisplay}
+                                              debugMode={debugMode}
+                                              onToggleDebug={toggleDebug}
+                                              onClose={closePanel}
+                                            />
+                                          </SlideOut>
+                                          <SlideOut panel="settings">
+                                            <SettingsPanel onClose={closePanel} />
+                                          </SlideOut>
+                                          <SlideOut panel="skills" pinnable="skills">
+                                            <SkillPanel mode="slideout" />
+                                          </SlideOut>
+                                          <SlideOut panel="chat" pinnable="chat">
+                                            <ChatPanel mode="slideout" />
+                                          </SlideOut>
+                                          <SlideOut panel="counter" pinnable="counter">
+                                            <CounterPanel mode="slideout" />
+                                          </SlideOut>
+                                          <SlideOut panel="notes" pinnable="notes">
+                                            <NotesPanel mode="slideout" />
+                                          </SlideOut>
+                                          <SlideOut panel="aliases">
+                                            <AliasPanel onClose={closePanel} />
+                                          </SlideOut>
+                                          <SlideOut panel="triggers">
+                                            <TriggerPanel onClose={closePanel} />
+                                          </SlideOut>
+                                          <SlideOut panel="timers">
+                                            <TimerPanel onClose={closePanel} />
+                                          </SlideOut>
+                                          <SlideOut panel="macros">
+                                            <MacroPanel
+                                              onClose={closePanel}
+                                              macros={macrosCRUD.items}
+                                              onAdd={macrosCRUD.add}
+                                              onUpdate={macrosCRUD.update}
+                                              onDelete={macrosCRUD.remove}
+                                            />
+                                          </SlideOut>
+                                          <SlideOut panel="variables">
+                                            <VariablePanel onClose={closePanel} />
+                                          </SlideOut>
+                                          <SlideOut panel="scripts">
+                                            <ScriptPanel
+                                              script={globalScript}
+                                              onSave={saveGlobalScript}
+                                              onClose={closePanel}
+                                            />
+                                          </SlideOut>
+                                          <SlideOut panel="map" pinnable="map">
+                                            <MapPanel mode="slideout" />
+                                          </SlideOut>
+                                          <SlideOut panel="alloc" pinnable="alloc">
+                                            <AllocPanel mode="slideout" />
+                                          </SlideOut>
+                                          <SlideOut panel="currency" pinnable="currency">
+                                            <CurrencyPanel mode="slideout" />
+                                          </SlideOut>
+                                          <SlideOut panel="babel" pinnable="babel">
+                                            <BabelPanel mode="slideout" />
+                                          </SlideOut>
+                                          <SlideOut panel="who" pinnable="who">
+                                            <WhoPanel mode="slideout" />
+                                          </SlideOut>
+                                          {activePanel === 'logs' && (
+                                            <LogViewerModal onClose={closePanel} />
+                                          )}
+                                          <SlideOut panel="help">
+                                            <HelpPanel onClose={closePanel} />
+                                          </SlideOut>
+                                        </div>
                                       </div>
-                                    </div>
-                                    <SpotlightOverlay />
-                                    {showCompanionQR && (
-                                      <CompanionQRDialog onClose={() => setShowCompanionQR(false)} />
-                                    )}
-                                  </SpotlightProvider>
-                                </PanelProvider>
+                                      <SpotlightOverlay />
+                                      {showCompanionQR && (
+                                        <CompanionQRDialog
+                                          onClose={() => setShowCompanionQR(false)}
+                                        />
+                                      )}
+                                    </SpotlightProvider>
+                                  </PanelProvider>
                                 </WhoTitleProvider>
                               </WhoProvider>
                             </AllocProvider>

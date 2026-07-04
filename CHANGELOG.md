@@ -5,29 +5,51 @@ All notable changes to DartForge will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 The `[Unreleased]` header controls automatic version bumping on merge:
+
 - `[Unreleased-patch]` → 0.1.0 → 0.1.1
 - `[Unreleased-minor]` → 0.1.0 → 0.2.0
 - `[Unreleased-major]` → 0.1.0 → 1.0.0
 
+## [Unreleased-minor]
+
+### Added
+
+- Town mapper — the Map panel now maps towns, buildings, and dungeons room by room, alongside the hex wilderness map. Step through a doorway and the panel switches to a room map automatically (Auto view; Hex/Town buttons force either view). Rooms you walk through are laid out on a grid — corpus analysis of 5 years of logs showed DartMUD towns are grid-consistent for n/s/e/w/up/down (98%+ of round trips close), while diagonal exits are shortcuts that get drawn as thin connector lines instead of constraining the layout. Buildings with multiple floors render one level at a time with stair glyphs (▲▼) on stair rooms and a floor stepper in the toolbar that follows you as you climb. Doors draw as amber ticks across their corridor, unexplored exits as faint stubs, and non-directional exits ("back", "out", boats you can enter) as dashed purple lines. Each town is remembered by the hexes you've entered or left it from, so walking back in from the wilderness re-localizes you instantly — and the hex map's anchor means the same town can have any number of entrances. Portal networks are handled as teleports: "You step into the north portal." makes the arrival room a fresh entry into its own town instead of gluing the two ends together, so the hub Portal Chamber and each destination temple keep separate maps and swapping through a portal switches the view to the right one. Teleports without a known message (mark/recall spells, Ebon mage portals) are caught by a generic heuristic: an arrival that matches nothing around you but uniquely matches a mapped room in another town is treated as a teleport there Same-named rooms (a street of "Market" rooms) are told apart by their exits, grid position, and link structure — a switchback trail of identical "Path" rooms maps as separate rooms because each one's connections point back to different neighbors, and even mirror-symmetric building wings (the rangers' keep's twin bedroom Vestibules with lookalike Bedchambers) stay apart because two rooms that attach the same physical neighbor on different sides can't be the same room; even a plaza grid of genuinely identical rooms (Eris's market: a walkable 3x3 of rooms all named "Market", several sharing the exact same exits) maps correctly — room descriptions (ignoring the time-of-day lighting sentence) are the final tiebreaker between twins, a diagonal step back into mapped ground reuses the room it lands on instead of duplicating it, hidden moves between lookalike rooms are caught when the description says you're somewhere else, and when several identical candidates are in reach and none can be positively identified the mapper creates a new room rather than guessing (a wrong guess cascades false links across the whole plaza; a duplicate room quietly heals later); if fragments of one town get mapped separately they fuse automatically the moment their room neighborhoods are recognized as the same place, and a connection that turns out to point at the wrong room heals itself the next time you walk through it and the real destination is recognized. Non-Euclidean spots are handled too: where two routes with the same net displacement end in different rooms (in Eris, e-e-e reaches the ferry landing while s-e-e-e-n reaches the abbey — the same grid coordinate), the exits line is treated as ground truth (you can't have walked north into a room that has no south exit), so the colliding rooms stay separate — the later one is nudged to a free cell and its stretched connections draw thin and dashed — each still departing through its exit's own side of the room (a south exit leaves the bottom edge) with only the middle of the line angling across — so they don't read as corridors through unrelated rooms. Town maps persist per character next to the hex map
+- Right-click-to-walk in towns — right-click any mapped room to auto-walk there, exactly like the hex map: BFS over the exits you've actually walked (including stairs across floors and named exits like "back"), two moves in flight, every step verified against the room that actually prints. The remaining route is drawn on the map as a dashed gold line with a dot on each room while you walk (and hex walks now draw their route the same way). The walk stops cleanly on closed doors, blocked movement, manual movement, or anything unexpected — but tolerates harmless room re-prints (a look, someone lighting a torch) instead of aborting. Hover a room for its description, exits, and visit count; renaming a town and the confirm-guarded town delete live in the map gear menu. Browsing another floor with the stepper centers the view on that floor's rooms; the gear stats show rooms, floors, and total towns mapped. A town picker in the toolbar browses any mapped town from anywhere (no need to be standing in it) — a cyan BROWSING badge marks that walking is unavailable until you're actually there, the view centers on the browsed town's rooms, and the gear menu's rename/delete apply to the town being viewed. Entering a town snaps the view back to following you. The gear menu also has a room search (type a name, Enter or click jumps to the best match, switches to its floor, and rings it in cyan) and a legend explaining every map glyph; double-clicking a stair room follows its staircase to the next floor
+- `/door <dir>` built-in command — passes through a (possibly locked) door in one go: unlocks trying each keyring slot ("key", "key 2", … — slot count configurable in Settings > Doors, default 5), opens, steps through, then closes and locks behind you. Accepts n/s/e/w/u/d, diagonals, and in/out. Replaces the multi-line alias approach with a single first-class command (an alias like `door$1 → /door $1` keeps old muscle memory working)
+- Auto-door walking — the town map's right-click walk now handles doors by itself: when a route step crosses an exit the mapper knows is a door (from the room's own exits line), the walker runs the full /door sequence instead of the bare direction. Start in a locked bedroom and right-click the wilderness: it unlocks, opens, closes, and re-locks every door on the way out. The walk banner counts them ("Walking 9 rooms (3 doors)..."), and a genuinely impassable door (no matching key) still stops the walk cleanly
+- Portal rooms are marked on town maps — the moment you step through a portal, both the departure and arrival rooms get a purple arch icon (and "· portal" in their hover tooltip), persisted with the map. Eris, Soriktos, and any other portal chambers flag themselves the first time you use them
+- Town mapper on/off toggle (Settings > Map) — the town mapper is new, so there's a kill switch: turn it off and the Map panel behaves like v1.12 again (hex map only, with the IN TOWN badge while indoors), town room output is ignored entirely, and right-click town walking is unavailable. Mapped town data is kept, and mapping picks back up the moment you re-enable it
+- Town mapper validation harness (`scripts/replay-town.ts`) — replays the full production parser → localizer → store pipeline against the historical log corpora (340k room blocks across 927 MUSHclient logs; 19k command-paired blocks across 166 DartForge session logs). Final corpus numbers: 99.9% of exits lines parse into room blocks, 78% of room arrivals confirm the predicted room, 0 permanently-lost resolutions, and duplicate-room creation held to 1.5% of blocks. A companion regression suite (`scripts/test-town.ts`) locks down the hard-won localizer behaviors as synthetic scenario tests: switchback trails, mirror-symmetric wings, non-Euclidean grid collisions, portal transits, and the uniform-fingerprint market plaza
+
+### Changed
+
+- Map panel toolbar compacted so it fits the pinned sidebar: the panel title is just "Map" (your current location — room or terrain + coordinates — is now an overlay in the map's top-left corner), Hex/Town are a hexagon and house icon, Center is a crosshair icon, and a gear menu at the far right holds the Labels and Fog toggles, map stats, town rename, and the confirm-guarded delete actions (Clear hex map / Delete town map — use the latter to reset a town that mapped badly; it re-maps as you walk). In Auto view the Hex/Town buttons show which map is actually on screen with a cyan tint (amber still marks the selected mode)
+- Fog of war now defaults to OFF and the Labels/Fog preferences persist across sessions (they previously reset every launch)
+
 ## [1.12.0] - 2026-07-03
 
 ### Added
+
 - Hex wilderness automapper — the Map panel is back, rebuilt from the ground up and now actually working. As you move through the wilderness, every survey paints all visible hexes (up to 19) with their terrain onto a persistent per-character map, so the world fills in around your path instead of one hex at a time. Landmarks from the survey legend (towns, caves, towers, ruins) are placed on their actual hexes and marked with a gold diamond — and hexes whose landmarks name a town, village, city, or hamlet render a house icon instead (Shift+click any hex to toggle its town marker manually). Rivers are drawn as blue hex sides along their actual course. Room descriptions are the ground truth for hexes you stand on ("There is a swift river to the southeast, and south." — bridge and fjord variants included), replacing any guesses the moment you visit; hexes seen only from afar get a preview from the art's blue river chars (rivers and paths share the same `*` character and differ only by ANSI color, and a border only counts when the river runs along its whole span — a river merely touching the hex's corner doesn't mark the edge). Crossing a river edge costs concentration, so auto-walk routes around rivers unless a detour is unreasonable — but stone bridges ("There is a swift river with a stone bridge to the northeast.", or the orange `^` in the art) are zero-concentration crossings: they render as an amber bar across the river edge and routes happily use them. River-crossed hex interiors also get a blue stream overlay. Cliffs get the same treatment: `x`/`c` edge chars in the art and "There is a cliff to the..." descriptions draw dashed stone-colored hex sides, and climbing across one costs concentration in routing exactly like a river crossing. Ctrl+click clears a hex's river and cliff marks along with its blocked marks. Blocked movement ("You must swim...", "There is no exit...") is remembered and drawn as red edge ticks; edges that lead into buildings are marked too, so walks stop routing through them. Movement inside buildings never touches the map (surveys prove you're back outside), stale blocked marks heal automatically when you walk through them, and Ctrl+click clears a hex's blocked marks manually
 - Click-to-walk — right-click any mapped hex to auto-walk there. Pathfinding is terrain-aware: it prefers easy ground (plains, farmland, woods) and steers around terrain with concentration hits (swamp, hills, mountains, wasteland) unless the detour would be far longer, while avoiding water and known blocked edges. Walks run at full speed — two moves are kept in flight at a time (as fast as spamming directions yourself) with every step verified against its survey; it stops on blocks, manual movement, or entering a building. Rest the cursor on a hex for a moment to see its terrain, landmarks, and visit info (hover-to-inspect, so click-dragging the map never pops it up). While you're inside a town or building the map dims slightly with an IN TOWN badge in the corner — pan, zoom, and inspection all keep working, but walks refuse to start (hex movement doesn't apply indoors) until you step back outside
 - The mapper tracks your position by correlating each survey's terrain view against the map (not just by counting your keypresses), so it survives spammed movement, being led by a group leader, swimming, riding, and forced movement — and self-corrects drift. After a teleport into unrecognizable terrain it shows LOST and automatically re-anchors the moment you reach distinctive terrain. Validated by replaying 5 years of play logs (158,914 wilderness surveys, 99.98% parsed)
 - Script API can now enable/disable a single timer by name with `enableTimer(name)` and `disableTimer(name)` — the per-timer counterparts to the existing `enableTimerGroup`/`disableTimerGroup`. Enabling a timer restarts it from its full interval rather than resuming any leftover countdown. (`startTimer`/`stopTimer` remain as aliases.)
 
 ### Fixed
+
 - Toggling, editing, adding, or deleting one timer no longer restarts the countdowns of your other running timers. The timer engine now reconciles each change incrementally — only the affected timer is started, stopped, or restarted, and every other timer keeps ticking undisturbed. (Editing a timer's body applies on its next fire without resetting its countdown; changing its interval restarts just that timer.)
 - The automapper's original fatal flaw: hex art was being fed to the parser with leading whitespace stripped, which destroyed the column alignment the terrain parser depends on. Survey parsing now runs on untrimmed lines and reads the art via DartMUD's fixed layout template, which is immune to desert terrain (whose `-` character previously blended into hex borders)
 
 ## [1.11.0] - 2026-06-30
 
 ### Added
+
 - Counter panel now shows a live "This period" readout under the session stats — the number of improves counted in the current period window plus a m:ss countdown and a progress bar to the next rollover, so you can see your real-time pace instead of only the lifetime average. The period rolls over on a timer (not just when the next improve lands), and — like the rest of the counter — is measured in active time: pausing (or closing the app) freezes the entire counter, so every number is exactly the same when you resume, whether that's in five minutes or four weeks
 - Counter panel skills table is now sortable — click the Skill, Imps, or per-period rate column header to sort by that field, and click again to flip the direction
 
 ### Changed
+
 - Counter panel's /min, /period, /hr stats are now explicitly labeled as session averages (so they're not mistaken for the current period's pace, which the new "This period" readout shows)
 - Counter panel skills table now has labeled, aligned columns (Skill · Imps · per-period rate) with a header that stays pinned while you scroll a long skill list, so it's clear what each number means and how it ties to the hot/cold thresholds. The per-skill rate dropped its parentheses and is right-aligned in its own column
 - Allocation panel slot colors are now meaningful instead of arbitrary. On the Combat tab, offensive slots (Bonus/Daring/Speed/Aiming) share a hot red→gold ramp and defensive slots (Parry/Control) use cool blues, so you can tell offense from defense at a glance. On the Magic tab, each element now wears a color that evokes it — airy pale cyan, fiery orange-red, ocean blue, and earthy green — replacing the muddy, low-contrast water/earth tones. The slot letters in the column header are now filled color chips (the full slot color as the background) rather than just tinted text, making each column's color easier to match to its stepper and distribution-bar segment
@@ -35,6 +57,7 @@ The `[Unreleased]` header controls automatic version bumping on merge:
 ## [1.10.0] - 2026-06-19
 
 ### Added
+
 - Trigger line rewrite — a trigger can now rewrite the matched line shown in the terminal (with $0/$1–$9/$line/$me substitution), in addition to gag and highlight. Set it in the trigger editor's "Rewrite line" field; an RW badge marks triggers that use it
 - Trigger & Alias group enable/disable — each group header now has an on/off toggle that enables or disables every trigger/alias in that group at once
 - Mobile Companion character status bar — the companion now shows your live health, concentration, aura, hunger, thirst, encumbrance, movement, and alignment readouts using the same icons and colors as the desktop status bar, pinned above the command input and ordered to match your desktop layout. On phones the readouts collapse to icon-only chips (tap one to reveal its label); wider screens show full labels.
@@ -44,12 +67,14 @@ The `[Unreleased]` header controls automatic version bumping on merge:
 - Mobile Companion in-game clock and text size — a new sub-bar shows the DartMUD time/date and holiday, with A−/A+ buttons to resize the output text (persisted per device)
 
 ### Changed
+
 - Output hot path no longer rebuilds the tab-completion line buffer from scratch on every incoming chunk — it updates in place instead, reducing allocation churn (and GC pauses) during heavy output like combat spam. No visible behavior change
 - Allocation panel redesign — replaced the tiny hover-only +/- cells with larger always-visible −/value/+ steppers, while keeping every limb visible at a glance: each limb shows its full name, unspent points, and an Apply button on a title line above a single full-width row of steppers. Slot letters now live in a sticky column header (with bulk −/+ that adjust every limb at once), and Apply All / Save to Profile sit in a sticky bottom bar that no longer requires scrolling. Click any value to type an exact number; −/+ step by 1 (shift = ×5). Applies to both Combat and Magic tabs in Live and Profile views
 - Mobile Companion is now responsive to the device — phones keep the on-screen d-pad and Prev/Next history buttons, while wider laptop/desktop browsers hide them in favor of a roomier layout driven by the numpad and arrow keys
 - Mobile Companion output now uses a true-black background (matching the desktop terminal) instead of an off-black, with a tuned monospace font and tighter line height so ASCII maps and hex grids render with the correct proportions instead of looking scrunched
 
 ### Fixed
+
 - A single malformed saved entry can no longer crash the entire app. Variable, trigger, alias, and who-title stores load straight from disk and then sort/look up by a text field (e.g. name/pattern); one corrupt entry (e.g. a value stored in a legacy format) made those operations throw on `undefined` and white-screen the whole client. Bad entries are now dropped on load (and self-healed out of the file on next save), and the lookups/sorts are guarded
 - Sound notifications no longer drop when several fire close together. Each chime shared one audio element, so a second tell/shout/zephyr arriving while the first was still playing just restarted (or cancelled) it — making notifications seem to not play. Chimes now play on independent clones so overlapping alerts all sound
 - Connection no longer silently goes "half-open" — if a write stalls or the writer fails (server gone, dead network with no clean close), the client now detects it within ~10s and surfaces a disconnect so reconnect can run, instead of continuing to show incoming output while silently dropping every command you send
@@ -59,28 +84,34 @@ The `[Unreleased]` header controls automatic version bumping on merge:
 ## [1.9.0] - 2026-04-18
 
 ### Added
+
 - Window state persistence — DartForge now remembers its window position, size, and maximized state between sessions, reopening exactly where you left it
 
 ### Changed
+
 - Allocation panel profile selector — replaced left/right arrow navigation with a dropdown switcher; click the profile name to rename, click the chevron to pick from all profiles instantly
 - Allocation panel now shows content even when disconnected — profiles and settings are always accessible without an active connection
 - Backup restore now requires a two-step confirm — first click flips the button to "Overwrite?", second click performs the restore; clicking away cancels
 
 ### Fixed
+
 - Pet skill readouts no longer overwrite player skill counts. Skill verification now only runs against the player's own skill the client explicitly asked the MUD about.
 
 ## [1.8.0] - 2026-03-18
 
 ### Added
+
 - Global panel font size setting — a single control that sets the default font size for all panels, configurable from Settings > Display or from any panel header. Chat, Who, and Allocations panels support per-panel overrides with a clear-override button (only visible when the panel size differs from global)
 - Counter archiving — archive counters to a collapsible dropdown; archived counters preserve all stats and can be restored or deleted, with actions always visible
 - Counter pill reordering — drag and drop counter pills to rearrange their display order
 - `/levels` command — displays a two-column reference table of all DartMUD skill levels and their improve count ranges
 
 ### Changed
+
 - Mobile Companion redesign — new dark terminal aesthetic with glowing accents, d-pad style directional navigation grid with Up/Down, collapsible quick-bar with persisted state, send arrow button, empty state with connecting animation, PWA meta tags, safe-area inset support, and landscape/large-phone responsive tweaks
 
 ### Fixed
+
 - Companion: virtual keyboard no longer causes a black box to cover the command input when focusing and scrolling
 - Companion: page can no longer be scrolled past its bounds when the keyboard is open, preventing the layout from shifting out of view
 - Companion: added scroll-to-bottom button that appears when scrolled up in the output area
@@ -89,21 +120,25 @@ The `[Unreleased]` header controls automatic version bumping on merge:
 ## [1.7.3] - 2026-03-13
 
 ### Fixed
+
 - Companion connect/disconnect buttons now correctly reflect MUD connection state on page load and after disconnect; status is tracked from boot rather than only after companion server starts
 
 ## [1.7.2] - 2026-03-13
 
 ### Fixed
+
 - App crash on startup caused by spawning a background task outside the async runtime during initialization
 
 ## [1.7.1] - 2026-03-13
 
 ### Fixed
+
 - Mobile Companion connect/disconnect buttons now show the correct initial state when the page loads (previously always showed "Connect" even if already connected to MUD)
 
 ## [1.7.0] - 2026-03-13
 
 ### Added
+
 - Chat panel Incoming/Outgoing tabs — Outgoing tab captures sent chat commands (say, tell, shout, ooc, sz) as a timestamped log with search and day separators
 - Delete individual chat messages — hover any message row (incoming or outgoing) to reveal a trash button that permanently removes it from history
 - Customizable command prompt — change the prompt character (default `>`) and color in Appearance > Display settings
@@ -113,6 +148,7 @@ The `[Unreleased]` header controls automatic version bumping on merge:
 ## [1.6.0] - 2026-03-08
 
 ### Added
+
 - Toggle buttons — quick buttons can now switch between ON and OFF states, each with its own label, color, and body (commands or script); toggle state is stored as a user variable, accessible via `$variable_name` in scripts and triggers
 - Optional name field for triggers — label triggers with a custom name for easier identification in the list (falls back to pattern display when not set)
 - Collapsible groups in trigger and alias panels — click group headers to collapse/expand; trigger "Gags" group starts collapsed by default to reduce clutter
@@ -134,6 +170,7 @@ The `[Unreleased]` header controls automatic version bumping on merge:
 - Allocation panel bulk adjust — hover column headers to reveal +/- buttons that adjust all limbs at once (hold Shift for ±5)
 
 ### Fixed
+
 - "Show quick skills" count injection — two-column format now correctly detected and parsed (was blocked by overly strict prefix regex and underscore-to-space conversion breaking skill lookups)
 - Quick skills offset mapping — re-strips ANSI from raw text internally so character positions align correctly (the pre-stripped text had .trim() applied, shifting offsets)
 - Quick skills column alignment — fixed-width count injection keeps column 2 properly positioned
@@ -144,11 +181,13 @@ The `[Unreleased]` header controls automatic version bumping on merge:
 ## [1.5.1] - 2026-03-07
 
 ### Fixed
+
 - Fixed aliases whose body starts with `/var` or `/spam` not capturing command separators (`;;`) in `$*` — e.g. alias `rea` → `/var reattackAction $*` now correctly sets the variable to `k demon;;sf` instead of splitting on `;;`
 
 ## [1.5.0] - 2026-03-07
 
 ### Added
+
 - Programmatic skill data access — query skill info from aliases, triggers, timers, and macros in both text and script modes
   - **Text mode**: `$skillCount(name)`, `$skillLevel(name)`, `$skillTier(name)`, `$skillNext(name)`, `$skillGroup(name)` — supports captures like `$skillCount($1)`
   - **Script mode**: `getSkill("name")` returns `{ level, count, tier, next, group }`; individual accessors `getSkillCount()`, `getSkillLevel()`, `getSkillTier()`, `getSkillNext()`, `getSkillGroup()`
@@ -158,6 +197,7 @@ The `[Unreleased]` header controls automatic version bumping on merge:
 - Macros panel — bind keyboard hotkeys (Ctrl+1, Alt+F5, etc.) to command sequences or JavaScript scripts; supports the same command/script modes as quick buttons, aliases, and triggers
 
 ### Changed
+
 - Quick buttons are now drag-and-droppable for reordering (replaces right-click Move Left/Right)
 - Allocations panel compacted for narrow pinned widths: cells shrunk from 36px to 26px, null/arcane columns removed (PointBar still shows distribution)
 - Counter panel compacted: merged Total and Elapsed into one line, removed divider, tightened padding throughout
@@ -168,24 +208,29 @@ The `[Unreleased]` header controls automatic version bumping on merge:
 - Performance: optimized Rust connection hot path — reduced allocations in command sending, TCP read loop, and ANSI processing (fast-path UTF-8 conversion, pre-allocated response buffers, consolidated lock acquisition)
 
 ### Fixed
+
 - Removed extra blank line the server inserts before the `>` prompt in the terminal
 - Fixed stray newlines from gagged lines: blank lines before AND after gagged content (gag groups, triggers, compact mode, sync) are now suppressed using deferred blank line emission
 
 ### Removed
+
 - Removed `[timer: <name>]` echo in the terminal each time a timer fires
 
 ## [1.4.0] - 2026-03-05
 
 ### Changed
+
 - Web client proxy ported from Fly.io/Rust to a Cloudflare Worker using Durable Objects — eliminates hosting costs by running on Cloudflare's free tier
 - Removed old Fly.io Rust proxy (account expired, code no longer needed)
 - Chat "Mine" filter is now a visual toggle — own messages are always captured and stored; toggling "Mine" instantly shows/hides them without losing history
 
 ### Fixed
+
 - Script editor (Global Script panel) now scrolls with the mouse wheel when content exceeds the panel height
 - Script editor fills the full panel height instead of starting at a fixed 120px minimum
 
 ### Added
+
 - `lastUserInputTime()` script API — returns the epoch timestamp of the last user-typed command (not timers, triggers, or aliases). Resets each session. Enables idle detection via timer scripts
 - Popout script editor — hover over any script editor (triggers, aliases, timers, global scripts, quick buttons) to reveal an expand button; click to open a large centered modal for comfortable editing; includes a Save button, line count, and a syntax help popover with the full script API reference; edits sync in real-time; close with Escape, click outside, or the collapse button
 - Skill panel shows total improvement count at the bottom of the skill list, reflecting the currently selected category
@@ -209,6 +254,7 @@ The `[Unreleased]` header controls automatic version bumping on merge:
 - Numpad `/`, `*`, `-`, and `.` keys are now configurable in Settings → Numpad Mappings (previously `/` and `*` were hardcoded, `-` and `.` were ignored)
 
 ### Fixed
+
 - Screenshot Mode failing in desktop app — now uses Tauri clipboard plugin for image writing instead of unsupported web Clipboard API
 - Gagged lines leaving orphan blank lines in terminal — empty separator lines adjacent to gagged content (gag groups, triggers, compact mode) are now suppressed so gagging doesn't leave vertical whitespace gaps
 - Dropbox sync overwriting allocations — initial sync now uses remote data entirely for non-skill files instead of shallow-merging with localStorage, preventing stale local data from corrupting allocation profiles
@@ -218,10 +264,12 @@ The `[Unreleased]` header controls automatic version bumping on merge:
 ## [1.3.0] - 2026-02-28
 
 ### Changed
+
 - Chat panel now shows a full-height "Today" section by default — Today fills the entire panel viewport and you scroll past it to reach older messages; if no messages arrived today, a placeholder fills the space; older messages render normally with day separators
 - Moved timestamp format toggle (12h/24h) from Settings into the Chat panel toolbar — one less settings section, and the control lives where it's actually used
 
 ### Added
+
 - `npm run version:next` command — bump version locally at the start of a feature branch so dev builds reflect the correct upcoming version; idempotent and CI-compatible
 - Manual panel collapse — hover the resize handle between a pinned panel and the terminal to reveal a collapse chevron; click to shrink the panel to its icon strip without unpinning; click the expand chevron at the top of the icon strip to restore; state persists across sessions
 - Who panel font size controls — +/- buttons in the header to adjust player name size (8–18px, persisted)
@@ -244,15 +292,18 @@ The `[Unreleased]` header controls automatic version bumping on merge:
 - `/autoconc` command — auto-execute any command(s) on full concentration (BEBT); `/autoconc <action>` saves the action (does not start — use `/autoconc on` to start); fires the action once on BEBT, then waits for conc to drop and recover before firing again (single-shot re-arm); actions support aliases, `/spam`, `/delay`, `/echo`, `/var`, and semicolons for multi-command chains; `/autoconc on` starts with the saved action (persisted across sessions); `/autoconc off` stops; `/autoconc status` shows current state; purple badge in command input shows status and click-to-stop; auto-stops on unconscious
 
 ### Changed
+
 - All built-in `/` command error and usage messages now use a consistent `[CommandName]` prefix in red (e.g. `[Autocast] Usage: ...`, `[Counter] No active counter.`) — makes it clear which command produced the error; `/spam`, `/delay`, and `/echo` now show usage errors instead of being sent raw to the MUD when syntax is wrong
 - Aura status bar color now extracted from the MUD's actual ANSI color codes instead of using hardcoded hex values — matches in-game colors exactly and follows terminal theme customization
 - Multi-colored aura descriptors (e.g. "very dim red", "reddish-orange") now render each word in its MUD ANSI color in the status bar pill instead of a single flat color
 - Auto-tools (`/autocast`, `/autoinscribe`, `/autoconc`) no longer poll concentration by sending `conc` every 2 seconds — they passively watch natural MUD concentration recovery messages instead; `on` sends a single initial `conc` to kick off
 
 ### Removed
+
 - `/notify` debug command — was a development-only test for system notifications, not needed
 
 ### Fixed
+
 - Aura pill color no longer sticks to the previous color when aura drops to "None" — correctly resets to grey
 - "Bashing" skill is now correctly categorized as Other instead of Combat
 - Chat timestamps no longer show "-1m" for self-sent messages (clock skew fix)
@@ -265,6 +316,7 @@ The `[Unreleased]` header controls automatic version bumping on merge:
 - Who panel now clears player list on disconnect instead of showing stale data
 
 ### Changed
+
 - Standardized all panel headers — extracted shared `PanelHeader` component replacing 16 hand-rolled headers across every panel (Skills, Chat, Who, Counter, Notes, Alloc, Currency, Babel, Map, Aliases, Triggers, Timers, Variables, Appearance, Settings, Guide); consistent two-row layout with title row + optional toolbar row; all slideout panels now have a × close button
 - Slideout "new" buttons — Alias, Timer, Trigger, Variable, and Skill panels now show labeled "New Alias", "New Timer", etc. buttons instead of bare `+` icons
 - Chat panel toolbar reordered — font size control first, sort button second (consistent with Who panel)
@@ -286,6 +338,7 @@ The `[Unreleased]` header controls automatic version bumping on merge:
 ## [1.2.0] - 2026-02-25
 
 ### Added
+
 - Who List panel — shows online players with guild tags, ANSI name colors, and idle status; auto-refreshes in the background (configurable interval), pinnable to left/right side; manual `who` command also updates the panel without suppressing terminal output
 - Who title tracking — players using custom who titles (names that don't match "Name the race") can be mapped to suspected or confirmed player names; hover a title row and click "?" to add, click an annotation to edit, right-click to toggle confirmed/suspected; mappings are character-scoped and persisted
 - Who panel now supports all 5 player states: Online, Away, Busy, Walkup, and Idle — each with theme-aware colored indicators
@@ -310,17 +363,20 @@ The `[Unreleased]` header controls automatic version bumping on merge:
 - Gag Groups — built-in pattern sets (ported from dartmudlet) that suppress noisy MUD output; 7 toggleable groups: Pets, Creatures, Citizens, Trainers, Sparring, Channels, Quests; accessible via a collapsible section in the Triggers panel
 
 ### Changed
+
 - Bumped Who panel player name font size from 11px to 12px
 - Added ESLint 9 + Prettier project configuration with `lint`, `lint:fix`, `format`, and `format:check` npm scripts
 - Character settings: removed active slot selector buttons (caused cooldown bypass); active character now indicated with a read-only badge, switchable only via the "Switch to" button
 - Character 2 inputs disabled until Character 1 is configured
 
 ### Fixed
+
 - Character switch cooldown bypass — clicking the active slot selector could invert the cooldown check, allowing immediate switching
 
 ## [1.1.0] - 2026-02-23
 
 ### Added
+
 - Custom timers — repeating commands at configurable intervals (seconds or minutes) with full alias/trigger body syntax support
 - Timer panel with create, edit, delete, duplicate, enable/disable, scope (character/global), group filtering, and search
 - Timer countdown badges next to command input — soonest-to-fire shown first, overflow dropdown for additional timers
@@ -341,6 +397,7 @@ The `[Unreleased]` header controls automatic version bumping on merge:
 - Allocation "Save to Profile" dropdown — can now create a new profile or overwrite an existing one from live allocations (combat and magic)
 
 ### Changed
+
 - Settings panel: merged Alignment Tracking and Anti-Idle into a single "Timers" section, reducing accordion clutter
 - Timer labels (`[timer: name]`, `[anti-idle]`, `[align]`) now appear before command output in the terminal
 - Anti-idle and alignment badges are now display-only countdowns (enable/disable via settings)
@@ -363,6 +420,7 @@ The `[Unreleased]` header controls automatic version bumping on merge:
 - Double-click anti-idle and alignment tracking badges to disable them, matching custom timer badge behavior
 
 ### Fixed
+
 - Removed click-outside-to-close behavior on slide-out panels — panels now stay open until explicitly closed via the × button or toolbar toggle
 - Prefix aliases with `$*` now capture the full argument string including semicolons (e.g., `rea /spam 1 k demon;sf` no longer splits on `;` before alias consumption)
 - `/var` values now preserve semicolons (treated as rest-of-line, like `/spam`)
@@ -382,6 +440,7 @@ The `[Unreleased]` header controls automatic version bumping on merge:
 ## [1.0.0] - 2026-02-22
 
 ### Added
+
 - Pinnable panel docking system — pin up to 3 panels per side (left/right) with reorder, swap-side, and resize controls
 - Responsive panel collapsing — auto-collapses pinned panels to icon strips on narrow windows with click-to-overlay access
 - Chat panel with color-coded message types (Say, Shout, OOC, Tell, SZ), sender muting, and anonymous tell identification
@@ -390,7 +449,7 @@ The `[Unreleased]` header controls automatic version bumping on merge:
 - Allocations panel for combat and magic allocation tracking with inline editing
 - Currency converter panel with freeform multi-denomination input (e.g., "3ri 5dn")
 - Trigger system with substring, exact, and regex matching, gag/highlight actions, cooldowns, and sound alerts
-- Alias system with exact, prefix, and regex match modes, positional args ($1-$9, $*, $-), and speedwalk
+- Alias system with exact, prefix, and regex match modes, positional args ($1-$9, $\*, $-), and speedwalk
 - Variable system with /var command and $varName substitution in aliases and triggers
 - Signature-to-player name mapping for identifying anonymous chat senders
 - Session logging with timestamped files and ANSI stripping
@@ -408,12 +467,14 @@ The `[Unreleased]` header controls automatic version bumping on merge:
 - Numpad directional movement with customizable mappings
 
 ### Changed
+
 - Panel system uses context providers (PanelContext, PinnedControlsContext) instead of prop drilling
 - Splash screens show connection/disconnection timestamps
 - Default notification settings are all off (user opts in per channel)
 - Strip prompts and board date conversion default to off
 
 ### Fixed
+
 - Chat pattern matching for OOC spacing and tell quote variants
 - Terminal selection preserved when new data arrives
 - React StrictMode compliance for skill tracker side effects
@@ -422,6 +483,7 @@ The `[Unreleased]` header controls automatic version bumping on merge:
 ## [0.4.0] - 2026-02-18
 
 ### Added
+
 - Web client — play DartMUD in any browser via WebSocket proxy
 - WebSocket-to-TCP proxy server (Rust) with Fly.io deployment config
 - Dropbox integration with popup OAuth (PKCE), folder picker, and bidirectional sync
@@ -430,15 +492,18 @@ The `[Unreleased]` header controls automatic version bumping on merge:
 - Transport abstraction layer (Tauri IPC for desktop, WebSocket for web)
 
 ### Changed
+
 - Terminal splash banner updated from DARTFORGE to DARTMUD with rainbow gradient
 - Splash now includes "1991 - 2025" tagline and "Welcome to the Lands of Ferdarchi"
 
 ### Fixed
+
 - Settings (filteredStatuses, compactBar) no longer overwritten with defaults on page reload
 
 ## [0.3.0] - 2026-02-17
 
 ### Added
+
 - Configurable data directory with Dropbox/cloud sync support
 - First-run setup dialog for selecting data location
 - Rust storage backend for reading/writing to arbitrary paths
@@ -455,6 +520,7 @@ The `[Unreleased]` header controls automatic version bumping on merge:
 - macOS build support in release workflow
 
 ### Changed
+
 - Panels (appearance, skills, settings) are now mutually exclusive — only one open at a time
 - Status bar auto-compacts on narrow windows with disabled compress button
 - Skills panel uses consistent overlay behavior at all screen sizes
@@ -463,6 +529,7 @@ The `[Unreleased]` header controls automatic version bumping on merge:
 ## [0.2.0] - 2026-02-16
 
 ### Added
+
 - Customizable terminal colors with persistent settings (react-colorful picker)
 - Debug mode showing human-readable ANSI color names (e.g. [bright green])
 - Per-color reset buttons in color panel
@@ -477,6 +544,7 @@ The `[Unreleased]` header controls automatic version bumping on merge:
 - README with project overview, setup instructions, and architecture docs
 
 ### Changed
+
 - Color panel slides in from right as overlay, toggled from toolbar
 - Renamed color panel to "Appearance" panel
 - Default theme colors updated to classic MUD palette
@@ -489,6 +557,7 @@ The `[Unreleased]` header controls automatic version bumping on merge:
 - "Press enter to reconnect" text brighter (removed dim)
 
 ### Fixed
+
 - Server prompt no longer jams next output onto same line
 - Clippy warnings in Rust backend (inlined format args)
 - Color picker handles no longer clipped at panel edges
@@ -497,6 +566,7 @@ The `[Unreleased]` header controls automatic version bumping on merge:
 ## [0.1.0] - 2026-02-15
 
 ### Added
+
 - Initial DartForge client with Tauri v2 + React/TypeScript + xterm.js
 - Auto-connect to DartMUD (dartmud.com:2525)
 - Command input with history, password masking

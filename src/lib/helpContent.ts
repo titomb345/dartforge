@@ -124,7 +124,7 @@ export const HELP_CATEGORIES: HelpCategory[] = [
       {
         title: 'Map Panel',
         description:
-          'Auto-maps the hex wilderness as you explore. Every survey paints all visible hexes with their terrain, so the map fills in around your path. Landmarks (towns, caves, towers) are marked with a gold diamond. Hexes you have seen but never entered are dimmed (Fog toggle). If you teleport somewhere unrecognizable the map shows LOST until you reach distinctive terrain again.',
+          'Auto-maps the hex wilderness as you explore. Every survey paints all visible hexes with their terrain, so the map fills in around your path. Landmarks (towns, caves, towers) are marked with a gold diamond. If you teleport somewhere unrecognizable the map shows LOST until you reach distinctive terrain again. Step into a town or building and the panel switches to a room map (Auto view — the view being shown gets a cyan tint on its Hex/Town button): rooms you walk through are laid out on a grid, one floor at a time, with stair glyphs (▲▼), amber door ticks, and dashed purple lines for special exits like "back" or boats. Each town is remembered by the hexes you enter it from, so the map picks you right back up next visit — and stepping through a portal switches to the destination\'s own town map instead of tangling the two together. The town picker in the toolbar browses any mapped town from anywhere (walking stays disabled until you\'re actually there). The gear menu holds the view options: terrain/room name labels, fog of war (dim hexes seen but never entered — off by default), renaming a town, and the map delete actions.',
         helpId: 'toolbar-map',
       },
       {
@@ -179,6 +179,13 @@ export const HELP_CATEGORIES: HelpCategory[] = [
         title: 'Walk Anywhere on the Map',
         description:
           'Right-click any mapped hex in the Map panel to auto-walk there. Routes prefer easy ground (plains, farmland, woods) and steer around terrain with concentration hits (swamp, hills, mountains, wasteland) unless the detour would be far longer. Water and known blocked edges are avoided. Two moves are kept in flight at a time (as fast as spamming directions yourself) with every step verified against its survey. It stops automatically if something blocks you — or click the Walking button to cancel. Rest the cursor on a hex for a moment to see its terrain, landmarks, and visit history.',
+        helpId: 'toolbar-map',
+        interaction: 'right-click',
+      },
+      {
+        title: 'Walk Through Towns Too',
+        description:
+          'In the town view, right-click any mapped room to auto-walk there — the route follows the exits you have actually used, climbs stairs across floors, and even takes special exits like "back". Doors on the route are handled automatically with the /door sequence (unlock with each key, open, step through, close and lock behind). Steps are verified room by room and the walk stops cleanly at anything unexpected, with the remaining route drawn as a dashed gold line (the hex map draws its walks the same way). The floor stepper (F0 ▲▼) browses other levels and snaps back to your floor when you take stairs — or double-click any stair room to follow its staircase. Rest the cursor on a room to see its description, exits, and visit count. The gear menu also holds a room search (type a name, Enter jumps to the best match and rings it in cyan), a legend for the map glyphs, and town rename/delete.',
         helpId: 'toolbar-map',
         interaction: 'right-click',
       },
@@ -398,6 +405,11 @@ export const HELP_CATEGORIES: HelpCategory[] = [
     title: 'Built-in Commands',
     iconName: 'terminal',
     items: [
+      {
+        title: '/door',
+        description:
+          '"/door <dir>" passes through a (possibly locked) door in one go: unlocks trying each keyring slot (key, key 2, … — count configurable in Settings > Doors), opens, steps through, then closes and locks behind you. Accepts n/s/e/w/u/d, diagonals, in/out. The town map\'s auto-walk runs the same sequence automatically when a route crosses a known door.',
+      },
       {
         title: '/convert',
         description:

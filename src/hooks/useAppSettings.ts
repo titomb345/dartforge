@@ -123,6 +123,16 @@ export function useAppSettings() {
   // Panel font size (global default)
   const [panelFontSize, setPanelFontSize] = useState(11);
 
+  // Map panel view options
+  const [mapShowFog, setMapShowFog] = useState(false);
+  const [mapShowLabels, setMapShowLabels] = useState(false);
+
+  // /door command — keyring slots to try when unlocking/locking
+  const [doorKeys, setDoorKeys] = useState(5);
+
+  // Town mapper kill switch (off = hex map only, IN TOWN badge indoors)
+  const [townMapperEnabled, setTownMapperEnabled] = useState(true);
+
   // Who list
   const [whoAutoRefreshEnabled, setWhoAutoRefreshEnabled] = useState(true);
   const [whoRefreshMinutes, setWhoRefreshMinutes] = useState(5);
@@ -210,7 +220,7 @@ export function useAppSettings() {
       async function load<T>(
         key: string,
         setter: React.Dispatch<React.SetStateAction<T>>,
-        validate?: (v: T) => boolean,
+        validate?: (v: T) => boolean
       ): Promise<void> {
         const saved = await dataStore.get<T>(SETTINGS_FILE, key);
         if (saved != null && (validate ? validate(saved as T) : true)) setter(saved as T);
@@ -219,7 +229,7 @@ export function useAppSettings() {
       /** Load a setting where `undefined` means "not set" but `null` is a valid value. */
       async function loadNullable<T>(
         key: string,
-        setter: React.Dispatch<React.SetStateAction<T>>,
+        setter: React.Dispatch<React.SetStateAction<T>>
       ): Promise<void> {
         const saved = await dataStore.get<T>(SETTINGS_FILE, key);
         if (saved !== undefined) setter(saved as T);
@@ -228,7 +238,7 @@ export function useAppSettings() {
       /** Load an object setting with type guard. */
       async function loadObject<T extends object>(
         key: string,
-        setter: React.Dispatch<React.SetStateAction<T>>,
+        setter: React.Dispatch<React.SetStateAction<T>>
       ): Promise<void> {
         const saved = await dataStore.get<T>(SETTINGS_FILE, key);
         if (saved != null && typeof saved === 'object' && !Array.isArray(saved)) setter(saved);
@@ -245,6 +255,10 @@ export function useAppSettings() {
       await load('autoBackupEnabled', setAutoBackupEnabled);
       await load('hasSeenGuide', setHasSeenGuide);
       await load('actionBlockingEnabled', setActionBlockingEnabled);
+      await load('mapShowFog', setMapShowFog);
+      await load('mapShowLabels', setMapShowLabels);
+      await load('doorKeys', setDoorKeys, (v) => v >= 1 && v <= 10);
+      await load('townMapperEnabled', setTownMapperEnabled);
       await load('whoAutoRefreshEnabled', setWhoAutoRefreshEnabled);
       await load('babelEnabled', setBabelEnabled);
       await load('selectOnSend', setSelectOnSend);
@@ -351,8 +365,12 @@ export function useAppSettings() {
 
   // Factory for simple "set state + persist" updaters (stable via useMemo)
   const updaters = useMemo(() => {
-    const make = <T,>(setter: React.Dispatch<React.SetStateAction<T>>, key: string) =>
-      (v: T) => { setter(v); persist(key, v); };
+    const make =
+      <T>(setter: React.Dispatch<React.SetStateAction<T>>, key: string) =>
+      (v: T) => {
+        setter(v);
+        persist(key, v);
+      };
     return {
       // Anti-idle
       updateAntiIdleEnabled: make(setAntiIdleEnabled, 'antiIdleEnabled'),
@@ -387,6 +405,13 @@ export function useAppSettings() {
       // Help guide / action blocking
       updateHasSeenGuide: make(setHasSeenGuide, 'hasSeenGuide'),
       updateActionBlockingEnabled: make(setActionBlockingEnabled, 'actionBlockingEnabled'),
+      // Map panel view options
+      updateMapShowFog: make(setMapShowFog, 'mapShowFog'),
+      updateMapShowLabels: make(setMapShowLabels, 'mapShowLabels'),
+      // /door keyring slots
+      updateDoorKeys: make(setDoorKeys, 'doorKeys'),
+      // Town mapper kill switch
+      updateTownMapperEnabled: make(setTownMapperEnabled, 'townMapperEnabled'),
       // Who list
       updateWhoAutoRefreshEnabled: make(setWhoAutoRefreshEnabled, 'whoAutoRefreshEnabled'),
       updateWhoRefreshMinutes: make(setWhoRefreshMinutes, 'whoRefreshMinutes'),
@@ -469,9 +494,18 @@ export function useAppSettings() {
       },
     [persist]
   );
-  const updateWhoFontSize = useMemo(() => makeNullableFontSizeUpdater(setWhoFontSize, 'whoFontSize'), [makeNullableFontSizeUpdater]);
-  const updateChatFontSize = useMemo(() => makeNullableFontSizeUpdater(setChatFontSize, 'chatFontSize'), [makeNullableFontSizeUpdater]);
-  const updateAllocFontSize = useMemo(() => makeNullableFontSizeUpdater(setAllocFontSize, 'allocFontSize'), [makeNullableFontSizeUpdater]);
+  const updateWhoFontSize = useMemo(
+    () => makeNullableFontSizeUpdater(setWhoFontSize, 'whoFontSize'),
+    [makeNullableFontSizeUpdater]
+  );
+  const updateChatFontSize = useMemo(
+    () => makeNullableFontSizeUpdater(setChatFontSize, 'chatFontSize'),
+    [makeNullableFontSizeUpdater]
+  );
+  const updateAllocFontSize = useMemo(
+    () => makeNullableFontSizeUpdater(setAllocFontSize, 'allocFontSize'),
+    [makeNullableFontSizeUpdater]
+  );
 
   const updateAutoLoginCharacters = useCallback(
     (v: [CharacterProfile | null, CharacterProfile | null]) => {
@@ -512,128 +546,184 @@ export function useAppSettings() {
     [persist]
   );
 
-  return useMemo(() => ({
-    // Anti-idle
-    antiIdleEnabled,
-    antiIdleCommand,
-    antiIdleMinutes,
-    // Alignment tracking
-    alignmentTrackingEnabled,
-    alignmentTrackingMinutes,
-    // Output transforms
-    boardDatesEnabled,
-    stripPromptsEnabled,
-    antiSpamEnabled,
-    // Buffer sizes
-    terminalScrollback,
-    commandHistorySize,
-    chatHistorySize,
-    // Timestamp
-    timestampFormat,
-    // Command echo
-    commandEchoEnabled,
-    // Timer badges
-    showTimerBadges,
-    // Session logging
-    sessionLoggingEnabled,
-    // Numpad
-    numpadMappings,
-    // Backups
-    autoBackupEnabled,
-    // Notifications
-    chatNotifications,
-    toggleChatNotification,
-    // Custom chimes / sound library
-    customChime1,
-    customChime2,
-    customSounds,
-    // Counter thresholds
-    counterHotThreshold,
-    counterColdThreshold,
-    // Help guide
-    hasSeenGuide,
-    // Action blocking
-    actionBlockingEnabled,
-    // Panel font size
-    panelFontSize,
-    updatePanelFontSize,
-    // Who list
-    whoAutoRefreshEnabled,
-    whoRefreshMinutes,
-    whoFontSize,
-    updateWhoFontSize,
-    chatFontSize,
-    updateChatFontSize,
-    allocFontSize,
-    updateAllocFontSize,
-    // Gag groups
-    gagGroups,
-    gaggedNpcs,
-    // Announce
-    announceMode,
-    announcePetMode,
-    // Babel language trainer
-    babelEnabled,
-    babelLanguage,
-    babelIntervalSeconds,
-    babelPhrases,
-    // Post-sync commands
-    postSyncEnabled,
-    postSyncCommands,
-    // Auto-login
-    autoLoginEnabled,
-    autoLoginActiveSlot,
-    autoLoginCharacters,
-    lastLoginTimestamp,
-    lastLoginSlot,
-    // Auto-caster weight mode
-    casterWeightItem,
-    casterWeightContainer,
-    casterWeightAdjustUp,
-    casterWeightAdjustDown,
-    // Auto-conc
-    autoConcAction,
-    // Command separator
-    commandSeparator,
-    // Select-on-send
-    selectOnSend,
-    // Skill counts on readouts
-    showSkillCounts,
-    // Collapsed panel groups
-    collapsedTriggerGroups,
-    collapsedAliasGroups,
-    // Mobile companion
-    companionEnabled,
-    companionPort,
-    // Special updaters (have extra logic beyond simple set+persist)
-    updateAlignmentTrackingEnabled,
-    updateAutoLoginCharacters,
-    // All simple updaters from factory
-    ...updaters,
-  }), [
-    antiIdleEnabled, antiIdleCommand, antiIdleMinutes,
-    alignmentTrackingEnabled, alignmentTrackingMinutes,
-    boardDatesEnabled, stripPromptsEnabled, antiSpamEnabled,
-    terminalScrollback, commandHistorySize, chatHistorySize,
-    timestampFormat, commandEchoEnabled, showTimerBadges, sessionLoggingEnabled,
-    numpadMappings, autoBackupEnabled,
-    chatNotifications, toggleChatNotification,
-    customChime1, customChime2, customSounds,
-    counterHotThreshold, counterColdThreshold,
-    hasSeenGuide, actionBlockingEnabled,
-    panelFontSize, updatePanelFontSize,
-    whoAutoRefreshEnabled, whoRefreshMinutes, whoFontSize, updateWhoFontSize,
-    chatFontSize, updateChatFontSize,
-    allocFontSize, updateAllocFontSize,
-    gagGroups, gaggedNpcs, announceMode, announcePetMode,
-    babelEnabled, babelLanguage, babelIntervalSeconds, babelPhrases,
-    postSyncEnabled, postSyncCommands,
-    autoLoginEnabled, autoLoginActiveSlot, autoLoginCharacters,
-    lastLoginTimestamp, lastLoginSlot,
-    casterWeightItem, casterWeightContainer, casterWeightAdjustUp, casterWeightAdjustDown,
-    autoConcAction, commandSeparator, selectOnSend, showSkillCounts,
-    collapsedTriggerGroups, collapsedAliasGroups,
-    companionEnabled, companionPort,
-    updateAlignmentTrackingEnabled, updateAutoLoginCharacters, updaters,
-  ]);
+  return useMemo(
+    () => ({
+      // Anti-idle
+      antiIdleEnabled,
+      antiIdleCommand,
+      antiIdleMinutes,
+      // Alignment tracking
+      alignmentTrackingEnabled,
+      alignmentTrackingMinutes,
+      // Output transforms
+      boardDatesEnabled,
+      stripPromptsEnabled,
+      antiSpamEnabled,
+      // Buffer sizes
+      terminalScrollback,
+      commandHistorySize,
+      chatHistorySize,
+      // Timestamp
+      timestampFormat,
+      // Command echo
+      commandEchoEnabled,
+      // Timer badges
+      showTimerBadges,
+      // Session logging
+      sessionLoggingEnabled,
+      // Numpad
+      numpadMappings,
+      // Backups
+      autoBackupEnabled,
+      // Notifications
+      chatNotifications,
+      toggleChatNotification,
+      // Custom chimes / sound library
+      customChime1,
+      customChime2,
+      customSounds,
+      // Counter thresholds
+      counterHotThreshold,
+      counterColdThreshold,
+      // Help guide
+      hasSeenGuide,
+      // Action blocking
+      actionBlockingEnabled,
+      // Panel font size
+      panelFontSize,
+      updatePanelFontSize,
+      // Map panel view options
+      mapShowFog,
+      mapShowLabels,
+      // /door keyring slots
+      doorKeys,
+      // Town mapper kill switch
+      townMapperEnabled,
+      // Who list
+      whoAutoRefreshEnabled,
+      whoRefreshMinutes,
+      whoFontSize,
+      updateWhoFontSize,
+      chatFontSize,
+      updateChatFontSize,
+      allocFontSize,
+      updateAllocFontSize,
+      // Gag groups
+      gagGroups,
+      gaggedNpcs,
+      // Announce
+      announceMode,
+      announcePetMode,
+      // Babel language trainer
+      babelEnabled,
+      babelLanguage,
+      babelIntervalSeconds,
+      babelPhrases,
+      // Post-sync commands
+      postSyncEnabled,
+      postSyncCommands,
+      // Auto-login
+      autoLoginEnabled,
+      autoLoginActiveSlot,
+      autoLoginCharacters,
+      lastLoginTimestamp,
+      lastLoginSlot,
+      // Auto-caster weight mode
+      casterWeightItem,
+      casterWeightContainer,
+      casterWeightAdjustUp,
+      casterWeightAdjustDown,
+      // Auto-conc
+      autoConcAction,
+      // Command separator
+      commandSeparator,
+      // Select-on-send
+      selectOnSend,
+      // Skill counts on readouts
+      showSkillCounts,
+      // Collapsed panel groups
+      collapsedTriggerGroups,
+      collapsedAliasGroups,
+      // Mobile companion
+      companionEnabled,
+      companionPort,
+      // Special updaters (have extra logic beyond simple set+persist)
+      updateAlignmentTrackingEnabled,
+      updateAutoLoginCharacters,
+      // All simple updaters from factory
+      ...updaters,
+    }),
+    [
+      antiIdleEnabled,
+      antiIdleCommand,
+      antiIdleMinutes,
+      alignmentTrackingEnabled,
+      alignmentTrackingMinutes,
+      boardDatesEnabled,
+      stripPromptsEnabled,
+      antiSpamEnabled,
+      terminalScrollback,
+      commandHistorySize,
+      chatHistorySize,
+      timestampFormat,
+      commandEchoEnabled,
+      showTimerBadges,
+      sessionLoggingEnabled,
+      numpadMappings,
+      autoBackupEnabled,
+      chatNotifications,
+      toggleChatNotification,
+      customChime1,
+      customChime2,
+      customSounds,
+      counterHotThreshold,
+      counterColdThreshold,
+      hasSeenGuide,
+      actionBlockingEnabled,
+      panelFontSize,
+      updatePanelFontSize,
+      mapShowFog,
+      mapShowLabels,
+      doorKeys,
+      townMapperEnabled,
+      whoAutoRefreshEnabled,
+      whoRefreshMinutes,
+      whoFontSize,
+      updateWhoFontSize,
+      chatFontSize,
+      updateChatFontSize,
+      allocFontSize,
+      updateAllocFontSize,
+      gagGroups,
+      gaggedNpcs,
+      announceMode,
+      announcePetMode,
+      babelEnabled,
+      babelLanguage,
+      babelIntervalSeconds,
+      babelPhrases,
+      postSyncEnabled,
+      postSyncCommands,
+      autoLoginEnabled,
+      autoLoginActiveSlot,
+      autoLoginCharacters,
+      lastLoginTimestamp,
+      lastLoginSlot,
+      casterWeightItem,
+      casterWeightContainer,
+      casterWeightAdjustUp,
+      casterWeightAdjustDown,
+      autoConcAction,
+      commandSeparator,
+      selectOnSend,
+      showSkillCounts,
+      collapsedTriggerGroups,
+      collapsedAliasGroups,
+      companionEnabled,
+      companionPort,
+      updateAlignmentTrackingEnabled,
+      updateAutoLoginCharacters,
+      updaters,
+    ]
+  );
 }

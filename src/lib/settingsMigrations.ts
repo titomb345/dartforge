@@ -9,11 +9,14 @@ import type { DataStore } from '../contexts/DataStoreContext';
  * v2 → v3: v1.4 release (numpad operator keys, command separator)
  * v3 → v4: v1.5 release (select-on-send)
  * v4 → v5: v1.6 release (show skill counts, NPC gags)
+ * v5 → v6: v1.7 release (mobile companion)
+ * v6 → v7: v1.8 release (panel font sizes, anti-spam)
+ * v7 → v8: v1.13 release (map panel view options)
  *
  * Prior to this collapse, each feature had its own version bump (up to v17).
  * normalizeVersion() maps those old version numbers to the collapsed scheme.
  */
-export const CURRENT_VERSION = 7;
+export const CURRENT_VERSION = 8;
 
 /** Raw store contents — all keys are optional since older stores may lack them. */
 export type StoreData = Record<string, unknown>;
@@ -306,6 +309,22 @@ const MIGRATIONS: MigrationFn[] = [
     } else {
       data.chatFontSize = null;
     }
+
+    return data;
+  },
+
+  // ── v7 → v8: v1.13 release ─────────────────────────────────────────
+  (data) => {
+    // Map panel view options (fog defaults OFF; both persisted now)
+    if (!('mapShowFog' in data)) data.mapShowFog = false;
+    if (!('mapShowLabels' in data)) data.mapShowLabels = false;
+
+    // /door command — keyring slots to try when unlocking/locking
+    if (!('doorKeys' in data)) data.doorKeys = 5;
+
+    // Town mapper kill switch (hex-only fallback while the town mapper
+    // is field-tested)
+    if (!('townMapperEnabled' in data)) data.townMapperEnabled = true;
 
     return data;
   },
