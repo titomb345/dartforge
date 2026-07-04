@@ -449,8 +449,19 @@ function drawLink(ctx: CanvasRenderingContext2D, from: TownRoom, to: TownRoom, d
   ctx.lineWidth = diag || displaced ? 1.2 : 3;
   if (displaced) ctx.setLineDash([3, 3]);
   ctx.beginPath();
-  ctx.moveTo(a.x, a.y);
-  ctx.lineTo(b.x, b.y);
+  if (displaced && vec) {
+    // The exit still leaves through its own side of the room (a south
+    // exit departs the bottom-middle edge, and arrives at the far room's
+    // opposite edge) — only the middle of the line angles across.
+    const stub = ROOM_HALF + 6;
+    ctx.moveTo(a.x + vec[0] * ROOM_HALF, a.y + vec[1] * ROOM_HALF);
+    ctx.lineTo(a.x + vec[0] * stub, a.y + vec[1] * stub);
+    ctx.lineTo(b.x - vec[0] * stub, b.y - vec[1] * stub);
+    ctx.lineTo(b.x - vec[0] * ROOM_HALF, b.y - vec[1] * ROOM_HALF);
+  } else {
+    ctx.moveTo(a.x, a.y);
+    ctx.lineTo(b.x, b.y);
+  }
   ctx.stroke();
   if (displaced) ctx.setLineDash([]);
 
