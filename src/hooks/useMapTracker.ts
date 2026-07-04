@@ -12,7 +12,7 @@ import { RoomParser } from '../lib/roomParser';
 import { HexLocalizer, type SurveyResolution } from '../lib/hexLocalizer';
 import { HexMapStore, type HexCell, type HexPos } from '../lib/hexMap';
 import { parseDirection, type Direction } from '../lib/hexUtils';
-import { TownParser } from '../lib/townParser';
+import { TownParser, PORTAL_TRANSIT_RE } from '../lib/townParser';
 import { TownLocalizer, classifyTownCommand, type TownResolution } from '../lib/townLocalizer';
 import { TownMapStore, hexAnchorKey, type TownRoom, type TownWalkStep } from '../lib/townMap';
 import { type DataStore } from '../contexts/DataStoreContext';
@@ -473,23 +473,32 @@ export function useMapTracker(
 
   const flushTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const feedLine = useCallback((line: string, raw?: string) => {
-    parserRef.current?.feedLine(line, raw);
-    townParserRef.current?.feedLine(line);
-    // The MUD's trailing prompt has no newline, so a survey (or wrapped
-    // exits line) without a clean terminator would wait for the NEXT output
-    // burst. Flush once the stream goes idle instead. (Both flushes are
-    // no-ops when nothing is pending.)
-    if (flushTimerRef.current) {
-      clearTimeout(flushTimerRef.current);
-      flushTimerRef.current = null;
-    }
-    flushTimerRef.current = setTimeout(() => {
-      flushTimerRef.current = null;
-      parserRef.current?.flushPending();
-      townParserRef.current?.flushPending();
-    }, 400);
-  }, []);
+  const feedLine = useCallback(
+    (line: string, raw?: string) => {
+      parserRef.current?.feedLine(line, raw);
+      townParserRef.current?.feedLine(line);
+      // Portal transits teleport between towns — the next room block must
+      // start a fresh town entry instead of gluing into the current town.
+      if (PORTAL_TRANSIT_RE.test(line)) {
+        townLocalizerRef.current.onPortalTransit();
+        if (townWalkRef.current) cancelTownWalk('stepped through a portal');
+      }
+      // The MUD's trailing prompt has no newline, so a survey (or wrapped
+      // exits line) without a clean terminator would wait for the NEXT output
+      // burst. Flush once the stream goes idle instead. (Both flushes are
+      // no-ops when nothing is pending.)
+      if (flushTimerRef.current) {
+        clearTimeout(flushTimerRef.current);
+        flushTimerRef.current = null;
+      }
+      flushTimerRef.current = setTimeout(() => {
+        flushTimerRef.current = null;
+        parserRef.current?.flushPending();
+        townParserRef.current?.flushPending();
+      }, 400);
+    },
+    [cancelTownWalk]
+  );
 
   const trackCommand = useCallback(
     (command: string) => {

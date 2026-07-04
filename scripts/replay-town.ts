@@ -25,7 +25,7 @@ import * as path from 'path';
 import { RoomParser } from '../src/lib/roomParser';
 import { HexLocalizer } from '../src/lib/hexLocalizer';
 import { HexMapStore } from '../src/lib/hexMap';
-import { TownParser } from '../src/lib/townParser';
+import { TownParser, PORTAL_TRANSIT_RE } from '../src/lib/townParser';
 import { TownLocalizer } from '../src/lib/townLocalizer';
 import { TownMapStore } from '../src/lib/townMap';
 import { hexAnchorKey } from '../src/lib/townMap';
@@ -90,6 +90,7 @@ const metrics = {
   cmdTracked: 0,
   moveFails: 0,
   merges: 0,
+  portals: 0,
 };
 
 const lostSamples: string[] = [];
@@ -195,6 +196,10 @@ function replayFile(filePath: string, dartforge: boolean): void {
     }
 
     if (/There (?:is one obvious exit|are \w+ exits):/.test(line)) metrics.exitsLines++;
+    if (PORTAL_TRANSIT_RE.test(line)) {
+      metrics.portals++;
+      townLocalizer.onPortalTransit();
+    }
     hexParser.feedLine(line);
     townParser.feedLine(line);
   }
@@ -256,6 +261,7 @@ for (const [k, v] of Object.entries(metrics.kinds).sort((a, b) => b[1] - a[1])) 
 console.log(`\nLink misses (known link, wrong room): ${townLocalizer.linkMisses}`);
 console.log(`Placement nudges: ${townMap.nudges}`);
 console.log(`Town merges: ${metrics.merges}`);
+console.log(`Portal transits: ${metrics.portals}`);
 
 console.log(`\nTowns mapped: ${townMap.towns.size}`);
 const townsBySize = [...townMap.towns.values()].sort((a, b) => b.rooms.size - a.rooms.size);

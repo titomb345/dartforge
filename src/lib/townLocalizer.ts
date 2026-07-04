@@ -131,6 +131,18 @@ export class TownLocalizer {
   }
 
   /**
+   * A portal transit line arrived ("You step into the north portal.").
+   * Portals bridge distant towns — the NEXT room block must resolve as a
+   * fresh town entry instead of being filed into the current town.
+   */
+  onPortalTransit(): void {
+    this.queue = [];
+    this.portalJump = true;
+  }
+
+  private portalJump = false;
+
+  /**
    * A wilderness survey arrived — the player is outside. Deactivate; the
    * map keeps the last position so re-entering resumes instantly. The room
    * we just left is remembered so the hex we emerge onto can be recorded
@@ -141,6 +153,7 @@ export class TownLocalizer {
     this.active = false;
     this.lost = false;
     this.queue = [];
+    this.portalJump = false;
   }
 
   /**
@@ -165,6 +178,7 @@ export class TownLocalizer {
     this.lost = false;
     this.queue = [];
     this.pendingExit = null;
+    this.portalJump = false;
   }
 
   /**
@@ -210,6 +224,16 @@ export class TownLocalizer {
     this.expireQueue(now);
     const gap = now - this.lastBlockAt;
     this.lastBlockAt = now;
+
+    // Portal transit ("You step into the north portal.") — we teleported.
+    // The arrival room is a fresh entry into whatever town it belongs to:
+    // no resume-in-place (identical Portal Chambers would false-match), no
+    // link back, and no hex anchor (the hex position is stale indoors).
+    if (this.portalJump) {
+      this.portalJump = false;
+      this.active = false;
+      return this.enterTown(block, null, now, false);
+    }
 
     if (!this.active) {
       return this.enterTown(block, anchor, now);
@@ -452,7 +476,12 @@ export class TownLocalizer {
   // Entry & relocalization
   // -------------------------------------------------------------------------
 
-  private enterTown(block: TownRoomBlock, anchor: string | null, now: number): TownResolution {
+  private enterTown(
+    block: TownRoomBlock,
+    anchor: string | null,
+    now: number,
+    allowResume = true
+  ): TownResolution {
     this.active = true;
     this.lost = false;
     this.queue = [];
@@ -460,10 +489,14 @@ export class TownLocalizer {
     // 0. Resume: DartMUD logs you back in exactly where you logged out, so
     //    the persisted position matching the block means we're still there.
     //    (This is what stops every login from spawning a duplicate town.)
-    const last = this.map.room(this.map.pos);
-    if (last && this.map.pos && this.map.matches(last, block)) {
-      this.map.touchRoom(last, block, now);
-      return { kind: 'entered', pos: this.map.pos, moved: null };
+    //    Skipped after a portal transit — the departure and arrival rooms
+    //    can be identical twins (Portal Chambers), and we KNOW we moved.
+    if (allowResume) {
+      const last = this.map.room(this.map.pos);
+      if (last && this.map.pos && this.map.matches(last, block)) {
+        this.map.touchRoom(last, block, now);
+        return { kind: 'entered', pos: this.map.pos, moved: null };
+      }
     }
 
     // 1. Anchor memory: entering from a known hex lands in a known room.

@@ -129,6 +129,14 @@ const PROMPT_PREFIX = /^(?:> )+/;
 const EXITS_START_RE =
   /^(?:> )*There (?:is one obvious exit|are (?:two|three|four|five|six|seven|eight|nine|ten|many) exits):/;
 
+/**
+ * Portal transit — "You step into the north portal." (hub side, direction
+ * named) or "You step into the portal." (spoke side). Portals teleport
+ * between distant towns; the owner must call TownLocalizer.onPortalTransit
+ * when this line arrives so the arrival room starts a fresh town entry.
+ */
+export const PORTAL_TRANSIT_RE = /^(?:> )*You step into the(?: \w+)? portal\.\s*$/;
+
 const DIR_WORD_RE = /\b(north(?:east|west)?|south(?:east|west)?|east|west|up|down)\b/g;
 
 /** Non-directional exit keywords seen in the corpus ("back and south", "exit and a closed hatch") */
