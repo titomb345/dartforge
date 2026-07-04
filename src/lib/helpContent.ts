@@ -185,7 +185,7 @@ export const HELP_CATEGORIES: HelpCategory[] = [
       {
         title: 'Walk Through Towns Too',
         description:
-          'In the town view, right-click any mapped room to auto-walk there — the route follows the exits you have actually used, climbs stairs across floors, and even takes special exits like "back". Steps are verified room by room and the walk stops cleanly at closed doors or anything unexpected. The floor stepper (F0 ▲▼) browses other levels and snaps back to your floor when you take stairs. Rest the cursor on a room to see its description, exits, and visit count. Rename or delete a town from the map gear menu.',
+          'In the town view, right-click any mapped room to auto-walk there — the route follows the exits you have actually used, climbs stairs across floors, and even takes special exits like "back". Steps are verified room by room and the walk stops cleanly at closed doors or anything unexpected, with the remaining route drawn as a dashed gold line (the hex map draws its walks the same way). The floor stepper (F0 ▲▼) browses other levels and snaps back to your floor when you take stairs — or double-click any stair room to follow its staircase. Rest the cursor on a room to see its description, exits, and visit count. The gear menu also holds a room search (type a name, Enter jumps to the best match and rings it in cyan), a legend for the map glyphs, and town rename/delete.',
         helpId: 'toolbar-map',
         interaction: 'right-click',
       },

@@ -44,6 +44,7 @@ export function MapPanel({ mode = 'slideout' }: PinnablePanelProps) {
     townWalking,
     getCellAt,
     getTowns,
+    getTownRooms,
     getTownFloors,
     centerOnPlayer,
     clearMap,
@@ -65,6 +66,8 @@ export function MapPanel({ mode = 'slideout' }: PinnablePanelProps) {
   /** Floor being browsed; null = follow the player's floor */
   const [floorOverride, setFloorOverride] = useState<number | null>(null);
   const [nameDraft, setNameDraft] = useState<string | null>(null);
+  const [roomSearch, setRoomSearch] = useState('');
+  const [focusRoom, setFocusRoom] = useState<{ roomId: number; nonce: number } | null>(null);
 
   const townView = viewMode === 'town' || (viewMode === 'auto' && indoors && town !== null);
   const effectiveView: 'hex' | 'town' = townView ? 'town' : 'hex';
@@ -91,6 +94,34 @@ export function MapPanel({ mode = 'slideout' }: PinnablePanelProps) {
   useEffect(() => {
     setFloorOverride(null);
   }, [playerFloor, displayedTownId]);
+
+  // Room search is per-town
+  useEffect(() => {
+    setRoomSearch('');
+    setFocusRoom(null);
+  }, [displayedTownId]);
+
+  const searchMatches =
+    townView && displayedTownId !== undefined && roomSearch.trim().length >= 2
+      ? getTownRooms(displayedTownId)
+          .filter((r) => r.name.toLowerCase().includes(roomSearch.trim().toLowerCase()))
+          .sort((a, b) => b.visits - a.visits)
+          .slice(0, 6)
+      : [];
+
+  const jumpToRoom = (roomId: number, z: number) => {
+    setFloorOverride(z);
+    setFocusRoom((prev) => ({ roomId, nonce: (prev?.nonce ?? 0) + 1 }));
+    setMenuOpen(false);
+  };
+
+  const handleStairJump = (fromZ: number, hasUp: boolean, hasDown: boolean) => {
+    const up = fromZ + 1;
+    const down = fromZ - 1;
+    const target =
+      hasUp && floors.includes(up) ? up : hasDown && floors.includes(down) ? down : null;
+    if (target !== null) setFloorOverride(target);
+  };
 
   // Resize observer to fill available space
   useEffect(() => {
@@ -289,6 +320,39 @@ export function MapPanel({ mode = 'slideout' }: PinnablePanelProps) {
                     : `${visitedCount}/${cellCount} hexes${islandCount > 1 ? ` · ${islandCount} regions` : ''}${townCount > 0 ? ` · ${townCount} town${townCount === 1 ? '' : 's'}` : ''}`}
                 </div>
                 <div className="h-px bg-border-subtle" />
+                {townView && displayed && (
+                  <>
+                    <input
+                      value={roomSearch}
+                      onChange={(e) => setRoomSearch(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter' && searchMatches.length > 0) {
+                          jumpToRoom(searchMatches[0].id, searchMatches[0].z);
+                        }
+                      }}
+                      placeholder="Find room…"
+                      className="w-full bg-bg-primary border border-border-dim focus:border-border-subtle rounded px-1 py-0.5 text-text-label outline-none placeholder:text-text-dim/60"
+                      title="Search rooms by name — Enter jumps to the best match"
+                    />
+                    {searchMatches.length > 0 && (
+                      <div className="flex flex-col gap-0.5 max-h-[110px] overflow-y-auto">
+                        {searchMatches.map((r) => (
+                          <button
+                            key={r.id}
+                            onClick={() => jumpToRoom(r.id, r.z)}
+                            className="text-left px-1 py-0.5 rounded hover:bg-bg-primary text-text-label cursor-pointer truncate"
+                          >
+                            {r.name}{' '}
+                            <span className="opacity-50">
+                              F{r.z} · {r.visits}x
+                            </span>
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                    <div className="h-px bg-border-subtle" />
+                  </>
+                )}
                 <div className="flex items-center justify-between gap-3">
                   <span className="text-text-label">
                     {townView ? 'Room labels' : 'Terrain labels'}
@@ -362,6 +426,25 @@ export function MapPanel({ mode = 'slideout' }: PinnablePanelProps) {
                     />
                   </div>
                 )}
+                {townView && (
+                  <>
+                    <div className="h-px bg-border-subtle" />
+                    <div className="text-[9px] leading-4 text-text-dim">
+                      <span style={{ color: 'rgba(150, 135, 110, 0.9)' }}>━</span> corridor{'  '}
+                      <span style={{ color: 'rgba(150, 135, 110, 0.6)' }}>╌</span> shortcut /
+                      squeezed
+                      <br />
+                      <span style={{ color: 'rgba(160, 120, 200, 0.9)' }}>╌</span> special exit
+                      {'  '}
+                      <span style={{ color: '#e8a849' }}>┃</span> door
+                      <br />
+                      <span className="text-text-label">▲▼</span> stairs (double-click to follow)
+                      <br />
+                      <span style={{ color: '#e8a849' }}>●</span> walk route{'  '}
+                      <span style={{ color: 'rgba(150, 135, 110, 0.5)' }}>╶</span> unexplored exit
+                    </div>
+                  </>
+                )}
               </div>
             </>
           )}
@@ -382,6 +465,8 @@ export function MapPanel({ mode = 'slideout' }: PinnablePanelProps) {
                 showLabels={mapShowLabels}
                 dimmed={!browsing && !indoors}
                 onWalkTo={browsing ? undefined : walkToRoom}
+                focus={focusRoom}
+                onStairJump={handleStairJump}
               />
             )
           ) : (

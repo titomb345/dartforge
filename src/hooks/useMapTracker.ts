@@ -11,7 +11,7 @@ import { useRef, useState, useCallback, useEffect, useMemo } from 'react';
 import { RoomParser } from '../lib/roomParser';
 import { HexLocalizer, type SurveyResolution } from '../lib/hexLocalizer';
 import { HexMapStore, type HexCell, type HexPos } from '../lib/hexMap';
-import { parseDirection, type Direction } from '../lib/hexUtils';
+import { parseDirection, getDirectionOffset, type Direction } from '../lib/hexUtils';
 import { TownParser, PORTAL_TRANSIT_RE } from '../lib/townParser';
 import { TownLocalizer, classifyTownCommand, type TownResolution } from '../lib/townLocalizer';
 import { TownMapStore, hexAnchorKey, type TownRoom, type TownWalkStep } from '../lib/townMap';
@@ -34,6 +34,8 @@ const WALK_PIPELINE = 2;
 export interface WalkState {
   target: { q: number; r: number };
   remaining: number;
+  /** Remaining route as hex coordinates (route preview) */
+  path: { q: number; r: number }[];
 }
 
 /** Summary of the town the player is (or was last) in */
@@ -193,6 +195,17 @@ export function useMapTracker(
       if (c.visited) visited++;
     }
     const walk = walkRef.current;
+    let hexWalkPath: { q: number; r: number }[] = [];
+    if (walk && map.pos) {
+      let q = map.pos.q;
+      let r = map.pos.r;
+      hexWalkPath = walk.path.slice(walk.confirmed).map((d) => {
+        const o = getDirectionOffset(d);
+        q += o.dq;
+        r += o.dr;
+        return { q, r };
+      });
+    }
     const townMap = townMapRef.current;
     const townPos = townMap.pos;
     let town: TownSummary | null = null;
@@ -219,7 +232,13 @@ export function useMapTracker(
       islandCount: map.islandSizes().size,
       lost: localizerRef.current.lost,
       indoors: localizerRef.current.indoors,
-      walking: walk ? { target: walk.target, remaining: walk.path.length - walk.confirmed } : null,
+      walking: walk
+        ? {
+            target: walk.target,
+            remaining: walk.path.length - walk.confirmed,
+            path: hexWalkPath,
+          }
+        : null,
       town,
       townCount: townMap.towns.size,
       townLost: townLocalizerRef.current.lost,

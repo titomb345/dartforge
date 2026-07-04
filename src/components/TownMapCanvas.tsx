@@ -62,6 +62,10 @@ interface TownMapCanvasProps {
   /** Dim the map (drawn under the DOM badge) — used while outdoors */
   dimmed?: boolean;
   onWalkTo?: (roomId: number) => void;
+  /** Search focus: pan to and highlight this room (nonce retriggers) */
+  focus?: { roomId: number; nonce: number } | null;
+  /** Double-clicking a stair room asks the panel to switch floors */
+  onStairJump?: (fromZ: number, hasUp: boolean, hasDown: boolean) => void;
 }
 
 export function TownMapCanvas({
@@ -72,6 +76,8 @@ export function TownMapCanvas({
   showLabels,
   dimmed = false,
   onWalkTo,
+  focus = null,
+  onStairJump,
 }: TownMapCanvasProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const { version, town, townWalking, centerVersion, getTownRooms } = useMapContext();
@@ -119,6 +125,15 @@ export function TownMapCanvas({
     panRef.current = { x: -cur.x * CELL, y: -cur.y * CELL };
     requestRedraw();
   }, [town, townId, centerVersion, getTownRooms, requestRedraw]);
+
+  // Search focus: pan straight to the room
+  useEffect(() => {
+    if (!focus) return;
+    const room = getTownRooms(townId).find((r) => r.id === focus.roomId);
+    if (!room) return;
+    panRef.current = { x: -room.x * CELL, y: -room.y * CELL };
+    requestRedraw();
+  }, [focus, townId, getTownRooms, requestRedraw]);
 
   // Browsing a floor (or a whole town) the player isn't in: center on the
   // displayed floor's rooms instead
@@ -221,6 +236,23 @@ export function TownMapCanvas({
         ctx.fill();
       }
       ctx.globalAlpha = 1;
+    }
+
+    // Search-focus ring
+    if (focus) {
+      const fr = byId.get(focus.roomId);
+      if (fr && fr.z === floor) {
+        ctx.strokeStyle = 'rgb(70, 180, 210)';
+        ctx.lineWidth = 1.5;
+        ctx.setLineDash([3, 2]);
+        ctx.strokeRect(
+          fr.x * CELL - ROOM_HALF - 4,
+          fr.y * CELL - ROOM_HALF - 4,
+          (ROOM_HALF + 4) * 2,
+          (ROOM_HALF + 4) * 2
+        );
+        ctx.setLineDash([]);
+      }
     }
 
     // Current room glow (only when displaying the player's town)
@@ -345,6 +377,18 @@ export function TownMapCanvas({
     [roomAtMouse, onWalkTo]
   );
 
+  const handleDoubleClick = useCallback(
+    (e: React.MouseEvent) => {
+      if (!onStairJump) return;
+      const room = roomAtMouse(e);
+      if (!room) return;
+      const hasUp = room.exits.includes('u');
+      const hasDown = room.exits.includes('d');
+      if (hasUp || hasDown) onStairJump(room.z, hasUp, hasDown);
+    },
+    [roomAtMouse, onStairJump]
+  );
+
   return (
     <div
       className="relative"
@@ -359,6 +403,7 @@ export function TownMapCanvas({
         onMouseLeave={handleMouseLeave}
         onWheel={handleWheel}
         onContextMenu={handleContextMenu}
+        onDoubleClick={handleDoubleClick}
       />
       {tooltip && (
         <RoomTooltip

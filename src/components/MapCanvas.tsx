@@ -94,8 +94,16 @@ export function MapCanvas({
   onWalkTo,
 }: MapCanvasProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  const { version, currentPos, centerVersion, getCells, getCellAt, clearBlockedAt, toggleTownAt } =
-    useMapContext();
+  const {
+    version,
+    currentPos,
+    walking,
+    centerVersion,
+    getCells,
+    getCellAt,
+    clearBlockedAt,
+    toggleTownAt,
+  } = useMapContext();
 
   // Pan/zoom state
   const panRef = useRef({ x: 0, y: 0 });
@@ -173,8 +181,7 @@ export function MapCanvas({
 
     // Terrain mosaic
     for (const cell of cells) {
-      const isCurrent =
-        !!currentPos && cell.q === currentPos.q && cell.r === currentPos.r;
+      const isCurrent = !!currentPos && cell.q === currentPos.q && cell.r === currentPos.r;
       drawHex(ctx, cell, isCurrent, showFog);
     }
 
@@ -194,6 +201,28 @@ export function MapCanvas({
       for (const cell of cells) {
         drawLabel(ctx, cell);
       }
+    }
+
+    // Active walk route preview — dashed gold line through the remaining
+    // hexes with a dot on each (same language as the town map's preview)
+    if (walking && walking.path.length > 0 && currentPos) {
+      const points = [currentPos, ...walking.path].map((p) => hexToPixel(p.q, p.r, HEX_SIZE));
+      ctx.strokeStyle = CURRENT_ROOM_GLOW;
+      ctx.lineWidth = 1.5;
+      ctx.setLineDash([4, 4]);
+      ctx.globalAlpha = 0.6;
+      ctx.beginPath();
+      ctx.moveTo(points[0].x, points[0].y);
+      for (let i = 1; i < points.length; i++) ctx.lineTo(points[i].x, points[i].y);
+      ctx.stroke();
+      ctx.setLineDash([]);
+      ctx.fillStyle = CURRENT_ROOM_GLOW;
+      for (let i = 1; i < points.length; i++) {
+        ctx.beginPath();
+        ctx.arc(points[i].x, points[i].y, 2.5, 0, Math.PI * 2);
+        ctx.fill();
+      }
+      ctx.globalAlpha = 1;
     }
 
     // Current position glow
@@ -250,19 +279,16 @@ export function MapCanvas({
     [requestRedraw, cancelHover]
   );
 
-  const hexAtMouse = useCallback(
-    (e: React.MouseEvent): { q: number; r: number } | null => {
-      const canvas = canvasRef.current;
-      if (!canvas) return null;
-      const rect = canvas.getBoundingClientRect();
-      const zoom = zoomRef.current;
-      const pan = panRef.current;
-      const worldX = (e.clientX - rect.left - rect.width / 2) / zoom - pan.x;
-      const worldY = (e.clientY - rect.top - rect.height / 2) / zoom - pan.y;
-      return pixelToHex(worldX, worldY, HEX_SIZE);
-    },
-    []
-  );
+  const hexAtMouse = useCallback((e: React.MouseEvent): { q: number; r: number } | null => {
+    const canvas = canvasRef.current;
+    if (!canvas) return null;
+    const rect = canvas.getBoundingClientRect();
+    const zoom = zoomRef.current;
+    const pan = panRef.current;
+    const worldX = (e.clientX - rect.left - rect.width / 2) / zoom - pan.x;
+    const worldY = (e.clientY - rect.top - rect.height / 2) / zoom - pan.y;
+    return pixelToHex(worldX, worldY, HEX_SIZE);
+  }, []);
 
   /** How long the cursor must rest on a hex before its info popup shows */
   const HOVER_DELAY = 800;
@@ -726,7 +752,10 @@ function CellTooltip({
         {(cell.river || cell.riverEdges.length > 0) && (
           <span style={{ color: RIVER_COLOR }}>
             {' '}
-            · river{cell.riverEdges.length > 0 ? ` (${cell.riverEdges.map((d) => directionLabel(d)).join(', ')})` : ''}
+            · river
+            {cell.riverEdges.length > 0
+              ? ` (${cell.riverEdges.map((d) => directionLabel(d)).join(', ')})`
+              : ''}
             <span className="opacity-60 italic"> — Ctrl+click to clear</span>
           </span>
         )}
