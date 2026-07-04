@@ -63,9 +63,12 @@ export interface MapTrackerState {
   walking: WalkState | null;
   /** Town the player is in (or was last in — persists while outdoors) */
   town: TownSummary | null;
+  /** Total towns mapped for this character */
+  townCount: number;
   /** Inside a town but the room couldn't be identified */
   townLost: boolean;
-  townWalking: { remaining: number } | null;
+  /** Active town walk — `path` holds the remaining rooms (route preview) */
+  townWalking: { remaining: number; path: number[] } | null;
 }
 
 export interface MapTrackerActions {
@@ -131,6 +134,7 @@ export function useMapTracker(
     indoors: false,
     walking: null,
     town: null,
+    townCount: 0,
     townLost: false,
     townWalking: null,
   });
@@ -215,8 +219,14 @@ export function useMapTracker(
       indoors: localizerRef.current.indoors,
       walking: walk ? { target: walk.target, remaining: walk.path.length - walk.confirmed } : null,
       town,
+      townCount: townMap.towns.size,
       townLost: townLocalizerRef.current.lost,
-      townWalking: townWalk ? { remaining: townWalk.steps.length - townWalk.confirmed } : null,
+      townWalking: townWalk
+        ? {
+            remaining: townWalk.steps.length - townWalk.confirmed,
+            path: townWalk.steps.slice(townWalk.confirmed).map((s) => s.toRoomId),
+          }
+        : null,
     }));
   }, []);
 
@@ -349,6 +359,12 @@ export function useMapTracker(
       }
       if (!res.pos || res.kind === 'lost') {
         cancelTownWalk('position lost');
+        return;
+      }
+      if (res.kind === 'stationary' && res.moved === null) {
+        // A room re-print (look, light change) — our step hasn't resolved
+        // yet; keep waiting instead of aborting the walk.
+        armTownWalkTimeout();
         return;
       }
       const expected = walk.steps[walk.confirmed];
@@ -491,11 +507,13 @@ export function useMapTracker(
         clearTimeout(flushTimerRef.current);
         flushTimerRef.current = null;
       }
-      flushTimerRef.current = setTimeout(() => {
-        flushTimerRef.current = null;
-        parserRef.current?.flushPending();
-        townParserRef.current?.flushPending();
-      }, 400);
+      if (parserRef.current?.hasPendingSurvey() || townParserRef.current?.hasPending()) {
+        flushTimerRef.current = setTimeout(() => {
+          flushTimerRef.current = null;
+          parserRef.current?.flushPending();
+          townParserRef.current?.flushPending();
+        }, 400);
+      }
     },
     [cancelTownWalk]
   );

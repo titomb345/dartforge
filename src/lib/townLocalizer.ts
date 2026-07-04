@@ -106,6 +106,8 @@ export class TownLocalizer {
   lost = false;
   /** Diagnostic: a known link predicted a room the block didn't match */
   linkMisses = 0;
+  /** Diagnostic: mispredicting links replaced by a confident destination */
+  linkHeals = 0;
   /** Timestamp of the last resolved room block (continuity tracking) */
   private lastBlockAt = 0;
 
@@ -277,6 +279,7 @@ export class TownLocalizer {
         // Block shows a different room — correlation decides below.
       } else {
         const linked = current.links[move.dir];
+        let missedLink = false;
         if (linked !== undefined) {
           const dest = town.rooms.get(linked);
           if (dest && this.map.matches(dest, block)) {
@@ -286,15 +289,20 @@ export class TownLocalizer {
             return { kind: 'expected', pos: this.map.pos, moved: move };
           }
           this.linkMisses++;
-          // Known link disagrees — correlation decides below.
-        } else {
-          // Frontier: an unmapped exit. Check the grid target first — walking
-          // a loop back into mapped territory must reuse the existing room.
+          missedLink = true;
+          // Known link disagrees. Fall into the guarded reuse below — a
+          // confident different destination RE-LINKS this exit (healing a
+          // stale/wrong link that would misroute walks forever); if nothing
+          // confident is found, correlation decides.
+        }
+        {
+          // Frontier: an unmapped exit (or a mispredicting one — see
+          // above). Check the grid target first — walking a loop back
+          // into mapped territory must reuse the existing room.
           const target = this.map.placementTarget(current, move.dir);
           const gridVec = TOWN_DIR_VEC[move.dir];
           const occupantId = town.grid.get(`${target.x},${target.y},${target.z}`);
           const occupant = occupantId !== undefined ? town.rooms.get(occupantId) : undefined;
-          this.queue.shift();
           // Reciprocity guards: only reuse a room as the destination of
           // `dir` if its reverse link agrees.
           //  - EXACT-CELL occupants (real loop closure) use the relaxed
@@ -339,10 +347,13 @@ export class TownLocalizer {
           if (
             gridVec &&
             occupant &&
+            occupant.id !== current.id &&
             this.map.matches(occupant, block) &&
             relaxedReciprocal(occupant)
           ) {
-            // Loop closed — link and move there
+            // Loop closed — (re)link and move there
+            this.queue.shift();
+            if (missedLink) this.linkHeals++;
             this.map.link(town, current, move.dir, occupant);
             this.map.touchRoom(occupant, block, now);
             this.map.pos = { townId: town.id, roomId: occupant.id };
@@ -371,15 +382,22 @@ export class TownLocalizer {
             );
           const reuse = near.length === 1 ? near[0] : null;
           if (reuse) {
+            this.queue.shift();
+            if (missedLink) this.linkHeals++;
             this.map.link(town, current, move.dir, reuse);
             this.map.touchRoom(reuse, block, now);
             this.map.pos = { townId: town.id, roomId: reuse.id };
             return { kind: 'expected', pos: this.map.pos, moved: move };
           }
-          const room = this.map.addRoom(town, block, target.x, target.y, target.z, now);
-          this.map.link(town, current, move.dir, room);
-          this.map.pos = { townId: town.id, roomId: room.id };
-          return { kind: 'new-room', pos: this.map.pos, moved: move };
+          if (!missedLink) {
+            this.queue.shift();
+            const room = this.map.addRoom(town, block, target.x, target.y, target.z, now);
+            this.map.link(town, current, move.dir, room);
+            this.map.pos = { townId: town.id, roomId: room.id };
+            return { kind: 'new-room', pos: this.map.pos, moved: move };
+          }
+          // Mispredicting link with no confident replacement — leave the
+          // queue intact and let correlation decide below.
         }
       }
     } else if (move?.kind === 'named') {

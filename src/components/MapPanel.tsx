@@ -37,6 +37,7 @@ export function MapPanel({ mode = 'slideout' }: PinnablePanelProps) {
     indoors,
     walking,
     town,
+    townCount,
     townLost,
     townWalking,
     getCellAt,
@@ -65,10 +66,11 @@ export function MapPanel({ mode = 'slideout' }: PinnablePanelProps) {
   const playerFloor = town?.floor ?? 0;
   const floor = floorOverride ?? playerFloor;
 
-  // Moving to another floor in-game snaps the view back to the player
+  // Moving to another floor in-game (or switching towns) snaps the view
+  // back to the player's floor
   useEffect(() => {
     setFloorOverride(null);
-  }, [playerFloor]);
+  }, [playerFloor, town?.id]);
 
   // Resize observer to fill available space
   useEffect(() => {
@@ -243,9 +245,9 @@ export function MapPanel({ mode = 'slideout' }: PinnablePanelProps) {
                 <div className="text-text-dim text-[9px]">
                   {townView
                     ? town
-                      ? `${town.roomCount} room${town.roomCount === 1 ? '' : 's'} · ${floors.length} floor${floors.length === 1 ? '' : 's'}`
+                      ? `${town.roomCount} room${town.roomCount === 1 ? '' : 's'} · ${floors.length} floor${floors.length === 1 ? '' : 's'} · ${townCount} town${townCount === 1 ? '' : 's'} mapped`
                       : 'No town mapped yet'
-                    : `${visitedCount}/${cellCount} hexes${islandCount > 1 ? ` · ${islandCount} regions` : ''}`}
+                    : `${visitedCount}/${cellCount} hexes${islandCount > 1 ? ` · ${islandCount} regions` : ''}${townCount > 0 ? ` · ${townCount} town${townCount === 1 ? '' : 's'}` : ''}`}
                 </div>
                 <div className="h-px bg-border-subtle" />
                 <div className="flex items-center justify-between gap-3">

@@ -243,6 +243,11 @@ export class TownParser {
     if (this.history.length > HISTORY) this.history.shift();
   }
 
+  /** True while a wrapped exits sentence is still being collected. */
+  hasPending(): boolean {
+    return this.state === 'in-exits';
+  }
+
   /** Flush a wrapped exits sentence that never completed (stream idle). */
   flushPending(): void {
     if (this.state === 'in-exits') this.finishExits();

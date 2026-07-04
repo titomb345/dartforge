@@ -259,6 +259,7 @@ for (const [k, v] of Object.entries(metrics.kinds).sort((a, b) => b[1] - a[1])) 
   console.log(`  ${k.padEnd(12)} ${v} (${((v / Math.max(1, totalRes)) * 100).toFixed(1)}%)`);
 }
 console.log(`\nLink misses (known link, wrong room): ${townLocalizer.linkMisses}`);
+console.log(`Link heals (stale links re-pointed): ${townLocalizer.linkHeals}`);
 console.log(`Placement nudges: ${townMap.nudges}`);
 console.log(`Town merges: ${metrics.merges}`);
 console.log(`Portal transits: ${metrics.portals}`);

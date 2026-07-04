@@ -71,7 +71,7 @@ export function TownMapCanvas({
   onWalkTo,
 }: TownMapCanvasProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  const { version, town, centerVersion, getTownRooms } = useMapContext();
+  const { version, town, townWalking, centerVersion, getTownRooms } = useMapContext();
 
   // Pan/zoom state
   const panRef = useRef({ x: 0, y: 0 });
@@ -114,6 +114,21 @@ export function TownMapCanvas({
     panRef.current = { x: -cur.x * CELL, y: -cur.y * CELL };
     requestRedraw();
   }, [town, centerVersion, getTownRooms, requestRedraw]);
+
+  // Browsing a floor the player isn't on: center on that floor's rooms
+  useEffect(() => {
+    if (town && floor === town.floor) return; // player floor — handled above
+    const rooms = getTownRooms().filter((r) => r.z === floor);
+    if (rooms.length === 0) return;
+    let sx = 0;
+    let sy = 0;
+    for (const r of rooms) {
+      sx += r.x;
+      sy += r.y;
+    }
+    panRef.current = { x: (-sx / rooms.length) * CELL, y: (-sy / rooms.length) * CELL };
+    requestRedraw();
+  }, [floor, town, getTownRooms, requestRedraw]);
 
   // Draw
   useEffect(() => {
@@ -169,6 +184,37 @@ export function TownMapCanvas({
     // Labels
     if (showLabels && zoom >= 0.7) {
       for (const room of floorRooms) drawRoomLabel(ctx, room);
+    }
+
+    // Active walk route preview — dashed gold line through the remaining
+    // rooms plus a dot on each (segments only where both ends share the
+    // displayed floor; stairs break the line, the dots carry on).
+    if (townWalking && town) {
+      const pathRooms = [town.roomId, ...townWalking.path]
+        .map((id) => byId.get(id))
+        .filter((r): r is TownRoom => !!r);
+      ctx.strokeStyle = CURRENT_ROOM_GLOW;
+      ctx.lineWidth = 1.5;
+      ctx.setLineDash([4, 4]);
+      ctx.globalAlpha = 0.6;
+      for (let i = 0; i < pathRooms.length - 1; i++) {
+        const a = pathRooms[i];
+        const b = pathRooms[i + 1];
+        if (a.z !== floor || b.z !== floor) continue;
+        ctx.beginPath();
+        ctx.moveTo(a.x * CELL, a.y * CELL);
+        ctx.lineTo(b.x * CELL, b.y * CELL);
+        ctx.stroke();
+      }
+      ctx.setLineDash([]);
+      ctx.fillStyle = CURRENT_ROOM_GLOW;
+      for (const r of pathRooms) {
+        if (r.z !== floor || r.id === town.roomId) continue;
+        ctx.beginPath();
+        ctx.arc(r.x * CELL, r.y * CELL, 2.5, 0, Math.PI * 2);
+        ctx.fill();
+      }
+      ctx.globalAlpha = 1;
     }
 
     // Current room glow
