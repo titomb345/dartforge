@@ -83,6 +83,28 @@ export interface TownWalkStep {
 
 const gridKey = (x: number, y: number, z: number) => `${x},${y},${z}`;
 
+/**
+ * Canonical description for identity comparison. Lighting sentences ("It is
+ * painfully bright.") change with the time of day, so every "It is ..."
+ * sentence is stripped and whitespace collapsed. What survives is the room's
+ * stable prose — which tells same-fingerprint twins apart (the Eris market
+ * plaza: identical "Market" name and exits, but "the northern edge" vs "the
+ * western side" mid-description). Too-short results are unusable: comparing
+ * them proves nothing, so callers must check descUsable() first.
+ */
+export function descKey(desc: string): string {
+  return desc
+    .replace(/\bIt is [^.]{1,60}\./g, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+const DESC_KEY_MIN = 20;
+
+export function descUsable(desc: string): boolean {
+  return descKey(desc).length >= DESC_KEY_MIN;
+}
+
 export function hexAnchorKey(island: number, q: number, r: number): string {
   return `${island}:${q},${r}`;
 }
@@ -268,6 +290,27 @@ export class TownMapStore {
     const a = room.exits.join(',');
     const b = block.exits.dirs.join(',');
     return a === b;
+  }
+
+  /**
+   * Does the block's description agree with this room's? Only meaningful
+   * when both sides are usable (long enough after canonicalization) — this
+   * is the tiebreaker that separates same-fingerprint twins in uniform
+   * neighborhoods like the Eris market plaza. Never use a desc DISAGREEMENT
+   * to veto an otherwise-unique match: descriptions can embed dynamic
+   * content, so absence of agreement only means "no extra evidence".
+   */
+  descAgrees(room: TownRoom, block: TownRoomBlock): boolean {
+    const a = descKey(room.desc);
+    const b = descKey(block.desc);
+    if (a.length < DESC_KEY_MIN || b.length < DESC_KEY_MIN) return false;
+    // Suffix containment, not just equality: session logs (and rarely the
+    // live stream) can fragment lines, and the parser then captures a
+    // contiguous TAIL of the true description (its backward scan stops at
+    // the mangled line). Two sightings of one room therefore produce keys
+    // where one is a suffix of the other. Twins' prose still differs, so
+    // suffix agreement keeps separating them.
+    return a === b || a.endsWith(b) || b.endsWith(a);
   }
 
   /** Entry-grade match: name + exits + description prefix. Town names are

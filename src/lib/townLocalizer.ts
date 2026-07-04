@@ -25,7 +25,7 @@ import {
   type TownDir,
   type TownRoomBlock,
 } from './townParser';
-import { TownMapStore, type Town, type TownRoom, type TownPos } from './townMap';
+import { TownMapStore, descUsable, type Town, type TownRoom, type TownPos } from './townMap';
 
 // ---------------------------------------------------------------------------
 // Tuning
@@ -401,19 +401,51 @@ export class TownLocalizer {
             }
             return false;
           };
-          // Near-reuse covers DISPLACED candidates only — the exact-cell
-          // occupant already got the strictest treatment above, and must
-          // not be resurrected here without its return-exit proof.
-          const near = this.map
+          // Near-reuse covers DISPLACED candidates — for CARDINAL moves the
+          // exact-cell occupant already got the strictest treatment above,
+          // and must not be resurrected here without its return-exit proof.
+          // For DIAGONAL moves no occupant judgement ran (diagonals are
+          // placement hints, not grid constraints), so the hint-cell
+          // occupant is a legitimate candidate here — excluding it meant a
+          // diagonal leading back into mapped territory ALWAYS duplicated
+          // its destination (Eris market plaza: se from the NW corner
+          // re-enters the already-mapped center).
+          const cands = this.map
             .findMatchesNear(town, block, target.x, target.y, target.z, NEAR_RADIUS, 4)
-            .filter(
-              (r) =>
-                r.id !== current.id &&
-                r.id !== occupantId &&
-                relaxedReciprocal(r) &&
-                !alreadyNeighborElsewhere(r)
-            );
-          const reuse = near.length === 1 ? near[0] : null;
+            .filter((r) => r.id !== current.id && (gridVec === undefined || r.id !== occupantId));
+          const guarded = cands.filter((r) => relaxedReciprocal(r) && !alreadyNeighborElsewhere(r));
+          let reuse: TownRoom | null = null;
+          if (cands.length <= 1) {
+            reuse = guarded.length === 1 ? guarded[0] : null;
+          } else {
+            // Uniform-fingerprint neighborhood (hall of mirrors): several
+            // nearby rooms share the block's full fingerprint. Positive
+            // identification wins outright: a reverse link pointing at us,
+            // or unique description agreement (plaza twins differ mid-desc
+            // even when name+exits are identical). Without it, fall back to
+            // guard-elimination uniqueness (what stops street-run loops
+            // duplicating rooms every lap) — UNLESS descriptions were
+            // readable on both sides and the lone survivor's disagrees
+            // with the block. An unset reverse link is no proof when the
+            // true destination may simply be unmapped: trusting the lone
+            // guard-survivor against a disagreeing desc is exactly how the
+            // Eris market plaza snapped onto wrong twins and grew false
+            // links. Ambiguous → create (duplicates heal; false links
+            // cascade).
+            const positive = guarded.filter((r) => r.links[backDir] === current.id);
+            const byDesc = guarded.filter((r) => this.map.descAgrees(r, block));
+            if (positive.length === 1) {
+              reuse = positive[0];
+            } else if (byDesc.length === 1) {
+              reuse = byDesc[0];
+            } else if (guarded.length === 1) {
+              const veto =
+                descUsable(block.desc) &&
+                descUsable(guarded[0].desc) &&
+                !this.map.descAgrees(guarded[0], block);
+              if (!veto) reuse = guarded[0];
+            }
+          }
           if (reuse) {
             this.queue.shift();
             if (missedLink) this.linkHeals++;
@@ -484,7 +516,62 @@ export class TownLocalizer {
     }
 
     // --- Correlation fallback (no pending move, or prediction failed) ---
-    // Identity first: unsolicited re-prints and stale queues are common.
+    // Hidden moves along twin-fingerprint streets can masquerade as
+    // re-prints: the block matches current by name, but its DESCRIPTION
+    // belongs to a linked neighbor. Desc disagreeing with current while
+    // agreeing with exactly one strict-matching neighbor means we MOVED
+    // (two adjacent "Garrison Road" segments: swallowing the second block
+    // as stationary left the position one room behind, and the next link
+    // heal then rewired a good link from the wrong room).
+    if (
+      this.map.matches(current, block) &&
+      descUsable(block.desc) &&
+      descUsable(current.desc) &&
+      !this.map.descAgrees(current, block)
+    ) {
+      const stepped = this.neighborsOf(town, current).filter(
+        (r) => this.map.matchesStrict(r, block) && this.map.descAgrees(r, block)
+      );
+      if (stepped.length === 1) {
+        if (move) this.queue.shift();
+        this.map.touchRoom(stepped[0], block, now);
+        this.map.pos = { townId: town.id, roomId: stepped[0].id };
+        return { kind: 'corrected', pos: this.map.pos, moved: null };
+      }
+      // No agreeing neighbor — a hidden hop can reach past them. A unique
+      // strict + desc-agreeing room NEARBY is still positive identification
+      // (in a clone plaza the twins tie on fingerprint but not on desc).
+      if (stepped.length === 0) {
+        const nearStrict = this.map
+          .findMatchesNear(town, block, current.x, current.y, current.z, NEAR_RADIUS, 8)
+          .filter((r) => r.id !== current.id);
+        const nearDesc = nearStrict.filter((r) => this.map.descAgrees(r, block));
+        if (nearDesc.length === 1) {
+          if (move) this.queue.shift();
+          this.map.touchRoom(nearDesc[0], block, now);
+          this.map.pos = { townId: town.id, roomId: nearDesc[0].id };
+          return { kind: 'relocalized', pos: this.map.pos, moved: null };
+        }
+        // Nothing desc-positive anywhere near. In a clone neighborhood
+        // (same-fingerprint twins around, none agreeing) "probably still
+        // here" is the documented disaster — plant an honest floater
+        // instead of keeping a position the desc just contradicted. Only
+        // when the block's EXITS disagree with current too: a re-print
+        // whose desc merely embeds dynamic content keeps current's exits,
+        // and must still fall through to the stationary swallow.
+        if (
+          nearDesc.length === 0 &&
+          nearStrict.length > 0 &&
+          !this.map.matchesStrict(current, block)
+        ) {
+          if (move) this.queue.shift();
+          const floater = this.map.addRoom(town, block, current.x, current.y, current.z, now);
+          this.map.pos = { townId: town.id, roomId: floater.id };
+          return { kind: 'jumped', pos: this.map.pos, moved: null };
+        }
+      }
+    }
+    // Identity next: unsolicited re-prints and stale queues are common.
     if (this.map.matches(current, block)) {
       // Consume a stale dir move whose prediction failed (silent failure)
       if (move && move.kind !== 'look') this.queue.shift();
@@ -493,21 +580,25 @@ export class TownLocalizer {
     }
 
     // Any linked neighbor matching? (forced moves, desynced queue)
-    const neighborIds = new Set<number>();
-    for (const id of Object.values(current.links)) {
-      if (id !== undefined) neighborIds.add(id);
-    }
-    for (const id of Object.values(current.namedLinks)) neighborIds.add(id);
-    const matching: TownRoom[] = [];
-    for (const id of neighborIds) {
-      const r = town.rooms.get(id);
-      if (r && this.map.matches(r, block)) matching.push(r);
-    }
+    const matching = this.neighborsOf(town, current).filter((r) => this.map.matches(r, block));
     if (matching.length === 1) {
       if (move) this.queue.shift(); // whatever was queued, this is what happened
       this.map.touchRoom(matching[0], block, now);
       this.map.pos = { townId: town.id, roomId: matching[0].id };
       return { kind: 'corrected', pos: this.map.pos, moved: null };
+    }
+    if (matching.length > 1) {
+      // Several neighbors share the block's name (clone plazas) — a unique
+      // strict + description agreement still identifies the destination.
+      const byDesc = matching.filter(
+        (r) => this.map.matchesStrict(r, block) && this.map.descAgrees(r, block)
+      );
+      if (byDesc.length === 1) {
+        if (move) this.queue.shift();
+        this.map.touchRoom(byDesc[0], block, now);
+        this.map.pos = { townId: town.id, roomId: byDesc[0].id };
+        return { kind: 'corrected', pos: this.map.pos, moved: null };
+      }
     }
 
     // A strict match near the current room? (hidden alias walked us a few
@@ -525,12 +616,27 @@ export class TownLocalizer {
     );
     let nearPick: TownRoom | null = nearMatches.length === 1 ? nearMatches[0] : null;
     if (!nearPick && nearMatches.length > 1) {
+      // Description tiebreak first: same-fingerprint twins usually differ
+      // mid-desc (Eris market plaza) — a unique desc agreement identifies
+      // the room outright, regardless of which twin sits closer.
+      const byDesc = nearMatches.filter((r) => this.map.descAgrees(r, block));
+      if (byDesc.length === 1) nearPick = byDesc[0];
+    }
+    if (!nearPick && nearMatches.length > 1) {
       const dist = (r: TownRoom) =>
         Math.max(Math.abs(r.x - current.x), Math.abs(r.y - current.y)) +
         Math.abs(r.z - current.z) * 2;
       nearMatches.sort((a, b) => dist(a) - dist(b));
-      if (dist(nearMatches[0]) <= 2 && dist(nearMatches[0]) < dist(nearMatches[1])) {
-        nearPick = nearMatches[0];
+      // Closest-pick is a guess — acceptable when descriptions could not
+      // decide, but when both the block's and the winner's descs are
+      // readable and DISAGREE, the block itself is saying "not this one"
+      // (an unmapped twin in a clone plaza) — snapping anyway is how
+      // positions corrupted and false links cascaded in the market plaza.
+      const winner = nearMatches[0];
+      const veto =
+        descUsable(block.desc) && descUsable(winner.desc) && !this.map.descAgrees(winner, block);
+      if (!veto && dist(winner) <= 2 && dist(winner) < dist(nearMatches[1])) {
+        nearPick = winner;
       }
     }
     if (nearPick) {
@@ -539,12 +645,18 @@ export class TownLocalizer {
       this.map.pos = { townId: town.id, roomId: nearPick.id };
       return { kind: 'relocalized', pos: this.map.pos, moved: null };
     }
-    // ... or a unique strict match anywhere in town?
-    const strict = this.map.findMatches(town, block, 2);
-    if (strict.length === 1) {
+    // ... or a unique strict match anywhere in town? (Desc agreement breaks
+    // fingerprint ties here too — same rule as lost-relocalization.)
+    const strict = this.map.findMatches(town, block, 8);
+    let strictPick: TownRoom | null = strict.length === 1 ? strict[0] : null;
+    if (!strictPick && strict.length > 1) {
+      const byDesc = strict.filter((r) => this.map.descAgrees(r, block));
+      if (byDesc.length === 1) strictPick = byDesc[0];
+    }
+    if (strictPick) {
       if (move) this.queue.shift();
-      this.map.touchRoom(strict[0], block, now);
-      this.map.pos = { townId: town.id, roomId: strict[0].id };
+      this.map.touchRoom(strictPick, block, now);
+      this.map.pos = { townId: town.id, roomId: strictPick.id };
       return { kind: 'relocalized', pos: this.map.pos, moved: null };
     }
 
@@ -651,6 +763,21 @@ export class TownLocalizer {
     return { kind: 'entered', pos: this.map.pos, moved: null };
   }
 
+  /** Distinct rooms current links to (directional + named). */
+  private neighborsOf(town: Town, current: TownRoom): TownRoom[] {
+    const ids = new Set<number>();
+    for (const id of Object.values(current.links)) {
+      if (id !== undefined) ids.add(id);
+    }
+    for (const id of Object.values(current.namedLinks)) ids.add(id);
+    const out: TownRoom[] = [];
+    for (const id of ids) {
+      const r = town.rooms.get(id);
+      if (r) out.push(r);
+    }
+    return out;
+  }
+
   private relocalize(
     block: TownRoomBlock,
     town: Town | null,
@@ -659,11 +786,19 @@ export class TownLocalizer {
   ): TownResolution {
     this.queue = [];
     if (town) {
-      const matches = this.map.findMatches(town, block, 2);
-      if (matches.length === 1) {
+      const matches = this.map.findMatches(town, block, 8);
+      let hit = matches.length === 1 ? matches[0] : null;
+      if (!hit && matches.length > 1) {
+        // Duplicate fingerprints town-wide — a unique description
+        // agreement still identifies the room (recovers inside clone
+        // plazas instead of staying lost).
+        const byDesc = matches.filter((r) => this.map.descAgrees(r, block));
+        if (byDesc.length === 1) hit = byDesc[0];
+      }
+      if (hit) {
         this.lost = false;
-        this.map.touchRoom(matches[0], block, now);
-        this.map.pos = { townId: town.id, roomId: matches[0].id };
+        this.map.touchRoom(hit, block, now);
+        this.map.pos = { townId: town.id, roomId: hit.id };
         return { kind: 'relocalized', pos: this.map.pos, moved: null };
       }
       this.lost = true;
