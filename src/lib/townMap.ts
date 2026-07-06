@@ -13,10 +13,13 @@
  *    STRETCHED: every placed room at/beyond the target cell shifts one cell
  *    along the movement axis, vacating the natural cell so the new room
  *    lands exactly where the move says. Straight streets stay straight and
- *    axis order stays monotone. Placements without a cardinal direction
- *    (diagonal hints, u/d, floaters, named exits) are nudged to the nearest
- *    free cell instead. Links — not grid adjacency — drive pathfinding, so
- *    a displaced room stays walkable either way.
+ *    axis order stays monotone. A DIAGONAL arrival into an occupied cell
+ *    double-stretches — one shift per component axis — so the room still
+ *    lands at its diagonal hint cell and the occupant stays diagonal to it.
+ *    Placements without a direction at all (u/d, floaters, named exits)
+ *    are nudged to the nearest free cell instead. Links — not grid
+ *    adjacency — drive pathfinding, so a displaced room stays walkable
+ *    either way.
  *
  * Each town is keyed by the hex(es) it was entered from, so the hex map
  * can show which town you're in. z is the floor index (0 = entry level).
@@ -43,6 +46,8 @@ export interface TownRoom {
   exitsEver: TownDir[];
   /** Directions that go through a door/gate */
   doorDirs: TownDir[];
+  /** Doors standing open at the latest sighting (subset of doorDirs) */
+  openDoorDirs: TownDir[];
   /** Non-directional exits ("back", "out", "exit") */
   namedExits: string[];
   /** A portal transit departed from or arrived at this room */
@@ -87,6 +92,14 @@ export interface TownWalkStep {
 }
 
 const gridKey = (x: number, y: number, z: number) => `${x},${y},${z}`;
+
+/** Component cardinal axes of each diagonal (double-stretch placement) */
+const DIAG_COMPONENTS: Partial<Record<TownDir, [TownDir, TownDir]>> = {
+  ne: ['n', 'e'],
+  nw: ['n', 'w'],
+  se: ['s', 'e'],
+  sw: ['s', 'w'],
+};
 
 /**
  * Canonical description for identity comparison. Lighting sentences ("It is
@@ -186,11 +199,12 @@ export class TownMapStore {
 
   /**
    * Create a room from a parsed block at/near (x,y,z). When `via` is the
-   * cardinal direction that was walked to reach the room, an occupied cell
-   * is resolved by STRETCHING the map (the new room always lands exactly at
-   * (x,y,z) — see stretchToVacate). Without a cardinal `via` (diagonal
-   * hints, u/d, floaters, named exits) the room is nudged to the nearest
-   * free cell instead (grid position is presentation; links carry
+   * direction that was walked to reach the room, an occupied cell is
+   * resolved by STRETCHING the map so the new room always lands exactly at
+   * (x,y,z): one shift along the movement axis for a cardinal arrival, one
+   * shift per component axis for a diagonal (see stretchToVacate). Without
+   * a lateral `via` (u/d, floaters, named exits) the room is nudged to the
+   * nearest free cell instead (grid position is presentation; links carry
    * connectivity).
    */
   addRoom(
@@ -204,8 +218,16 @@ export class TownMapStore {
   ): TownRoom {
     let spot = { x, y };
     const vec = via !== undefined ? TOWN_DIR_VEC[via] : undefined;
-    if (vec && vec[2] === 0 && town.grid.has(gridKey(x, y, z))) {
+    const diag = via !== undefined ? DIAG_COMPONENTS[via] : undefined;
+    const occupied = town.grid.has(gridKey(x, y, z));
+    if (occupied && vec && vec[2] === 0) {
       this.stretchToVacate(town, { x, y }, via!);
+    } else if (occupied && diag) {
+      // Diagonal arrival: double-stretch — vacate the target column and the
+      // target row (one shift per component axis) so the room lands at its
+      // diagonal hint cell and the displaced occupant stays diagonal to it.
+      this.stretchToVacate(town, { x, y }, diag[0]);
+      this.stretchToVacate(town, { x, y }, diag[1]);
     } else {
       spot = this.findFreeCell(town, x, y, z);
       if (spot.x !== x || spot.y !== y) this.nudges++;
@@ -221,6 +243,7 @@ export class TownMapStore {
       exits: block.exits.dirs,
       exitsEver: [...block.exits.dirs],
       doorDirs: block.exits.doorDirs,
+      openDoorDirs: block.exits.openDoorDirs,
       namedExits: block.exits.named,
       portal: false,
       links: {},
@@ -319,6 +342,7 @@ export class TownMapStore {
       if (!room.exitsEver.includes(d)) room.exitsEver.push(d);
     }
     room.doorDirs = block.exits.doorDirs;
+    room.openDoorDirs = block.exits.openDoorDirs;
     room.namedExits = block.exits.named;
     room.descFirst = block.descFirst || room.descFirst;
     room.desc = block.desc || room.desc;
@@ -846,6 +870,7 @@ export class TownMapStore {
         town.rooms.set(r.id, {
           ...r,
           exitsEver: r.exitsEver ?? [...(r.exits ?? [])],
+          openDoorDirs: r.openDoorDirs ?? [],
           portal: r.portal ?? false,
           links: r.links ?? {},
           namedLinks: r.namedLinks ?? {},

@@ -167,11 +167,13 @@ export function useMapTracker(
   const walkSendingRef = useRef(false);
   // Town walk executor state — same shape, steps carry commands not dirs.
   // Each step may expand to several commands (door steps send the full
-  // unlock/open/move/close/lock sequence).
+  // unlock/open/move/close/lock sequence, built at send time from the
+  // door's freshest known state).
   const townWalkRef = useRef<{
-    steps: (TownWalkStep & { cmds: string[] })[];
+    steps: (TownWalkStep & { cmds: string[]; door?: { dir: TownDir; fromId: number } })[];
     confirmed: number;
     sent: number;
+    townId: number;
     targetRoomId: number;
     timeout: ReturnType<typeof setTimeout> | null;
   } | null>(null);
@@ -368,7 +370,21 @@ export function useMapTracker(
     if (!walk) return;
     if (walk.sent >= walk.steps.length) return;
     if (walk.sent - walk.confirmed >= WALK_PIPELINE) return;
-    const cmds = walk.steps[walk.sent].cmds;
+    const step = walk.steps[walk.sent];
+    let cmds = step.cmds;
+    if (step.door) {
+      // Door commands are built here (not at plan time) from the from-room's
+      // freshest exits line, so hold the step until arrival there is
+      // confirmed — the arrival block carries the live open/closed state.
+      // The pump re-runs on every confirmation, so a held step self-releases.
+      if (walk.confirmed < walk.sent) return;
+      const fromRoom = townMapRef.current.get(walk.townId)?.rooms.get(step.door.fromId);
+      const wasOpen = fromRoom?.openDoorDirs.includes(step.door.dir) ?? false;
+      // A door found standing open is left as found: walk straight through,
+      // no closing/locking behind. Only doors we opened ourselves (or whose
+      // state is unknown) get the full unlock/open/move/close/lock sequence.
+      if (!wasOpen) cmds = buildDoorSequence(step.cmd, doorKeysRef.current) ?? [step.cmd];
+    }
     walk.sent += 1;
     townWalkSendingRef.current = true;
     (async () => {
@@ -739,9 +755,10 @@ export function useMapTracker(
         echoRef.current('[Map] No known route there.');
         return;
       }
-      // Expand door crossings into the full unlock/open/move/close/lock
-      // sequence (the /door built-in) — the room being left knows which of
-      // its exits are doors from its own exits line.
+      // Mark door crossings — the room being left knows which of its exits
+      // are doors from its own exits line. The commands themselves (full
+      // unlock/open/move/close/lock, or a plain move through a door found
+      // standing open) are built at send time from the freshest door state.
       let doors = 0;
       const enriched = steps.map((s, i) => {
         const fromId = i === 0 ? pos.roomId : steps[i - 1].toRoomId;
@@ -749,7 +766,7 @@ export function useMapTracker(
         const dir = TOWN_DIR_ALIASES[s.cmd] as TownDir | undefined;
         if (fromRoom && dir && fromRoom.doorDirs.includes(dir)) {
           doors++;
-          return { ...s, cmds: buildDoorSequence(s.cmd, doorKeysRef.current) ?? [s.cmd] };
+          return { ...s, cmds: [s.cmd], door: { dir, fromId } };
         }
         return { ...s, cmds: [s.cmd] };
       });
@@ -759,6 +776,7 @@ export function useMapTracker(
         steps: enriched,
         confirmed: 0,
         sent: 0,
+        townId: pos.townId,
         targetRoomId: roomId,
         timeout: null,
       };

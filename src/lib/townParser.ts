@@ -30,6 +30,8 @@ export interface TownExits {
   dirs: TownDir[];
   /** Directions reached through a door/gate ("a closed oak door leading west") */
   doorDirs: TownDir[];
+  /** Doors currently standing open ("an open oak door leading east") */
+  openDoorDirs: TownDir[];
   /** Non-directional exits ("back", "out", "exit") */
   named: string[];
   /** Raw exits sentence body (after the colon), for tooltips */
@@ -167,6 +169,7 @@ export function parseTownExits(sentence: string): TownExits {
     .trim();
   const dirs = new Set<TownDir>();
   const doorDirs = new Set<TownDir>();
+  const openDoorDirs = new Set<TownDir>();
 
   // Door/gate phrases name their directions after "leading": mark those dirs.
   // "a closed pair of oak doors leading west and east" → doors west+east.
@@ -174,6 +177,15 @@ export function parseTownExits(sentence: string): TownExits {
     for (const w of m[1].split(/[^a-z]+/)) {
       const d = TOWN_DIR_ALIASES[w];
       if (d) doorDirs.add(d);
+    }
+  }
+  // Doors standing open ("an open oak door leading east") — the state word
+  // sits earlier in the same comma-separated phrase as its "leading" dirs.
+  // Phrases without an "open" (closed doors, bare gates) default to closed.
+  for (const m of body.matchAll(/\bopen\b[^,.]*?\bleading ([a-z, and]+?)(?=[,.]|$)/g)) {
+    for (const w of m[1].split(/[^a-z]+/)) {
+      const d = TOWN_DIR_ALIASES[w];
+      if (d) openDoorDirs.add(d);
     }
   }
   for (const m of body.matchAll(DIR_WORD_RE)) {
@@ -186,6 +198,7 @@ export function parseTownExits(sentence: string): TownExits {
   return {
     dirs: [...dirs].sort(),
     doorDirs: [...doorDirs].sort(),
+    openDoorDirs: [...openDoorDirs].sort(),
     named: [...named].sort(),
     raw: body,
   };

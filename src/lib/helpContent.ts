@@ -408,7 +408,7 @@ export const HELP_CATEGORIES: HelpCategory[] = [
       {
         title: '/door',
         description:
-          '"/door <dir>" passes through a (possibly locked) door in one go: unlocks trying each keyring slot (key, key 2, … — count configurable in Settings > Doors), opens, steps through, then closes and locks behind you. Accepts n/s/e/w/u/d, diagonals, in/out. The town map\'s auto-walk runs the same sequence automatically when a route crosses a known door.',
+          '"/door <dir>" passes through a (possibly locked) door in one go: unlocks trying each keyring slot (key, key 2, … — count configurable in Settings > Doors), opens, steps through, then closes and locks behind you. Accepts n/s/e/w/u/d, diagonals, in/out. The town map\'s auto-walk runs the same sequence automatically when a route crosses a known door — but leaves doors as it found them: a door already standing open is walked through and left open, not closed behind you.',
       },
       {
         title: '/convert',

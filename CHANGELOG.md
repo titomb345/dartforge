@@ -10,6 +10,16 @@ The `[Unreleased]` header controls automatic version bumping on merge:
 - `[Unreleased-minor]` → 0.1.0 → 0.2.0
 - `[Unreleased-major]` → 0.1.0 → 1.0.0
 
+## [Unreleased-minor]
+
+### Changed
+
+- The town map's auto-walk now leaves doors as it found them. A door that was already standing open when you reach it is walked straight through and left open — no more closing (and trying to lock) doors that were open to begin with. Doors that are closed still get the full unlock/open/step/close/lock treatment. The exits line's own wording ("an open oak door leading east" vs "a closed oak door…") is the source of truth, read fresh from the room you're leaving at the moment of the crossing
+
+### Fixed
+
+- Diagonal movements (ne/nw/se/sw) now stretch the town map like cardinal moves do. When a diagonal arrival's natural cell was already occupied, the room was shoved to the nearest free cell, scattering diagonally-connected rooms wherever the grid was tight. Now the map double-stretches — one shift along each component axis — so the room lands exactly at its diagonal cell and the displaced neighbor stays diagonal to it (corpus-replay validated: identical mapping accuracy)
+
 ## [1.13.2] - 2026-07-06
 
 ### Changed
