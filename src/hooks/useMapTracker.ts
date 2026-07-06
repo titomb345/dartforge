@@ -16,6 +16,7 @@ import { TownParser, PORTAL_TRANSIT_RE, TOWN_DIR_ALIASES, type TownDir } from '.
 import { buildDoorSequence } from '../lib/doorSequence';
 import { TownLocalizer, classifyTownCommand, type TownResolution } from '../lib/townLocalizer';
 import { TownMapStore, hexAnchorKey, type TownRoom, type TownWalkStep } from '../lib/townMap';
+import type { HexMarkerType, RoomIconType } from '../lib/mapMarkers';
 import { type DataStore } from '../contexts/DataStoreContext';
 
 function mapFilename(character: string): string {
@@ -97,8 +98,8 @@ export interface MapTrackerActions {
    * each edge). Correct data re-detects on the next survey there.
    */
   clearBlockedAt: (q: number, r: number) => void;
-  /** Toggle a hex's town marker (house icon) */
-  toggleTownAt: (q: number, r: number) => void;
+  /** Set a hex's landmark marker ('none' = remove, null = back to auto) */
+  setMarkerAt: (q: number, r: number, marker: HexMarkerType | 'none' | null) => void;
   clearMap: () => void;
   /** Center request — bumps a counter to signal MapCanvas to re-center */
   centerOnPlayer: () => void;
@@ -116,6 +117,8 @@ export interface MapTrackerActions {
   renameTown: (name: string, townId?: number) => void;
   /** Delete a town's map entirely (default: the player's town) */
   deleteTown: (townId?: number) => void;
+  /** Set a room's icon ('none' = remove, null = back to auto) */
+  setRoomIcon: (townId: number, roomId: number, icon: RoomIconType | 'none' | null) => void;
 }
 
 export function useMapTracker(
@@ -676,11 +679,20 @@ export function useMapTracker(
     [syncState, scheduleSave]
   );
 
-  const toggleTownAt = useCallback(
-    (q: number, r: number) => {
+  const setMarkerAt = useCallback(
+    (q: number, r: number, marker: HexMarkerType | 'none' | null) => {
       const map = mapRef.current;
       const island = map.pos?.island ?? map.primaryIsland();
-      map.toggleTownMarker(island, q, r);
+      map.setMarker(island, q, r, marker);
+      syncState();
+      scheduleSave();
+    },
+    [syncState, scheduleSave]
+  );
+
+  const setRoomIcon = useCallback(
+    (townId: number, roomId: number, icon: RoomIconType | 'none' | null) => {
+      townMapRef.current.setRoomIcon(townId, roomId, icon);
       syncState();
       scheduleSave();
     },
@@ -835,7 +847,7 @@ export function useMapTracker(
       cancelWalk: cancelWalkAction,
       setCellNotes,
       clearBlockedAt,
-      toggleTownAt,
+      setMarkerAt,
       clearMap,
       centerOnPlayer,
       centerVersion,
@@ -846,6 +858,7 @@ export function useMapTracker(
       cancelTownWalk: cancelTownWalkAction,
       renameTown,
       deleteTown,
+      setRoomIcon,
     }),
     [
       state,
@@ -858,7 +871,7 @@ export function useMapTracker(
       cancelWalkAction,
       setCellNotes,
       clearBlockedAt,
-      toggleTownAt,
+      setMarkerAt,
       clearMap,
       centerOnPlayer,
       centerVersion,
@@ -869,6 +882,7 @@ export function useMapTracker(
       cancelTownWalkAction,
       renameTown,
       deleteTown,
+      setRoomIcon,
     ]
   );
 }

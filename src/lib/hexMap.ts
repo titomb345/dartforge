@@ -15,6 +15,7 @@
 import type { Direction, HexCoord } from './hexUtils';
 import { applyDirection, oppositeDirection, COMPASS_DIRECTIONS } from './hexUtils';
 import type { HexTerrainType } from './hexTerrainPatterns';
+import { classifyLandmark, type HexMarkerType } from './mapMarkers';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -50,11 +51,11 @@ export interface HexCell {
   /** Landmark descriptions seen for this hex (deduped, capped) */
   landmarks: string[];
   /**
-   * Point-of-interest marker. 'town' renders a house icon instead of the
-   * landmark diamond; 'none' means the user explicitly unmarked it (auto
-   * classification must not re-add); null = unclassified.
+   * Point-of-interest marker. A HexMarkerType renders that icon instead of
+   * the landmark diamond; 'none' means the user explicitly removed it (auto
+   * classification must not re-add); null = unclassified (auto may fill it).
    */
-  marker: 'town' | 'none' | null;
+  marker: HexMarkerType | 'none' | null;
   notes: string;
   /** Directions confirmed blocked from this cell (failed moves) */
   blocked: Direction[];
@@ -70,9 +71,6 @@ export interface SerializedHexMap {
 }
 
 const MAX_LANDMARKS_PER_CELL = 4;
-
-/** Landmark texts that clearly name a settlement → auto-mark as town */
-const TOWN_RE = /\b(?:town|village|city|hamlet)\b/i;
 
 /**
  * Movement is binary in DartMUD: a step either costs concentration or it
@@ -341,8 +339,8 @@ export class HexMapStore {
     if (!trimmed) return;
     this.paint(island, q, r, 'unknown', now);
     const cell = this.cells.get(cellKey(island, q, r))!;
-    // Auto-classify settlements (never overrides a user's explicit choice)
-    if (cell.marker === null && TOWN_RE.test(trimmed)) cell.marker = 'town';
+    // Auto-classify landmarks (never overrides a user's explicit choice)
+    if (cell.marker === null) cell.marker = classifyLandmark(trimmed);
     const lower = trimmed.toLowerCase();
     if (cell.landmarks.some((l) => l.toLowerCase() === lower)) return;
     cell.landmarks.push(trimmed);
@@ -350,13 +348,25 @@ export class HexMapStore {
   }
 
   /**
-   * Toggle a hex's town marker. Turning it off records 'none' so auto
-   * classification won't re-add it.
+   * Set a hex's marker from the picker. 'none' records the user's explicit
+   * removal so auto classification won't re-add one; null returns the hex
+   * to AUTO and immediately re-classifies from its known landmarks.
    */
-  toggleTownMarker(island: number, q: number, r: number): void {
+  setMarker(island: number, q: number, r: number, marker: HexMarkerType | 'none' | null): void {
     const cell = this.cells.get(cellKey(island, q, r));
     if (!cell) return;
-    cell.marker = cell.marker === 'town' ? 'none' : 'town';
+    if (marker === null) {
+      cell.marker = null;
+      for (const l of cell.landmarks) {
+        const auto = classifyLandmark(l);
+        if (auto) {
+          cell.marker = auto;
+          break;
+        }
+      }
+    } else {
+      cell.marker = marker;
+    }
   }
 
   /** Record a blocked exit (both sides if the target cell exists). */
@@ -645,11 +655,13 @@ export class HexMapStore {
         visitCount: cell.visitCount ?? 0,
         lastSeen: cell.lastSeen ?? 0,
         landmarks: Array.isArray(cell.landmarks) ? cell.landmarks : [],
-        // Classify pre-existing saved landmarks on first load after upgrade
+        // Classify pre-existing saved landmarks on load — unclassified cells
+        // pick up the current icon vocabulary; explicit choices (any type,
+        // or 'none') are preserved verbatim.
         marker:
           cell.marker ??
-          (Array.isArray(cell.landmarks) && cell.landmarks.some((l) => TOWN_RE.test(l))
-            ? 'town'
+          (Array.isArray(cell.landmarks)
+            ? (cell.landmarks.map(classifyLandmark).find((m) => m !== null) ?? null)
             : null),
         notes: cell.notes ?? '',
         blocked: Array.isArray(cell.blocked) ? cell.blocked : [],

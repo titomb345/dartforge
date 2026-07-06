@@ -26,6 +26,7 @@
  */
 
 import { TOWN_DIR_VEC, TOWN_REVERSE, type TownDir, type TownRoomBlock } from './townParser';
+import { classifyRoomIcon, type RoomIconType } from './mapMarkers';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -52,6 +53,12 @@ export interface TownRoom {
   namedExits: string[];
   /** A portal transit departed from or arrived at this room */
   portal: boolean;
+  /**
+   * Point-of-interest icon (bank, shop, inn, ...). Auto-classified from
+   * the room's name/description; 'none' = user explicitly removed it
+   * (auto must not re-add); null = unclassified.
+   */
+  icon: RoomIconType | 'none' | null;
   /** Confirmed connections: dir → destination room id */
   links: Partial<Record<TownDir, number>>;
   /** Confirmed non-directional connections: command → destination room id */
@@ -315,6 +322,7 @@ export class TownMapStore {
       openDoorDirs: block.exits.openDoorDirs,
       namedExits: block.exits.named,
       portal: false,
+      icon: classifyRoomIcon(block.name, block.desc),
       links: {},
       namedLinks: {},
       visits: 1,
@@ -455,8 +463,21 @@ export class TownMapStore {
     room.namedExits = block.exits.named;
     room.descFirst = block.descFirst || room.descFirst;
     room.desc = block.desc || room.desc;
+    // A fuller description can newly reveal an icon (bulletin boards live
+    // mid-desc); explicit choices (any icon, or 'none') are never touched.
+    if (room.icon === null) room.icon = classifyRoomIcon(room.name, room.desc);
     room.visits++;
     room.lastSeen = now;
+  }
+
+  /**
+   * Set a room's icon from the picker. 'none' records explicit removal;
+   * null returns the room to AUTO (re-classified immediately).
+   */
+  setRoomIcon(townId: number, roomId: number, icon: RoomIconType | 'none' | null): void {
+    const room = this.towns.get(townId)?.rooms.get(roomId);
+    if (!room) return;
+    room.icon = icon === null ? classifyRoomIcon(room.name, room.desc) : icon;
   }
 
   // -------------------------------------------------------------------------
@@ -1024,6 +1045,8 @@ export class TownMapStore {
           exitsEver: r.exitsEver ?? [...(r.exits ?? [])],
           openDoorDirs: r.openDoorDirs ?? [],
           portal: r.portal ?? false,
+          // Classify pre-existing rooms on load; explicit choices persist
+          icon: r.icon !== undefined ? r.icon : classifyRoomIcon(r.name ?? '', r.desc ?? ''),
           links: r.links ?? {},
           namedLinks: r.namedLinks ?? {},
           notes: r.notes ?? '',

@@ -502,6 +502,9 @@ export function MapPanel({ mode = 'slideout' }: PinnablePanelProps) {
                         <span style={{ color: 'rgba(150, 135, 110, 0.5)' }}>╶</span> unexplored exit
                         {'  '}
                         <span style={{ color: 'rgba(160, 120, 200, 0.9)' }}>∩</span> portal
+                        <br />
+                        <span style={{ color: '#e8c97a' }}>◆</span> room icon (bank, shop, inn, …) —
+                        Shift+click a room to set
                       </div>
                     </>
                   )}

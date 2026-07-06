@@ -23,6 +23,8 @@ import {
 } from '../lib/hexUtils';
 import type { HexCell } from '../lib/hexMap';
 import { TERRAIN_LABELS, type HexTerrainType } from '../lib/hexTerrainPatterns';
+import { paintMarkerGlyph, HEX_MARKER_TYPES, type HexMarkerType } from '../lib/mapMarkers';
+import { MarkerPicker } from './MarkerPicker';
 
 // ---------------------------------------------------------------------------
 // Design tokens
@@ -103,8 +105,16 @@ export function MapCanvas({
     getCells,
     getCellAt,
     clearBlockedAt,
-    toggleTownAt,
+    setMarkerAt,
   } = useMapContext();
+  // Shift+click marker picker (portal popover at viewport coords)
+  const [picker, setPicker] = useState<{
+    x: number;
+    y: number;
+    q: number;
+    r: number;
+    current: HexMarkerType | 'none' | null;
+  } | null>(null);
 
   // Pan/zoom state
   const panRef = useRef({ x: 0, y: 0 });
@@ -193,7 +203,7 @@ export function MapCanvas({
       if (cell.cliffEdges.length > 0) drawCliffEdges(ctx, cell);
       if (cell.bridgeEdges.length > 0) drawBridgeEdges(ctx, cell);
       if (cell.blocked.length > 0) drawBlockedEdges(ctx, cell);
-      if (cell.marker === 'town') drawTownMarker(ctx, cell);
+      if (cell.marker && cell.marker !== 'none') drawCellMarker(ctx, cell, cell.marker);
       else if (cell.landmarks.length > 0) drawLandmarkMarker(ctx, cell);
     }
 
@@ -347,9 +357,9 @@ export function MapCanvas({
       if (!hex) return;
       const cell = getCellAt(hex.q, hex.r);
       if (!cell) return;
-      // Shift+click toggles the town marker (house icon)
+      // Shift+click opens the landmark marker picker
       if (e.shiftKey) {
-        toggleTownAt(hex.q, hex.r);
+        setPicker({ x: e.clientX, y: e.clientY, q: hex.q, r: hex.r, current: cell.marker });
         cancelHover(true);
         return;
       }
@@ -367,7 +377,7 @@ export function MapCanvas({
       }
       // Plain clicks are for dragging — inspection happens on hover
     },
-    [hexAtMouse, getCellAt, clearBlockedAt, toggleTownAt, cancelHover]
+    [hexAtMouse, getCellAt, clearBlockedAt, cancelHover]
   );
 
   const handleContextMenu = useCallback(
@@ -405,6 +415,17 @@ export function MapCanvas({
           isCurrent={
             !!currentPos && tooltip.cell.q === currentPos.q && tooltip.cell.r === currentPos.r
           }
+        />
+      )}
+      {picker && (
+        <MarkerPicker
+          x={picker.x}
+          y={picker.y}
+          title="Hex marker"
+          options={HEX_MARKER_TYPES}
+          current={picker.current}
+          onPick={(value) => setMarkerAt(picker.q, picker.r, value)}
+          onClose={() => setPicker(null)}
         />
       )}
     </div>
@@ -594,26 +615,10 @@ function drawBlockedEdges(ctx: CanvasRenderingContext2D, cell: HexCell) {
   }
 }
 
-/** Town marker: a small house (roof + walls + door) in landmark gold */
-function drawTownMarker(ctx: CanvasRenderingContext2D, cell: HexCell) {
+/** Landmark marker glyph (house, castle, cave, ...) in landmark gold */
+function drawCellMarker(ctx: CanvasRenderingContext2D, cell: HexCell, marker: HexMarkerType) {
   const { x, y } = hexToPixel(cell.q, cell.r, HEX_SIZE);
-  const s = HEX_SIZE * 0.22;
-  const baseY = y + s * 0.9;
-  const wallTop = y - s * 0.1;
-
-  // Walls
-  ctx.fillStyle = LANDMARK_COLOR;
-  ctx.fillRect(x - s * 0.8, wallTop, s * 1.6, baseY - wallTop);
-  // Roof
-  ctx.beginPath();
-  ctx.moveTo(x - s * 1.1, wallTop);
-  ctx.lineTo(x, y - s * 1.1);
-  ctx.lineTo(x + s * 1.1, wallTop);
-  ctx.closePath();
-  ctx.fill();
-  // Door (punched out in the background color)
-  ctx.fillStyle = BG_COLOR;
-  ctx.fillRect(x - s * 0.22, baseY - s * 0.8, s * 0.44, s * 0.8);
+  paintMarkerGlyph(ctx, marker, x, y, HEX_SIZE * 0.22, LANDMARK_COLOR, BG_COLOR);
 }
 
 function drawLandmarkMarker(ctx: CanvasRenderingContext2D, cell: HexCell) {
@@ -745,7 +750,12 @@ function CellTooltip({
         style={{ color: isCurrent ? CURRENT_ROOM_GLOW : TOOLTIP_TEXT }}
       >
         {terrainLabel}
-        {cell.marker === 'town' && <span style={{ color: LANDMARK_COLOR }}> · Town</span>}
+        {cell.marker && cell.marker !== 'none' && (
+          <span style={{ color: LANDMARK_COLOR }}>
+            {' '}
+            · {HEX_MARKER_TYPES.find((m) => m.type === cell.marker)?.label ?? cell.marker}
+          </span>
+        )}
         {(cell.river || cell.riverEdges.length > 0) && (
           <span style={{ color: RIVER_COLOR }}>
             {' '}
@@ -793,7 +803,7 @@ function CellTooltip({
       </div>
       {!isCurrent && (
         <div className="text-[9px] opacity-40 mt-0.5 italic">
-          Right-click to walk here · Shift+click to toggle town
+          Right-click to walk here · Shift+click to set marker
         </div>
       )}
     </div>,

@@ -12,6 +12,10 @@ The `[Unreleased]` header controls automatic version bumping on merge:
 
 ## [Unreleased-minor]
 
+### Added
+
+- Landmark icons on both maps. Hex landmarks now auto-classify into distinct icons instead of one generic diamond: towns keep their house, and castles/fortresses, towers (including windmills and lighthouses), caves and chasms, temples, graveyards, camps, farms, and boats/ferry landings each get their own glyph — the vocabulary was mined from five years of survey logs, and existing maps re-classify automatically on load. Town map rooms get point-of-interest icons the same way: banks (coin), shops (awning), inns and taverns (tankard), temples, smithies (anvil), stables (horseshoe), and bulletin boards (detected from room descriptions). Shift+click any hex or room to open a picker and set the icon yourself, remove it, or hand it back to auto-detection — an explicit choice is never overwritten by the auto-classifier. Hover popups name the icon, and the town legend notes the shortcut
+
 ### Changed
 
 - The Allocations panel now remembers where you left it, per character. The selected combat and magic profiles were already saved, but the panel always reopened on the Combat tab's Live view — now the Combat/Magic tab and Live/Profiles view are saved too, so the client opens showing the same profile that was on screen when it closed

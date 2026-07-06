@@ -190,9 +190,16 @@ export const HELP_CATEGORIES: HelpCategory[] = [
         interaction: 'right-click',
       },
       {
-        title: 'Mark Towns on the Map',
+        title: 'Landmark Icons on the Hex Map',
         description:
-          'Hexes whose landmarks name a town, village, city, or hamlet automatically get a house icon instead of the landmark diamond. Shift+click any hex to toggle its town marker manually — turning one off tells the mapper not to re-add it.',
+          'Hexes whose landmarks name a known kind of place get a matching icon instead of the generic landmark diamond — towns (house), castles and fortresses, towers/windmills/lighthouses, caves and chasms, temples, graveyards, camps, farms, and boats/ferry landings. Shift+click any hex to pick an icon yourself, remove one ("No icon"), or hand it back to auto-detection — an explicit choice is never overwritten.',
+        helpId: 'toolbar-map',
+        interaction: 'click',
+      },
+      {
+        title: 'Room Icons on the Town Map',
+        description:
+          'Rooms whose names give them away are tagged automatically: banks (coin), shops and stores (awning), inns and taverns (tankard), temples, smithies (anvil), stables (horseshoe), and rooms whose descriptions mention a bulletin board. Shift+click any room to set or clear its icon manually, or return it to auto-detection. Hover the room to see the icon\'s meaning.',
         helpId: 'toolbar-map',
         interaction: 'click',
       },
