@@ -196,9 +196,10 @@ function replayFile(filePath: string, dartforge: boolean): void {
     }
 
     if (/There (?:is one obvious exit|are \w+ exits):/.test(line)) metrics.exitsLines++;
-    if (PORTAL_TRANSIT_RE.test(line)) {
+    const portal = PORTAL_TRANSIT_RE.exec(line);
+    if (portal) {
       metrics.portals++;
-      townLocalizer.onPortalTransit();
+      townLocalizer.onPortalTransit(portal[1] ?? null);
     }
     hexParser.feedLine(line);
     townParser.feedLine(line);
@@ -264,6 +265,9 @@ console.log(`Placement nudges: ${townMap.nudges}`);
 console.log(`Placement stretches: ${townMap.stretches}`);
 console.log(`Town merges: ${metrics.merges}`);
 console.log(`Portal transits: ${metrics.portals}`);
+console.log(`Portal destinations learned: ${townMap.portalDests.size}`);
+console.log(`Volatile desc sentences learned: ${townMap.volatileSentences.size}`);
+for (const s of townMap.volatileSentences) console.log(`  ~ ${s.slice(0, 90)}`);
 
 // Layout quality: how faithfully does the drawn grid reflect the graph?
 // A cardinal link is "exact" when its rooms sit one cell apart along that

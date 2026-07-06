@@ -558,8 +558,10 @@ export function useMapTracker(
         townParserRef.current?.feedLine(line);
         // Portal transits teleport between towns — the next room block must
         // start a fresh town entry instead of gluing into the current town.
-        if (PORTAL_TRANSIT_RE.test(line)) {
-          townLocalizerRef.current.onPortalTransit();
+        // The named portal ("north") keys the destination memory.
+        const portal = PORTAL_TRANSIT_RE.exec(line);
+        if (portal) {
+          townLocalizerRef.current.onPortalTransit(portal[1] ?? null);
           if (townWalkRef.current) cancelTownWalk('stepped through a portal');
         }
       }

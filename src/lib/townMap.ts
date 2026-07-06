@@ -123,6 +123,27 @@ export function descUsable(desc: string): boolean {
   return descKey(desc).length >= DESC_KEY_MIN;
 }
 
+/** Split prose into normalized sentences (whitespace collapsed). */
+function splitSentences(text: string): string[] {
+  return text
+    .replace(/\s+/g, ' ')
+    .trim()
+    .split(/(?<=[.!?])\s+/)
+    .map((s) => s.trim())
+    .filter(Boolean);
+}
+
+/** Sentences too short to be meaningful volatile-prose evidence, plus the
+ *  lighting sentences descKey already handles. */
+function stableSentenceCandidates(text: string): string[] {
+  return splitSentences(text).filter((s) => s.length >= 20 && !/^It is [^.]{1,60}\./.test(s));
+}
+
+/** Max learned volatile sentences kept (and serialized) */
+const VOLATILE_MAX = 64;
+/** Max unpromoted alternation pairs tracked */
+const VOLATILE_PENDING_MAX = 200;
+
 export function hexAnchorKey(island: number, q: number, r: number): string {
   return `${island}:${q},${r}`;
 }
@@ -139,6 +160,32 @@ export class TownMapStore {
   nudges = 0;
   /** Stretch counter — collisions resolved by shifting the map (diagnostics) */
   stretches = 0;
+  /**
+   * Portal destination memory: "townId:roomId:dirWord" of the room a portal
+   * was stepped into (dirWord '*' when the transit line names no direction)
+   * → the room it delivered to. This is the hex map's anchor idea applied
+   * to portals: every temple Forecourt looks identical, so entry matching
+   * is hopelessly ambiguous — but WHICH portal was stepped through is not.
+   * Without it, every hub transit spawned a fresh fragment town that later
+   * merge-scarred the real town with desc-divergent duplicates.
+   */
+  portalDests = new Map<string, TownPos>();
+  /**
+   * Learned VOLATILE prose: sentences that swap with world state (time of
+   * day) inside otherwise-identical descriptions — "The market is active
+   * with shoppers..." alternating with "...mostly empty except for a few
+   * adventurers..." (the Eris market cycles through six such variants).
+   * These defeat the description tiebreaker: the same room reads as a
+   * desc-DISAGREEING twin across an hour boundary, and the disagreement
+   * veto then duplicates it. Learning: a positively-identified revisit
+   * (confirmed link / look re-print) whose desc differs in EXACTLY one
+   * swapped sentence records the pair; a pair witnessed on 2+ DIFFERENT
+   * rooms promotes both sentences. World-state prose is shared across
+   * rooms by nature; twin-distinguishing prose is room-specific — that
+   * asymmetry is what makes the promotion safe.
+   */
+  volatileSentences = new Set<string>();
+  private volatilePending = new Map<string, Set<number>>();
 
   get(townId: number): Town | undefined {
     return this.towns.get(townId);
@@ -178,6 +225,25 @@ export class TownMapStore {
   deleteTown(townId: number): void {
     this.towns.delete(townId);
     if (this.pos?.townId === townId) this.pos = null;
+    for (const [key, dest] of this.portalDests) {
+      if (dest.townId === townId || key.startsWith(`${townId}:`)) this.portalDests.delete(key);
+    }
+  }
+
+  // -------------------------------------------------------------------------
+  // Portal destination memory
+  // -------------------------------------------------------------------------
+
+  private portalKey(from: TownPos, dirWord: string | null): string {
+    return `${from.townId}:${from.roomId}:${dirWord ?? '*'}`;
+  }
+
+  setPortalDest(from: TownPos, dirWord: string | null, dest: TownPos): void {
+    this.portalDests.set(this.portalKey(from, dirWord), dest);
+  }
+
+  getPortalDest(from: TownPos, dirWord: string | null): TownPos | undefined {
+    return this.portalDests.get(this.portalKey(from, dirWord));
   }
 
   renameTown(townId: number, name: string): void {
@@ -191,6 +257,9 @@ export class TownMapStore {
     this.pos = null;
     this.nudges = 0;
     this.stretches = 0;
+    this.portalDests.clear();
+    this.volatileSentences.clear();
+    this.volatilePending.clear();
   }
 
   // -------------------------------------------------------------------------
@@ -335,8 +404,48 @@ export class TownMapStore {
     from.namedLinks[cmd] = to.id;
   }
 
-  /** Refresh a room's volatile fields from a fresh sighting. */
-  touchRoom(room: TownRoom, block: TownRoomBlock, now: number): void {
+  /**
+   * Record a desc alternation observed on a POSITIVELY identified revisit:
+   * old and new descs sharing 2+ sentences and differing in exactly one
+   * swapped sentence. The pair promotes to volatileSentences once seen on
+   * two different rooms (see the field's doc for why that guard matters).
+   */
+  private learnVolatileDesc(roomId: number, oldDesc: string, newDesc: string): void {
+    const a = stableSentenceCandidates(oldDesc);
+    const b = stableSentenceCandidates(newDesc);
+    if (a.length < 3 || b.length < 3) return;
+    const setA = new Set(a);
+    const setB = new Set(b);
+    const removed = a.filter((s) => !setB.has(s));
+    const added = b.filter((s) => !setA.has(s));
+    if (removed.length !== 1 || added.length !== 1 || a.length - removed.length < 2) return;
+    if (this.volatileSentences.has(removed[0]) && this.volatileSentences.has(added[0])) return;
+    const pair = [removed[0], added[0]].sort();
+    const key = pair.join(' ');
+    let seenOn = this.volatilePending.get(key);
+    if (!seenOn) {
+      if (this.volatilePending.size >= VOLATILE_PENDING_MAX) return;
+      seenOn = new Set();
+      this.volatilePending.set(key, seenOn);
+    }
+    seenOn.add(roomId);
+    if (seenOn.size >= 2 && this.volatileSentences.size <= VOLATILE_MAX - 2) {
+      this.volatileSentences.add(pair[0]);
+      this.volatileSentences.add(pair[1]);
+      this.volatilePending.delete(key);
+    }
+  }
+
+  /**
+   * Refresh a room's volatile fields from a fresh sighting. Pass
+   * `positiveId` only when the identification did NOT lean on heuristics
+   * (confirmed link follow, look re-print) — it feeds volatile-prose
+   * learning, and learning from a wrong reuse would poison the set.
+   */
+  touchRoom(room: TownRoom, block: TownRoomBlock, now: number, positiveId = false): void {
+    if (positiveId && room.desc && block.desc) {
+      this.learnVolatileDesc(room.id, room.desc, block.desc);
+    }
     room.exits = block.exits.dirs;
     for (const d of block.exits.dirs) {
       if (!room.exitsEver.includes(d)) room.exitsEver.push(d);
@@ -379,9 +488,18 @@ export class TownMapStore {
    * to veto an otherwise-unique match: descriptions can embed dynamic
    * content, so absence of agreement only means "no extra evidence".
    */
+  /** descKey with learned volatile sentences removed first. Stable prose
+   *  can never be learned as volatile (it never appears in a revisit diff),
+   *  so the stripped key always retains the room's distinguishing text. */
+  private canonDesc(text: string): string {
+    if (this.volatileSentences.size === 0) return descKey(text);
+    const kept = splitSentences(text).filter((s) => !this.volatileSentences.has(s));
+    return descKey(kept.join(' '));
+  }
+
   descAgrees(room: TownRoom, block: TownRoomBlock): boolean {
-    const a = descKey(room.desc);
-    const b = descKey(block.desc);
+    const a = this.canonDesc(room.desc);
+    const b = this.canonDesc(block.desc);
     if (a.length < DESC_KEY_MIN || b.length < DESC_KEY_MIN) return false;
     // Suffix containment, not just equality: session logs (and rarely the
     // live stream) can fragment lines, and the parser then captures a
@@ -595,6 +713,35 @@ export class TownMapStore {
     if (this.pos?.townId === from.id) {
       const mapped = idMap.get(this.pos.roomId);
       this.pos = mapped !== undefined ? { townId: into.id, roomId: mapped } : null;
+    }
+
+    // Portal destination memory follows (both sides of each entry) — this is
+    // how the anchor learned on a first-trip fragment keeps working once the
+    // fragment fuses into the real town.
+    for (const [key, dest] of [...this.portalDests]) {
+      let newKey = key;
+      const [townIdStr, roomIdStr, dirWord] = key.split(':');
+      if (Number(townIdStr) === from.id) {
+        const mapped = idMap.get(Number(roomIdStr));
+        if (mapped === undefined) {
+          this.portalDests.delete(key);
+          continue;
+        }
+        newKey = `${into.id}:${mapped}:${dirWord}`;
+      }
+      let newDest = dest;
+      if (dest.townId === from.id) {
+        const mapped = idMap.get(dest.roomId);
+        if (mapped === undefined) {
+          this.portalDests.delete(key);
+          continue;
+        }
+        newDest = { townId: into.id, roomId: mapped };
+      }
+      if (newKey !== key || newDest !== dest) {
+        this.portalDests.delete(key);
+        this.portalDests.set(newKey, newDest);
+      }
     }
 
     this.towns.delete(from.id);
@@ -827,6 +974,11 @@ export class TownMapStore {
       v: 2,
       nextTownId: this.nextTownId,
       pos: this.pos,
+      portalDests: Object.fromEntries(this.portalDests),
+      volatileSentences: [...this.volatileSentences],
+      volatilePending: Object.fromEntries(
+        [...this.volatilePending].map(([k, ids]) => [k, [...ids]])
+      ),
       towns: [...this.towns.values()].map((t) => ({
         id: t.id,
         name: t.name,
@@ -889,6 +1041,33 @@ export class TownMapStore {
       store.towns.get(pos.townId)?.rooms.has(pos.roomId)
     ) {
       store.pos = pos;
+    }
+    const vol = (d as { volatileSentences?: unknown }).volatileSentences;
+    if (Array.isArray(vol)) {
+      for (const s of vol.slice(0, VOLATILE_MAX)) {
+        if (typeof s === 'string') store.volatileSentences.add(s);
+      }
+    }
+    const pending = (d as { volatilePending?: Record<string, unknown> }).volatilePending;
+    if (pending && typeof pending === 'object') {
+      for (const [k, ids] of Object.entries(pending).slice(0, VOLATILE_PENDING_MAX)) {
+        if (Array.isArray(ids)) {
+          store.volatilePending.set(k, new Set(ids.filter((n) => typeof n === 'number')));
+        }
+      }
+    }
+    const portalDests = (d as { portalDests?: Record<string, TownPos> }).portalDests;
+    if (portalDests && typeof portalDests === 'object') {
+      for (const [key, dest] of Object.entries(portalDests)) {
+        if (
+          dest &&
+          typeof dest.townId === 'number' &&
+          typeof dest.roomId === 'number' &&
+          store.towns.get(dest.townId)?.rooms.has(dest.roomId)
+        ) {
+          store.portalDests.set(key, { townId: dest.townId, roomId: dest.roomId });
+        }
+      }
     }
     // Pre-v2 layouts were nudge-scarred (and last-write-wins above can
     // silently collapse corrupt duplicate cells) — re-embed once from the

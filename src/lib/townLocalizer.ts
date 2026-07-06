@@ -136,18 +136,26 @@ export class TownLocalizer {
    * A portal transit line arrived ("You step into the north portal.").
    * Portals bridge distant towns — the NEXT room block must resolve as a
    * fresh town entry instead of being filed into the current town.
+   * `dirWord` is the portal named by the transit line ("north"), which
+   * identifies WHICH of a room's portals was taken (the hub chamber has
+   * seven); departure room + dirWord keys the portal destination memory.
    */
-  onPortalTransit(): void {
+  onPortalTransit(dirWord: string | null = null): void {
     // The room we're leaving through the portal is a portal room
     if (this.active) {
       const room = this.map.room(this.map.pos);
       if (room) room.portal = true;
     }
+    this.pendingPortalFrom =
+      this.active && this.map.pos && !this.lost
+        ? { pos: this.map.pos, dir: dirWord?.toLowerCase() ?? null }
+        : null;
     this.queue = [];
     this.portalJump = true;
   }
 
   private portalJump = false;
+  private pendingPortalFrom: { pos: TownPos; dir: string | null } | null = null;
 
   /**
    * A wilderness survey arrived — the player is outside. Deactivate; the
@@ -161,6 +169,7 @@ export class TownLocalizer {
     this.lost = false;
     this.queue = [];
     this.portalJump = false;
+    this.pendingPortalFrom = null;
   }
 
   /**
@@ -186,6 +195,7 @@ export class TownLocalizer {
     this.queue = [];
     this.pendingExit = null;
     this.portalJump = false;
+    this.pendingPortalFrom = null;
   }
 
   /**
@@ -238,10 +248,32 @@ export class TownLocalizer {
     // link back, and no hex anchor (the hex position is stale indoors).
     if (this.portalJump) {
       this.portalJump = false;
+      const from = this.pendingPortalFrom;
+      this.pendingPortalFrom = null;
+      // Destination memory first: this exact portal has been taken before,
+      // so land where it landed then. Entry matching cannot do this — every
+      // temple Forecourt is a same-fingerprint twin of the others, so the
+      // global match is ambiguous and each trip used to spawn a fresh
+      // fragment town that later merge-scarred the real one.
+      if (from) {
+        const dest = this.map.getPortalDest(from.pos, from.dir);
+        const destTown = dest ? this.map.get(dest.townId) : undefined;
+        const destRoom = destTown?.rooms.get(dest!.roomId);
+        if (destTown && destRoom && this.map.matches(destRoom, block)) {
+          this.active = true;
+          this.lost = false;
+          destRoom.portal = true;
+          this.map.touchRoom(destRoom, block, now);
+          this.map.pos = { townId: destTown.id, roomId: destRoom.id };
+          return { kind: 'entered', pos: this.map.pos, moved: null };
+        }
+      }
       this.active = false;
       const res = this.enterTown(block, null, now, false);
       const arrival = this.map.room(res.pos);
       if (arrival) arrival.portal = true; // ... and so is the arrival room
+      // Learn (or relearn) where this portal leads for next time.
+      if (from && res.pos) this.map.setPortalDest(from.pos, from.dir, res.pos);
       return res;
     }
 
@@ -264,7 +296,7 @@ export class TownLocalizer {
     if (move?.kind === 'look') {
       this.queue.shift();
       if (this.map.matches(current, block)) {
-        this.map.touchRoom(current, block, now);
+        this.map.touchRoom(current, block, now, true);
         return { kind: 'stationary', pos: this.map.pos, moved: move };
       }
       // Look shows a different room?! Fall through to correlation.
@@ -292,7 +324,7 @@ export class TownLocalizer {
           const dest = town.rooms.get(linked);
           if (dest && this.map.matches(dest, block)) {
             this.queue.shift();
-            this.map.touchRoom(dest, block, now);
+            this.map.touchRoom(dest, block, now, true);
             this.map.pos = { townId: town.id, roomId: dest.id };
             return { kind: 'expected', pos: this.map.pos, moved: move };
           }
@@ -471,7 +503,7 @@ export class TownLocalizer {
         const dest = town.rooms.get(linked);
         if (dest && this.map.matches(dest, block)) {
           this.queue.shift();
-          this.map.touchRoom(dest, block, now);
+          this.map.touchRoom(dest, block, now, true);
           this.map.pos = { townId: town.id, roomId: dest.id };
           return { kind: 'expected', pos: this.map.pos, moved: move };
         }

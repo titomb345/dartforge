@@ -140,7 +140,10 @@ const EXITS_START_RE =
  * (Teleports with unknown messages — recall spells — are caught by the
  * localizer's generic teleport heuristic instead.)
  */
-export const PORTAL_TRANSIT_RE = /^(?:> )*You step (?:into|through) the(?: \w+)? portal\.\s*$/;
+/** Captures the portal word ("north", "shimmering", ...) when present —
+ *  hub-side transits name their portal by direction, which identifies the
+ *  destination (see portal destination memory in townMap.ts). */
+export const PORTAL_TRANSIT_RE = /^(?:> )*You step (?:into|through) the(?: (\w+))? portal\.\s*$/;
 
 const DIR_WORD_RE = /\b(north(?:east|west)?|south(?:east|west)?|east|west|up|down)\b/g;
 
@@ -303,6 +306,13 @@ export class TownParser {
         // Candidate name line. Capitalized start filters mid-sentence
         // fragments; length guards against stray tokens.
         if (t.length < 3 || t.length > 60 || !/^[A-Z0-9"']/.test(t)) return null;
+        // Fragmented streams can slice a description/contents sentence so
+        // its tail lands on its own short line ("There is an oak chest in
+        // the opposite corner.  It") — sentence-shaped starts and dangling
+        // function-word endings are prose, never room names.
+        if (/^(?:There (?:is|are)|You )\b/.test(t)) return null;
+        if (/\b(?:It|He|She|They|The|A|An|and|or|of|to|with|in|on|at|is|are|was|from|by)$/.test(t))
+          return null;
         return { name: t, descLines: desc };
       }
       desc.unshift(t);

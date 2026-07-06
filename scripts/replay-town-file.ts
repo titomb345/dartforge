@@ -68,9 +68,12 @@ for (const f of files) {
       }
       continue;
     }
-    if (PORTAL_TRANSIT_RE.test(line)) {
-      console.log(`${String(lineNo).padStart(5)} (portal transit)`);
-      townLoc.onPortalTransit();
+    const portal = PORTAL_TRANSIT_RE.exec(line);
+    if (portal) {
+      console.log(
+        `${String(lineNo).padStart(5)} (portal transit${portal[1] ? `: ${portal[1]}` : ''})`
+      );
+      townLoc.onPortalTransit(portal[1] ?? null);
     }
     hexParser.feedLine(line);
     townParser.feedLine(line);
