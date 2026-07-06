@@ -13,7 +13,13 @@ import { HexLocalizer, type SurveyResolution } from '../lib/hexLocalizer';
 import { HexMapStore, type HexCell, type HexPos } from '../lib/hexMap';
 import { parseDirection, getDirectionOffset, type Direction } from '../lib/hexUtils';
 import { TownParser, PORTAL_TRANSIT_RE, TOWN_DIR_ALIASES, type TownDir } from '../lib/townParser';
-import { buildDoorSequence } from '../lib/doorSequence';
+import { resolveDoorDir } from '../lib/doorSequence';
+import {
+  DoorRunner,
+  setActiveDoorRunner,
+  getActiveDoorRunner,
+  feedActiveDoorRunner,
+} from '../lib/doorRunner';
 import { TownLocalizer, classifyTownCommand, type TownResolution } from '../lib/townLocalizer';
 import { TownMapStore, hexAnchorKey, type TownRoom, type TownWalkStep } from '../lib/townMap';
 import type { HexMarkerType, RoomIconType } from '../lib/mapMarkers';
@@ -355,6 +361,8 @@ export function useMapTracker(
       if (!walk) return;
       if (walk.timeout) clearTimeout(walk.timeout);
       townWalkRef.current = null;
+      // Stop a mid-crossing door runner from sending further commands
+      getActiveDoorRunner()?.cancel();
       if (reason) echoRef.current(`[Map] Walk stopped — ${reason}`);
       syncState();
     },
@@ -374,24 +382,53 @@ export function useMapTracker(
     if (walk.sent >= walk.steps.length) return;
     if (walk.sent - walk.confirmed >= WALK_PIPELINE) return;
     const step = walk.steps[walk.sent];
-    let cmds = step.cmds;
     if (step.door) {
-      // Door commands are built here (not at plan time) from the from-room's
-      // freshest exits line, so hold the step until arrival there is
-      // confirmed — the arrival block carries the live open/closed state.
-      // The pump re-runs on every confirmation, so a held step self-releases.
+      // Door crossings run response-aware (DoorRunner): the door's state is
+      // read from the from-room's freshest exits line, so hold the step
+      // until arrival there is confirmed — the arrival block carries the
+      // live open/closed state. The pump re-runs on every confirmation, so
+      // a held step self-releases.
       if (walk.confirmed < walk.sent) return;
+      const resolved = resolveDoorDir(step.cmd);
       const fromRoom = townMapRef.current.get(walk.townId)?.rooms.get(step.door.fromId);
-      const wasOpen = fromRoom?.openDoorDirs.includes(step.door.dir) ?? false;
-      // A door found standing open is left as found: walk straight through,
-      // no closing/locking behind. Only doors we opened ourselves (or whose
-      // state is unknown) get the full unlock/open/move/close/lock sequence.
-      if (!wasOpen) cmds = buildDoorSequence(step.cmd, doorKeysRef.current) ?? [step.cmd];
+      const door = step.door;
+      walk.sent += 1;
+      townWalkSendingRef.current = true;
+      const runner = new DoorRunner({
+        dir: resolved?.dir ?? step.cmd,
+        opp: resolved?.opp ?? step.cmd,
+        keys: doorKeysRef.current,
+        preferredKey: fromRoom?.doorKeySlots?.[door.dir],
+        // A door found standing open is left as found: walk straight
+        // through, no closing/locking behind.
+        knownOpen: fromRoom?.openDoorDirs.includes(door.dir) ?? false,
+        send: (cmd) => sendDirectionRef.current(cmd),
+      });
+      setActiveDoorRunner(runner);
+      runner
+        .run()
+        .then((res) => {
+          if (res.unlockedWithKey !== undefined) {
+            // Remember which key fits this door (both sides) for next time
+            townMapRef.current.learnDoorKey(walk.townId, door.fromId, door.dir, res.unlockedWithKey);
+            scheduleSave();
+          }
+          if (!res.ok && townWalkRef.current) {
+            cancelTownWalk(res.reason ?? 'the door would not open');
+          }
+        })
+        .catch(() => cancelTownWalk('send failed'))
+        .finally(() => {
+          if (getActiveDoorRunner() === runner) setActiveDoorRunner(null);
+          townWalkSendingRef.current = false;
+          if (townWalkRef.current) pumpTownWalkSends();
+        });
+      return;
     }
     walk.sent += 1;
     townWalkSendingRef.current = true;
     (async () => {
-      for (const cmd of cmds) {
+      for (const cmd of step.cmds) {
         await sendDirectionRef.current(cmd);
       }
     })()
@@ -400,7 +437,7 @@ export function useMapTracker(
         townWalkSendingRef.current = false;
         if (townWalkRef.current) pumpTownWalkSends();
       });
-  }, [cancelTownWalk]);
+  }, [cancelTownWalk, scheduleSave]);
 
   /** Called after each town room resolution while a town walk is active. */
   const advanceTownWalk = useCallback(
@@ -427,6 +464,9 @@ export function useMapTracker(
         cancelTownWalk('unexpected movement');
         return;
       }
+      // Arrival confirmed — a door runner waiting on its move step can
+      // proceed to the close/lock phase immediately
+      getActiveDoorRunner()?.notifyMoved();
       walk.confirmed += 1;
       if (walk.confirmed >= walk.steps.length) {
         if (walk.timeout) clearTimeout(walk.timeout);
@@ -556,6 +596,9 @@ export function useMapTracker(
 
   const feedLine = useCallback(
     (line: string, raw?: string) => {
+      // A door crossing in progress reads the MUD's replies from here
+      // ("You unlock the …", "You fail.", …) — see doorRunner.ts
+      feedActiveDoorRunner(line);
       parserRef.current?.feedLine(line, raw);
       if (townEnabledRef.current) {
         townParserRef.current?.feedLine(line);
