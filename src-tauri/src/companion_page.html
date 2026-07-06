@@ -24,6 +24,28 @@
     --border: #2a2a31;
     --safe-bottom: env(safe-area-inset-bottom, 0px);
     --safe-top: env(safe-area-inset-top, 0px);
+    /* Terminal output palette — mirrors the desktop terminal's DEFAULT_THEME
+       so companion output matches the desktop exactly (the previous Dracula
+       values made white/bright-white nearly identical and threw the who
+       colors off). Overridden live by the pushed theme config when the user
+       has customized their colors. --out-fg is the default (uncolored) text. */
+    --out-fg: #c0c0c0;
+    --ansi-black: #000000;
+    --ansi-red: #8b0000;
+    --ansi-green: #008000;
+    --ansi-yellow: #cccc00;
+    --ansi-blue: #1e90ff;
+    --ansi-magenta: #800080;
+    --ansi-cyan: #008b8b;
+    --ansi-white: #c0c0c0;
+    --ansi-bright-black: #808080;
+    --ansi-bright-red: #ff0000;
+    --ansi-bright-green: #00ff00;
+    --ansi-bright-yellow: #ffff00;
+    --ansi-bright-blue: #0000ff;
+    --ansi-bright-magenta: #ff00ff;
+    --ansi-bright-cyan: #00ffff;
+    --ansi-bright-white: #ffffff;
     /* Monospace stack tuned for ASCII-map fidelity (avoids Courier New,
        whose loose metrics made the hex map look scrunched). */
     --mono: ui-monospace, 'Cascadia Mono', 'Cascadia Code', Consolas, Menlo,
@@ -251,7 +273,9 @@
     margin-bottom: 5px;
   }
   .who-row { display: flex; align-items: baseline; gap: 6px; padding: 2px 0; white-space: nowrap; }
-  .who-guild { color: var(--purple); font-size: 10px; }
+  /* Per-guild colored tag (brackets + abbreviation), mirrors the desktop
+     Who panel's GUILD_STYLES rather than a flat purple. */
+  .who-guild-tag { font-size: 9px; font-weight: bold; white-space: nowrap; flex-shrink: 0; }
   .who-idle { color: var(--fg-dim); font-size: 10px; margin-left: auto; padding-left: 8px; }
   .who-row.title-row { color: var(--fg-dim); font-style: italic; }
   .counter-row { display: flex; align-items: baseline; gap: 8px; padding: 3px 0; flex-wrap: wrap; }
@@ -317,6 +341,9 @@
     padding: 10px 12px;
     white-space: pre-wrap;
     word-wrap: break-word;
+    /* Default (uncolored) MUD text uses the terminal foreground, not the
+       brighter chrome --fg, so plain output matches the desktop terminal. */
+    color: var(--out-fg);
     /* Tight line-height keeps the hex map's aspect ratio correct. */
     line-height: 1.2;
     -webkit-overflow-scrolling: touch;
@@ -327,39 +354,41 @@
   #output::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
 
   /* ── ANSI colors ─────────────────────────────────── */
-  .ansi-black { color: #44475a; }
-  .ansi-bright-black { color: #6272a4; }
-  .ansi-red { color: #ff5555; }
-  .ansi-green { color: #50fa7b; }
-  .ansi-yellow { color: #f1fa8c; }
-  .ansi-blue { color: #6272a4; }
-  .ansi-magenta { color: #ff79c6; }
-  .ansi-cyan { color: #8be9fd; }
-  .ansi-white { color: #f8f8f2; }
-  .ansi-bright-red { color: #ff6e6e; }
-  .ansi-bright-green { color: #69ff94; }
-  .ansi-bright-yellow { color: #ffffa5; }
-  .ansi-bright-blue { color: #d6acff; }
-  .ansi-bright-magenta { color: #ff92df; }
-  .ansi-bright-cyan { color: #a4ffff; }
-  .ansi-bright-white { color: #ffffff; }
+  /* All resolve to theme variables so a pushed custom theme recolors output
+     live; defaults (in :root) match the desktop terminal palette. */
+  .ansi-black { color: var(--ansi-black); }
+  .ansi-bright-black { color: var(--ansi-bright-black); }
+  .ansi-red { color: var(--ansi-red); }
+  .ansi-green { color: var(--ansi-green); }
+  .ansi-yellow { color: var(--ansi-yellow); }
+  .ansi-blue { color: var(--ansi-blue); }
+  .ansi-magenta { color: var(--ansi-magenta); }
+  .ansi-cyan { color: var(--ansi-cyan); }
+  .ansi-white { color: var(--ansi-white); }
+  .ansi-bright-red { color: var(--ansi-bright-red); }
+  .ansi-bright-green { color: var(--ansi-bright-green); }
+  .ansi-bright-yellow { color: var(--ansi-bright-yellow); }
+  .ansi-bright-blue { color: var(--ansi-bright-blue); }
+  .ansi-bright-magenta { color: var(--ansi-bright-magenta); }
+  .ansi-bright-cyan { color: var(--ansi-bright-cyan); }
+  .ansi-bright-white { color: var(--ansi-bright-white); }
   .ansi-bold { font-weight: bold; }
-  .ansi-bg-black { background-color: #44475a; }
-  .ansi-bg-red { background-color: #ff5555; }
-  .ansi-bg-green { background-color: #50fa7b; }
-  .ansi-bg-yellow { background-color: #f1fa8c; }
-  .ansi-bg-blue { background-color: #6272a4; }
-  .ansi-bg-magenta { background-color: #ff79c6; }
-  .ansi-bg-cyan { background-color: #8be9fd; }
-  .ansi-bg-white { background-color: #f8f8f2; }
-  .ansi-bg-bright-black { background-color: #6272a4; }
-  .ansi-bg-bright-red { background-color: #ff6e6e; }
-  .ansi-bg-bright-green { background-color: #69ff94; }
-  .ansi-bg-bright-yellow { background-color: #ffffa5; }
-  .ansi-bg-bright-blue { background-color: #d6acff; }
-  .ansi-bg-bright-magenta { background-color: #ff92df; }
-  .ansi-bg-bright-cyan { background-color: #a4ffff; }
-  .ansi-bg-bright-white { background-color: #ffffff; }
+  .ansi-bg-black { background-color: var(--ansi-black); }
+  .ansi-bg-red { background-color: var(--ansi-red); }
+  .ansi-bg-green { background-color: var(--ansi-green); }
+  .ansi-bg-yellow { background-color: var(--ansi-yellow); }
+  .ansi-bg-blue { background-color: var(--ansi-blue); }
+  .ansi-bg-magenta { background-color: var(--ansi-magenta); }
+  .ansi-bg-cyan { background-color: var(--ansi-cyan); }
+  .ansi-bg-white { background-color: var(--ansi-white); }
+  .ansi-bg-bright-black { background-color: var(--ansi-bright-black); }
+  .ansi-bg-bright-red { background-color: var(--ansi-bright-red); }
+  .ansi-bg-bright-green { background-color: var(--ansi-bright-green); }
+  .ansi-bg-bright-yellow { background-color: var(--ansi-bright-yellow); }
+  .ansi-bg-bright-blue { background-color: var(--ansi-bright-blue); }
+  .ansi-bg-bright-magenta { background-color: var(--ansi-bright-magenta); }
+  .ansi-bg-bright-cyan { background-color: var(--ansi-bright-cyan); }
+  .ansi-bg-bright-white { background-color: var(--ansi-bright-white); }
 
   /* ── Scroll-to-bottom button ────────────────────── */
   #scroll-notice {
@@ -680,24 +709,50 @@
   'use strict';
 
   // ── ANSI parser ───────────────────────────────────────────────
-  var ANSI_COLORS = {
+  var ANSI_FG = {
     30: 'ansi-black', 31: 'ansi-red', 32: 'ansi-green', 33: 'ansi-yellow',
     34: 'ansi-blue', 35: 'ansi-magenta', 36: 'ansi-cyan', 37: 'ansi-white',
-    40: 'ansi-bg-black', 41: 'ansi-bg-red', 42: 'ansi-bg-green', 43: 'ansi-bg-yellow',
-    44: 'ansi-bg-blue', 45: 'ansi-bg-magenta', 46: 'ansi-bg-cyan', 47: 'ansi-bg-white',
     90: 'ansi-bright-black', 91: 'ansi-bright-red', 92: 'ansi-bright-green',
     93: 'ansi-bright-yellow', 94: 'ansi-bright-blue', 95: 'ansi-bright-magenta',
-    96: 'ansi-bright-cyan', 97: 'ansi-bright-white',
+    96: 'ansi-bright-cyan', 97: 'ansi-bright-white'
+  };
+  var ANSI_BG = {
+    40: 'ansi-bg-black', 41: 'ansi-bg-red', 42: 'ansi-bg-green', 43: 'ansi-bg-yellow',
+    44: 'ansi-bg-blue', 45: 'ansi-bg-magenta', 46: 'ansi-bg-cyan', 47: 'ansi-bg-white',
     100: 'ansi-bg-bright-black', 101: 'ansi-bg-bright-red', 102: 'ansi-bg-bright-green',
     103: 'ansi-bg-bright-yellow', 104: 'ansi-bg-bright-blue', 105: 'ansi-bg-bright-magenta',
     106: 'ansi-bg-bright-cyan', 107: 'ansi-bg-bright-white'
   };
 
+  // Stateful SGR parser. Tracks bold + current fg/bg across escapes and emits
+  // one span per text run. Bold upgrades a normal foreground (30-37) to its
+  // bright variant, matching xterm's default drawBoldTextInBrightColors — many
+  // MUDs (DartMUD included) send "bright" colors as bold + normal color.
   function ansiToHtml(text) {
     var result = '';
-    var openSpans = 0;
-    var parts = text.split(/(\x1b\[[0-9;]*m)/);
+    var spanOpen = false;
+    var bold = false;
+    var fg = null;      // numeric SGR code (30-37 / 90-97) or null
+    var bgClass = null; // resolved ansi-bg-* class or null
 
+    function stateClasses() {
+      var cls = [];
+      if (bold) cls.push('ansi-bold');
+      if (fg !== null) {
+        var code = fg;
+        if (bold && code >= 30 && code <= 37) code += 60; // bright variant
+        cls.push(ANSI_FG[code]);
+      }
+      if (bgClass) cls.push(bgClass);
+      return cls;
+    }
+    function reopenSpan() {
+      if (spanOpen) { result += '</span>'; spanOpen = false; }
+      var cls = stateClasses();
+      if (cls.length) { result += '<span class="' + cls.join(' ') + '">'; spanOpen = true; }
+    }
+
+    var parts = text.split(/(\x1b\[[0-9;]*m)/);
     for (var i = 0; i < parts.length; i++) {
       var part = parts[i];
       var match = part.match(/^\x1b\[([0-9;]*)m$/);
@@ -705,21 +760,85 @@
         var codes = match[1].split(';').map(Number);
         for (var j = 0; j < codes.length; j++) {
           var code = codes[j];
-          if (code === 0) {
-            while (openSpans > 0) { result += '</span>'; openSpans--; }
-          } else if (code === 1) {
-            result += '<span class="ansi-bold">'; openSpans++;
-          } else if (ANSI_COLORS[code]) {
-            result += '<span class="' + ANSI_COLORS[code] + '">'; openSpans++;
-          }
+          if (code === 0) { bold = false; fg = null; bgClass = null; }
+          else if (code === 1) bold = true;
+          else if (code === 22) bold = false;
+          else if (code === 39) fg = null;
+          else if (code === 49) bgClass = null;
+          else if (ANSI_FG[code]) fg = code;
+          else if (ANSI_BG[code]) bgClass = ANSI_BG[code];
         }
-      } else {
+        reopenSpan();
+      } else if (part) {
         result += part.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
       }
     }
 
-    while (openSpans > 0) { result += '</span>'; openSpans--; }
+    if (spanOpen) result += '</span>';
     return result;
+  }
+
+  // ── Terminal theme (mirrors desktop DEFAULT_THEME; overridden live) ──
+  // Kept in sync with the desktop's customizable palette via the 'config'
+  // message so who guild tags and (via CSS vars) output colors track it.
+  var DEFAULT_ANSI_THEME = {
+    foreground: '#c0c0c0', black: '#000000', red: '#8b0000', green: '#008000',
+    yellow: '#cccc00', blue: '#1e90ff', magenta: '#800080', cyan: '#008b8b', white: '#c0c0c0',
+    brightBlack: '#808080', brightRed: '#ff0000', brightGreen: '#00ff00', brightYellow: '#ffff00',
+    brightBlue: '#0000ff', brightMagenta: '#ff00ff', brightCyan: '#00ffff', brightWhite: '#ffffff'
+  };
+  var currentTheme = DEFAULT_ANSI_THEME;
+
+  var THEME_CSS_VARS = {
+    '--out-fg': 'foreground', '--ansi-black': 'black', '--ansi-red': 'red',
+    '--ansi-green': 'green', '--ansi-yellow': 'yellow', '--ansi-blue': 'blue',
+    '--ansi-magenta': 'magenta', '--ansi-cyan': 'cyan', '--ansi-white': 'white',
+    '--ansi-bright-black': 'brightBlack', '--ansi-bright-red': 'brightRed',
+    '--ansi-bright-green': 'brightGreen', '--ansi-bright-yellow': 'brightYellow',
+    '--ansi-bright-blue': 'brightBlue', '--ansi-bright-magenta': 'brightMagenta',
+    '--ansi-bright-cyan': 'brightCyan', '--ansi-bright-white': 'brightWhite'
+  };
+
+  function applyTheme(t) {
+    if (!t || typeof t !== 'object') return;
+    currentTheme = t;
+    var root = document.documentElement;
+    for (var cssVar in THEME_CSS_VARS) {
+      var val = t[THEME_CSS_VARS[cssVar]];
+      if (typeof val === 'string' && val) root.style.setProperty(cssVar, val);
+    }
+    // Guild tags are inline-styled from the theme, so re-render the who list.
+    if (lastWhoData) renderWho(lastWhoData);
+  }
+
+  // Guild tag styles — mirror the desktop Who panel's GUILD_STYLES. Values are
+  // theme color keys, resolved against currentTheme at render time.
+  var GUILD_STYLES = {
+    BH: { color: 'brightYellow', bracketColor: 'magenta' },
+    DG: { color: 'brightYellow', bracketColor: 'brightBlue' },
+    DK: { color: 'white', bg: 'blue', bracketColor: 'white' },
+    HG: { color: 'black', bg: 'white', bracketColor: 'black' },
+    MG: { color: 'brightCyan', bracketColor: 'white' },
+    RoE: { color: 'white', bg: 'red', bracketColor: 'white' },
+    SR: { color: 'brightGreen', bracketColor: 'white' }
+  };
+
+  function guildTagHtml(guild) {
+    var style = GUILD_STYLES[guild];
+    if (!style) {
+      return '<span class="who-guild-tag" style="color:#999">[' + esc(guild) + ']</span>';
+    }
+    var color = currentTheme[style.color] || '#c0c0c0';
+    var bracket = currentTheme[style.bracketColor || style.color] || color;
+    var wrap = '';
+    if (style.bg) {
+      var bg = currentTheme[style.bg];
+      if (bg) wrap = 'background-color:' + bg + ';padding:0 2px;border-radius:2px;';
+    }
+    return '<span class="who-guild-tag" style="' + wrap + '">' +
+      '<span style="color:' + bracket + '">[</span>' +
+      '<span style="color:' + color + '">' + esc(guild) + '</span>' +
+      '<span style="color:' + bracket + '">]</span></span>';
   }
 
   // ── Vitals icons (mirror the desktop status-bar SVGs) ─────────
@@ -777,6 +896,7 @@
   // tracked per key and persisted. Default is collapsed on phones and
   // expanded on desktop; tapping a chip toggles it on either device.
   var lastReadouts = [];
+  var lastWhoData = null;
   var vitalCollapse = {};
   try { vitalCollapse = JSON.parse(localStorage.getItem('df-vitals-collapse') || '{}') || {}; } catch(e) {}
   var wideMq = window.matchMedia('(min-width: 760px)');
@@ -854,6 +974,7 @@
   }
 
   function renderWho(d) {
+    lastWhoData = d;
     var players = d && d.players ? d.players : [];
     var real = 0;
     for (var k = 0; k < players.length; k++) if (!players[k].isTitle) real++;
@@ -873,9 +994,9 @@
         html += '<div class="who-row title-row">' + esc(p.name) + '</div>';
         continue;
       }
-      var color = p.color ? ('' + p.color).replace(/"/g, '') : 'var(--fg)';
+      var color = p.color ? ('' + p.color).replace(/"/g, '') : 'var(--out-fg)';
       html += '<div class="who-row">' +
-        (p.guild ? '<span class="who-guild">[' + esc(p.guild) + ']</span>' : '') +
+        (p.guild ? guildTagHtml(p.guild) : '') +
         '<span style="color:' + color + '">' + esc(p.name) + '</span>' +
         (p.idle ? '<span class="who-idle">' + esc(p.idle) + '</span>' : '') +
         '</div>';
@@ -1033,9 +1154,13 @@
         } else if (msg.type === 'vitals') {
           renderVitals(msg.readouts);
         } else if (msg.type === 'config') {
-          if (msg.config && typeof msg.config === 'object' &&
-              msg.config.numpadMappings && typeof msg.config.numpadMappings === 'object') {
-            numpadMap = msg.config.numpadMappings;
+          if (msg.config && typeof msg.config === 'object') {
+            if (msg.config.numpadMappings && typeof msg.config.numpadMappings === 'object') {
+              numpadMap = msg.config.numpadMappings;
+            }
+            if (msg.config.theme && typeof msg.config.theme === 'object') {
+              applyTheme(msg.config.theme);
+            }
           }
         } else if (msg.type === 'state') {
           handleState(msg.key, msg.data);

@@ -129,6 +129,13 @@ export class OutputFilter {
   stripPrompts = true;
   /** When true, collapse consecutive identical lines with a repeat count. */
   antiSpamEnabled = false;
+  /**
+   * Number of identical occurrences before collapsing kicks in. Occurrences
+   * below this count are shown in full (a few repeats are usually legitimate);
+   * only from the Nth identical line onward are duplicates collapsed into the
+   * `[repeated xN]` marker. Minimum 2 (collapse on the 2nd occurrence).
+   */
+  antiSpamThreshold = 4;
   /** Callback to write anti-spam flush output to the terminal asynchronously. */
   onAntiSpamFlush: ((text: string) => void) | null = null;
   /** Callback invoked when sync gagging completes (all login responses consumed). */
@@ -181,6 +188,16 @@ export class OutputFilter {
     return `\x1b[90m  [repeated x${count}]\x1b[0m\r\n`;
   }
 
+  /**
+   * Whether the accumulated repeats reached the collapse threshold — i.e.
+   * whether at least one duplicate was actually collapsed and so a
+   * `[repeated xN]` marker should be emitted. `repeatCount + 1` is the total
+   * occurrence count (the first shown line plus each repeat).
+   */
+  private shouldEmitRepeat(): boolean {
+    return this.repeatCount + 1 >= this.antiSpamThreshold;
+  }
+
   /** Cancel the pending anti-spam flush timer. */
   private clearAntiSpamTimer(): void {
     if (this.antiSpamTimer) {
@@ -199,7 +216,7 @@ export class OutputFilter {
     this.clearAntiSpamTimer();
     this.antiSpamTimer = setTimeout(() => {
       this.antiSpamTimer = null;
-      if (this.repeatCount > 0) {
+      if (this.shouldEmitRepeat()) {
         const text = OutputFilter.antiSpamLine(this.repeatCount + 1);
         this.onAntiSpamFlush?.(text);
       }
@@ -631,7 +648,7 @@ export class OutputFilter {
         // Flush any pending anti-spam count before the highlighted line
         if (this.repeatCount > 0) {
           this.clearAntiSpamTimer();
-          output += OutputFilter.antiSpamLine(this.repeatCount + 1);
+          if (this.shouldEmitRepeat()) output += OutputFilter.antiSpamLine(this.repeatCount + 1);
           this.repeatCount = 0;
         }
         this.prevStrippedLine = stripped;
@@ -655,16 +672,23 @@ export class OutputFilter {
       // --- Anti-spam: collapse identical lines within a sliding window ---
       if (this.antiSpamEnabled && stripped !== '') {
         if (stripped === this.prevStrippedLine) {
-          // Match while the window is still open — collapse and slide it forward.
+          // Match while the window is still open — count it and slide it forward.
           this.repeatCount++;
           this.startAntiSpamTimer();
-          output += '\x1b[0m'; // reset color state so gagged line doesn't bleed
-          continue; // suppress duplicate
+          if (this.shouldEmitRepeat()) {
+            // Threshold reached — collapse this and every later duplicate.
+            output += '\x1b[0m'; // reset color state so gagged line doesn't bleed
+            continue; // suppress duplicate
+          }
+          // Below threshold — a few repeats are legitimate, so show this one
+          // in full. Once the count reaches the threshold, later copies collapse.
+          output += displaySegment;
+          continue;
         }
-        // Different line — flush pending count
+        // Different line — flush any collapsed count
         if (this.repeatCount > 0) {
           this.clearAntiSpamTimer();
-          output += OutputFilter.antiSpamLine(this.repeatCount + 1);
+          if (this.shouldEmitRepeat()) output += OutputFilter.antiSpamLine(this.repeatCount + 1);
           this.repeatCount = 0;
         }
         // Track this line and open its window; if no repeat arrives before the

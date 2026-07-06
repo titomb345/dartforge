@@ -10,6 +10,17 @@ The `[Unreleased]` header controls automatic version bumping on merge:
 - `[Unreleased-minor]` → 0.1.0 → 0.2.0
 - `[Unreleased-major]` → 0.1.0 → 1.0.0
 
+## [Unreleased-patch]
+
+### Changed
+
+- Anti-spam's `[repeated xN]` collapse now only kicks in at the **4th** identical line instead of the 2nd, and the threshold is configurable in Settings > Output ("Collapse after N repeats"). Two or three identical lines in a row are usually legitimate (a triple "You bow." emote, a couple of parries), so they now pass through in full; only the 4th and later copies fold into the dim count. Set it back to 2 for the old behavior, or higher to let more repeats through
+
+### Fixed
+
+- Mobile companion colors now match the desktop. The companion had its own Dracula-ish ANSI palette that didn't line up with the desktop terminal — regular white and bright white were nearly identical, and the Who panel's guild tags were a flat purple instead of each guild's real colors. The companion now uses the desktop terminal's actual palette (and picks up your customized theme live), renders bold-as-bright the way the desktop terminal does (so MUD "bright" colors sent as bold + normal color show correctly), colors each Who guild tag like the desktop Who panel (BH, DG, DK, HG, MG, RoE, SR), and defaults uncolored output and names to the terminal foreground instead of near-white
+- Town maps no longer go wonky at layout collisions. Previously, when a walk arrived at a cell another room already occupied (non-Euclidean loops, converging streets), the new room was shoved to the nearest free cell — bending straight streets and disjointing the map more with every collision. Now the map **stretches** instead: the rooms beyond the collision shift one cell out of the way and the new room lands exactly where the move says, so streets stay straight and north stays up. A collinear stretched connection now draws as a normal solid corridor (it's a truthful long street); only genuinely non-Euclidean links keep the thin dashed style. Existing town maps are healed automatically: the first load re-derives every town's layout from its walked connections (one-time migration — corpus-replay validated at no loss of mapping accuracy), and a rebuilt layout also repairs maps scarred by older versions' collisions
+
 ## [1.13.1] - 2026-07-04
 
 ### Added

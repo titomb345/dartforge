@@ -9,9 +9,14 @@
  *    Tobermore "sw" ≠ "s"+"w") — they are graph shortcuts. A diagonal
  *    placement is only a HINT; it never overrides an occupied cell.
  *  - Named exits ("back", "out", "enter <thing>") are non-spatial links.
- *  - When a placement collides (two rooms, one cell), the new room is
- *    nudged to the nearest free cell on the same floor. Links — not grid
- *    adjacency — drive pathfinding, so a nudged room stays walkable.
+ *  - When a CARDINAL placement collides (two rooms, one cell), the map is
+ *    STRETCHED: every placed room at/beyond the target cell shifts one cell
+ *    along the movement axis, vacating the natural cell so the new room
+ *    lands exactly where the move says. Straight streets stay straight and
+ *    axis order stays monotone. Placements without a cardinal direction
+ *    (diagonal hints, u/d, floaters, named exits) are nudged to the nearest
+ *    free cell instead. Links — not grid adjacency — drive pathfinding, so
+ *    a displaced room stays walkable either way.
  *
  * Each town is keyed by the hex(es) it was entered from, so the hex map
  * can show which town you're in. z is the floor index (0 = entry level).
@@ -117,8 +122,10 @@ export class TownMapStore {
   towns = new Map<number, Town>();
   nextTownId = 0;
   pos: TownPos | null = null;
-  /** Nudge counter — placement collisions resolved (diagnostics) */
+  /** Nudge counter — collisions resolved by nearest-free-cell (diagnostics) */
   nudges = 0;
+  /** Stretch counter — collisions resolved by shifting the map (diagnostics) */
+  stretches = 0;
 
   get(townId: number): Town | undefined {
     return this.towns.get(townId);
@@ -170,6 +177,7 @@ export class TownMapStore {
     this.nextTownId = 0;
     this.pos = null;
     this.nudges = 0;
+    this.stretches = 0;
   }
 
   // -------------------------------------------------------------------------
@@ -177,9 +185,13 @@ export class TownMapStore {
   // -------------------------------------------------------------------------
 
   /**
-   * Create a room from a parsed block at/near (x,y,z). If the cell is
-   * occupied the room is nudged to the nearest free cell on the same floor
-   * (grid position is presentation; links carry connectivity).
+   * Create a room from a parsed block at/near (x,y,z). When `via` is the
+   * cardinal direction that was walked to reach the room, an occupied cell
+   * is resolved by STRETCHING the map (the new room always lands exactly at
+   * (x,y,z) — see stretchToVacate). Without a cardinal `via` (diagonal
+   * hints, u/d, floaters, named exits) the room is nudged to the nearest
+   * free cell instead (grid position is presentation; links carry
+   * connectivity).
    */
   addRoom(
     town: Town,
@@ -187,10 +199,17 @@ export class TownMapStore {
     x: number,
     y: number,
     z: number,
-    now: number
+    now: number,
+    via?: TownDir
   ): TownRoom {
-    const spot = this.findFreeCell(town, x, y, z);
-    if (spot.x !== x || spot.y !== y) this.nudges++;
+    let spot = { x, y };
+    const vec = via !== undefined ? TOWN_DIR_VEC[via] : undefined;
+    if (vec && vec[2] === 0 && town.grid.has(gridKey(x, y, z))) {
+      this.stretchToVacate(town, { x, y }, via!);
+    } else {
+      spot = this.findFreeCell(town, x, y, z);
+      if (spot.x !== x || spot.y !== y) this.nudges++;
+    }
     const room: TownRoom = {
       id: town.nextRoomId++,
       name: block.name,
@@ -213,6 +232,42 @@ export class TownMapStore {
     town.rooms.set(room.id, room);
     town.grid.set(gridKey(room.x, room.y, room.z), room.id);
     return room;
+  }
+
+  /**
+   * Vacate `target` for a cardinal arrival by shifting the half-plane of
+   * PLACED rooms at/beyond the target cell one cell along the movement
+   * axis (all floors — cross-floor stair alignment is preserved). The
+   * from-room is strictly on the near side of the cut, so it never moves;
+   * the entire target row/column is vacated, so the cell is guaranteed
+   * free afterward. Only rooms present in town.grid move — during relayout
+   * the not-yet-placed rooms keep their stale coords untouched.
+   */
+  private stretchToVacate(town: Town, target: { x: number; y: number }, dir: TownDir): void {
+    const vec = TOWN_DIR_VEC[dir];
+    if (!vec || vec[2] !== 0) return;
+    const [dx, dy] = vec;
+    const shifted: TownRoom[] = [];
+    for (const id of town.grid.values()) {
+      const r = town.rooms.get(id);
+      if (!r) continue;
+      const beyond =
+        dx === 1
+          ? r.x >= target.x
+          : dx === -1
+            ? r.x <= target.x
+            : dy === 1
+              ? r.y >= target.y
+              : r.y <= target.y;
+      if (beyond) shifted.push(r);
+    }
+    for (const r of shifted) town.grid.delete(gridKey(r.x, r.y, r.z));
+    for (const r of shifted) {
+      r.x += dx;
+      r.y += dy;
+      town.grid.set(gridKey(r.x, r.y, r.z), r.id);
+    }
+    this.stretches++;
   }
 
   /** Nearest free cell to (x,y) on floor z — ring search, radius ≤ 6. */
@@ -519,6 +574,155 @@ export class TownMapStore {
     }
 
     this.towns.delete(from.id);
+    // Deliberately NO relayoutTown here: re-deriving the layout mid-session
+    // moved same-fingerprint twins (Eris market plaza) relative to each
+    // other and broke the proximity heuristics tuned on organically-grown
+    // layouts (corpus replay: +3 duplicate plaza rooms). Merge nudge scars
+    // persist until the one-time v1→v2 load migration heals them.
+  }
+
+  // -------------------------------------------------------------------------
+  // Layout
+  // -------------------------------------------------------------------------
+
+  /**
+   * Deterministically re-embed a town from its link graph, discarding the
+   * (possibly collision-scarred) stored coordinates. BFS from the entry
+   * room over cardinal links in fixed n,e,s,w,u,d order (ties by room id),
+   * stretching on conflict — the same rule live mapping uses — so the
+   * result is idempotent for graph-anchored rooms. Rooms reachable only
+   * via diagonals/named/one-way links attach at hint cells near a placed
+   * neighbor; true floaters keep their old position relative to the root.
+   * Runs on pre-v2 save migration and after town merges.
+   */
+  relayoutTown(town: Town): void {
+    if (town.rooms.size === 0) return;
+    const ids = [...town.rooms.keys()].sort((a, b) => a - b);
+    const rootId =
+      town.entryRoomId !== null && town.rooms.has(town.entryRoomId) ? town.entryRoomId : ids[0];
+    const root = town.rooms.get(rootId)!;
+    const origin = { x: root.x, y: root.y, z: root.z };
+
+    town.grid.clear();
+    const placed = new Set<number>();
+    const placeAt = (r: TownRoom, x: number, y: number, z: number) => {
+      r.x = x;
+      r.y = y;
+      r.z = z;
+      town.grid.set(gridKey(x, y, z), r.id);
+      placed.add(r.id);
+    };
+
+    // Grow the cardinal skeleton from a placed seed: BFS in fixed direction
+    // order, stretching on conflict exactly like live placement.
+    const DIR_ORDER: TownDir[] = ['n', 'e', 's', 'w', 'u', 'd'];
+    const growFrom = (seedId: number) => {
+      const queue = [seedId];
+      while (queue.length > 0) {
+        const room = town.rooms.get(queue.shift()!)!;
+        for (const dir of DIR_ORDER) {
+          const destId = room.links[dir];
+          if (destId === undefined || placed.has(destId)) continue;
+          const dest = town.rooms.get(destId);
+          if (!dest) continue;
+          const vec = TOWN_DIR_VEC[dir]!;
+          // Read the parent's coords now — an earlier stretch may have moved it
+          let target = { x: room.x + vec[0], y: room.y + vec[1], z: room.z + vec[2] };
+          if (town.grid.has(gridKey(target.x, target.y, target.z))) {
+            if (vec[2] === 0) {
+              this.stretchToVacate(town, target, dir);
+            } else {
+              // u/d collision — no lateral axis to stretch; nudge on the floor
+              const spot = this.findFreeCell(town, target.x, target.y, target.z);
+              this.nudges++;
+              target = { x: spot.x, y: spot.y, z: target.z };
+            }
+          }
+          placeAt(dest, target.x, target.y, target.z);
+          queue.push(destId);
+        }
+      }
+    };
+
+    // Attach rooms reachable only via diagonal/named/one-way links at a
+    // hint cell beside a placed neighbor, then grow the cardinal skeleton
+    // hanging off each as it lands. Iterate until no progress.
+    const attachAnchored = () => {
+      let progress = true;
+      while (progress) {
+        progress = false;
+        for (const id of ids) {
+          if (placed.has(id)) continue;
+          const room = town.rooms.get(id)!;
+          const hint = this.relayoutHint(town, room, placed);
+          if (!hint) continue;
+          const spot = this.findFreeCell(town, hint.x, hint.y, hint.z);
+          if (spot.x !== hint.x || spot.y !== hint.y) this.nudges++;
+          placeAt(room, spot.x, spot.y, hint.z);
+          growFrom(id);
+          progress = true;
+        }
+      }
+    };
+
+    placeAt(root, 0, 0, 0);
+    growFrom(rootId);
+    attachAnchored();
+
+    // Disconnected fragments: seed each at its old root-relative position
+    // and re-grow from there.
+    for (const id of ids) {
+      if (placed.has(id)) continue;
+      const room = town.rooms.get(id)!;
+      const tx = room.x - origin.x;
+      const ty = room.y - origin.y;
+      const tz = room.z - origin.z;
+      const spot = this.findFreeCell(town, tx, ty, tz);
+      if (spot.x !== tx || spot.y !== ty) this.nudges++;
+      placeAt(room, spot.x, spot.y, tz);
+      growFrom(id);
+      attachAnchored();
+    }
+  }
+
+  /**
+   * Placement hint for a still-unplaced room during relayout: prefer a
+   * directional link to/from a placed room (the hint cell mirrors the
+   * direction), else land beside a named-link neighbor (findFreeCell will
+   * pick the nearest open cell around it).
+   */
+  private relayoutHint(
+    town: Town,
+    room: TownRoom,
+    placed: Set<number>
+  ): { x: number; y: number; z: number } | null {
+    for (const [dir, destId] of Object.entries(room.links) as [TownDir, number][]) {
+      if (!placed.has(destId)) continue;
+      const dest = town.rooms.get(destId);
+      if (!dest) continue;
+      return this.placementTarget(dest, TOWN_REVERSE[dir]);
+    }
+    let named: { x: number; y: number; z: number } | null = null;
+    for (const otherId of placed) {
+      const other = town.rooms.get(otherId);
+      if (!other) continue;
+      for (const [dir, destId] of Object.entries(other.links) as [TownDir, number][]) {
+        if (destId === room.id) return this.placementTarget(other, dir);
+      }
+      if (!named) {
+        for (const destId of Object.values(other.namedLinks)) {
+          if (destId === room.id) named = { x: other.x, y: other.y, z: other.z };
+        }
+      }
+    }
+    if (!named) {
+      for (const destId of Object.values(room.namedLinks)) {
+        if (!placed.has(destId)) continue;
+        const dest = town.rooms.get(destId);
+        if (dest) named = { x: dest.x, y: dest.y, z: dest.z };
+      }
+    }
+    return named;
   }
 
   // -------------------------------------------------------------------------
@@ -589,9 +793,14 @@ export class TownMapStore {
   // Serialization
   // -------------------------------------------------------------------------
 
+  /**
+   * v2: coordinates produced by stretch-on-collision placement (or healed
+   * by relayoutTown). Pre-v2 saves carry nudge-scarred layouts and are
+   * re-laid-out from the link graph once on load.
+   */
   serialize(): unknown {
     return {
-      v: 1,
+      v: 2,
       nextTownId: this.nextTownId,
       pos: this.pos,
       towns: [...this.towns.values()].map((t) => ({
@@ -655,6 +864,12 @@ export class TownMapStore {
       store.towns.get(pos.townId)?.rooms.has(pos.roomId)
     ) {
       store.pos = pos;
+    }
+    // Pre-v2 layouts were nudge-scarred (and last-write-wins above can
+    // silently collapse corrupt duplicate cells) — re-embed once from the
+    // link graph. v2 coordinates load verbatim, keeping maps stable.
+    if ((d.v ?? 0) < 2) {
+      for (const town of store.towns.values()) store.relayoutTown(town);
     }
     return store;
   }

@@ -8,7 +8,9 @@
  * real duplication/false-link cascade found live or via replay). Any town
  * engine change must keep them green, alongside the corpus replay:
  *   npx tsx scripts/replay-town.ts --dartforge
- * (expected ≥ 78.3%, town 0 ≈ 118 rooms — see memory/automapper-v2.)
+ * Baseline (July 2026, Dropbox sessions dir currently holds 44 logs; older
+ * notes cite 166 logs / 78.3%): expected ≥ 71.5%, 0 lost, town 1
+ * "Eris Road" ≈ 83 rooms, dup fingerprint groups ≤ 3.
  */
 import { spawnSync } from 'child_process';
 import * as fs from 'fs';

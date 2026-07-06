@@ -70,6 +70,7 @@ export function useAppSettings() {
   const [boardDatesEnabled, setBoardDatesEnabled] = useState(false);
   const [stripPromptsEnabled, setStripPromptsEnabled] = useState(false);
   const [antiSpamEnabled, setAntiSpamEnabled] = useState(false);
+  const [antiSpamThreshold, setAntiSpamThreshold] = useState(4);
 
   /* ── New settings ──────────────────────────────────────── */
 
@@ -290,6 +291,7 @@ export function useAppSettings() {
       await load('counterHotThreshold', setCounterHotThreshold, (v) => v >= 0);
       await load('counterColdThreshold', setCounterColdThreshold, (v) => v >= 0);
       await load('whoRefreshMinutes', setWhoRefreshMinutes, (v) => v >= 1);
+      await load('antiSpamThreshold', setAntiSpamThreshold, (v) => v >= 2 && v <= 99);
       await load('panelFontSize', setPanelFontSize, (v) => v >= 8 && v <= 18);
       await loadNullable('whoFontSize', setWhoFontSize);
       await loadNullable('chatFontSize', setChatFontSize);
@@ -382,6 +384,7 @@ export function useAppSettings() {
       updateBoardDatesEnabled: make(setBoardDatesEnabled, 'boardDatesEnabled'),
       updateStripPromptsEnabled: make(setStripPromptsEnabled, 'stripPromptsEnabled'),
       updateAntiSpamEnabled: make(setAntiSpamEnabled, 'antiSpamEnabled'),
+      updateAntiSpamThreshold: make(setAntiSpamThreshold, 'antiSpamThreshold'),
       // Buffer sizes
       updateTerminalScrollback: make(setTerminalScrollback, 'terminalScrollback'),
       updateCommandHistorySize: make(setCommandHistorySize, 'commandHistorySize'),
@@ -559,6 +562,7 @@ export function useAppSettings() {
       boardDatesEnabled,
       stripPromptsEnabled,
       antiSpamEnabled,
+      antiSpamThreshold,
       // Buffer sizes
       terminalScrollback,
       commandHistorySize,
@@ -662,6 +666,7 @@ export function useAppSettings() {
       boardDatesEnabled,
       stripPromptsEnabled,
       antiSpamEnabled,
+      antiSpamThreshold,
       terminalScrollback,
       commandHistorySize,
       chatHistorySize,

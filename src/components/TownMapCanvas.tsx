@@ -183,13 +183,15 @@ export function TownMapCanvas({
     const floorRooms = rooms.filter((r) => r.z === floor);
 
     // Links first (under the room boxes). Draw each once (id order).
+    const occupied = new Set<string>();
+    for (const r of floorRooms) occupied.add(`${r.x},${r.y}`);
     for (const room of floorRooms) {
       for (const [dir, destId] of Object.entries(room.links) as [TownDir, number][]) {
         if (dir === 'u' || dir === 'd') continue; // stairs render as glyphs
         const dest = byId.get(destId);
         if (!dest || dest.z !== floor) continue;
         if (dest.id < room.id && dest.links[reverse(dir)] === room.id) continue; // drawn already
-        drawLink(ctx, room, dest, dir);
+        drawLink(ctx, room, dest, dir, occupied);
       }
       for (const destId of Object.values(room.namedLinks)) {
         const dest = byId.get(destId);
@@ -481,15 +483,38 @@ const CARDINAL_VEC: Partial<Record<TownDir, [number, number]>> = {
   w: [-1, 0],
 };
 
-function drawLink(ctx: CanvasRenderingContext2D, from: TownRoom, to: TownRoom, dir: TownDir) {
+function drawLink(
+  ctx: CanvasRenderingContext2D,
+  from: TownRoom,
+  to: TownRoom,
+  dir: TownDir,
+  occupied: Set<string>
+) {
   const a = px(from);
   const b = px(to);
   const diag = isDiagonal(dir);
   // A cardinal link whose rooms aren't grid-adjacent was displaced by a
-  // collision nudge (non-Euclidean overlap) — draw it thin and dashed so
-  // it doesn't read as a straight corridor through unrelated rooms.
+  // collision (non-Euclidean overlap) — draw it thin and dashed so it
+  // doesn't read as a straight corridor through unrelated rooms. Exception:
+  // a collinear link whose intervening cells are all empty is a truthful
+  // long street (a map stretch opened the gap) — that one draws solid.
   const vec = CARDINAL_VEC[dir];
-  const displaced = !!vec && (to.x !== from.x + vec[0] || to.y !== from.y + vec[1]);
+  let displaced = !!vec && (to.x !== from.x + vec[0] || to.y !== from.y + vec[1]);
+  if (displaced && vec) {
+    const [vx, vy] = vec;
+    const along = (to.x - from.x) * vx + (to.y - from.y) * vy;
+    const collinear = along > 1 && to.x - from.x === along * vx && to.y - from.y === along * vy;
+    if (collinear) {
+      let clear = true;
+      for (let i = 1; i < along; i++) {
+        if (occupied.has(`${from.x + vx * i},${from.y + vy * i}`)) {
+          clear = false;
+          break;
+        }
+      }
+      if (clear) displaced = false;
+    }
+  }
   ctx.strokeStyle = diag || displaced ? LINK_DIAG_COLOR : LINK_COLOR;
   ctx.lineWidth = diag || displaced ? 1.2 : 3;
   if (displaced) ctx.setLineDash([3, 3]);
