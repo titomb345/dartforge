@@ -326,6 +326,10 @@ const MIGRATIONS: MigrationFn[] = [
     // is field-tested)
     if (!('townMapperEnabled' in data)) data.townMapperEnabled = true;
 
+    // Anti-spam collapse threshold — how many identical lines before the
+    // `[repeated xN]` collapse kicks in (a few repeats are usually legit)
+    if (!('antiSpamThreshold' in data)) data.antiSpamThreshold = 4;
+
     return data;
   },
 ];

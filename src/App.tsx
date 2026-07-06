@@ -258,6 +258,7 @@ function AppMain() {
     boardDatesEnabled,
     stripPromptsEnabled,
     antiSpamEnabled,
+    antiSpamThreshold,
     postSyncEnabled,
     postSyncCommands,
     autoLoginEnabled,
@@ -748,10 +749,11 @@ function AppMain() {
     filter.boardDatesEnabled = boardDatesEnabled;
     filter.stripPrompts = stripPromptsEnabled;
     filter.antiSpamEnabled = antiSpamEnabled;
+    filter.antiSpamThreshold = antiSpamThreshold;
     // Don't persist until settings are loaded — prevents defaults from overwriting synced values
     if (!settingsLoadedRef.current) return;
     dataStore.set('settings.json', 'filteredStatuses', filterFlags).catch(console.error);
-  }, [filterFlags, boardDatesEnabled, stripPromptsEnabled, antiSpamEnabled]);
+  }, [filterFlags, boardDatesEnabled, stripPromptsEnabled, antiSpamEnabled, antiSpamThreshold]);
 
   // Wire anti-spam flush callback so the timer can write to terminal
   useEffect(() => {
@@ -1951,14 +1953,14 @@ function AppMain() {
     tauriInvoke?.('broadcast_companion_vitals', { readouts });
   }, [readoutConfigs, statusBarOrder, theme]);
 
-  // Mirror the user's customizable numpad mappings to companion clients so the
-  // companion's keypad movement matches the desktop client (including any
-  // custom bindings).
+  // Mirror the user's customizable numpad mappings and terminal color theme to
+  // companion clients so the companion's keypad movement and output/who colors
+  // match the desktop client (including any custom bindings or theme).
   useEffect(() => {
     tauriInvoke?.('broadcast_companion_config', {
-      config: { numpadMappings: appSettings.numpadMappings },
+      config: { numpadMappings: appSettings.numpadMappings, theme },
     });
-  }, [appSettings.numpadMappings]);
+  }, [appSettings.numpadMappings, theme]);
 
   // Mirror the in-game clock to companion clients (header display).
   useEffect(() => {

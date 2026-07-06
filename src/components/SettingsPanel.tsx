@@ -253,6 +253,8 @@ export function SettingsPanel({ onClose }: { onClose: () => void }) {
     updateStripPromptsEnabled: onStripPromptsEnabledChange,
     antiSpamEnabled,
     updateAntiSpamEnabled,
+    antiSpamThreshold,
+    updateAntiSpamThreshold,
     showSkillCounts,
     updateShowSkillCounts,
     commandEchoEnabled,
@@ -732,6 +734,20 @@ export function SettingsPanel({ onClose }: { onClose: () => void }) {
           />
           <div className="text-[9px] text-text-dim font-mono leading-relaxed mt-1">
             Collapse consecutive identical lines with a repeat count.
+          </div>
+          <NumberRow
+            label="Collapse after"
+            value={antiSpamThreshold}
+            onChange={updateAntiSpamThreshold}
+            accent="green"
+            min={2}
+            max={99}
+            unit="repeats"
+            dimmed={!antiSpamEnabled}
+          />
+          <div className="text-[9px] text-text-dim font-mono leading-relaxed mt-1">
+            How many identical lines before they collapse. Up to this many show in full — a few
+            repeats are usually legitimate — then further copies fold into the count.
           </div>
           <ToggleRow
             label="Show skill counts"

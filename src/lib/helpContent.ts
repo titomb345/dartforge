@@ -541,7 +541,7 @@ export const HELP_CATEGORIES: HelpCategory[] = [
       {
         title: 'Anti-Spam',
         description:
-          'Collapses consecutive identical lines into a single line with a dim repeat count (e.g. "x5"). Enable in Settings > Output.',
+          'Collapses consecutive identical lines into a single line with a dim repeat count (e.g. "x5"). By default the collapse only kicks in at the 4th identical line — a few repeats are usually legitimate — and the threshold is configurable. Enable and set it in Settings > Output.',
       },
       {
         title: 'Command Chaining',
