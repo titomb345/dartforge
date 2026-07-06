@@ -130,7 +130,7 @@ export const HELP_CATEGORIES: HelpCategory[] = [
       {
         title: 'Allocations Panel',
         description:
-          'Tracks your combat and magic allocations. Auto-parses from "show combat allocation:all" output. Every limb shows a row of −/value/+ steppers under a sticky slot header — click a value to type an exact number, or use −/+ to step (hold Shift for ×5). The header\'s −/+ adjust that slot on every limb at once, and Apply All / Save sit in a sticky bottom bar.',
+          'Tracks your combat and magic allocations. Auto-parses from "show combat allocation:all" output. Every limb shows a row of −/value/+ steppers under a sticky slot header — click a value to type an exact number, or use −/+ to step (hold Shift for ×5). The header\'s −/+ adjust that slot on every limb at once, and Apply All / Save sit in a sticky bottom bar. The panel remembers where you left it per character — tab, view, and selected profiles are restored when the client reopens.',
         helpId: 'toolbar-alloc',
       },
       {

@@ -14,6 +14,7 @@ The `[Unreleased]` header controls automatic version bumping on merge:
 
 ### Changed
 
+- The Allocations panel now remembers where you left it, per character. The selected combat and magic profiles were already saved, but the panel always reopened on the Combat tab's Live view — now the Combat/Magic tab and Live/Profiles view are saved too, so the client opens showing the same profile that was on screen when it closed
 - The town map's auto-walk now leaves doors as it found them. A door that was already standing open when you reach it is walked straight through and left open — no more closing (and trying to lock) doors that were open to begin with. Doors that are closed still get the full unlock/open/step/close/lock treatment. The exits line's own wording ("an open oak door leading east" vs "a closed oak door…") is the source of truth, read fresh from the room you're leaving at the moment of the crossing
 
 ### Fixed
