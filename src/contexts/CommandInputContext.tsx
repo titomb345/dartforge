@@ -29,6 +29,11 @@ export interface CommandInputState {
   whoRefreshMinutes: number;
   whoNextAt: number | null;
   onToggleWhoAutoRefresh: () => void;
+  // Held-equipment auto-refresh (Loadout)
+  equipAutoRefreshEnabled: boolean;
+  equipRefreshMinutes: number;
+  equipNextAt: number | null;
+  onToggleEquipAutoRefresh: () => void;
   // Action blocking
   actionBlocked: boolean;
   actionBlockLabel: string | null;

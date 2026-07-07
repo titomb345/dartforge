@@ -10,7 +10,7 @@ import {
 } from 'react';
 import { cn } from '../lib/cn';
 import { formatCountdown } from '../lib/panelUtils';
-import { TimerIcon, AlignmentIcon, WhoIcon } from './icons';
+import { TimerIcon, AlignmentIcon, WhoIcon, LoadoutIcon } from './icons';
 import { StatusBadge } from './StatusBadge';
 import { useAppSettingsContext } from '../contexts/AppSettingsContext';
 import { useCommandInputContext } from '../contexts/CommandInputContext';
@@ -96,6 +96,10 @@ export const CommandInput = forwardRef<HTMLTextAreaElement, CommandInputProps>(
       whoRefreshMinutes,
       whoNextAt,
       onToggleWhoAutoRefresh,
+      equipAutoRefreshEnabled,
+      equipRefreshMinutes,
+      equipNextAt,
+      onToggleEquipAutoRefresh,
       activeTimers,
       onToggleTimer,
       initialHistory,
@@ -171,10 +175,11 @@ export const CommandInput = forwardRef<HTMLTextAreaElement, CommandInputProps>(
     const hasActiveTimers = activeTimers && activeTimers.length > 0;
     const [, setCountdownTick] = useState(0);
     useEffect(() => {
-      if (!antiIdleNextAt && !alignmentNextAt && !whoNextAt && !hasActiveTimers) return;
+      if (!antiIdleNextAt && !alignmentNextAt && !whoNextAt && !equipNextAt && !hasActiveTimers)
+        return;
       const id = setInterval(() => setCountdownTick((t) => t + 1), 1000);
       return () => clearInterval(id);
-    }, [antiIdleNextAt, alignmentNextAt, whoNextAt, hasActiveTimers]);
+    }, [antiIdleNextAt, alignmentNextAt, whoNextAt, equipNextAt, hasActiveTimers]);
 
     // Timer overflow dropdown state
     const [timerOverflowOpen, setTimerOverflowOpen] = useState(false);
@@ -439,9 +444,7 @@ export const CommandInput = forwardRef<HTMLTextAreaElement, CommandInputProps>(
             animate
           >
             <span>Autoinscribe</span>
-            {inscriberCycleCount > 0 && (
-              <span className="opacity-70">x{inscriberCycleCount}</span>
-            )}
+            {inscriberCycleCount > 0 && <span className="opacity-70">x{inscriberCycleCount}</span>}
           </StatusBadge>
         )}
 
@@ -458,9 +461,7 @@ export const CommandInput = forwardRef<HTMLTextAreaElement, CommandInputProps>(
             animate
           >
             <span>{casterWeightMode ? 'Autocast+Wt' : 'Autocast'}</span>
-            {casterCycleCount > 0 && (
-              <span className="opacity-70">x{casterCycleCount}</span>
-            )}
+            {casterCycleCount > 0 && <span className="opacity-70">x{casterCycleCount}</span>}
           </StatusBadge>
         )}
 
@@ -473,9 +474,7 @@ export const CommandInput = forwardRef<HTMLTextAreaElement, CommandInputProps>(
             animate
           >
             <span>Autoconc</span>
-            {concCycleCount > 0 && (
-              <span className="opacity-70">x{concCycleCount}</span>
-            )}
+            {concCycleCount > 0 && <span className="opacity-70">x{concCycleCount}</span>}
           </StatusBadge>
         )}
 
@@ -516,6 +515,20 @@ export const CommandInput = forwardRef<HTMLTextAreaElement, CommandInputProps>(
             <WhoIcon size={9} />
             <span>
               {whoNextAt ? formatCountdown(whoNextAt - Date.now()) : `${whoRefreshMinutes}m`}
+            </span>
+          </StatusBadge>
+        )}
+
+        {/* Held-equipment auto-refresh badge (only when active) */}
+        {showTimerBadges && equipAutoRefreshEnabled && (
+          <StatusBadge
+            color="#bd93f9"
+            title={`Held-equipment re-sync: every ${equipRefreshMinutes}m (double-click to stop)`}
+            onDoubleClick={onToggleEquipAutoRefresh}
+          >
+            <LoadoutIcon size={9} />
+            <span>
+              {equipNextAt ? formatCountdown(equipNextAt - Date.now()) : `${equipRefreshMinutes}m`}
             </span>
           </StatusBadge>
         )}
