@@ -110,8 +110,9 @@ const EQ_LINE = /^([a-z][a-z ]*hands?[a-z ]*): (.+)$/;
 /** `show health` line: " upper left hand (very healthy)" — also "overall" */
 const HEALTH_LINE = /^\s*([a-z][a-z ]*?)\s+\(([a-z][a-z ]*)\)\s*$/;
 
-/** Examine-self commands (post-alias-expansion), e.g. "x me", "look at me" */
-const EXAMINE_SELF_CMD = /^(?:x|ex|exa|exam|examine|l|look)(?: at)? me$/i;
+/** Examine-self commands (post-alias-expansion). DartMUD's native command
+ *  is `view` (Bill's `x` is an alias for it); the others are tolerated. */
+const EXAMINE_SELF_CMD = /^(?:view|x|ex|exa|exam|examine|l|look)(?: at)? me$/i;
 const EQUIP_CMD = /^(?:eq|equip)(?: held)?$/i;
 const SHOW_HEALTH_CMD = /^(?:sh|show health)$/i;
 /** "hold chain in upper left hand and upper right hand" (also plain hold) */
@@ -164,6 +165,10 @@ export class LoadoutTracker {
   state: LoadoutState = emptyState();
   private capture: Capture | null = null;
   private pendingHold: PendingHold | null = null;
+  /** Set by the commit* methods so onLine/flush can REPORT the change —
+   *  a commit that isn't reported never reaches React and the panel
+   *  silently stays stale (the original live bug). */
+  private lastCommit: LoadoutChange = 'none';
 
   /** Called for every command the player sends (post alias expansion). */
   onCommand(cmd: string, now: number): void {
@@ -199,7 +204,8 @@ export class LoadoutTracker {
    * context can re-render (and persist) only when something happened.
    */
   onLine(rawLine: string, now: number): LoadoutChange {
-    const line = rawLine.replace(/^> /, '');
+    // Queued commands can stack several prompts before a line ("> > ...")
+    const line = rawLine.replace(/^(?:> )+/, '');
 
     // --- Armed block captures --------------------------------------------
     // The TTL measures INACTIVITY (refreshed on every consumed line), not
@@ -208,13 +214,48 @@ export class LoadoutTracker {
     if (this.capture && now - this.capture.at > CAPTURE_TTL_MS) this.capture = null;
     if (this.capture) {
       const cap = this.capture;
+      this.lastCommit = 'none';
       const consumed = this.feedCapture(cap, line, now);
+      const committed = this.lastCommit;
       if (consumed) {
         cap.at = now;
-        return consumed === 'done' ? 'snapshot' : 'none';
+        return committed;
+      }
+      if (committed !== 'none') {
+        // The block committed because THIS foreign line ended it — the
+        // line may itself be a delta, so parse it too, but never report
+        // less than the commit.
+        const rest = this.parseStream(line, now);
+        return rest === 'none' ? committed : rest;
       }
     }
 
+    return this.parseStream(line, now);
+  }
+
+  /**
+   * Commit a block capture that is still open but has content — called by
+   * the hook after a quiet period. Without this, an `equip held` block sent
+   * in a lull only commits when the NEXT unrelated server line arrives.
+   */
+  flush(now: number): LoadoutChange {
+    const cap = this.capture;
+    if (!cap) return 'none';
+    this.lastCommit = 'none';
+    if (cap.kind === 'examine' && cap.inList && cap.seen.size > 0) this.commitExamine(cap, now);
+    else if (cap.kind === 'equip' && cap.seen.size > 0) this.commitEquip(cap, now);
+    else if (cap.kind === 'health' && cap.seen.size > 0) this.commitHealth(cap);
+    if (this.lastCommit !== 'none') this.capture = null;
+    return this.lastCommit;
+  }
+
+  /** True while a block capture is armed (the hook uses this to schedule
+   *  an idle flush). */
+  get hasPendingCapture(): boolean {
+    return this.capture !== null;
+  }
+
+  private parseStream(line: string, now: number): LoadoutChange {
     // --- Hold confirmation -------------------------------------------------
     if (this.pendingHold && now - this.pendingHold.at > CAPTURE_TTL_MS) this.pendingHold = null;
     if (this.pendingHold) {
@@ -304,19 +345,19 @@ export class LoadoutTracker {
   // Block captures
   // -------------------------------------------------------------------------
 
-  /** Returns 'done' when the block completed, true when the line was
-   *  consumed, false when it didn't belong to the capture. */
-  private feedCapture(cap: Capture, line: string, now: number): 'done' | boolean {
+  /** Returns true when the line was consumed, false when it didn't belong
+   *  to the capture. Commits are reported through this.lastCommit. */
+  private feedCapture(cap: Capture, line: string, now: number): boolean {
     if (cap.kind === 'examine') return this.feedExamine(cap, line, now);
     if (cap.kind === 'equip') return this.feedEquip(cap, line, now);
-    return this.feedHealth(cap, line, now);
+    return this.feedHealth(cap, line);
   }
 
   private feedExamine(
     cap: Extract<Capture, { kind: 'examine' }>,
     line: string,
     now: number
-  ): 'done' | boolean {
+  ): boolean {
     // Clothing prose — may start mid-line inside the description paragraph
     // and wrap; collect until the sentence's period.
     if (!cap.inList && cap.prose !== null && !/\.\s*$/.test(cap.prose)) {
@@ -367,11 +408,7 @@ export class LoadoutTracker {
     return false;
   }
 
-  private feedEquip(
-    cap: Extract<Capture, { kind: 'equip' }>,
-    line: string,
-    now: number
-  ): 'done' | boolean {
+  private feedEquip(cap: Extract<Capture, { kind: 'equip' }>, line: string, now: number): boolean {
     const m = EQ_LINE.exec(line);
     if (m) {
       cap.seen.set(m[1].trim(), m[2].trim());
@@ -380,7 +417,7 @@ export class LoadoutTracker {
     if (/^You (?:are not|aren't) (?:holding|wielding)/.test(line)) {
       this.commitEquip(cap, now);
       this.capture = null;
-      return 'done';
+      return true;
     }
     if (cap.seen.size > 0) {
       // Block ended at the first non-matching line
@@ -392,11 +429,7 @@ export class LoadoutTracker {
     return false;
   }
 
-  private feedHealth(
-    cap: Extract<Capture, { kind: 'health' }>,
-    line: string,
-    _now: number
-  ): 'done' | boolean {
+  private feedHealth(cap: Extract<Capture, { kind: 'health' }>, line: string): boolean {
     const m = HEALTH_LINE.exec(line);
     if (m && m[1].trim() !== 'overall') {
       cap.seen.set(m[1].trim(), m[2].trim());
@@ -404,10 +437,7 @@ export class LoadoutTracker {
     }
     if (m) return true; // overall line
     if (cap.seen.size > 0) {
-      for (const [limbName, health] of cap.seen) {
-        const limb = this.limbFor(limbName, true);
-        if (limb) limb.health = health;
-      }
+      this.commitHealth(cap);
       this.capture = null;
       return false;
     }
@@ -427,6 +457,7 @@ export class LoadoutTracker {
     s.handsStale = false;
     s.fullSyncAt = now;
     s.heldSyncAt = now;
+    this.lastCommit = 'snapshot';
   }
 
   private commitEquip(cap: Extract<Capture, { kind: 'equip' }>, now: number): void {
@@ -445,6 +476,15 @@ export class LoadoutTracker {
     s.unassigned = [];
     s.handsStale = false;
     s.heldSyncAt = now;
+    this.lastCommit = 'snapshot';
+  }
+
+  private commitHealth(cap: Extract<Capture, { kind: 'health' }>): void {
+    for (const [limbName, health] of cap.seen) {
+      const limb = this.limbFor(limbName, true);
+      if (limb) limb.health = health;
+    }
+    this.lastCommit = 'health';
   }
 
   // -------------------------------------------------------------------------

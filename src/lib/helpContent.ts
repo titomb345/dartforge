@@ -136,7 +136,7 @@ export const HELP_CATEGORIES: HelpCategory[] = [
       {
         title: 'Loadout Panel',
         description:
-          'Live view of what each of your limbs is holding and everything you\'re wearing — no more typing "eq" every few seconds. It reads the output the game already prints: an "x me" gives it the full picture (limb roster, held and worn items, limb health — the colored dots), "equip held" re-syncs the hands, and between snapshots it follows your hold/wear/remove/summon/stow/drop/eat messages live. Summoned items get a ✦ badge (they vanish when dismissed — an emptied hand shows immediately). When something moves into a hand the game doesn\'t name (a bare "take"), the panel says so with an "≈ approx" flag instead of guessing — press ⟳ hands to re-sync. The ⟳ buttons send "equip held" / "x me" for you. Pin it next to the terminal while hunting.',
+          'Live view of what each of your limbs is holding and everything you\'re wearing — no more typing "eq" every few seconds. It reads the output the game already prints: a "view me" (or your x-me alias) gives it the full picture — limb roster, held and worn items, limb health as colored dots — "equip held" re-syncs the hands, and between snapshots it follows your hold/wear/remove/summon/stow/drop/eat messages live. Summoned items get a ✦ badge (they vanish when dismissed — an emptied hand shows immediately). When something moves into a hand the game doesn\'t name (a bare "take"), the panel says so with an "≈ approx" flag instead of guessing — press ⟳ hands to re-sync. The ⟳ buttons send "equip held" / "view me" for you. Pin it next to the terminal while hunting.',
         helpId: 'toolbar-loadout',
       },
       {

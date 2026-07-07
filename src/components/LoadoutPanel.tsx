@@ -98,7 +98,7 @@ export function LoadoutPanel({ mode = 'slideout' }: PinnablePanelProps) {
         <button
           onClick={refreshFull}
           className={syncBtn}
-          title='Full re-sync: hands, worn, and limb health (sends "x me")'
+          title='Full re-sync: hands, worn, and limb health (sends "view me")'
         >
           ⟳ full
         </button>
@@ -127,8 +127,8 @@ export function LoadoutPanel({ mode = 'slideout' }: PinnablePanelProps) {
             <br />
             <br />
             Press <span className="text-text-label">⟳ full</span> (or type{' '}
-            <span className="text-text-label">x me</span>) for a complete snapshot — the panel then
-            follows your hold, wear, remove, summon, and stow messages live.
+            <span className="text-text-label">view me</span>) for a complete snapshot — the panel
+            then follows your hold, wear, remove, summon, and stow messages live.
           </div>
         ) : (
           <>

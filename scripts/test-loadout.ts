@@ -27,8 +27,9 @@ const wornAnywhere = (name: string) =>
   tracker.state.wornLoose.some((n) => n.includes(name)) ||
   tracker.state.limbs.some((l) => l.worn.some((n) => n.includes(name)));
 
-// --- 1. Full x me snapshot (verbatim from session_2026-07-04) --------------
-cmd('x me');
+// --- 1. Full examine-self snapshot (verbatim from session_2026-07-04;
+// `view me` is what Bill's `x me` alias expands to) ---------------------------
+cmd('view me');
 lines(`He is an overgrown arachnid with four legs, four arms, eight black eyes, white
 fur, and dripping mandibles.  He looks like a strong warrior.  An intense amber
 four-pointed star glows brightly at the center of his chest.  He is wearing a
@@ -60,8 +61,11 @@ left foreleg     (in perfect health):
 right foreleg    (in perfect health):
 left hind leg    (in perfect health):
 right hind leg   (in perfect health):`);
-line('Eye of the Temple'); // foreign line ends the block
+const endChange = line('Eye of the Temple'); // foreign line ends the block
 
+// THE live bug: the commit fired but onLine reported 'none', so React never
+// re-rendered — the panel looked completely dead.
+check('x me: block end is REPORTED as a change', endChange === 'snapshot');
 check('x me: 10 limbs learned', tracker.state.limbs.length === 10);
 check('x me: 4 hand limbs', tracker.state.limbs.filter((l) => isHandLimb(l.limb)).length === 4);
 check('x me: axe held upper left', heldOn('upper left hand')[0] === 'a bloody axe');
@@ -113,7 +117,8 @@ check('disintegrates clears the named limb', heldOn('lower right hand').length =
 cmd('equip held');
 line('upper left hand: a bloody axe');
 line('lower left hand: a large black steel great chain');
-line('You gaze at your surroundings.'); // ends the block
+const eqEnd = line('You gaze at your surroundings.'); // ends the block
+check('eq: block end is REPORTED as a change', eqEnd === 'snapshot');
 check(
   'eq: listed limbs set',
   heldOn('upper left hand')[0] === 'a bloody axe' &&
@@ -121,6 +126,14 @@ check(
 );
 check('eq: omitted hands emptied', heldOn('lower right hand').length === 0);
 check('eq: clears stale flag', tracker.state.handsStale === false);
+
+// In a quiet room no foreign line arrives — the idle flush must commit.
+cmd('equip held');
+line('upper right hand: a mythril longsword');
+check('eq: no commit before the block ends', heldOn('upper right hand').length === 0);
+check('eq: flush commits the pending block', tracker.flush((t += 2000)) === 'snapshot');
+check('eq: flushed hand is set', heldOn('upper right hand')[0] === 'a mythril longsword');
+check('eq: nothing pending after flush', tracker.hasPendingCapture === false);
 
 // --- 4. Wear / remove / stow (verbatim from the stow sequence) ---------------
 line('You take a dagger from the chest');

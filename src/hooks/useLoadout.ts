@@ -4,6 +4,10 @@ import type { DataStore } from '../contexts/DataStoreContext';
 
 const loadoutFileName = (name: string) => `loadout-${name.toLowerCase()}.json`;
 const SAVE_DEBOUNCE_MS = 2000;
+/** A capture block is committed after this much line silence — the block's
+ *  natural end is "the first foreign line", which in a quiet room may not
+ *  arrive for minutes. */
+const FLUSH_IDLE_MS = 1500;
 
 /**
  * Loadout tracker hook — owns the LoadoutTracker instance, feeds it output
@@ -70,31 +74,54 @@ export function useLoadout(
     };
   }, [activeCharacter, dataStore.ready]);
 
+  const flushTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const publish = useCallback(() => {
+    setState(structuredClone(trackerRef.current!.state));
+    scheduleSave();
+  }, [scheduleSave]);
+
+  /** While a block capture is open, (re)arm a timer that force-commits it
+   *  after a quiet period — its natural end is "the first foreign line",
+   *  which in a quiet room may not arrive for minutes. */
+  const armFlush = useCallback(() => {
+    if (flushTimerRef.current) clearTimeout(flushTimerRef.current);
+    if (!trackerRef.current!.hasPendingCapture) return;
+    flushTimerRef.current = setTimeout(() => {
+      flushTimerRef.current = null;
+      const change = trackerRef.current!.flush(Date.now());
+      if (change !== 'none') publish();
+    }, FLUSH_IDLE_MS);
+  }, [publish]);
+
   /** Feed one stripped output line (wired into OutputFilter's onLine). */
   const feedLine = useCallback(
     (line: string) => {
       const change = trackerRef.current!.onLine(line, Date.now());
-      if (change !== 'none') {
-        setState(structuredClone(trackerRef.current!.state));
-        scheduleSave();
-      }
+      if (change !== 'none') publish();
+      armFlush();
     },
-    [scheduleSave]
+    [publish, armFlush]
   );
 
   /** Observe an outgoing command (wired next to the mapper's trackCommand). */
-  const trackCommand = useCallback((cmd: string) => {
-    trackerRef.current!.onCommand(cmd, Date.now());
-  }, []);
+  const trackCommand = useCallback(
+    (cmd: string) => {
+      trackerRef.current!.onCommand(cmd, Date.now());
+      armFlush();
+    },
+    [armFlush]
+  );
 
   /** Re-sync held items — sends `equip held` (tiny, one line per limb). */
   const refreshHands = useCallback(() => {
     sendCommandRef.current?.('equip held').catch(console.error);
   }, [sendCommandRef]);
 
-  /** Full re-sync (hands + worn + limb health) — sends `x me`. */
+  /** Full re-sync (hands + worn + limb health) — sends `view me` (the
+   *  native DartMUD examine; `x` is only an alias for it). */
   const refreshFull = useCallback(() => {
-    sendCommandRef.current?.('x me').catch(console.error);
+    sendCommandRef.current?.('view me').catch(console.error);
   }, [sendCommandRef]);
 
   return { state, feedLine, trackCommand, refreshHands, refreshFull };
