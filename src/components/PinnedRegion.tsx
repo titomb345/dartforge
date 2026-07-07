@@ -12,6 +12,7 @@ import { AllocPanel } from './AllocPanel';
 import { CurrencyPanel } from './CurrencyPanel';
 import { BabelPanel } from './BabelPanel';
 import { WhoPanel } from './WhoPanel';
+import { LoadoutPanel } from './LoadoutPanel';
 import {
   ChatIcon,
   CounterIcon,
@@ -22,6 +23,7 @@ import {
   CoinIcon,
   BabelIcon,
   WhoIcon,
+  LoadoutIcon,
 } from './icons';
 import { useVerticalResize } from '../hooks/useVerticalResize';
 import { VerticalResizeHandle } from './VerticalResizeHandle';
@@ -88,6 +90,12 @@ export const PANEL_META: Record<
     icon: (s) => <WhoIcon size={s} />,
     accent: '#61afef',
     label: 'Who',
+  },
+  loadout: {
+    render: () => <LoadoutPanel mode="pinned" />,
+    icon: (s) => <LoadoutIcon size={s} />,
+    accent: '#bd93f9',
+    label: 'Loadout',
   },
 };
 

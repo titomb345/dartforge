@@ -18,6 +18,7 @@ import {
   CoinIcon,
   BabelIcon,
   WhoIcon,
+  LoadoutIcon,
 } from './icons';
 
 const PANEL_INFO: Record<PinnablePanel, { label: string; icon: ReactNode }> = {
@@ -30,6 +31,7 @@ const PANEL_INFO: Record<PinnablePanel, { label: string; icon: ReactNode }> = {
   currency: { label: 'Currency', icon: <CoinIcon size={10} /> },
   babel: { label: 'Babel', icon: <BabelIcon size={10} /> },
   who: { label: 'Who', icon: <WhoIcon size={10} /> },
+  loadout: { label: 'Loadout', icon: <LoadoutIcon size={10} /> },
 };
 
 export function HeaderBtn({
