@@ -443,13 +443,33 @@ export class TownLocalizer {
           // diagonal leading back into mapped territory ALWAYS duplicated
           // its destination (Eris market plaza: se from the NW corner
           // re-enters the already-mapped center).
+          //
+          // FLOOR ground truth: a tracked move's destination floor is exact
+          // (lateral moves stay on the floor, u/d shift exactly one), so a
+          // candidate on another z can never be this move's destination.
+          // findMatchesNear tolerates dz=1 for the z-uncertain correlation
+          // paths — here it let mirror-identical floors merge vertically:
+          // the keep's 2F Bedchamber, entered n from its Vestibule, reused
+          // the 3F Bedchamber directly above (same name+exits; its own
+          // Vestibule mirrors ours, so the reciprocity guard passed).
           const cands = this.map
             .findMatchesNear(town, block, target.x, target.y, target.z, NEAR_RADIUS, 4)
-            .filter((r) => r.id !== current.id && (gridVec === undefined || r.id !== occupantId));
+            .filter(
+              (r) =>
+                r.z === target.z &&
+                r.id !== current.id &&
+                (gridVec === undefined || r.id !== occupantId)
+            );
           const guarded = cands.filter((r) => relaxedReciprocal(r) && !alreadyNeighborElsewhere(r));
+          // Readable disagreeing descs veto reuse regardless of candidate
+          // count — the block itself is saying "not this one" (the plaza
+          // lesson, extended to the single-candidate branch: the keep's
+          // Bedchambers differ ONLY in prose, name+exits are identical).
+          const descVeto = (r: TownRoom) =>
+            descUsable(block.desc) && descUsable(r.desc) && !this.map.descAgrees(r, block);
           let reuse: TownRoom | null = null;
           if (cands.length <= 1) {
-            reuse = guarded.length === 1 ? guarded[0] : null;
+            reuse = guarded.length === 1 && !descVeto(guarded[0]) ? guarded[0] : null;
           } else {
             // Uniform-fingerprint neighborhood (hall of mirrors): several
             // nearby rooms share the block's full fingerprint. Positive
@@ -471,12 +491,8 @@ export class TownLocalizer {
               reuse = positive[0];
             } else if (byDesc.length === 1) {
               reuse = byDesc[0];
-            } else if (guarded.length === 1) {
-              const veto =
-                descUsable(block.desc) &&
-                descUsable(guarded[0].desc) &&
-                !this.map.descAgrees(guarded[0], block);
-              if (!veto) reuse = guarded[0];
+            } else if (guarded.length === 1 && !descVeto(guarded[0])) {
+              reuse = guarded[0];
             }
           }
           if (reuse) {

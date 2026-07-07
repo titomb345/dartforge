@@ -1139,6 +1139,25 @@ export class TownMapStore {
         }
       }
     }
+    // Ground-truth link invariant: a lateral move can never change floors,
+    // and stairs move exactly one. Every placement path preserves that
+    // (placementTarget, findFreeCell, stretch all keep z), so a recorded
+    // link violating it can only be a cross-floor merge scar — mirror-
+    // identical stacked floors reusing each other's rooms (the rangers'
+    // keep bedrooms, the Blue Pearl Inn hallways) before the localizer
+    // gained its floor filter. Sever such links; walking the exit again
+    // maps the real destination. Must run BEFORE the relayout migration,
+    // which embeds rooms by following links.
+    for (const town of store.towns.values()) {
+      for (const room of town.rooms.values()) {
+        for (const [dir, id] of Object.entries(room.links) as [TownDir, number][]) {
+          const dest = id !== undefined ? town.rooms.get(id) : undefined;
+          if (!dest) continue;
+          const dz = dir === 'u' ? 1 : dir === 'd' ? -1 : 0;
+          if (dest.z !== room.z + dz) delete room.links[dir];
+        }
+      }
+    }
     // Pre-v2 layouts were nudge-scarred (and last-write-wins above can
     // silently collapse corrupt duplicate cells) — re-embed once from the
     // link graph. v2 coordinates load verbatim, keeping maps stable.
