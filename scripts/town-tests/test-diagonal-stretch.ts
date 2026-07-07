@@ -1,11 +1,13 @@
 /**
- * Regression test: diagonal double-stretch placement.
+ * Regression test: diagonal single-stretch placement.
  * A diagonal arrival (ne/nw/se/sw) whose hint cell is occupied by a
- * DIFFERENT room must double-stretch the map — one shift per component
- * axis — so the new room lands exactly at its diagonal cell, the from-room
- * stays put, and the displaced occupant remains diagonal to the new room.
- * (Previously diagonals nudged to the nearest free cell, which scattered
- * them to arbitrary cells whenever the grid was tight.)
+ * DIFFERENT room must stretch the map along ONE component axis — a single
+ * half-plane shift already frees the cell — so the new room lands exactly
+ * at its diagonal cell and the from-room stays put. The axis is chosen
+ * perpendicular to the occupant's own linked run, so the occupant's street
+ * moves as one piece. (Previously diagonals stretched BOTH component axes,
+ * spreading the map an extra cell in each direction on every collision;
+ * before that they nudged to the nearest free cell, scattering them.)
  */
 import { TownMapStore } from '../../src/lib/townMap';
 import { TownLocalizer } from '../../src/lib/townLocalizer';
@@ -54,7 +56,9 @@ step('s', EAST_ST);
 step('w', PLAZA);
 
 // The ne arrival's hint cell (1,-1) is occupied by Corner (a different
-// room) — the map must double-stretch so Garden lands exactly there.
+// room). Corner's only link is south to East Street (a vertical run), so
+// the map must stretch the HORIZONTAL component only: Corner's whole
+// column shifts east as one piece and Garden lands exactly at the hint.
 step('ne', GARDEN);
 const garden = map.pos!.roomId;
 
@@ -75,26 +79,32 @@ check(
 );
 // The from-room never moves
 check(r(plaza).x === 0 && r(plaza).y === 0, `plaza moved to (${r(plaza).x},${r(plaza).y})`);
-// The occupant shifted once along EACH axis — still strictly ne of garden
+// The occupant shifted once along the HORIZONTAL axis only (its own run
+// is vertical) — same row as garden, one east, still atop East Street
 check(
-  r(corner).x === r(garden).x + 1 && r(corner).y === r(garden).y - 1,
-  `corner at (${r(corner).x},${r(corner).y}), expected one further ne (${r(garden).x + 1},${r(garden).y - 1})`
+  r(corner).x === r(garden).x + 1 && r(corner).y === r(garden).y,
+  `corner at (${r(corner).x},${r(corner).y}), expected one east of garden (${r(garden).x + 1},${r(garden).y})`
+);
+check(
+  r(corner).x === r(eastSt).x && r(corner).y === r(eastSt).y - 1,
+  'corner no longer directly north of east street (its column was split)'
+);
+// The perpendicular axis is untouched: north street never moves
+check(
+  r(northSt).x === r(plaza).x && r(northSt).y === r(plaza).y - 1,
+  `north street at (${r(northSt).x},${r(northSt).y}), expected untouched at (${r(plaza).x},${r(plaza).y - 1})`
 );
 // Cardinal neighbors stay on their axes (stretched, not bent)
-check(
-  r(northSt).x === r(plaza).x && r(northSt).y < r(plaza).y,
-  'north street no longer directly north of the plaza'
-);
 check(
   r(eastSt).y === r(plaza).y && r(eastSt).x > r(plaza).x,
   'east street no longer directly east of the plaza'
 );
-// Double-stretch, not nudge
-check(map.stretches === 2, `stretches=${map.stretches}, expected 2`);
+// ONE stretch, not two, and no nudge
+check(map.stretches === 1, `stretches=${map.stretches}, expected 1`);
 check(map.nudges === 0, `nudges=${map.nudges}, expected 0`);
 // No two rooms share a cell
 const cells = new Set([...town.rooms.values()].map((rm) => `${rm.x},${rm.y},${rm.z}`));
 check(cells.size === town.rooms.size, 'two rooms share a grid cell');
 
 if (fail) process.exit(1);
-console.log('PASS — diagonal collision double-stretched; the room sits at its diagonal cell');
+console.log('PASS — diagonal collision stretched one axis; the room sits at its diagonal cell');

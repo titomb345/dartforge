@@ -14,8 +14,9 @@
  *    along the movement axis, vacating the natural cell so the new room
  *    lands exactly where the move says. Straight streets stay straight and
  *    axis order stays monotone. A DIAGONAL arrival into an occupied cell
- *    double-stretches — one shift per component axis — so the room still
- *    lands at its diagonal hint cell and the occupant stays diagonal to it.
+ *    stretches ONE component axis (a single half-plane shift already frees
+ *    the cell) — chosen so the displaced occupant's own street moves as one
+ *    piece — and the room still lands at its diagonal hint cell.
  *    Placements without a direction at all (u/d, floaters, named exits)
  *    are nudged to the nearest free cell instead. Links — not grid
  *    adjacency — drive pathfinding, so a displaced room stays walkable
@@ -100,7 +101,7 @@ export interface TownWalkStep {
 
 const gridKey = (x: number, y: number, z: number) => `${x},${y},${z}`;
 
-/** Component cardinal axes of each diagonal (double-stretch placement) */
+/** Component cardinal axes of each diagonal, [vertical, horizontal] */
 const DIAG_COMPONENTS: Partial<Record<TownDir, [TownDir, TownDir]>> = {
   ne: ['n', 'e'],
   nw: ['n', 'w'],
@@ -283,10 +284,10 @@ export class TownMapStore {
    * direction that was walked to reach the room, an occupied cell is
    * resolved by STRETCHING the map so the new room always lands exactly at
    * (x,y,z): one shift along the movement axis for a cardinal arrival, one
-   * shift per component axis for a diagonal (see stretchToVacate). Without
-   * a lateral `via` (u/d, floaters, named exits) the room is nudged to the
-   * nearest free cell instead (grid position is presentation; links carry
-   * connectivity).
+   * shift along a single component axis for a diagonal (see
+   * stretchToVacate). Without a lateral `via` (u/d, floaters, named exits)
+   * the room is nudged to the nearest free cell instead (grid position is
+   * presentation; links carry connectivity).
    */
   addRoom(
     town: Town,
@@ -304,11 +305,18 @@ export class TownMapStore {
     if (occupied && vec && vec[2] === 0) {
       this.stretchToVacate(town, { x, y }, via!);
     } else if (occupied && diag) {
-      // Diagonal arrival: double-stretch — vacate the target column and the
-      // target row (one shift per component axis) so the room lands at its
-      // diagonal hint cell and the displaced occupant stays diagonal to it.
-      this.stretchToVacate(town, { x, y }, diag[0]);
-      this.stretchToVacate(town, { x, y }, diag[1]);
+      // Diagonal arrival: a single half-plane shift already vacates the
+      // hint cell, so stretch only ONE component axis (stretching both
+      // spread the map an extra cell in each direction on every diagonal
+      // collision). Pick the axis perpendicular to the occupant's own
+      // linked run: a vertical stretch moves its whole row as one piece, a
+      // horizontal one its whole column — so its street stays intact
+      // instead of having the new room wedged into the middle of it.
+      const occupant = town.rooms.get(town.grid.get(gridKey(x, y, z))!);
+      const runsEW = occupant?.links.e !== undefined || occupant?.links.w !== undefined;
+      const runsNS = occupant?.links.n !== undefined || occupant?.links.s !== undefined;
+      const [vertical, horizontal] = diag;
+      this.stretchToVacate(town, { x, y }, runsNS && !runsEW ? horizontal : vertical);
     } else {
       spot = this.findFreeCell(town, x, y, z);
       if (spot.x !== x || spot.y !== y) this.nudges++;
@@ -400,7 +408,7 @@ export class TownMapStore {
     const vec = TOWN_DIR_VEC[dir];
     if (vec) return { x: from.x + vec[0], y: from.y + vec[1], z: from.z + vec[2] };
     // Diagonal — the visual diagonal is a placement hint only. Derived
-    // from the same DIAG_COMPONENTS table addRoom's double-stretch uses,
+    // from the same DIAG_COMPONENTS table addRoom's collision stretch uses,
     // so the hint cell and the vacated row/column can never disagree.
     const [d1, d2] = DIAG_COMPONENTS[dir]!;
     const v1 = TOWN_DIR_VEC[d1]!;
@@ -436,6 +444,16 @@ export class TownMapStore {
     const added = b.filter((s) => !setA.has(s));
     // (a.length >= 3 above + exactly one swap ⇒ at least 2 shared sentences)
     if (removed.length !== 1 || added.length !== 1) return;
+    // A description's FIRST sentence is the room's identity headline, never
+    // world-state: every corpus-confirmed volatile sentence (market crowds,
+    // weather, street traffic) lives mid-description. A swapped headline
+    // means the "revisit" was really two look-alike rooms conflated by a
+    // wrong link — the Blue Pearl Inn's floors differ only by their
+    // "second/third floor" headline, and learning that pair glued the
+    // floors together for good (cross-floor links, duplicated bedrooms).
+    if (removed[0] === splitSentences(oldDesc)[0] || added[0] === splitSentences(newDesc)[0]) {
+      return;
+    }
     if (this.volatileSentences.has(removed[0]) && this.volatileSentences.has(added[0])) return;
     const pair = [removed[0], added[0]].sort();
     const key = pair.join(' ');
@@ -1087,6 +1105,26 @@ export class TownMapStore {
           store.volatilePending.set(k, new Set(ids.filter((n) => typeof n === 'number')));
         }
       }
+    }
+    // Identity headlines can never be world-state prose — drop any learned
+    // (or pending) volatile sentence matching a room's first sentence.
+    // Heals saves poisoned before learnVolatileDesc gained its headline
+    // guard: the Blue Pearl Inn's "second/third floor" hallway headlines
+    // got learned as volatile, gluing the inn's floors together.
+    const headlines = new Set<string>();
+    for (const town of store.towns.values()) {
+      for (const r of town.rooms.values()) {
+        const first = splitSentences(r.desc ?? '')[0];
+        if (first) headlines.add(first);
+        const firstShown = splitSentences(r.descFirst ?? '')[0];
+        if (firstShown) headlines.add(firstShown);
+      }
+    }
+    for (const s of [...store.volatileSentences]) {
+      if (headlines.has(s)) store.volatileSentences.delete(s);
+    }
+    for (const k of [...store.volatilePending.keys()]) {
+      if (k.split('\0').some((s) => headlines.has(s))) store.volatilePending.delete(k);
     }
     const portalDests = (d as { portalDests?: Record<string, TownPos> }).portalDests;
     if (portalDests && typeof portalDests === 'object') {

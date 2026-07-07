@@ -104,9 +104,53 @@ check(
   'hidden move at a new hour duplicated a room'
 );
 
+// A description's FIRST sentence is the room's identity headline and must
+// never be learned, even when witnessed swapping on two different rooms.
+// (The Blue Pearl Inn's floors differ only by their "second/third floor"
+// headline; a wrong link once taught that pair and glued the floors
+// together — cross-floor links, duplicated bedrooms.)
+const H2 = 'A hallway on the second floor which stretches southwards.';
+const H3 = 'A hallway on the third floor which stretches southwards.';
+const REST = 'Doors on the west side lead into private bedrooms for guests.';
+const REST2 = 'The carpet here is a rich blue with pearl-white trim on the edges.';
+const hallway = (headline: string): TownRoomBlock => ({
+  name: 'Blue Pearl Hallway',
+  descFirst: headline,
+  desc: `${headline}  ${REST}  ${REST2}`,
+  exits: parseTownExits('There are exits: north and south.'),
+});
+const roomA = map.get(map.pos!.townId)!.rooms.get(west)!;
+const roomB = map.get(map.pos!.townId)!.rooms.get(center)!;
+roomA.desc = hallway(H2).desc;
+map.touchRoom(roomA, hallway(H3), (t += 1000), true);
+roomB.desc = hallway(H3).desc;
+map.touchRoom(roomB, hallway(H2), (t += 1000), true);
+check(
+  !map.volatileSentences.has(H2) && !map.volatileSentences.has(H3),
+  'identity headline sentences wrongly learned as volatile'
+);
+
 // Learned prose survives serialization.
 const revived = TownMapStore.deserialize(JSON.parse(JSON.stringify(map.serialize())));
 check(revived.volatileSentences.has(BUSY), 'volatile sentences lost through serialize');
+
+// Saves poisoned by the pre-guard learner are cleansed on load: a learned
+// sentence matching some room's headline is dropped, legit ones are kept.
+// (roomA's desc now headlines H3 after the touch above.)
+const poisoned = JSON.parse(JSON.stringify(map.serialize())) as {
+  volatileSentences: string[];
+  volatilePending: Record<string, number[]>;
+};
+poisoned.volatileSentences.push(H3);
+poisoned.volatilePending[[H2, H3].sort().join('\0')] = [roomA.id];
+const cleansed = TownMapStore.deserialize(poisoned);
+check(!cleansed.volatileSentences.has(H3), 'poisoned headline sentence survived load cleanse');
+check(cleansed.volatileSentences.has(BUSY), 'legit volatile sentence dropped by load cleanse');
+const reSerialized = cleansed.serialize() as { volatilePending: Record<string, number[]> };
+check(
+  !Object.keys(reSerialized.volatilePending).some((k) => k.includes(H3)),
+  'poisoned pending pair survived load cleanse'
+);
 
 if (fail) process.exit(1);
 console.log('PASS — volatile prose is learned from confirmed revisits and ignored thereafter');

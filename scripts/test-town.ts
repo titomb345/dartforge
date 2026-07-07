@@ -8,13 +8,15 @@
  * real duplication/false-link cascade found live or via replay). Any town
  * engine change must keep them green, alongside the corpus replay:
  *   npx tsx scripts/replay-town.ts --dartforge
- * Baseline (July 2026, Dropbox sessions dir currently holds 48 logs; the
- * dir drifts over time — older notes cite 44 logs / 71.5% and 166 logs /
- * 78.3%; re-baseline against main when it moves): expected ≥ 71.2%,
- * 0 lost, 13 towns, town 1 "Eris Road" ≈ 99 rooms, dup fingerprint
- * groups ≤ 3 (all three are LEGIT same-fingerprint rooms: the Market
- * trio, the keep's four Vestibules, the inn's four Hallway segments),
- * link misses ≈ 12, blocks parsed ≈ 99.8%.
+ * Baseline (July 2026, Dropbox sessions dir currently holds 51 logs; the
+ * dir drifts over time — older notes cite 44 logs / 71.5%, 48 logs /
+ * 71.2%, 166 logs / 78.3%; re-baseline against main when it moves):
+ * expected ≥ 72.4%, 0 lost, 13 towns, town 1 "Eris Road" ≈ 101 rooms,
+ * dup fingerprint groups ≤ 6 (mostly LEGIT same-fingerprint rooms: the
+ * Eris Market, the keep's Vestibules and Bedchambers, the inn's Hallway
+ * segments, the Soriktos Souk's sides, Jacinth Street's segments — the
+ * Market group carries 2 cold-start orphan dups created before the crowd
+ * sentences were learned), link misses ≈ 23, blocks parsed ≈ 99.8%.
  */
 import { spawnSync } from 'child_process';
 import * as fs from 'fs';
