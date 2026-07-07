@@ -15,9 +15,10 @@
  *    put/take/drop, and `hold <item> in <limbs>` command echoes confirmed
  *    by the game's "Okay." reply.
  *
- * `take X from ...` never names the receiving hand, so taken items land in
- * an "unassigned held" bucket and the hands section is flagged approximate
- * (`handsStale`) until the next `equip held` / `x me` snapshot re-syncs it.
+ * Hands are never guessed at between snapshots: the game usually doesn't
+ * say which hand an event touched, so any hand-affecting delta just flags
+ * `handsStale` and the hook fires a silent gagged `equip held` to re-sync
+ * with truth moments later.
  */
 
 // ---------------------------------------------------------------------------
@@ -46,9 +47,8 @@ export interface LoadoutState {
   limbs: LimbState[];
   /** Worn items not attributed to a limb (clothing prose + live wear events) */
   wornLoose: string[];
-  /** Held somewhere, hand unknown (take/remove events) */
-  unassigned: string[];
-  /** Hands section is an estimate — a take/remove happened since last sync */
+  /** Hands shown are from the last snapshot and something has changed since
+   *  — the auto-verify eq clears this moments later */
   handsStale: boolean;
   /** Timestamps of the last authoritative syncs (0 = never) */
   fullSyncAt: number;
@@ -75,16 +75,6 @@ function sameItem(a: string, b: string): boolean {
   const ca = canonItem(a);
   const cb = canonItem(b);
   return ca === cb || ca.endsWith(cb) || cb.endsWith(ca);
-}
-
-/** Substring containment either way — for events that name the limb, where
- *  our recorded name may be the player's shorthand ("chain" vs the full
- *  "blackened bronze chain with a malachite key on it"). */
-function sameItemLoose(a: string, b: string): boolean {
-  if (sameItem(a, b)) return true;
-  const ca = canonItem(a);
-  const cb = canonItem(b);
-  return ca.length >= 3 && cb.length >= 3 && (ca.includes(cb) || cb.includes(ca));
 }
 
 /** A limb name is a hand slot if it can hold things. */
@@ -163,24 +153,25 @@ type Capture =
   | { kind: 'equip'; at: number; misses: number; seen: Map<string, string> }
   | { kind: 'health'; at: number; misses: number; seen: Map<string, string> };
 
-interface PendingHold {
-  item: string;
-  limbs: string[] | null;
-  at: number;
-  misses: number;
-}
-
 export class LoadoutTracker {
   state: LoadoutState = emptyState();
   private capture: Capture | null = null;
-  private pendingHold: PendingHold | null = null;
   /** Set by the commit* methods so onLine/flush can REPORT the change —
    *  a commit that isn't reported never reaches React and the panel
    *  silently stays stale (the original live bug). */
   private lastCommit: LoadoutChange = 'none';
+  /** Canonical names of items seen arriving via a summon — held items
+   *  matching one get the ✦ badge when snapshots rebuild the hands
+   *  (eq output can't tell summoned from real). Pruned on snapshots. */
+  private summonedNames = new Set<string>();
 
-  /** Called for every command the player sends (post alias expansion). */
-  onCommand(cmd: string, now: number): void {
+  /**
+   * Called for every command the player sends (post alias expansion).
+   * Returns true when the command may have changed what the hands hold
+   * without any parseable echo ("hold X in ..." replies just "Okay."),
+   * so the caller should schedule a verify re-sync.
+   */
+  onCommand(cmd: string, now: number): boolean {
     const c = cmd.trim();
     if (EXAMINE_SELF_CMD.test(c)) {
       this.capture = {
@@ -191,21 +182,21 @@ export class LoadoutTracker {
         prose: null,
         seen: new Map(),
       };
-      return;
+      return false;
     }
     if (EQUIP_CMD.test(c)) {
       this.capture = { kind: 'equip', at: now, misses: 0, seen: new Map() };
-      return;
+      return false;
     }
     if (SHOW_HEALTH_CMD.test(c)) {
       this.capture = { kind: 'health', at: now, misses: 0, seen: new Map() };
-      return;
+      return false;
     }
-    const hold = HOLD_CMD.exec(c);
-    if (hold) {
-      const limbs = hold[2] ? hold[2].split(/ and /).map((l) => l.trim()) : null;
-      this.pendingHold = { item: hold[1].trim(), limbs, at: now, misses: 0 };
+    if (HOLD_CMD.test(c)) {
+      this.state.handsStale = true;
+      return true;
     }
+    return false;
   }
 
   /**
@@ -264,90 +255,49 @@ export class LoadoutTracker {
     return this.capture !== null;
   }
 
-  private parseStream(line: string, now: number): LoadoutChange {
-    // --- Hold confirmation -------------------------------------------------
-    if (this.pendingHold && now - this.pendingHold.at > CAPTURE_TTL_MS) this.pendingHold = null;
-    if (this.pendingHold) {
-      if (/^Okay\.\s*$/.test(line)) {
-        const { item, limbs } = this.pendingHold;
-        this.pendingHold = null;
-        this.applyHold(item, limbs);
-        return 'held';
-      }
-      if (/^(?:What \?|You can't|You don't|You aren't|You are not)/.test(line)) {
-        this.pendingHold = null;
-      } else if (++this.pendingHold.misses > CAPTURE_GRACE_LINES) {
-        this.pendingHold = null;
-      }
-    }
-
-    // --- Delta lines --------------------------------------------------------
+  /**
+   * Delta lines. Hands are NEVER guessed at: the game usually doesn't say
+   * which hand ("hold X in right hand" on a four-handed race, one of three
+   * identical tonfas dissolving), and per Bill the interim guesses were
+   * pure visual noise. Any hand-affecting event just flags the hands
+   * unverified — the caller's auto-verify eq replaces that with truth
+   * moments later. Worn tracking stays live: wear/remove echoes name the
+   * item exactly and involve no limb guessing.
+   */
+  private parseStream(line: string, _now: number): LoadoutChange {
     let m: RegExpExecArray | null;
     if ((m = APPEARS.exec(line))) {
-      const limbs = m[2].split(/ and /).map((l) => l.trim());
-      for (const limbName of limbs) {
-        const limb = this.limbFor(limbName);
-        if (limb) {
-          limb.held = limb.held.filter((h) => !sameItem(h.name, m![1]));
-          limb.held.push({ name: m[1], summoned: true });
-        }
-      }
+      // Remember the name for the ✦ badge — snapshots can't tell summoned
+      // gear from real gear on their own.
+      this.summonedNames.add(canonItem(m[1]));
+      this.state.handsStale = true;
       return 'held';
     }
-    if ((m = DISSOLVES.exec(line))) {
-      // ONE instance dissolved — with duplicates (three summoned tonfas)
-      // the message doesn't say which hand, so mark hands unverified and
-      // let the auto-verify eq settle it.
-      this.removeOneHeld(m[1]);
-      if (this.countHeld(m[1]) > 0) this.state.handsStale = true;
-      return 'held';
-    }
-    if ((m = DISINTEGRATES.exec(line))) {
-      // The limb is explicitly named, so a LOOSE match is safe: what we
-      // recorded there may be the player's shorthand ("chain") while the
-      // vanish line prints the item's full name.
-      const limb = this.limbFor(m[2]);
-      if (limb) limb.held = limb.held.filter((h) => !sameItemLoose(h.name, m![1]));
-      else this.removeOneHeld(m[1], true);
+    if (DISSOLVES.test(line) || DISINTEGRATES.test(line)) {
+      this.state.handsStale = true;
       return 'held';
     }
     if ((m = WEAR.exec(line))) {
-      // Wearing consumes the item from a hand (or the unassigned bucket)
-      this.removeOneHeld(m[1]);
       this.addWorn(m[1]);
+      this.state.handsStale = true; // it left a hand
       return 'worn';
     }
     if ((m = REMOVE_AND_PUT.exec(line))) {
-      this.removeWornByName(m[1]);
+      this.removeWornByName(m[1]); // straight into a container, hands untouched
       return 'worn';
     }
     if ((m = REMOVE.exec(line))) {
-      // Removed into a hand the game doesn't name
       this.removeWornByName(m[1]);
-      this.state.unassigned.push(m[1]);
-      this.state.handsStale = true;
+      this.state.handsStale = true; // removed INTO an unnamed hand
       return 'worn';
     }
     if ((m = PUT.exec(line))) {
-      // "(worn)" in the item text = stowing a worn container. Either way
-      // ONE instance left the hand (or the unassigned bucket, when the stow
-      // sequence's bare "You remove X." parked it there moments earlier).
       if (/\(worn\)/.test(m[1])) this.removeWornByName(m[1]);
-      this.removeOneHeld(m[1]);
-      return 'held';
-    }
-    if ((m = TAKE.exec(line))) {
-      this.state.unassigned.push(m[1]);
       this.state.handsStale = true;
       return 'held';
     }
-    if ((m = DROP.exec(line))) {
-      this.removeOneHeld(m[1]);
-      return 'held';
-    }
-    if ((m = CONSUME.exec(line))) {
-      // Loose match: "You eat 8 bananas." vs the taken "bananas"
-      this.removeOneHeld(m[1], true);
+    if (TAKE.test(line) || DROP.test(line) || CONSUME.test(line)) {
+      this.state.handsStale = true;
       return 'held';
     }
 
@@ -411,7 +361,7 @@ export class LoadoutTracker {
       const last = [...cap.seen.values()][cap.seen.size - 1];
       const text = item[1].trim();
       if (/\(worn\)/.test(text)) last.worn.push(text.replace(/\s*\(worn\)/, '').trim());
-      else last.held.push({ name: text, summoned: this.wasSummoned(text) });
+      else last.held.push({ name: text, summoned: false }); // marked on commit
       return true;
     }
     if (line.trim() === '') return true; // blank inside the block
@@ -462,14 +412,17 @@ export class LoadoutTracker {
     if (cap.seen.size === 0) return;
     const s = this.state;
     s.limbs = [...cap.seen.values()];
+    for (const limb of s.limbs) {
+      for (const h of limb.held) h.summoned = this.isSummonedName(h.name);
+    }
     // The wearing sentence usually ends mid-line ("...leather boots.  He is
     // a middle aged spyder...") — everything after its first period is the
     // next description sentence, not clothing.
     s.wornLoose = cap.prose ? splitProseList(cap.prose.replace(/\..*$/, '')) : s.wornLoose;
-    s.unassigned = [];
     s.handsStale = false;
     s.fullSyncAt = now;
     s.heldSyncAt = now;
+    this.pruneSummonedNames();
     this.lastCommit = 'snapshot';
   }
 
@@ -483,12 +436,12 @@ export class LoadoutTracker {
       if (item === undefined) {
         limb.held = [];
       } else {
-        limb.held = [{ name: item, summoned: this.wasSummoned(item) }];
+        limb.held = [{ name: item, summoned: this.isSummonedName(item) }];
       }
     }
-    s.unassigned = [];
     s.handsStale = false;
     s.heldSyncAt = now;
+    this.pruneSummonedNames();
     this.lastCommit = 'snapshot';
   }
 
@@ -518,69 +471,28 @@ export class LoadoutTracker {
     return limb;
   }
 
-  private applyHold(item: string, limbs: string[] | null): void {
-    const summoned = this.wasSummoned(item);
-    // The item leaves wherever it was (a hold repositions the one object,
-    // possibly out of several hands at once)
-    this.removeHeldByName(item);
-    if (!limbs) {
-      this.state.unassigned.push(item);
-      this.state.handsStale = true;
-      return;
-    }
-    for (const limbName of limbs) {
-      // A partial limb name ("hold X in right hand" on a four-handed race)
-      // is the GAME's choice to make — our pick is a guess, so flag it.
-      // The auto-verify eq settles it moments later.
-      if (!this.state.limbs.some((l) => l.limb === limbName.trim())) {
-        this.state.handsStale = true;
-      }
-      const limb = this.limbFor(limbName, true);
-      if (limb) limb.held.push({ name: item, summoned });
-    }
-  }
-
-  /** Was an item with this name summoned per current state? (keeps the
-   *  badge across re-syncs — eq output doesn't say). */
-  private wasSummoned(name: string): boolean {
-    return this.state.limbs.some((l) => l.held.some((h) => h.summoned && sameItem(h.name, name)));
-  }
-
-  /** How many held instances (across limbs + unassigned) match this name. */
-  private countHeld(name: string): number {
-    let n = this.state.unassigned.filter((u) => sameItem(u, name)).length;
-    for (const limb of this.state.limbs) {
-      n += limb.held.filter((h) => sameItem(h.name, name)).length;
-    }
-    return n;
-  }
-
-  /** Remove ALL held instances (a hold repositions the one object out of
-   *  every hand that gripped it). */
-  private removeHeldByName(name: string): void {
-    for (const limb of this.state.limbs) {
-      limb.held = limb.held.filter((h) => !sameItem(h.name, name));
-    }
-    this.state.unassigned = this.state.unassigned.filter((n) => !sameItem(n, name));
-  }
-
-  /** Remove ONE held instance — "You drop a tonfa" drops one tonfa, not
-   *  every tonfa you're holding. Returns true when something was removed. */
-  private removeOneHeld(name: string, loose = false): boolean {
-    const match = loose ? sameItemLoose : sameItem;
-    for (const limb of this.state.limbs) {
-      const idx = limb.held.findIndex((h) => match(h.name, name));
-      if (idx >= 0) {
-        limb.held.splice(idx, 1);
-        return true;
-      }
-    }
-    const uidx = this.state.unassigned.findIndex((n) => match(n, name));
-    if (uidx >= 0) {
-      this.state.unassigned.splice(uidx, 1);
-      return true;
+  /** Does this held-item name match one seen arriving via a summon? */
+  private isSummonedName(name: string): boolean {
+    const c = canonItem(name);
+    for (const s of this.summonedNames) {
+      if (c === s || c.endsWith(s) || s.endsWith(c)) return true;
     }
     return false;
+  }
+
+  /** Forget summoned names no longer held anywhere (called on snapshots —
+   *  summoned gear vanishes rather than being put down, so absence from a
+   *  snapshot means it's gone for good). */
+  private pruneSummonedNames(): void {
+    for (const s of [...this.summonedNames]) {
+      const stillHeld = this.state.limbs.some((l) =>
+        l.held.some((h) => {
+          const c = canonItem(h.name);
+          return c === s || c.endsWith(s) || s.endsWith(c);
+        })
+      );
+      if (!stillHeld) this.summonedNames.delete(s);
+    }
   }
 
   private addWorn(name: string): void {
@@ -604,17 +516,15 @@ export class LoadoutTracker {
   // -------------------------------------------------------------------------
 
   serialize(): unknown {
-    return { v: 1, state: this.state };
+    return { v: 1, state: this.state, summoned: [...this.summonedNames] };
   }
 
   static deserialize(data: unknown): LoadoutTracker {
     const t = new LoadoutTracker();
     if (!data || typeof data !== 'object') return t;
-    const d = data as { v?: number; state?: LoadoutState };
+    const d = data as { v?: number; state?: LoadoutState; summoned?: unknown };
     if (!d.state || !Array.isArray(d.state.limbs)) return t;
     t.state = {
-      ...emptyState(),
-      ...d.state,
       limbs: d.state.limbs.map((l) => ({
         limb: l.limb,
         health: l.health ?? null,
@@ -622,17 +532,21 @@ export class LoadoutTracker {
         worn: Array.isArray(l.worn) ? l.worn : [],
       })),
       wornLoose: Array.isArray(d.state.wornLoose) ? d.state.wornLoose : [],
-      unassigned: Array.isArray(d.state.unassigned) ? d.state.unassigned : [],
       // A reload means we missed output — never trust hands blindly
       handsStale: true,
+      fullSyncAt: d.state.fullSyncAt ?? 0,
+      heldSyncAt: d.state.heldSyncAt ?? 0,
     };
+    if (Array.isArray(d.summoned)) {
+      for (const s of d.summoned) if (typeof s === 'string') t.summonedNames.add(s);
+    }
     return t;
   }
 
   reset(): void {
     this.state = emptyState();
     this.capture = null;
-    this.pendingHold = null;
+    this.summonedNames.clear();
   }
 }
 
@@ -640,7 +554,6 @@ function emptyState(): LoadoutState {
   return {
     limbs: [],
     wornLoose: [],
-    unassigned: [],
     handsStale: false,
     fullSyncAt: 0,
     heldSyncAt: 0,

@@ -83,7 +83,7 @@ export function LoadoutPanel({ mode = 'slideout' }: PinnablePanelProps) {
   }
 
   const heldAge = ageLabel(state.heldSyncAt, Date.now());
-  const empty = state.limbs.length === 0 && worn.length === 0 && state.unassigned.length === 0;
+  const empty = state.limbs.length === 0 && worn.length === 0;
 
   const iconBtn =
     'p-1 rounded text-text-dim hover:text-text-muted transition-colors cursor-pointer';
@@ -109,7 +109,7 @@ export function LoadoutPanel({ mode = 'slideout' }: PinnablePanelProps) {
         {state.handsStale ? (
           <span
             className="text-[9px] text-amber-300/90 font-mono"
-            title="Something moved into a hand the game didn't name. Re-sync to confirm"
+            title="Your hands changed. An automatic silent re-sync is on the way; the button forces one now"
           >
             hands unverified
           </span>
@@ -185,21 +185,6 @@ export function LoadoutPanel({ mode = 'slideout' }: PinnablePanelProps) {
                   </div>
                 ))}
               </>
-            )}
-
-            {/* Taken into an unnamed hand */}
-            {state.unassigned.length > 0 && (
-              <div className="flex items-baseline gap-1.5 px-2 py-[3px]">
-                <span
-                  className="shrink-0 text-[9px] text-amber-300/90"
-                  title="The game didn't say which hand caught these. Re-sync to confirm"
-                >
-                  hand?
-                </span>
-                <span className="flex-1 min-w-0 text-text-label break-words">
-                  {state.unassigned.map(displayName).join(', ')}
-                </span>
-              </div>
             )}
 
             {/* Worn */}

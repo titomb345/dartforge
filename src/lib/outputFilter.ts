@@ -592,7 +592,7 @@ export class OutputFilter {
           stripped.charCodeAt(0) === 65 /* 'A' — "Aura :" */ ||
           stripped.charCodeAt(0) === 69 /* 'E' — "Encumbrance :" */ ||
           stripped.charCodeAt(0) === 67 /* 'C' — "Concentration :" */ ||
-          stripped.charCodeAt(0) === 77) /* 'M' — "Movement :" */;
+          stripped.charCodeAt(0) === 77); /* 'M' — "Movement :" */
 
       let concMatch: ConcentrationMatch | null = null;
       let needsMatch: ReturnType<typeof matchNeedsLine> = null;
@@ -762,6 +762,17 @@ export class OutputFilter {
     // Note: anti-spam count is NOT flushed at chunk boundaries.
     // The count accumulates across filter() calls and flushes when
     // a different line arrives, ensuring a single accurate total.
+
+    // The equip-held response arrives in ONE server write, so once its
+    // lines have been gagged the equip gag ends with the chunk. Without
+    // this, the gag lingered until the next unrelated line (or the 5s
+    // safety timer) and swallowed the output of a MANUAL eq typed moments
+    // after a background re-sync.
+    if (this.syncActive && this.syncGags.equip && this.syncEquipHasData) {
+      this.syncGags.equip = false;
+      this.syncEquipHasData = false;
+      this.checkSyncDone();
+    }
 
     // Flush remaining buffer if it looks like a prompt or is empty.
     if (this.buffer) {

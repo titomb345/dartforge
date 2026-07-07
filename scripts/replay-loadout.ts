@@ -63,8 +63,7 @@ for (const file of files) {
       );
     }
     const worn = [...s.limbs.flatMap((l) => l.worn), ...s.wornLoose];
-    console.log(`  worn: ${worn.length} items${s.handsStale ? '  [hands ≈ approximate]' : ''}`);
-    if (s.unassigned.length) console.log(`  unassigned: ${s.unassigned.join(', ')}`);
+    console.log(`  worn: ${worn.length} items${s.handsStale ? '  [hands unverified]' : ''}`);
   } else {
     console.log('  (no loadout data in this session)');
   }

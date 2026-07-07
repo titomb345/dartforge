@@ -130,10 +130,15 @@ export function useLoadout(
   /** Observe an outgoing command (wired next to the mapper's trackCommand). */
   const trackCommand = useCallback(
     (cmd: string) => {
-      trackerRef.current!.onCommand(cmd, Date.now());
+      // True = the command may change the hands with no parseable echo
+      // ("hold X in ..." replies just "Okay.") — verify with a silent eq.
+      if (trackerRef.current!.onCommand(cmd, Date.now())) {
+        publish();
+        armVerify();
+      }
       armFlush();
     },
-    [armFlush]
+    [publish, armVerify, armFlush]
   );
 
   /** Full re-sync (hands + worn + limb health) — sends `view me` (the

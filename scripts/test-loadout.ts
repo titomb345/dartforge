@@ -97,47 +97,57 @@ check(
   tracker.state.limbs.every((l) => l.health === 'in perfect health')
 );
 
-// --- 2. Summon + multi-hand hold + dismissal --------------------------------
+// --- 2. Hands are never guessed: deltas only flag unverified ----------------
+// (Bill: the interim guesses were always wrong — a dismissal of one of
+// three tonfas wiped all three, holds picked arbitrary hands. Deltas now
+// only mark handsStale; the hook then fires a silent gagged eq.)
 line(
   'You gesture and an eye-piercing blade-embossed purple sandworm leather heater shield appears in your upper right hand!'
 );
-check('summon lands in named hand', heldOn('upper right hand').length === 1);
-check(
-  'summon is badged',
-  tracker.state.limbs.find((l) => l.limb === 'upper right hand')!.held[0].summoned === true
-);
+check('summon does NOT guess a placement', heldOn('upper right hand').length === 0);
+check('summon flags hands unverified', tracker.state.handsStale === true);
 
-cmd('hold chain in lower left hand and lower right hand');
-line('Okay.');
-check(
-  'hold+Okay assigns both hands',
-  heldOn('lower left hand')[0] === 'chain' && heldOn('lower right hand')[0] === 'chain'
-);
+tracker.state.handsStale = false;
+check('hold command requests a verify', cmd('hold chain in lower left hand and lower right hand'));
+check('hold flags hands unverified', tracker.state.handsStale === true);
+check('view me does not request a verify', !cmd('view me'));
+tracker.flush((t += 20_000)); // discard the armed examine capture
 
+tracker.state.handsStale = false;
 line(
   'You gesture and an eye-piercing blade-embossed purple sandworm leather heater shield dissolves into mist and vanishes!'
 );
-check('dismissal empties the hand', heldOn('upper right hand').length === 0);
+check('dismissal flags hands unverified', tracker.state.handsStale === true);
 
-line(
-  'A blackened bronze chain with a malachite key on it disintegrates from your lower right hand.'
-);
-// name-based limb clear: the held "chain" on lower right matches by suffix
-check('disintegrates clears the named limb', heldOn('lower right hand').length === 0);
-
-// --- 3. equip held block (verbatim shape) -----------------------------------
+// --- 3. equip held block (verbatim shape) — the source of truth -------------
 cmd('equip held');
 line('upper left hand: a bloody axe');
-line('lower left hand: a large black steel great chain');
+line('lower left hand: a dragon bone tonfa');
 const eqEnd = line('You gaze at your surroundings.'); // ends the block
 check('eq: block end is REPORTED as a change', eqEnd === 'snapshot');
 check(
   'eq: listed limbs set',
   heldOn('upper left hand')[0] === 'a bloody axe' &&
-    heldOn('lower left hand')[0] === 'a large black steel great chain'
+    heldOn('lower left hand')[0] === 'a dragon bone tonfa'
 );
 check('eq: omitted hands emptied', heldOn('lower right hand').length === 0);
 check('eq: clears stale flag', tracker.state.handsStale === false);
+// The tonfa was never seen appearing via a summon — no badge...
+check(
+  'eq: non-summoned item unbadged',
+  tracker.state.limbs.find((l) => l.limb === 'lower left hand')!.held[0].summoned === false
+);
+// ...but after a summon message, the next snapshot badges it.
+line('You gesture and a dragon bone tonfa appears in your lower right hand!');
+cmd('equip held');
+line('upper left hand: a bloody axe');
+line('lower left hand: a dragon bone tonfa');
+line('lower right hand: a dragon bone tonfa');
+line('You gaze at your surroundings.');
+check(
+  'eq: summoned name badges snapshot items',
+  tracker.state.limbs.find((l) => l.limb === 'lower right hand')!.held[0].summoned === true
+);
 
 // In a quiet room no foreign line arrives — the idle flush must commit.
 cmd('equip held');
@@ -147,63 +157,25 @@ check('eq: flush commits the pending block', tracker.flush((t += 2000)) === 'sna
 check('eq: flushed hand is set', heldOn('upper right hand')[0] === 'a mythril longsword');
 check('eq: nothing pending after flush', tracker.hasPendingCapture === false);
 
-// --- 3b. Duplicate summons: dismissing ONE of three tonfas ------------------
-line('You gesture and a dragon bone tonfa appears in your upper left hand!');
-line('You gesture and a dragon bone tonfa appears in your lower left hand!');
-line('You gesture and a dragon bone tonfa appears in your lower right hand!');
-const tonfas = () =>
-  tracker.state.limbs.reduce(
-    (n, l) => n + l.held.filter((h) => h.name.includes('tonfa')).length,
-    0
-  );
-check('three summoned tonfas held', tonfas() === 3);
-tracker.state.handsStale = false;
-line('You gesture and a dragon bone tonfa dissolves into mist and vanishes!');
-check('dismissing one tonfa keeps the other two', tonfas() === 2);
-check('ambiguous dismissal flags hands unverified', tracker.state.handsStale === true);
-line('You gesture and a dragon bone tonfa dissolves into mist and vanishes!');
-line('You gesture and a dragon bone tonfa dissolves into mist and vanishes!');
-check('all tonfas gone after three dismissals', tonfas() === 0);
-
-// --- 3c. Partial limb names in hold ("left hand" on a four-handed race) -----
-tracker.state.handsStale = false;
-cmd('hold chain in left hand and right hand');
-line('Okay.');
-check(
-  'partial-limb hold lands somewhere',
-  tracker.state.limbs.some((l) => l.held.some((h) => h.name === 'chain'))
-);
-check('partial-limb hold flags hands unverified', tracker.state.handsStale === true);
-
 // --- 4. Wear / remove / stow (verbatim from the stow sequence) ---------------
+tracker.state.handsStale = false;
 line('You take a dagger from the chest');
-check(
-  'take → unassigned + stale',
-  tracker.state.unassigned.length === 1 && tracker.state.handsStale
-);
+check('take flags hands unverified', tracker.state.handsStale === true);
 line('You wear a dagger.');
-check(
-  'wear consumes the taken item',
-  tracker.state.unassigned.length === 0 && wornAnywhere('dagger')
-);
+check('wear adds to worn', wornAnywhere('dagger'));
 
 line('You remove your hood and put it in the chest.');
-check('remove-and-put does not enter a hand', tracker.state.unassigned.length === 0);
-
 line('You remove an open shadowsilk moneybag.');
-check(
-  'bare remove → hand unknown',
-  tracker.state.unassigned.some((n) => n.includes('moneybag'))
-);
+check('bare remove drops from worn', !wornAnywhere('moneybag'));
 line('You put an open shadowsilk moneybag (worn) in an open iron-bound oak chest.');
-check('worn moneybag gone after stow', !wornAnywhere('moneybag'));
-check(
-  'stowed moneybag left the unassigned bucket too',
-  !tracker.state.unassigned.some((n) => n.includes('moneybag'))
-);
+check('worn moneybag still gone after stow', !wornAnywhere('moneybag'));
 
-line('You drop a bloody axe.');
-check('drop removes the dropped item', !heldOn('upper left hand').some((n) => n.includes('axe')));
+tracker.state.handsStale = false;
+line('You drop a mythril longsword.');
+check('drop flags hands unverified', tracker.state.handsStale === true);
+// The last snapshot (the flush) put the longsword in the upper right hand —
+// the drop must NOT guess it away; the auto-verify eq is the authority.
+check('drop does NOT guess a removal', heldOn('upper right hand')[0] === 'a mythril longsword');
 
 // --- 5. Serialization round-trip ---------------------------------------------
 const revived = LoadoutTracker.deserialize(tracker.serialize());
