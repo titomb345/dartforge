@@ -295,7 +295,11 @@ export class LoadoutTracker {
       return 'held';
     }
     if ((m = DISSOLVES.exec(line))) {
-      this.removeHeldByName(m[1]);
+      // ONE instance dissolved — with duplicates (three summoned tonfas)
+      // the message doesn't say which hand, so mark hands unverified and
+      // let the auto-verify eq settle it.
+      this.removeOneHeld(m[1]);
+      if (this.countHeld(m[1]) > 0) this.state.handsStale = true;
       return 'held';
     }
     if ((m = DISINTEGRATES.exec(line))) {
@@ -304,12 +308,12 @@ export class LoadoutTracker {
       // vanish line prints the item's full name.
       const limb = this.limbFor(m[2]);
       if (limb) limb.held = limb.held.filter((h) => !sameItemLoose(h.name, m![1]));
-      else this.removeHeldByName(m[1]);
+      else this.removeOneHeld(m[1], true);
       return 'held';
     }
     if ((m = WEAR.exec(line))) {
       // Wearing consumes the item from a hand (or the unassigned bucket)
-      this.removeHeldByName(m[1]);
+      this.removeOneHeld(m[1]);
       this.addWorn(m[1]);
       return 'worn';
     }
@@ -326,10 +330,10 @@ export class LoadoutTracker {
     }
     if ((m = PUT.exec(line))) {
       // "(worn)" in the item text = stowing a worn container. Either way
-      // the item left the hand (or the unassigned bucket, when the stow
+      // ONE instance left the hand (or the unassigned bucket, when the stow
       // sequence's bare "You remove X." parked it there moments earlier).
       if (/\(worn\)/.test(m[1])) this.removeWornByName(m[1]);
-      this.removeHeldByName(m[1]);
+      this.removeOneHeld(m[1]);
       return 'held';
     }
     if ((m = TAKE.exec(line))) {
@@ -338,12 +342,12 @@ export class LoadoutTracker {
       return 'held';
     }
     if ((m = DROP.exec(line))) {
-      this.removeHeldByName(m[1]);
+      this.removeOneHeld(m[1]);
       return 'held';
     }
     if ((m = CONSUME.exec(line))) {
       // Loose match: "You eat 8 bananas." vs the taken "bananas"
-      this.removeHeldLoose(m[1]);
+      this.removeOneHeld(m[1], true);
       return 'held';
     }
 
@@ -515,7 +519,9 @@ export class LoadoutTracker {
   }
 
   private applyHold(item: string, limbs: string[] | null): void {
-    // The item leaves wherever it was
+    const summoned = this.wasSummoned(item);
+    // The item leaves wherever it was (a hold repositions the one object,
+    // possibly out of several hands at once)
     this.removeHeldByName(item);
     if (!limbs) {
       this.state.unassigned.push(item);
@@ -523,8 +529,14 @@ export class LoadoutTracker {
       return;
     }
     for (const limbName of limbs) {
+      // A partial limb name ("hold X in right hand" on a four-handed race)
+      // is the GAME's choice to make — our pick is a guess, so flag it.
+      // The auto-verify eq settles it moments later.
+      if (!this.state.limbs.some((l) => l.limb === limbName.trim())) {
+        this.state.handsStale = true;
+      }
       const limb = this.limbFor(limbName, true);
-      if (limb) limb.held.push({ name: item, summoned: this.wasSummoned(item) });
+      if (limb) limb.held.push({ name: item, summoned });
     }
   }
 
@@ -534,6 +546,17 @@ export class LoadoutTracker {
     return this.state.limbs.some((l) => l.held.some((h) => h.summoned && sameItem(h.name, name)));
   }
 
+  /** How many held instances (across limbs + unassigned) match this name. */
+  private countHeld(name: string): number {
+    let n = this.state.unassigned.filter((u) => sameItem(u, name)).length;
+    for (const limb of this.state.limbs) {
+      n += limb.held.filter((h) => sameItem(h.name, name)).length;
+    }
+    return n;
+  }
+
+  /** Remove ALL held instances (a hold repositions the one object out of
+   *  every hand that gripped it). */
   private removeHeldByName(name: string): void {
     for (const limb of this.state.limbs) {
       limb.held = limb.held.filter((h) => !sameItem(h.name, name));
@@ -541,11 +564,23 @@ export class LoadoutTracker {
     this.state.unassigned = this.state.unassigned.filter((n) => !sameItem(n, name));
   }
 
-  private removeHeldLoose(name: string): void {
+  /** Remove ONE held instance — "You drop a tonfa" drops one tonfa, not
+   *  every tonfa you're holding. Returns true when something was removed. */
+  private removeOneHeld(name: string, loose = false): boolean {
+    const match = loose ? sameItemLoose : sameItem;
     for (const limb of this.state.limbs) {
-      limb.held = limb.held.filter((h) => !sameItemLoose(h.name, name));
+      const idx = limb.held.findIndex((h) => match(h.name, name));
+      if (idx >= 0) {
+        limb.held.splice(idx, 1);
+        return true;
+      }
     }
-    this.state.unassigned = this.state.unassigned.filter((n) => !sameItemLoose(n, name));
+    const uidx = this.state.unassigned.findIndex((n) => match(n, name));
+    if (uidx >= 0) {
+      this.state.unassigned.splice(uidx, 1);
+      return true;
+    }
+    return false;
   }
 
   private addWorn(name: string): void {
@@ -612,10 +647,18 @@ function emptyState(): LoadoutState {
   };
 }
 
-/** "a sash ..., an iron torc, a shirt, and a pair of boots" → items */
+/**
+ * "a sash ..., an iron torc, a shirt, and a pair of boots" → items.
+ *
+ * Item names themselves contain comma lists ("a sash ... with silver, iron,
+ * copper, steel, gold, and brass medals pinned to it" is ONE item), so a
+ * naive comma split shreds them. Every item in the wearing sentence starts
+ * with an article, so only a comma FOLLOWED BY an article is an item
+ * boundary — the medals list never is.
+ */
 function splitProseList(prose: string): string[] {
   return prose
-    .split(/, and |, |and (?=a |an |the )/)
-    .map((s) => s.replace(/^(?:a|an|the) /, '').trim())
+    .split(/,\s+(?:and\s+)?(?=(?:a|an|the|some)\s)/i)
+    .map((s) => s.replace(/^(?:a|an|the|some) /, '').trim())
     .filter((s) => s.length > 0);
 }

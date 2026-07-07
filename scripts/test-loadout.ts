@@ -80,6 +80,17 @@ check(
   'x me: clothing prose parsed',
   wornAnywhere('shadowsilk shirt') && wornAnywhere('leather boots')
 );
+// The sash's own text contains a comma list ("with silver, iron, copper,
+// steel, gold, and brass medals pinned to it") — it must stay ONE item.
+check(
+  'prose: sash with inner commas stays one item',
+  tracker.state.wornLoose.some((n) => n.includes('medals pinned to it'))
+);
+check(
+  'prose: no comma-shrapnel items',
+  !tracker.state.wornLoose.some((n) => /^(?:silver|iron|copper|steel|gold)$/.test(n.trim()))
+);
+check('prose: exactly 7 clothing items', tracker.state.wornLoose.length === 7);
 check('x me: hands not stale', tracker.state.handsStale === false);
 check(
   'x me: limb health captured',
@@ -136,6 +147,34 @@ check('eq: flush commits the pending block', tracker.flush((t += 2000)) === 'sna
 check('eq: flushed hand is set', heldOn('upper right hand')[0] === 'a mythril longsword');
 check('eq: nothing pending after flush', tracker.hasPendingCapture === false);
 
+// --- 3b. Duplicate summons: dismissing ONE of three tonfas ------------------
+line('You gesture and a dragon bone tonfa appears in your upper left hand!');
+line('You gesture and a dragon bone tonfa appears in your lower left hand!');
+line('You gesture and a dragon bone tonfa appears in your lower right hand!');
+const tonfas = () =>
+  tracker.state.limbs.reduce(
+    (n, l) => n + l.held.filter((h) => h.name.includes('tonfa')).length,
+    0
+  );
+check('three summoned tonfas held', tonfas() === 3);
+tracker.state.handsStale = false;
+line('You gesture and a dragon bone tonfa dissolves into mist and vanishes!');
+check('dismissing one tonfa keeps the other two', tonfas() === 2);
+check('ambiguous dismissal flags hands unverified', tracker.state.handsStale === true);
+line('You gesture and a dragon bone tonfa dissolves into mist and vanishes!');
+line('You gesture and a dragon bone tonfa dissolves into mist and vanishes!');
+check('all tonfas gone after three dismissals', tonfas() === 0);
+
+// --- 3c. Partial limb names in hold ("left hand" on a four-handed race) -----
+tracker.state.handsStale = false;
+cmd('hold chain in left hand and right hand');
+line('Okay.');
+check(
+  'partial-limb hold lands somewhere',
+  tracker.state.limbs.some((l) => l.held.some((h) => h.name === 'chain'))
+);
+check('partial-limb hold flags hands unverified', tracker.state.handsStale === true);
+
 // --- 4. Wear / remove / stow (verbatim from the stow sequence) ---------------
 line('You take a dagger from the chest');
 check(
@@ -164,7 +203,7 @@ check(
 );
 
 line('You drop a bloody axe.');
-check('drop empties the hand', heldOn('upper left hand').length === 0);
+check('drop removes the dropped item', !heldOn('upper left hand').some((n) => n.includes('axe')));
 
 // --- 5. Serialization round-trip ---------------------------------------------
 const revived = LoadoutTracker.deserialize(tracker.serialize());

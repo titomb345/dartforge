@@ -9,6 +9,12 @@ const SAVE_DEBOUNCE_MS = 2000;
  *  for minutes). Block lines arrive in one server write, milliseconds
  *  apart, so a short window is safe and keeps the panel feeling instant. */
 const FLUSH_IDLE_MS = 200;
+/** After held-equipment delta events (summon/dismiss/hold/drop/...) settle,
+ *  fire a silent gagged `equip held` to VERIFY the heuristic model — the
+ *  game often doesn't say which hand ("hold X in right hand" on a
+ *  four-handed race, one of three identical tonfas dissolving). Debounced
+ *  so a burst (stow loops, summon sets) triggers a single re-sync. */
+const VERIFY_IDLE_MS = 400;
 
 /**
  * Loadout tracker hook — owns the LoadoutTracker instance, feeds it output
@@ -18,7 +24,10 @@ const FLUSH_IDLE_MS = 200;
 export function useLoadout(
   dataStore: DataStore,
   activeCharacter: string | null,
-  sendCommandRef: React.RefObject<((cmd: string) => Promise<void>) | null>
+  sendCommandRef: React.RefObject<((cmd: string) => Promise<void>) | null>,
+  /** The gagged `equip held` refresher (useTimerEngines.refreshEquip) —
+   *  a ref because the engines mount after this hook. */
+  refreshEquipRef: React.RefObject<(() => void) | null>
 ) {
   const trackerRef = useRef<LoadoutTracker | null>(null);
   if (!trackerRef.current) trackerRef.current = new LoadoutTracker();
@@ -95,14 +104,27 @@ export function useLoadout(
     }, FLUSH_IDLE_MS);
   }, [publish]);
 
+  /** After a burst of hand-affecting delta events, verify the heuristic
+   *  model with one silent gagged eq. Snapshot commits ('snapshot') never
+   *  arm this, so the verify's own response can't re-trigger it. */
+  const verifyTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const armVerify = useCallback(() => {
+    if (verifyTimerRef.current) clearTimeout(verifyTimerRef.current);
+    verifyTimerRef.current = setTimeout(() => {
+      verifyTimerRef.current = null;
+      refreshEquipRef.current?.();
+    }, VERIFY_IDLE_MS);
+  }, [refreshEquipRef]);
+
   /** Feed one stripped output line (wired into OutputFilter's onLine). */
   const feedLine = useCallback(
     (line: string) => {
       const change = trackerRef.current!.onLine(line, Date.now());
       if (change !== 'none') publish();
+      if (change === 'held' || change === 'worn') armVerify();
       armFlush();
     },
-    [publish, armFlush]
+    [publish, armFlush, armVerify]
   );
 
   /** Observe an outgoing command (wired next to the mapper's trackCommand). */

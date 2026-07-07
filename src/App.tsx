@@ -1062,8 +1062,11 @@ function AppMain() {
   const mapFeedLineRef = useLatestRef(mapTracker.feedLine);
   const mapTrackCommandRef = useLatestRef(mapTracker.trackCommand);
 
-  // Loadout tracker — hands/worn state from output + outgoing commands
-  const loadout = useLoadout(dataStore, activeCharacter, sendCommandRef);
+  // Loadout tracker — hands/worn state from output + outgoing commands.
+  // refreshEquipRef is filled in after useTimerEngines mounts; the tracker
+  // uses it to auto-verify hands (silent gagged eq) after delta events.
+  const refreshEquipRef = useRef<(() => void) | null>(null);
+  const loadout = useLoadout(dataStore, activeCharacter, sendCommandRef, refreshEquipRef);
   const loadoutFeedLineRef = useLatestRef(loadout.feedLine);
   const loadoutTrackCommandRef = useLatestRef(loadout.trackCommand);
 
@@ -1849,6 +1852,9 @@ function AppMain() {
     globalScriptRef,
     commandSeparatorRef,
   });
+  // Loadout auto-verify — after hand-affecting events, the tracker fires
+  // this gagged eq refresher to replace its heuristic guess with truth
+  refreshEquipRef.current = refreshEquip;
 
   // First-launch: auto-open Guide panel
   useEffect(() => {
