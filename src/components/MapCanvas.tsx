@@ -248,9 +248,6 @@ export function MapCanvas({
 
     ctx.restore();
 
-    // Compass rose
-    drawCompassRose(ctx, width, height);
-
     // Indoors: dim the whole map uniformly (the DOM popup/badge above the
     // canvas stay at full brightness). Interaction is unaffected.
     if (dimmed) {
@@ -662,56 +659,6 @@ function drawLabel(ctx: CanvasRenderingContext2D, cell: HexCell) {
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
   ctx.fillText(label, x, y);
-}
-
-function drawCompassRose(ctx: CanvasRenderingContext2D, w: number, h: number) {
-  const cx = w - 40;
-  const cy = h - 40;
-  const r = 22;
-
-  ctx.save();
-  ctx.globalAlpha = 0.3;
-
-  // Circle
-  ctx.beginPath();
-  ctx.arc(cx, cy, r, 0, Math.PI * 2);
-  ctx.strokeStyle = 'rgba(200, 185, 160, 0.4)';
-  ctx.lineWidth = 1;
-  ctx.stroke();
-
-  // Direction labels for all 6 hex directions
-  ctx.font = '7px monospace';
-  ctx.fillStyle = TOOLTIP_TEXT;
-  ctx.globalAlpha = 0.5;
-  ctx.textAlign = 'center';
-  ctx.textBaseline = 'middle';
-
-  const dirs: { label: string; angle: number }[] = [
-    { label: 'N', angle: -Math.PI / 2 },
-    { label: 'NE', angle: -Math.PI / 6 },
-    { label: 'SE', angle: Math.PI / 6 },
-    { label: 'S', angle: Math.PI / 2 },
-    { label: 'SW', angle: (5 * Math.PI) / 6 },
-    { label: 'NW', angle: -(5 * Math.PI) / 6 },
-  ];
-
-  for (const { label, angle } of dirs) {
-    const lx = cx + (r + 8) * Math.cos(angle);
-    const ly = cy + (r + 8) * Math.sin(angle);
-    ctx.fillText(label, lx, ly);
-  }
-
-  // N indicator triangle
-  ctx.beginPath();
-  ctx.moveTo(cx, cy - r + 2);
-  ctx.lineTo(cx - 3, cy - r + 8);
-  ctx.lineTo(cx + 3, cy - r + 8);
-  ctx.closePath();
-  ctx.fillStyle = '#e8a849';
-  ctx.globalAlpha = 0.6;
-  ctx.fill();
-
-  ctx.restore();
 }
 
 // ---------------------------------------------------------------------------
