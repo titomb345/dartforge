@@ -638,11 +638,9 @@ export function SettingsPanel({ onClose }: { onClose: () => void }) {
             unit="keys"
           />
           <div className="text-[9px] text-text-dim font-mono leading-relaxed mt-1">
-            /door &lt;dir&gt; tries each keyring slot until one unlocks (reading the MUD's replies —
-            "You fail." means try the next key), opens, steps through, then closes and locks behind
-            you with the key that worked. A door found standing open is left open. The town map's
-            auto-walk runs the same engine when a route crosses a known door, and remembers which
-            key fits each door for next time.
+            /door &lt;dir&gt; unlocks with key, key 2 … key N, opens, steps through, then closes and
+            locks behind you. The town map's auto-walk runs the same sequence when a route crosses a
+            known door.
           </div>
         </SettingsSection>
 

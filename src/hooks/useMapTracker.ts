@@ -13,13 +13,7 @@ import { HexLocalizer, type SurveyResolution } from '../lib/hexLocalizer';
 import { HexMapStore, type HexCell, type HexPos } from '../lib/hexMap';
 import { parseDirection, getDirectionOffset, type Direction } from '../lib/hexUtils';
 import { TownParser, PORTAL_TRANSIT_RE, TOWN_DIR_ALIASES, type TownDir } from '../lib/townParser';
-import { resolveDoorDir } from '../lib/doorSequence';
-import {
-  DoorRunner,
-  setActiveDoorRunner,
-  getActiveDoorRunner,
-  feedActiveDoorRunner,
-} from '../lib/doorRunner';
+import { buildDoorSequence } from '../lib/doorSequence';
 import { TownLocalizer, classifyTownCommand, type TownResolution } from '../lib/townLocalizer';
 import { TownMapStore, hexAnchorKey, type TownRoom, type TownWalkStep } from '../lib/townMap';
 import type { HexMarkerType, RoomIconType } from '../lib/mapMarkers';
@@ -175,8 +169,8 @@ export function useMapTracker(
   } | null>(null);
   const walkSendingRef = useRef(false);
   // Town walk executor state — same shape, steps carry commands not dirs.
-  // Door-crossing steps are marked at plan time and executed by DoorRunner
-  // at send time (response-aware, from the door's freshest known state).
+  // Door-crossing steps are marked at plan time; their commands are built
+  // at send time from the door's freshest known state.
   const townWalkRef = useRef<{
     steps: (TownWalkStep & { door?: { dir: TownDir; fromId: number } })[];
     confirmed: number;
@@ -360,101 +354,52 @@ export function useMapTracker(
       if (!walk) return;
       if (walk.timeout) clearTimeout(walk.timeout);
       townWalkRef.current = null;
-      // Stop a mid-crossing door runner from sending further commands
-      getActiveDoorRunner()?.cancel();
       if (reason) echoRef.current(`[Map] Walk stopped — ${reason}`);
       syncState();
     },
     [syncState]
   );
 
-  const armTownWalkTimeout = useCallback(
-    (extraMs = 0) => {
-      const walk = townWalkRef.current;
-      if (!walk) return;
-      if (walk.timeout) clearTimeout(walk.timeout);
-      walk.timeout = setTimeout(
-        () => cancelTownWalk('no response from the MUD'),
-        WALK_STEP_TIMEOUT + extraMs
-      );
-    },
-    [cancelTownWalk]
-  );
+  const armTownWalkTimeout = useCallback(() => {
+    const walk = townWalkRef.current;
+    if (!walk) return;
+    if (walk.timeout) clearTimeout(walk.timeout);
+    walk.timeout = setTimeout(() => cancelTownWalk('no response from the MUD'), WALK_STEP_TIMEOUT);
+  }, [cancelTownWalk]);
 
   const pumpTownWalkSends = useCallback(() => {
     const walk = townWalkRef.current;
     if (!walk) return;
-    // A door crossing owns the wire until its close/lock phase is done —
-    // dispatching the next step early would put the runner's remaining
-    // commands one room behind (closing/locking the wrong door), and a
-    // second door step would clobber the active-runner registry. The
-    // runner's completion re-pumps.
-    if (getActiveDoorRunner()) return;
     if (walk.sent >= walk.steps.length) return;
     if (walk.sent - walk.confirmed >= WALK_PIPELINE) return;
     const step = walk.steps[walk.sent];
+    let cmds = [step.cmd];
     if (step.door) {
-      // Door crossings run response-aware (DoorRunner): the door's state is
-      // read from the from-room's freshest exits line, so hold the step
-      // until arrival there is confirmed — the arrival block carries the
-      // live open/closed state. The pump re-runs on every confirmation, so
-      // a held step self-releases.
+      // Door commands are built here (not at plan time) from the from-room's
+      // freshest exits line, so hold the step until arrival there is
+      // confirmed — the arrival block carries the live open/closed state.
+      // The pump re-runs on every confirmation, so a held step self-releases.
       if (walk.confirmed < walk.sent) return;
-      const resolved = resolveDoorDir(step.cmd);
       const fromRoom = townMapRef.current.get(walk.townId)?.rooms.get(step.door.fromId);
-      const door = step.door;
-      walk.sent += 1;
-      townWalkSendingRef.current = true;
-      const runner = new DoorRunner({
-        dir: resolved?.dir ?? step.cmd,
-        opp: resolved?.opp ?? step.cmd,
-        keys: doorKeysRef.current,
-        preferredKey: fromRoom?.doorKeySlots?.[door.dir],
-        // A door found standing open is left as found: walk straight
-        // through, no closing/locking behind.
-        knownOpen: fromRoom?.openDoorDirs.includes(door.dir) ?? false,
-        send: (cmd) => sendDirectionRef.current(cmd),
-      });
-      setActiveDoorRunner(runner);
-      // A crossing can legitimately take several reply-timeouts before the
-      // move even sends (unrecognized unlock replies) — extend the step
-      // timer so a slow-but-working crossing isn't cancelled mid-door.
-      armTownWalkTimeout(doorKeysRef.current * 1500 + 3000);
-      runner
-        .run()
-        .then((res) => {
-          if (res.unlockedWithKey !== undefined) {
-            // Remember which key fits this door (both sides) for next time
-            townMapRef.current.learnDoorKey(
-              walk.townId,
-              door.fromId,
-              door.dir,
-              res.unlockedWithKey
-            );
-            scheduleSave();
-          }
-          if (!res.ok && townWalkRef.current) {
-            cancelTownWalk(res.reason ?? 'the door would not open');
-          }
-        })
-        .catch(() => cancelTownWalk('send failed'))
-        .finally(() => {
-          if (getActiveDoorRunner() === runner) setActiveDoorRunner(null);
-          townWalkSendingRef.current = false;
-          if (townWalkRef.current) pumpTownWalkSends();
-        });
-      return;
+      const wasOpen = fromRoom?.openDoorDirs.includes(step.door.dir) ?? false;
+      // A door found standing open is left as found: walk straight through,
+      // no closing/locking behind. Only doors we opened ourselves (or whose
+      // state is unknown) get the full unlock/open/move/close/lock sequence.
+      if (!wasOpen) cmds = buildDoorSequence(step.cmd, doorKeysRef.current) ?? [step.cmd];
     }
     walk.sent += 1;
     townWalkSendingRef.current = true;
-    sendDirectionRef
-      .current(step.cmd)
+    (async () => {
+      for (const cmd of cmds) {
+        await sendDirectionRef.current(cmd);
+      }
+    })()
       .catch(() => cancelTownWalk('send failed'))
       .finally(() => {
         townWalkSendingRef.current = false;
         if (townWalkRef.current) pumpTownWalkSends();
       });
-  }, [cancelTownWalk, scheduleSave, armTownWalkTimeout]);
+  }, [cancelTownWalk]);
 
   /** Called after each town room resolution while a town walk is active. */
   const advanceTownWalk = useCallback(
@@ -481,9 +426,6 @@ export function useMapTracker(
         cancelTownWalk('unexpected movement');
         return;
       }
-      // Arrival confirmed — a door runner waiting on its move step can
-      // proceed to the close/lock phase immediately
-      getActiveDoorRunner()?.notifyMoved();
       walk.confirmed += 1;
       if (walk.confirmed >= walk.steps.length) {
         if (walk.timeout) clearTimeout(walk.timeout);
@@ -613,9 +555,6 @@ export function useMapTracker(
 
   const feedLine = useCallback(
     (line: string, raw?: string) => {
-      // A door crossing in progress reads the MUD's replies from here
-      // ("You unlock the …", "You fail.", …) — see doorRunner.ts
-      feedActiveDoorRunner(line);
       parserRef.current?.feedLine(line, raw);
       if (townEnabledRef.current) {
         townParserRef.current?.feedLine(line);
@@ -832,8 +771,7 @@ export function useMapTracker(
       // Mark door crossings — the room being left knows which of its exits
       // are doors from its own exits line. The commands themselves (full
       // unlock/open/move/close/lock, or a plain move through a door found
-      // standing open) are run by DoorRunner at send time from the
-      // freshest door state.
+      // standing open) are built at send time from the freshest door state.
       let doors = 0;
       const enriched = steps.map((s, i) => {
         const fromId = i === 0 ? pos.roomId : steps[i - 1].toRoomId;

@@ -49,8 +49,6 @@ export interface TownRoom {
   doorDirs: TownDir[];
   /** Doors standing open at the latest sighting (subset of doorDirs) */
   openDoorDirs: TownDir[];
-  /** Keyring slot that unlocked each door dir (learned by the door runner) */
-  doorKeySlots?: Partial<Record<TownDir, number>>;
   /** Non-directional exits ("back", "out", "exit") */
   namedExits: string[];
   /** A portal transit departed from or arrived at this room */
@@ -489,20 +487,6 @@ export class TownMapStore {
     const room = this.towns.get(townId)?.rooms.get(roomId);
     if (!room) return;
     room.icon = icon === null ? classifyRoomIcon(room.name, room.desc) : icon;
-  }
-
-  /**
-   * Remember which keyring slot unlocks a door (learned by the door
-   * runner). Mirrored onto the far side of the door — same lock, same key.
-   */
-  learnDoorKey(townId: number, roomId: number, dir: TownDir, slot: number): void {
-    const town = this.towns.get(townId);
-    const room = town?.rooms.get(roomId);
-    if (!town || !room) return;
-    (room.doorKeySlots ??= {})[dir] = slot;
-    const destId = room.links[dir];
-    const dest = destId !== undefined ? town.rooms.get(destId) : undefined;
-    if (dest) (dest.doorKeySlots ??= {})[TOWN_REVERSE[dir]] = slot;
   }
 
   // -------------------------------------------------------------------------

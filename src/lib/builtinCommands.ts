@@ -1,6 +1,5 @@
 import type { ActionBlocker } from './actionBlocker';
-import { resolveDoorDir } from './doorSequence';
-import { DoorRunner, setActiveDoorRunner, getActiveDoorRunner } from './doorRunner';
+import { buildDoorSequence } from './doorSequence';
 import type { AutoInscriber } from './autoInscriber';
 import type { AutoCaster } from './autoCaster';
 import type { AutoConc } from './autoConc';
@@ -845,11 +844,9 @@ const handleLevels: Handler = async (trimmed, ctx) => {
 };
 
 /**
- * /door <dir> — pass through a (possibly locked) door, reacting to the
- * MUD's replies: keys are tried until one unlocks ("You fail." → next
- * slot), a door found standing open is walked through and left open, and
- * only the key that worked is used to lock behind. The town auto-walker
- * runs the same engine when a route crosses a known door.
+ * /door <dir> — pass through a (possibly locked) door: unlock with each
+ * keyring slot, open, step through, then close and lock behind. The town
+ * auto-walker fires the same sequence when a route crosses a known door.
  */
 const handleDoor: Handler = async (trimmed, ctx) => {
   const m = /^\/door(?:\s+(\S+))?\s*$/i.exec(trimmed);
@@ -858,29 +855,14 @@ const handleDoor: Handler = async (trimmed, ctx) => {
     error(ctx, 'Usage: /door <direction>  (n/s/e/w/u/d, diagonals, in/out)');
     return true;
   }
-  const resolved = resolveDoorDir(m[1]);
-  if (!resolved) {
+  const cmds = buildDoorSequence(m[1], ctx.appSettings.doorKeys);
+  if (!cmds) {
     error(ctx, `/door: unknown direction "${m[1]}"`);
     return true;
   }
-  if (getActiveDoorRunner()) {
-    error(ctx, '/door: a door crossing is already in progress');
-    return true;
-  }
   const send = await ctx.sendCommandViaRef();
-  const runner = new DoorRunner({
-    dir: resolved.dir,
-    opp: resolved.opp,
-    keys: ctx.appSettings.doorKeys,
-    send,
-  });
-  setActiveDoorRunner(runner);
-  try {
-    const res = await runner.run();
-    if (!res.ok) error(ctx, `/door: ${res.reason ?? 'the door would not open'}`);
-    else if (res.wasOpen) echo(ctx, '/door: it was standing open — left it that way');
-  } finally {
-    if (getActiveDoorRunner() === runner) setActiveDoorRunner(null);
+  for (const cmd of cmds) {
+    await send(cmd);
   }
   return true;
 };

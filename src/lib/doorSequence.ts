@@ -1,15 +1,17 @@
 /**
- * Door-passage direction vocabulary for the /door built-in and the town
- * auto-walker. The command sequence itself is executed by DoorRunner
- * (doorRunner.ts), which reads the MUD's replies to pick the right key
- * and leave doors as it found them, instead of firing every keyring slot
- * blind:
+ * Door-passage command sequence — DartMUD doors are opened/unlocked from
+ * one side and closed/locked from the other after stepping through:
  *
- *   unlock w door with key [2…]   (until "You unlock the …")
+ *   unlock w door with key … unlock w door with key N
  *   open w door
  *   w
  *   close e door
- *   lock e door with key N        (the key that worked)
+ *   lock e door with key … lock e door with key N
+ *
+ * Failed steps are harmless server-side ("The oak door has no lock!",
+ * "You don't have one of those.") — the sequence fires blind, exactly like
+ * the alias it replaces. Used by the /door built-in command and by the
+ * town auto-walker when a route crosses a known door.
  */
 
 const DOOR_DIR_ALIASES: Record<string, string> = {
@@ -56,12 +58,23 @@ const DOOR_OPPOSITE: Record<string, string> = {
 export const DOOR_DIRECTIONS = Object.keys(DOOR_OPPOSITE);
 
 /**
- * Resolve a direction word (any long/short direction, plus in/out) to the
- * short form used in door commands and its opposite (the side the door is
- * closed/locked from after stepping through). Null for unknown words.
+ * Build the full unlock→open→move→close→lock sequence for passing a door
+ * in `dirWord` (any long/short direction, plus in/out), trying `keys`
+ * keyring slots ("key", "key 2", … "key N") on both sides.
+ * Returns null for unrecognized directions.
  */
-export function resolveDoorDir(dirWord: string): { dir: string; opp: string } | null {
+export function buildDoorSequence(dirWord: string, keys: number): string[] | null {
   const dir = DOOR_DIR_ALIASES[dirWord.trim().toLowerCase()];
   if (!dir) return null;
-  return { dir, opp: DOOR_OPPOSITE[dir] };
+  const opp = DOOR_OPPOSITE[dir];
+  const n = Math.max(1, Math.min(10, Math.floor(keys) || 1));
+
+  const keyName = (i: number) => (i === 1 ? 'key' : `key ${i}`);
+  const cmds: string[] = [];
+  for (let i = 1; i <= n; i++) cmds.push(`unlock ${dir} door with ${keyName(i)}`);
+  cmds.push(`open ${dir} door`);
+  cmds.push(dir);
+  cmds.push(`close ${opp} door`);
+  for (let i = 1; i <= n; i++) cmds.push(`lock ${opp} door with ${keyName(i)}`);
+  return cmds;
 }
