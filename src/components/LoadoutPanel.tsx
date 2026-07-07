@@ -109,7 +109,7 @@ export function LoadoutPanel({ mode = 'slideout' }: PinnablePanelProps) {
         {state.handsStale ? (
           <span
             className="text-[9px] text-amber-300/90 font-mono"
-            title="Something moved into a hand the game didn't name — re-sync to confirm"
+            title="Something moved into a hand the game didn't name. Re-sync to confirm"
           >
             hands unverified
           </span>
@@ -130,7 +130,7 @@ export function LoadoutPanel({ mode = 'slideout' }: PinnablePanelProps) {
         </button>
         <button
           onClick={refreshFull}
-          title='Full sync — hands, worn, health (sends "view me")'
+          title='Full sync: hands, worn, health (sends "view me")'
           className={iconBtn}
         >
           <UserIcon size={11} />
@@ -148,7 +148,7 @@ export function LoadoutPanel({ mode = 'slideout' }: PinnablePanelProps) {
             <br />
             <br />
             Press <UserIcon size={10} /> <span className="text-text-label">Full sync</span> above
-            (or type <span className="text-text-label">view me</span>) — the panel then follows your
+            (or type <span className="text-text-label">view me</span>). The panel then follows your
             hold, wear, remove, summon, and stow messages live.
           </div>
         ) : (
@@ -172,7 +172,7 @@ export function LoadoutPanel({ mode = 'slideout' }: PinnablePanelProps) {
                             {h.summoned && (
                               <span
                                 style={{ color: ACCENT }}
-                                title="Summoned — vanishes when dismissed or dropped"
+                                title="Summoned: vanishes when dismissed or dropped"
                               >
                                 ✦{' '}
                               </span>
@@ -192,7 +192,7 @@ export function LoadoutPanel({ mode = 'slideout' }: PinnablePanelProps) {
               <div className="flex items-baseline gap-1.5 px-2 py-[3px]">
                 <span
                   className="shrink-0 text-[9px] text-amber-300/90"
-                  title="The game didn't say which hand caught these — re-sync to confirm"
+                  title="The game didn't say which hand caught these. Re-sync to confirm"
                 >
                   hand?
                 </span>

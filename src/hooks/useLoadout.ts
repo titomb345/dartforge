@@ -4,10 +4,11 @@ import type { DataStore } from '../contexts/DataStoreContext';
 
 const loadoutFileName = (name: string) => `loadout-${name.toLowerCase()}.json`;
 const SAVE_DEBOUNCE_MS = 2000;
-/** A capture block is committed after this much line silence — the block's
- *  natural end is "the first foreign line", which in a quiet room may not
- *  arrive for minutes. */
-const FLUSH_IDLE_MS = 1500;
+/** A capture block is committed after this much line silence (its natural
+ *  end is "the first foreign line", which in a quiet room may not arrive
+ *  for minutes). Block lines arrive in one server write, milliseconds
+ *  apart, so a short window is safe and keeps the panel feeling instant. */
+const FLUSH_IDLE_MS = 200;
 
 /**
  * Loadout tracker hook — owns the LoadoutTracker instance, feeds it output
