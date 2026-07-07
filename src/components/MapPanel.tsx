@@ -571,17 +571,18 @@ export function MapPanel({ mode = 'slideout' }: PinnablePanelProps) {
           </div>
         )}
         {townView && browsing && (
-          <div
-            className="absolute top-2 right-2 z-20 pointer-events-none flex items-center justify-center px-2.5 py-1 rounded border border-cyan/35 bg-[#121517]/85"
-            title="Browsing another town's map — walking is unavailable"
+          <button
+            onClick={() => setBrowseTownId(null)}
+            className="absolute top-2 right-2 z-20 flex items-center justify-center gap-1 px-2.5 py-1 rounded border border-cyan/35 bg-[#121517]/85 hover:bg-cyan/15 transition-colors cursor-pointer"
+            title="Browsing another town's map (walking is unavailable). Click to return to your current town"
           >
             <span
               className="text-[9px] font-mono font-semibold tracking-[0.14em] leading-none text-cyan"
               style={{ marginRight: '-0.14em' }}
             >
-              BROWSING
+              BROWSING ✕
             </span>
-          </div>
+          </button>
         )}
         {townView && !browsing && !indoors && (
           <div
