@@ -257,15 +257,16 @@ export class TownLocalizer {
       // fragment town that later merge-scarred the real one.
       if (from) {
         const dest = this.map.getPortalDest(from.pos, from.dir);
-        const destTown = dest ? this.map.get(dest.townId) : undefined;
-        const destRoom = destTown?.rooms.get(dest!.roomId);
-        if (destTown && destRoom && this.map.matches(destRoom, block)) {
-          this.active = true;
-          this.lost = false;
-          destRoom.portal = true;
-          this.map.touchRoom(destRoom, block, now);
-          this.map.pos = { townId: destTown.id, roomId: destRoom.id };
-          return { kind: 'entered', pos: this.map.pos, moved: null };
+        if (dest) {
+          const destRoom = this.map.get(dest.townId)?.rooms.get(dest.roomId);
+          if (destRoom && this.map.matches(destRoom, block)) {
+            this.active = true;
+            this.lost = false;
+            destRoom.portal = true;
+            this.map.touchRoom(destRoom, block, now);
+            this.map.pos = { townId: dest.townId, roomId: destRoom.id };
+            return { kind: 'entered', pos: this.map.pos, moved: null };
+          }
         }
       }
       this.active = false;

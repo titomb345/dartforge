@@ -23,7 +23,12 @@ import {
 } from '../lib/hexUtils';
 import type { HexCell } from '../lib/hexMap';
 import { TERRAIN_LABELS, type HexTerrainType } from '../lib/hexTerrainPatterns';
-import { paintMarkerGlyph, HEX_MARKER_TYPES, type HexMarkerType } from '../lib/mapMarkers';
+import {
+  paintMarkerGlyph,
+  HEX_MARKER_TYPES,
+  MARKER_COLOR,
+  type HexMarkerType,
+} from '../lib/mapMarkers';
 import { MarkerPicker } from './MarkerPicker';
 
 // ---------------------------------------------------------------------------
@@ -69,7 +74,7 @@ const TERRAIN_STROKE: Record<HexTerrainType, string> = {
 
 const LABEL_COLOR = 'rgba(200, 185, 160, 0.85)';
 const LABEL_FONT = '9px "Courier New", monospace';
-const LANDMARK_COLOR = '#e8c97a';
+const LANDMARK_COLOR = MARKER_COLOR;
 const RIVER_COLOR = 'rgba(96, 158, 214, 0.85)';
 const CLIFF_COLOR = 'rgba(205, 185, 150, 0.9)';
 const BRIDGE_COLOR = '#e8a849';

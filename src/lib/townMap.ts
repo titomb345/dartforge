@@ -119,9 +119,13 @@ const DIAG_COMPONENTS: Partial<Record<TownDir, [TownDir, TownDir]>> = {
  * western side" mid-description). Too-short results are unusable: comparing
  * them proves nothing, so callers must check descUsable() first.
  */
+/** Lighting sentences change with the time of day — one definition shared
+ *  by descKey (global strip) and stableSentenceCandidates (per-sentence). */
+const LIGHTING_SENTENCE = 'It is [^.]{1,60}\\.';
+
 export function descKey(desc: string): string {
   return desc
-    .replace(/\bIt is [^.]{1,60}\./g, '')
+    .replace(new RegExp('\\b' + LIGHTING_SENTENCE, 'g'), '')
     .replace(/\s+/g, ' ')
     .trim();
 }
@@ -144,8 +148,9 @@ function splitSentences(text: string): string[] {
 
 /** Sentences too short to be meaningful volatile-prose evidence, plus the
  *  lighting sentences descKey already handles. */
+const LIGHTING_SENTENCE_START = new RegExp('^' + LIGHTING_SENTENCE);
 function stableSentenceCandidates(text: string): string[] {
-  return splitSentences(text).filter((s) => s.length >= 20 && !/^It is [^.]{1,60}\./.test(s));
+  return splitSentences(text).filter((s) => s.length >= 20 && !LIGHTING_SENTENCE_START.test(s));
 }
 
 /** Max learned volatile sentences kept (and serialized) */
@@ -396,10 +401,13 @@ export class TownMapStore {
   placementTarget(from: TownRoom, dir: TownDir): { x: number; y: number; z: number } {
     const vec = TOWN_DIR_VEC[dir];
     if (vec) return { x: from.x + vec[0], y: from.y + vec[1], z: from.z + vec[2] };
-    // Diagonal — use the visual diagonal as a placement hint only
-    const dx = dir.includes('e') ? 1 : -1;
-    const dy = dir.startsWith('n') ? -1 : 1;
-    return { x: from.x + dx, y: from.y + dy, z: from.z };
+    // Diagonal — the visual diagonal is a placement hint only. Derived
+    // from the same DIAG_COMPONENTS table addRoom's double-stretch uses,
+    // so the hint cell and the vacated row/column can never disagree.
+    const [d1, d2] = DIAG_COMPONENTS[dir]!;
+    const v1 = TOWN_DIR_VEC[d1]!;
+    const v2 = TOWN_DIR_VEC[d2]!;
+    return { x: from.x + v1[0] + v2[0], y: from.y + v1[1] + v2[1], z: from.z };
   }
 
   /** Record a confirmed transition. The reverse link is inferred (98%+ of
@@ -428,7 +436,8 @@ export class TownMapStore {
     const setB = new Set(b);
     const removed = a.filter((s) => !setB.has(s));
     const added = b.filter((s) => !setA.has(s));
-    if (removed.length !== 1 || added.length !== 1 || a.length - removed.length < 2) return;
+    // (a.length >= 3 above + exactly one swap ⇒ at least 2 shared sentences)
+    if (removed.length !== 1 || added.length !== 1) return;
     if (this.volatileSentences.has(removed[0]) && this.volatileSentences.has(added[0])) return;
     const pair = [removed[0], added[0]].sort();
     const key = pair.join(' ');
@@ -754,32 +763,32 @@ export class TownMapStore {
 
     // Portal destination memory follows (both sides of each entry) — this is
     // how the anchor learned on a first-trip fragment keeps working once the
-    // fragment fuses into the real town.
-    for (const [key, dest] of [...this.portalDests]) {
+    // fragment fuses into the real town. Rebuilt into a fresh map so
+    // mutation-during-iteration can't happen by construction.
+    const remapped = new Map<string, TownPos>();
+    for (const [key, dest] of this.portalDests) {
       let newKey = key;
       const [townIdStr, roomIdStr, dirWord] = key.split(':');
       if (Number(townIdStr) === from.id) {
         const mapped = idMap.get(Number(roomIdStr));
-        if (mapped === undefined) {
-          this.portalDests.delete(key);
-          continue;
-        }
+        if (mapped === undefined) continue; // drop — source room vanished
         newKey = `${into.id}:${mapped}:${dirWord}`;
       }
       let newDest = dest;
       if (dest.townId === from.id) {
         const mapped = idMap.get(dest.roomId);
-        if (mapped === undefined) {
-          this.portalDests.delete(key);
-          continue;
-        }
+        if (mapped === undefined) continue;
         newDest = { townId: into.id, roomId: mapped };
       }
-      if (newKey !== key || newDest !== dest) {
-        this.portalDests.delete(key);
-        this.portalDests.set(newKey, newDest);
-      }
+      remapped.set(newKey, newDest);
     }
+    this.portalDests = remapped;
+
+    // Pending volatile-prose witnesses hold bare room ids that this merge
+    // just renumbered — a stale id plus its remapped twin could satisfy
+    // the "2+ different rooms" promotion guard with ONE physical room, so
+    // drop them (merges are rare; pending evidence re-accumulates).
+    this.volatilePending.clear();
 
     this.towns.delete(from.id);
     // Deliberately NO relayoutTown here: re-deriving the layout mid-session

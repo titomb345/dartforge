@@ -65,7 +65,19 @@ const UNLOCK_EXPECT: Reply[] = ['unlocked', 'fail', 'no-key', 'no-lock', 'is-ope
 const OPEN_EXPECT: Reply[] = ['opened', 'is-open', 'is-locked', 'no-lock'];
 const MOVE_EXPECT: Reply[] = ['is-closed', 'is-locked'];
 const CLOSE_EXPECT: Reply[] = ['closed-ok', 'already-closed', 'is-locked'];
-const LOCK_EXPECT: Reply[] = ['locked-ok', 'fail', 'no-key', 'no-lock', 'is-open'];
+// 'is-locked' counts as done: the door is locked, however that came about
+// (some doors self-lock on close) — without it the reply times out and the
+// old retry loop would spray every other key at an already-locked door.
+const LOCK_EXPECT: Reply[] = ['locked-ok', 'fail', 'no-key', 'no-lock', 'is-open', 'is-locked'];
+
+/**
+ * A failed move's reply is the FIRST line the server sends back. Once other
+ * output has streamed past (the arrival room's name/description — which can
+ * itself contain full-line "It is closed."-style prose), a late match is a
+ * false positive, so after this many unmatched non-empty lines the move is
+ * treated as succeeded.
+ */
+const MOVE_REPLY_LINE_WINDOW = 2;
 
 export interface DoorCrossingOptions {
   /** Short direction word ('w', 'ne', 'in', ...) */
@@ -101,10 +113,17 @@ export class DoorRunner {
     resolve: (r: Reply) => void;
     timer: ReturnType<typeof setTimeout>;
     isMove: boolean;
+    /** Non-empty lines seen without a match (move false-positive guard) */
+    unmatched: number;
   } | null = null;
   private cancelled = false;
+  /** Keyring slots, defensively clamped (a corrupt persisted setting must
+   *  never mean "try zero keys") */
+  private readonly keys: number;
 
-  constructor(private opts: DoorCrossingOptions) {}
+  constructor(private opts: DoorCrossingOptions) {
+    this.keys = Math.max(1, Math.min(10, Math.floor(opts.keys) || 1));
+  }
 
   /** Feed every output line (ANSI-stripped). Unrelated lines are ignored. */
   feedLine(line: string): void {
@@ -120,6 +139,14 @@ export class DoorRunner {
         p.resolve(reply);
         return;
       }
+    }
+    // A move's failure reply arrives immediately; once the arrival room's
+    // block starts streaming, stop matching (descriptions can contain
+    // "It is closed."-style lines) and count the move as succeeded.
+    if (p.isMove && ++p.unmatched >= MOVE_REPLY_LINE_WINDOW) {
+      clearTimeout(p.timer);
+      this.pending = null;
+      p.resolve('moved');
     }
   }
 
@@ -153,6 +180,7 @@ export class DoorRunner {
         expect,
         resolve,
         isMove,
+        unmatched: 0,
         timer: setTimeout(() => {
           this.pending = null;
           resolve('timeout');
@@ -162,61 +190,84 @@ export class DoorRunner {
   }
 
   /**
+   * Unlock (trying keys until one works) and open. Returns the slot that
+   * unlocked (if any), whether the door turned out to be standing open,
+   * and ok=false when it is locked and no key fits.
+   */
+  private async unlockAndOpen(): Promise<{
+    ok: boolean;
+    wasOpen: boolean;
+    unlockedWith?: number;
+  }> {
+    const { dir } = this.opts;
+    let unlockedWith: number | undefined;
+    // Try the remembered key first, then the rest in order. "You don't
+    // have one of those." means slots that high don't exist, so everything
+    // above it is skipped too.
+    const order: number[] = [];
+    const preferred = this.opts.preferredKey;
+    if (preferred && preferred >= 1 && preferred <= this.keys) order.push(preferred);
+    for (let i = 1; i <= this.keys; i++) if (i !== preferred) order.push(i);
+    let maxSlot = this.keys;
+    for (const slot of order) {
+      if (slot > maxSlot) continue;
+      const reply = await this.step(`unlock ${dir} door with ${keyName(slot)}`, UNLOCK_EXPECT);
+      if (reply === 'unlocked') {
+        unlockedWith = slot;
+        break;
+      }
+      if (reply === 'no-lock') break;
+      if (reply === 'is-open') return { ok: true, wasOpen: true };
+      if (reply === 'no-key') maxSlot = Math.min(maxSlot, slot - 1);
+      // 'fail' / 'timeout' → next slot
+    }
+    if (this.cancelled) return { ok: true, wasOpen: false, unlockedWith };
+    const reply = await this.step(`open ${dir} door`, OPEN_EXPECT);
+    if (reply === 'is-locked') return { ok: false, wasOpen: false };
+    if (reply === 'is-open') return { ok: true, wasOpen: true, unlockedWith };
+    // 'opened' / 'no-lock' / 'timeout' → proceed
+    return { ok: true, wasOpen: false, unlockedWith };
+  }
+
+  /**
    * Execute the crossing. Resolves once the far-side close/lock is done
    * (or immediately on a near-side failure). The move itself is verified
    * by the walk executor's own room-block confirmation — a 'timeout' on
    * the move step just means "no failure line printed".
    */
   async run(): Promise<DoorCrossingResult> {
-    const { dir, opp, keys } = this.opts;
+    const { dir, opp } = this.opts;
     let wasOpen = this.opts.knownOpen ?? false;
     let unlockedWith: number | undefined;
+    const lockedOut = (): DoorCrossingResult => ({
+      ok: false,
+      wasOpen: false,
+      reason: 'the door is locked and no key on the ring fits',
+    });
 
     if (!wasOpen) {
-      // --- UNLOCK: try the remembered key first, then the rest in order.
-      // "You don't have one of those." means slots that high don't exist,
-      // so everything above it is skipped too.
-      const order: number[] = [];
-      const preferred = this.opts.preferredKey;
-      if (preferred && preferred >= 1 && preferred <= keys) order.push(preferred);
-      for (let i = 1; i <= keys; i++) if (i !== preferred) order.push(i);
-      let maxSlot = keys;
-      for (const slot of order) {
-        if (slot > maxSlot) continue;
-        const reply = await this.step(`unlock ${dir} door with ${keyName(slot)}`, UNLOCK_EXPECT);
-        if (reply === 'unlocked') {
-          unlockedWith = slot;
-          break;
-        }
-        if (reply === 'no-lock') break;
-        if (reply === 'is-open') {
-          wasOpen = true;
-          break;
-        }
-        if (reply === 'no-key') maxSlot = Math.min(maxSlot, slot - 1);
-        // 'fail' / 'timeout' → next slot
-      }
-
-      // --- OPEN
-      if (!wasOpen && !this.cancelled) {
-        const reply = await this.step(`open ${dir} door`, OPEN_EXPECT);
-        if (reply === 'is-locked') {
-          return {
-            ok: false,
-            wasOpen: false,
-            reason: 'the door is locked and no key on the ring fits',
-          };
-        }
-        if (reply === 'is-open') wasOpen = true; // was standing open after all
-        // 'opened' / 'no-lock' / 'timeout' → proceed
-      }
+      const phase = await this.unlockAndOpen();
+      if (!phase.ok) return lockedOut();
+      wasOpen = phase.wasOpen;
+      unlockedWith = phase.unlockedWith;
     }
 
     if (this.cancelled) return { ok: false, wasOpen, reason: 'cancelled' };
 
     // --- MOVE. Success is the room block (notifyMoved) or simply no
-    // failure line before the timeout.
-    const moveReply = await this.step(dir, MOVE_EXPECT, true);
+    // failure line in the immediate replies.
+    let moveReply = await this.step(dir, MOVE_EXPECT, true);
+    if ((moveReply === 'is-closed' || moveReply === 'is-locked') && wasOpen && !this.cancelled) {
+      // Believed open but actually closed (state went stale between the
+      // sighting and the step) — fall back to the closed-door sequence
+      // once instead of aborting the whole walk.
+      wasOpen = false;
+      const phase = await this.unlockAndOpen();
+      if (!phase.ok) return lockedOut();
+      wasOpen = phase.wasOpen;
+      unlockedWith = phase.unlockedWith;
+      moveReply = await this.step(dir, MOVE_EXPECT, true);
+    }
     if (moveReply === 'is-closed' || moveReply === 'is-locked') {
       return { ok: false, wasOpen, unlockedWithKey: unlockedWith, reason: 'the door is closed' };
     }
@@ -230,13 +281,14 @@ export class DoorRunner {
           `lock ${opp} door with ${keyName(unlockedWith)}`,
           LOCK_EXPECT
         );
-        // Same physical lock — the same key should work. If it somehow
-        // fails, run the remaining slots once rather than leaving it open.
-        if (reply === 'fail' || reply === 'timeout') {
-          for (let slot = 1; slot <= keys && !this.cancelled; slot++) {
+        // Same physical lock — the same key should work. Only an explicit
+        // "You fail." warrants trying the other slots once; an unrecognized
+        // reply (timeout) means continue blind, never retry-storm.
+        if (reply === 'fail') {
+          for (let slot = 1; slot <= this.keys && !this.cancelled; slot++) {
             if (slot === unlockedWith) continue;
             const r = await this.step(`lock ${opp} door with ${keyName(slot)}`, LOCK_EXPECT);
-            if (r === 'locked-ok' || r === 'no-lock' || r === 'is-open' || r === 'no-key') break;
+            if (r !== 'fail') break;
           }
         }
       }

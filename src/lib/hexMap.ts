@@ -15,7 +15,7 @@
 import type { Direction, HexCoord } from './hexUtils';
 import { applyDirection, oppositeDirection, COMPASS_DIRECTIONS } from './hexUtils';
 import type { HexTerrainType } from './hexTerrainPatterns';
-import { classifyLandmark, type HexMarkerType } from './mapMarkers';
+import { classifyLandmark, classifyLandmarks, type HexMarkerType } from './mapMarkers';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -282,13 +282,7 @@ export class HexMapStore {
    * Edges confirmed by visited neighbors' own descriptions are kept, and
    * this cell's edges mirror onto its neighbors.
    */
-  setVisitedEdges(
-    kind: EdgeKind,
-    island: number,
-    q: number,
-    r: number,
-    dirs: Direction[]
-  ): void {
+  setVisitedEdges(kind: EdgeKind, island: number, q: number, r: number, dirs: Direction[]): void {
     const cell = this.cells.get(cellKey(island, q, r));
     if (!cell) return;
     const edges = [...dirs];
@@ -355,18 +349,7 @@ export class HexMapStore {
   setMarker(island: number, q: number, r: number, marker: HexMarkerType | 'none' | null): void {
     const cell = this.cells.get(cellKey(island, q, r));
     if (!cell) return;
-    if (marker === null) {
-      cell.marker = null;
-      for (const l of cell.landmarks) {
-        const auto = classifyLandmark(l);
-        if (auto) {
-          cell.marker = auto;
-          break;
-        }
-      }
-    } else {
-      cell.marker = marker;
-    }
+    cell.marker = marker === null ? classifyLandmarks(cell.landmarks) : marker;
   }
 
   /** Record a blocked exit (both sides if the target cell exists). */
@@ -659,10 +642,7 @@ export class HexMapStore {
         // pick up the current icon vocabulary; explicit choices (any type,
         // or 'none') are preserved verbatim.
         marker:
-          cell.marker ??
-          (Array.isArray(cell.landmarks)
-            ? (cell.landmarks.map(classifyLandmark).find((m) => m !== null) ?? null)
-            : null),
+          cell.marker ?? (Array.isArray(cell.landmarks) ? classifyLandmarks(cell.landmarks) : null),
         notes: cell.notes ?? '',
         blocked: Array.isArray(cell.blocked) ? cell.blocked : [],
         description: cell.description ?? '',

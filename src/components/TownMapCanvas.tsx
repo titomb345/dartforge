@@ -14,7 +14,12 @@ import { createPortal } from 'react-dom';
 import { useMapContext } from '../contexts/MapContext';
 import type { TownRoom } from '../lib/townMap';
 import type { TownDir } from '../lib/townParser';
-import { paintMarkerGlyph, ROOM_ICON_TYPES, type RoomIconType } from '../lib/mapMarkers';
+import {
+  paintMarkerGlyph,
+  ROOM_ICON_TYPES,
+  MARKER_COLOR,
+  type RoomIconType,
+} from '../lib/mapMarkers';
 import { MarkerPicker } from './MarkerPicker';
 
 // ---------------------------------------------------------------------------
@@ -34,7 +39,7 @@ const ROOM_FILL_OUTDOOR = 'rgba(100, 115, 70, 0.30)';
 const LINK_COLOR = 'rgba(150, 135, 110, 0.45)';
 const LINK_DIAG_COLOR = 'rgba(150, 135, 110, 0.30)';
 const DOOR_COLOR = '#e8a849';
-const ICON_COLOR = '#e8c97a';
+const ICON_COLOR = MARKER_COLOR;
 const STAIR_COLOR = 'rgba(200, 185, 160, 0.9)';
 const NAMED_COLOR = 'rgba(160, 120, 200, 0.9)';
 const LABEL_COLOR = 'rgba(200, 185, 160, 0.85)';

@@ -15,6 +15,10 @@
  * smithies, stables) plus the description for bulletin boards.
  */
 
+/** Landmark/POI gold — one source for the map glyphs, the picker swatches,
+ *  and the legend, so retuning it can't leave them mismatched. */
+export const MARKER_COLOR = '#e8c97a';
+
 // ---------------------------------------------------------------------------
 // Hex landmark markers
 // ---------------------------------------------------------------------------
@@ -63,6 +67,16 @@ const HEX_MARKER_RULES: [HexMarkerType, RegExp][] = [
 export function classifyLandmark(text: string): HexMarkerType | null {
   for (const [type, re] of HEX_MARKER_RULES) {
     if (re.test(text)) return type;
+  }
+  return null;
+}
+
+/** Classify a cell from all its landmarks — first classifiable one wins.
+ *  (One definition, used by both live re-classification and load.) */
+export function classifyLandmarks(texts: string[]): HexMarkerType | null {
+  for (const text of texts) {
+    const m = classifyLandmark(text);
+    if (m) return m;
   }
   return null;
 }

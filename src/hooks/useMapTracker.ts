@@ -175,11 +175,10 @@ export function useMapTracker(
   } | null>(null);
   const walkSendingRef = useRef(false);
   // Town walk executor state — same shape, steps carry commands not dirs.
-  // Each step may expand to several commands (door steps send the full
-  // unlock/open/move/close/lock sequence, built at send time from the
-  // door's freshest known state).
+  // Door-crossing steps are marked at plan time and executed by DoorRunner
+  // at send time (response-aware, from the door's freshest known state).
   const townWalkRef = useRef<{
-    steps: (TownWalkStep & { cmds: string[]; door?: { dir: TownDir; fromId: number } })[];
+    steps: (TownWalkStep & { door?: { dir: TownDir; fromId: number } })[];
     confirmed: number;
     sent: number;
     townId: number;
@@ -369,16 +368,28 @@ export function useMapTracker(
     [syncState]
   );
 
-  const armTownWalkTimeout = useCallback(() => {
-    const walk = townWalkRef.current;
-    if (!walk) return;
-    if (walk.timeout) clearTimeout(walk.timeout);
-    walk.timeout = setTimeout(() => cancelTownWalk('no response from the MUD'), WALK_STEP_TIMEOUT);
-  }, [cancelTownWalk]);
+  const armTownWalkTimeout = useCallback(
+    (extraMs = 0) => {
+      const walk = townWalkRef.current;
+      if (!walk) return;
+      if (walk.timeout) clearTimeout(walk.timeout);
+      walk.timeout = setTimeout(
+        () => cancelTownWalk('no response from the MUD'),
+        WALK_STEP_TIMEOUT + extraMs
+      );
+    },
+    [cancelTownWalk]
+  );
 
   const pumpTownWalkSends = useCallback(() => {
     const walk = townWalkRef.current;
     if (!walk) return;
+    // A door crossing owns the wire until its close/lock phase is done —
+    // dispatching the next step early would put the runner's remaining
+    // commands one room behind (closing/locking the wrong door), and a
+    // second door step would clobber the active-runner registry. The
+    // runner's completion re-pumps.
+    if (getActiveDoorRunner()) return;
     if (walk.sent >= walk.steps.length) return;
     if (walk.sent - walk.confirmed >= WALK_PIPELINE) return;
     const step = walk.steps[walk.sent];
@@ -405,12 +416,21 @@ export function useMapTracker(
         send: (cmd) => sendDirectionRef.current(cmd),
       });
       setActiveDoorRunner(runner);
+      // A crossing can legitimately take several reply-timeouts before the
+      // move even sends (unrecognized unlock replies) — extend the step
+      // timer so a slow-but-working crossing isn't cancelled mid-door.
+      armTownWalkTimeout(doorKeysRef.current * 1500 + 3000);
       runner
         .run()
         .then((res) => {
           if (res.unlockedWithKey !== undefined) {
             // Remember which key fits this door (both sides) for next time
-            townMapRef.current.learnDoorKey(walk.townId, door.fromId, door.dir, res.unlockedWithKey);
+            townMapRef.current.learnDoorKey(
+              walk.townId,
+              door.fromId,
+              door.dir,
+              res.unlockedWithKey
+            );
             scheduleSave();
           }
           if (!res.ok && townWalkRef.current) {
@@ -427,17 +447,14 @@ export function useMapTracker(
     }
     walk.sent += 1;
     townWalkSendingRef.current = true;
-    (async () => {
-      for (const cmd of step.cmds) {
-        await sendDirectionRef.current(cmd);
-      }
-    })()
+    sendDirectionRef
+      .current(step.cmd)
       .catch(() => cancelTownWalk('send failed'))
       .finally(() => {
         townWalkSendingRef.current = false;
         if (townWalkRef.current) pumpTownWalkSends();
       });
-  }, [cancelTownWalk, scheduleSave]);
+  }, [cancelTownWalk, scheduleSave, armTownWalkTimeout]);
 
   /** Called after each town room resolution while a town walk is active. */
   const advanceTownWalk = useCallback(
@@ -815,7 +832,8 @@ export function useMapTracker(
       // Mark door crossings — the room being left knows which of its exits
       // are doors from its own exits line. The commands themselves (full
       // unlock/open/move/close/lock, or a plain move through a door found
-      // standing open) are built at send time from the freshest door state.
+      // standing open) are run by DoorRunner at send time from the
+      // freshest door state.
       let doors = 0;
       const enriched = steps.map((s, i) => {
         const fromId = i === 0 ? pos.roomId : steps[i - 1].toRoomId;
@@ -823,9 +841,9 @@ export function useMapTracker(
         const dir = TOWN_DIR_ALIASES[s.cmd] as TownDir | undefined;
         if (fromRoom && dir && fromRoom.doorDirs.includes(dir)) {
           doors++;
-          return { ...s, cmds: [s.cmd], door: { dir, fromId } };
+          return { ...s, door: { dir, fromId } };
         }
-        return { ...s, cmds: [s.cmd] };
+        return { ...s };
       });
       cancelWalk();
       cancelTownWalk();

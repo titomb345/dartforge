@@ -204,10 +204,12 @@ export function useAllocations(
     const ds = dataStoreRef.current;
     (async () => {
       try {
+        // set() schedules the store's debounced whole-file write — no
+        // explicit save() here, or every tab/view click would flush the
+        // entire alloc file to disk immediately.
         await ds.set(filename, 'panelTab', allocTab);
         await ds.set(filename, 'panelView', view);
         await ds.set(filename, 'panelMagicView', magicView);
-        await ds.save(filename);
       } catch (e) {
         console.error('Failed to save alloc panel state:', e);
       }

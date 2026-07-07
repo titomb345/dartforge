@@ -32,6 +32,7 @@ import { ToggleSwitch } from './shared';
 import { useMapContext } from '../contexts/MapContext';
 import { useAppSettingsContext } from '../contexts/AppSettingsContext';
 import { TERRAIN_LABELS } from '../lib/hexTerrainPatterns';
+import { MARKER_COLOR } from '../lib/mapMarkers';
 
 type ViewMode = 'auto' | 'hex' | 'town';
 
@@ -503,8 +504,8 @@ export function MapPanel({ mode = 'slideout' }: PinnablePanelProps) {
                         {'  '}
                         <span style={{ color: 'rgba(160, 120, 200, 0.9)' }}>∩</span> portal
                         <br />
-                        <span style={{ color: '#e8c97a' }}>◆</span> room icon (bank, shop, inn, …) —
-                        Shift+click a room to set
+                        <span style={{ color: MARKER_COLOR }}>◆</span> room icon (bank, shop, inn,
+                        …) — Shift+click a room to set
                       </div>
                     </>
                   )}

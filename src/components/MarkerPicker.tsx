@@ -8,12 +8,12 @@
 
 import { useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
-import { paintMarkerGlyph, type MarkerGlyph } from '../lib/mapMarkers';
+import { paintMarkerGlyph, MARKER_COLOR, type MarkerGlyph } from '../lib/mapMarkers';
 
 const PICKER_BG = 'rgba(20, 18, 16, 0.97)';
 const PICKER_BORDER = 'rgba(140, 125, 100, 0.5)';
 const PICKER_TEXT = '#c8b9a0';
-const GLYPH_COLOR = '#e8c97a';
+const GLYPH_COLOR = MARKER_COLOR;
 
 function GlyphSwatch({ glyph }: { glyph: MarkerGlyph }) {
   const ref = useRef<HTMLCanvasElement>(null);
@@ -68,27 +68,26 @@ export function MarkerPicker<T extends string>({
   const ty =
     y + height + 12 > window.innerHeight ? Math.max(8, window.innerHeight - height - 8) : y + 4;
 
-  const row = (
-    key: string,
-    label: string,
-    value: T | 'none' | null,
-    swatch: React.ReactNode,
-    selected: boolean
-  ) => (
-    <button
-      key={key}
-      onClick={() => {
-        onPick(value);
-        onClose();
-      }}
-      className="w-full flex items-center gap-2 px-2 py-[3px] text-[10px] font-mono text-left rounded hover:bg-white/10 cursor-pointer"
-      style={{ color: selected ? GLYPH_COLOR : PICKER_TEXT }}
-    >
-      <span className="w-4 h-4 flex items-center justify-center shrink-0">{swatch}</span>
-      {label}
-      {selected && <span className="ml-auto opacity-60">✓</span>}
-    </button>
-  );
+  // Selection is derived in one place: `current === value` also covers the
+  // Auto row (both null) so an unclassified cell shows Auto as active.
+  const row = (label: string, value: T | 'none' | null, swatch: React.ReactNode) => {
+    const selected = current === value;
+    return (
+      <button
+        key={value ?? '__auto'}
+        onClick={() => {
+          onPick(value);
+          onClose();
+        }}
+        className="w-full flex items-center gap-2 px-2 py-[3px] text-[10px] font-mono text-left rounded hover:bg-white/10 cursor-pointer"
+        style={{ color: selected ? GLYPH_COLOR : PICKER_TEXT }}
+      >
+        <span className="w-4 h-4 flex items-center justify-center shrink-0">{swatch}</span>
+        {label}
+        {selected && <span className="ml-auto opacity-60">✓</span>}
+      </button>
+    );
+  };
 
   return createPortal(
     <>
@@ -110,30 +109,10 @@ export function MarkerPicker<T extends string>({
         >
           {title}
         </div>
-        {options.map((o) =>
-          row(
-            o.type,
-            o.label,
-            o.type,
-            <GlyphSwatch glyph={o.type as MarkerGlyph} />,
-            current === o.type
-          )
-        )}
+        {options.map((o) => row(o.label, o.type, <GlyphSwatch glyph={o.type as MarkerGlyph} />))}
         <div className="h-px my-1" style={{ background: PICKER_BORDER }} />
-        {row(
-          '__auto',
-          'Auto-detect',
-          null,
-          <span className="text-[9px] opacity-60">◈</span>,
-          false
-        )}
-        {row(
-          '__none',
-          'No icon',
-          'none',
-          <span className="text-[9px] opacity-60">✕</span>,
-          current === 'none'
-        )}
+        {row('Auto-detect', null, <span className="text-[9px] opacity-60">◈</span>)}
+        {row('No icon', 'none', <span className="text-[9px] opacity-60">✕</span>)}
       </div>
     </>,
     document.body

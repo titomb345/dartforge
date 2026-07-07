@@ -137,11 +137,94 @@ function drive(
     check(unlocks.length === 2, `nokey: ${unlocks.length} unlock attempts, expected 2`);
   }
 
-  // 8. Move blocked (door closed between sighting and step): not ok.
+  // 8. Move blocked and the fallback can't help (still locked): not ok.
   {
-    const { result } = drive({ w: 'The wrought iron gate is closed.' }, { knownOpen: true });
+    const { result } = drive(
+      {
+        w: 'The wrought iron gate is closed.',
+        'open w door': 'The wrought iron gate is locked!',
+        'unlock w door with key': 'You fail.',
+        'unlock w door with key 2': 'You fail.',
+        'unlock w door with key 3': 'You fail.',
+        'unlock w door with key 4': 'You fail.',
+        'unlock w door with key 5': 'You fail.',
+      },
+      { knownOpen: true }
+    );
     const res = await result;
     check(!res.ok, 'move-blocked: must report failure');
+  }
+
+  // 8b. Stale open state: believed open, actually closed — fall back to the
+  // closed-door sequence and cross anyway instead of aborting the walk.
+  {
+    const sent: string[] = [];
+    let moves = 0;
+    // eslint-disable-next-line prefer-const
+    let runner: DoorRunner;
+    const script: Record<string, string> = {
+      'unlock w door with key': 'You unlock the oak door.',
+      'open w door': 'You open the oak door.',
+      'close e door': 'You close the oak door.',
+      'lock e door with key': 'You lock the oak door.',
+    };
+    const send = async (cmd: string) => {
+      sent.push(cmd);
+      if (cmd === 'w') {
+        moves++;
+        // First move bounces off the closed door; the retry succeeds
+        if (moves === 1) setTimeout(() => runner.feedLine('The oak door is closed.'), 0);
+        else setTimeout(() => runner.notifyMoved(), 0);
+      } else if (script[cmd]) {
+        setTimeout(() => runner.feedLine(script[cmd]), 0);
+      }
+    };
+    runner = new DoorRunner({
+      dir: 'w',
+      opp: 'e',
+      keys: 1,
+      knownOpen: true,
+      send,
+      responseTimeoutMs: 25,
+    });
+    const res = await runner.run();
+    check(
+      res.ok && res.unlockedWithKey === 1,
+      `stale-open: ok=${res.ok} key=${res.unlockedWithKey}`
+    );
+    check(moves === 2, `stale-open: ${moves} move attempts, expected 2`);
+    check(sent.includes('lock e door with key'), 'stale-open: must lock behind (we unlocked)');
+  }
+
+  // 8c. Arrival-room prose can't fail the move: once two unmatched lines
+  // stream past (the room block), a late "It is closed." desc line is
+  // ignored and the move counts as succeeded.
+  {
+    const sent: string[] = [];
+    // eslint-disable-next-line prefer-const
+    let runner: DoorRunner;
+    const send = async (cmd: string) => {
+      sent.push(cmd);
+      if (cmd === 'w') {
+        setTimeout(() => {
+          runner.feedLine('Gatehouse');
+          runner.feedLine('This is a tunnel-like passage through the gatehouse.');
+          runner.feedLine('It is closed.'); // desc prose — must NOT fail the move
+        }, 0);
+      }
+    };
+    runner = new DoorRunner({
+      dir: 'w',
+      opp: 'e',
+      keys: 1,
+      knownOpen: true,
+      send,
+      responseTimeoutMs: 5000,
+    });
+    const t0 = Date.now();
+    const res = await runner.run();
+    check(res.ok, 'desc-prose: crossing must succeed');
+    check(Date.now() - t0 < 4000, 'desc-prose: room block should end the move wait early');
   }
 
   // 9. notifyMoved short-circuits the move wait (no timeout needed).

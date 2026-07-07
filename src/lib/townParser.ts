@@ -174,21 +174,20 @@ export function parseTownExits(sentence: string): TownExits {
   const doorDirs = new Set<TownDir>();
   const openDoorDirs = new Set<TownDir>();
 
-  // Door/gate phrases name their directions after "leading": mark those dirs.
-  // "a closed pair of oak doors leading west and east" → doors west+east.
+  // Door/gate phrases name their directions after "leading": mark those
+  // dirs ("a closed pair of oak doors leading west and east" → doors
+  // west+east). The open/closed state word sits earlier in the same
+  // comma-separated phrase — phrases without an "open" (closed doors,
+  // bare gates) default to closed.
   for (const m of body.matchAll(/\bleading ([a-z, and]+?)(?=[,.]|$)/g)) {
+    const segStart = Math.max(body.lastIndexOf(',', m.index), body.lastIndexOf('.', m.index)) + 1;
+    const isOpen = /\bopen\b/.test(body.slice(segStart, m.index));
     for (const w of m[1].split(/[^a-z]+/)) {
       const d = TOWN_DIR_ALIASES[w];
-      if (d) doorDirs.add(d);
-    }
-  }
-  // Doors standing open ("an open oak door leading east") — the state word
-  // sits earlier in the same comma-separated phrase as its "leading" dirs.
-  // Phrases without an "open" (closed doors, bare gates) default to closed.
-  for (const m of body.matchAll(/\bopen\b[^,.]*?\bleading ([a-z, and]+?)(?=[,.]|$)/g)) {
-    for (const w of m[1].split(/[^a-z]+/)) {
-      const d = TOWN_DIR_ALIASES[w];
-      if (d) openDoorDirs.add(d);
+      if (d) {
+        doorDirs.add(d);
+        if (isOpen) openDoorDirs.add(d);
+      }
     }
   }
   for (const m of body.matchAll(DIR_WORD_RE)) {
@@ -309,9 +308,12 @@ export class TownParser {
         // Fragmented streams can slice a description/contents sentence so
         // its tail lands on its own short line ("There is an oak chest in
         // the opposite corner.  It") — sentence-shaped starts and dangling
-        // function-word endings are prose, never room names.
+        // function-word endings are prose, never room names. Capitalized
+        // articles are NOT in the trailing list: "Pier A" / "Cell Block A"
+        // are legitimate names, while mid-sentence truncation dangles
+        // pronouns or lowercase function words.
         if (/^(?:There (?:is|are)|You )\b/.test(t)) return null;
-        if (/\b(?:It|He|She|They|The|A|An|and|or|of|to|with|in|on|at|is|are|was|from|by)$/.test(t))
+        if (/\b(?:It|He|She|They|and|or|of|to|with|in|on|at|is|are|was|from|by|the|a|an)$/.test(t))
           return null;
         return { name: t, descLines: desc };
       }
