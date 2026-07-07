@@ -136,18 +136,26 @@ export class TownLocalizer {
    * A portal transit line arrived ("You step into the north portal.").
    * Portals bridge distant towns — the NEXT room block must resolve as a
    * fresh town entry instead of being filed into the current town.
+   * `dirWord` is the portal named by the transit line ("north"), which
+   * identifies WHICH of a room's portals was taken (the hub chamber has
+   * seven); departure room + dirWord keys the portal destination memory.
    */
-  onPortalTransit(): void {
+  onPortalTransit(dirWord: string | null = null): void {
     // The room we're leaving through the portal is a portal room
     if (this.active) {
       const room = this.map.room(this.map.pos);
       if (room) room.portal = true;
     }
+    this.pendingPortalFrom =
+      this.active && this.map.pos && !this.lost
+        ? { pos: this.map.pos, dir: dirWord?.toLowerCase() ?? null }
+        : null;
     this.queue = [];
     this.portalJump = true;
   }
 
   private portalJump = false;
+  private pendingPortalFrom: { pos: TownPos; dir: string | null } | null = null;
 
   /**
    * A wilderness survey arrived — the player is outside. Deactivate; the
@@ -161,6 +169,7 @@ export class TownLocalizer {
     this.lost = false;
     this.queue = [];
     this.portalJump = false;
+    this.pendingPortalFrom = null;
   }
 
   /**
@@ -186,6 +195,7 @@ export class TownLocalizer {
     this.queue = [];
     this.pendingExit = null;
     this.portalJump = false;
+    this.pendingPortalFrom = null;
   }
 
   /**
@@ -238,10 +248,33 @@ export class TownLocalizer {
     // link back, and no hex anchor (the hex position is stale indoors).
     if (this.portalJump) {
       this.portalJump = false;
+      const from = this.pendingPortalFrom;
+      this.pendingPortalFrom = null;
+      // Destination memory first: this exact portal has been taken before,
+      // so land where it landed then. Entry matching cannot do this — every
+      // temple Forecourt is a same-fingerprint twin of the others, so the
+      // global match is ambiguous and each trip used to spawn a fresh
+      // fragment town that later merge-scarred the real one.
+      if (from) {
+        const dest = this.map.getPortalDest(from.pos, from.dir);
+        if (dest) {
+          const destRoom = this.map.get(dest.townId)?.rooms.get(dest.roomId);
+          if (destRoom && this.map.matches(destRoom, block)) {
+            this.active = true;
+            this.lost = false;
+            destRoom.portal = true;
+            this.map.touchRoom(destRoom, block, now);
+            this.map.pos = { townId: dest.townId, roomId: destRoom.id };
+            return { kind: 'entered', pos: this.map.pos, moved: null };
+          }
+        }
+      }
       this.active = false;
       const res = this.enterTown(block, null, now, false);
       const arrival = this.map.room(res.pos);
       if (arrival) arrival.portal = true; // ... and so is the arrival room
+      // Learn (or relearn) where this portal leads for next time.
+      if (from && res.pos) this.map.setPortalDest(from.pos, from.dir, res.pos);
       return res;
     }
 
@@ -264,7 +297,7 @@ export class TownLocalizer {
     if (move?.kind === 'look') {
       this.queue.shift();
       if (this.map.matches(current, block)) {
-        this.map.touchRoom(current, block, now);
+        this.map.touchRoom(current, block, now, true);
         return { kind: 'stationary', pos: this.map.pos, moved: move };
       }
       // Look shows a different room?! Fall through to correlation.
@@ -292,7 +325,7 @@ export class TownLocalizer {
           const dest = town.rooms.get(linked);
           if (dest && this.map.matches(dest, block)) {
             this.queue.shift();
-            this.map.touchRoom(dest, block, now);
+            this.map.touchRoom(dest, block, now, true);
             this.map.pos = { townId: town.id, roomId: dest.id };
             return { kind: 'expected', pos: this.map.pos, moved: move };
           }
@@ -410,13 +443,33 @@ export class TownLocalizer {
           // diagonal leading back into mapped territory ALWAYS duplicated
           // its destination (Eris market plaza: se from the NW corner
           // re-enters the already-mapped center).
+          //
+          // FLOOR ground truth: a tracked move's destination floor is exact
+          // (lateral moves stay on the floor, u/d shift exactly one), so a
+          // candidate on another z can never be this move's destination.
+          // findMatchesNear tolerates dz=1 for the z-uncertain correlation
+          // paths — here it let mirror-identical floors merge vertically:
+          // the keep's 2F Bedchamber, entered n from its Vestibule, reused
+          // the 3F Bedchamber directly above (same name+exits; its own
+          // Vestibule mirrors ours, so the reciprocity guard passed).
           const cands = this.map
             .findMatchesNear(town, block, target.x, target.y, target.z, NEAR_RADIUS, 4)
-            .filter((r) => r.id !== current.id && (gridVec === undefined || r.id !== occupantId));
+            .filter(
+              (r) =>
+                r.z === target.z &&
+                r.id !== current.id &&
+                (gridVec === undefined || r.id !== occupantId)
+            );
           const guarded = cands.filter((r) => relaxedReciprocal(r) && !alreadyNeighborElsewhere(r));
+          // Readable disagreeing descs veto reuse regardless of candidate
+          // count — the block itself is saying "not this one" (the plaza
+          // lesson, extended to the single-candidate branch: the keep's
+          // Bedchambers differ ONLY in prose, name+exits are identical).
+          const descVeto = (r: TownRoom) =>
+            descUsable(block.desc) && descUsable(r.desc) && !this.map.descAgrees(r, block);
           let reuse: TownRoom | null = null;
           if (cands.length <= 1) {
-            reuse = guarded.length === 1 ? guarded[0] : null;
+            reuse = guarded.length === 1 && !descVeto(guarded[0]) ? guarded[0] : null;
           } else {
             // Uniform-fingerprint neighborhood (hall of mirrors): several
             // nearby rooms share the block's full fingerprint. Positive
@@ -438,12 +491,8 @@ export class TownLocalizer {
               reuse = positive[0];
             } else if (byDesc.length === 1) {
               reuse = byDesc[0];
-            } else if (guarded.length === 1) {
-              const veto =
-                descUsable(block.desc) &&
-                descUsable(guarded[0].desc) &&
-                !this.map.descAgrees(guarded[0], block);
-              if (!veto) reuse = guarded[0];
+            } else if (guarded.length === 1 && !descVeto(guarded[0])) {
+              reuse = guarded[0];
             }
           }
           if (reuse) {
@@ -471,7 +520,7 @@ export class TownLocalizer {
         const dest = town.rooms.get(linked);
         if (dest && this.map.matches(dest, block)) {
           this.queue.shift();
-          this.map.touchRoom(dest, block, now);
+          this.map.touchRoom(dest, block, now, true);
           this.map.pos = { townId: town.id, roomId: dest.id };
           return { kind: 'expected', pos: this.map.pos, moved: move };
         }

@@ -155,6 +155,15 @@ export function useAllocations(
           currentProfileIndex: magicCurrentIndex ?? 0,
           liveAllocation: magicLive ?? { ...EMPTY_MAGIC },
         });
+        // Restore where the panel was left (tab + view), so the client
+        // opens showing the same profile that was selected last session.
+        const savedTab = await dataStore.get<AllocTab>(filename, 'panelTab');
+        if (savedTab === 'combat' || savedTab === 'magic') setAllocTab(savedTab);
+        const savedView = await dataStore.get<AllocView>(filename, 'panelView');
+        if (savedView === 'live' || savedView === 'profiles') setView(savedView);
+        const savedMagicView = await dataStore.get<AllocView>(filename, 'panelMagicView');
+        if (savedMagicView === 'live' || savedMagicView === 'profiles')
+          setMagicView(savedMagicView);
       } catch (e) {
         console.error('Failed to load alloc data:', e);
         setData({ ...EMPTY_DATA });
@@ -184,6 +193,28 @@ export function useAllocations(
       }
     })();
   }, [data]);
+
+  // Persist panel position (tab + view) so reopening the client lands on
+  // the same profile that was on screen when it closed
+  useEffect(() => {
+    if (!loadedRef.current) return;
+    const charName = activeCharRef.current;
+    if (!charName) return;
+    const filename = allocFileName(charName);
+    const ds = dataStoreRef.current;
+    (async () => {
+      try {
+        // set() schedules the store's debounced whole-file write — no
+        // explicit save() here, or every tab/view click would flush the
+        // entire alloc file to disk immediately.
+        await ds.set(filename, 'panelTab', allocTab);
+        await ds.set(filename, 'panelView', view);
+        await ds.set(filename, 'panelMagicView', magicView);
+      } catch (e) {
+        console.error('Failed to save alloc panel state:', e);
+      }
+    })();
+  }, [allocTab, view, magicView]);
 
   // Persist magic data
   useEffect(() => {

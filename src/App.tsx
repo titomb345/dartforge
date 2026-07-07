@@ -107,6 +107,9 @@ import { MapPanel } from './components/MapPanel';
 import { useAllocations } from './hooks/useAllocations';
 import { AllocProvider } from './contexts/AllocContext';
 import { AllocPanel } from './components/AllocPanel';
+import { useLoadout } from './hooks/useLoadout';
+import { LoadoutProvider } from './contexts/LoadoutContext';
+import { LoadoutPanel } from './components/LoadoutPanel';
 import { CurrencyPanel } from './components/CurrencyPanel';
 import { BabelPanel } from './components/BabelPanel';
 import { WhoPanel } from './components/WhoPanel';
@@ -170,6 +173,7 @@ const LOGIN_COMMANDS = [
   'show magic allocation',
   'show alignment',
   'who',
+  'equip held',
 ];
 
 /** Max recent output lines kept for tab completion */
@@ -637,6 +641,7 @@ function AppMain() {
           (async () => {
             for (const cmd of toSend) {
               mapTrackCommandRef.current(cmd);
+              loadoutTrackCommandRef.current(cmd);
               await sendCommand(cmd);
             }
           })();
@@ -650,6 +655,9 @@ function AppMain() {
 
         // Auto-conc — watch for BEBT to execute action
         autoConcRef.current.processServerLine(stripped);
+
+        // Feed to loadout tracker (hands/worn state)
+        loadoutFeedLineRef.current(stripped);
 
         // Feed to allocation parser
         const allocResult = allocParserRef.current?.feedLine(stripped);
@@ -1054,6 +1062,14 @@ function AppMain() {
   const mapFeedLineRef = useLatestRef(mapTracker.feedLine);
   const mapTrackCommandRef = useLatestRef(mapTracker.trackCommand);
 
+  // Loadout tracker — hands/worn state from output + outgoing commands.
+  // refreshEquipRef is filled in after useTimerEngines mounts; the tracker
+  // uses it to auto-verify hands (silent gagged eq) after delta events.
+  const refreshEquipRef = useRef<(() => void) | null>(null);
+  const loadout = useLoadout(dataStore, activeCharacter, sendCommandRef, refreshEquipRef);
+  const loadoutFeedLineRef = useLatestRef(loadout.feedLine);
+  const loadoutTrackCommandRef = useLatestRef(loadout.trackCommand);
+
   // Allocation tracker
   const allocState = useAllocations(sendCommandRef, dataStore, activeCharacter);
   const handleAllocParseRef = useLatestRef(allocState.handleAllocParse);
@@ -1184,6 +1200,8 @@ function AppMain() {
     }
     // Automapper — track outgoing movement commands (post movement-mode)
     mapTrackCommandRef.current(command);
+    // Loadout — arm block captures / hold pairing for equipment commands
+    loadoutTrackCommandRef.current(command);
     await sendCommand(command);
   };
 
@@ -1800,10 +1818,12 @@ function AppMain() {
     antiIdleNextAt,
     alignmentNextAt,
     whoNextAt,
+    equipNextAt,
     babelNextAt,
     activeTimerBadges,
     handleToggleTimer,
     refreshWho,
+    refreshEquip,
   } = useTimerEngines({
     connected,
     loggedIn,
@@ -1814,6 +1834,8 @@ function AppMain() {
     alignmentTrackingMinutes,
     whoAutoRefreshEnabled: appSettings.whoAutoRefreshEnabled,
     whoRefreshMinutes: appSettings.whoRefreshMinutes,
+    equipAutoRefreshEnabled: appSettings.equipAutoRefreshEnabled,
+    equipRefreshMinutes: appSettings.equipRefreshMinutes,
     babelEnabled: appSettings.babelEnabled,
     babelLanguage: appSettings.babelLanguage,
     babelIntervalSeconds: appSettings.babelIntervalSeconds,
@@ -1830,6 +1852,9 @@ function AppMain() {
     globalScriptRef,
     commandSeparatorRef,
   });
+  // Loadout auto-verify — after hand-affecting events, the tracker fires
+  // this gagged eq refresher to replace its heuristic guess with truth
+  refreshEquipRef.current = refreshEquip;
 
   // First-launch: auto-open Guide panel
   useEffect(() => {
@@ -2170,6 +2195,17 @@ function AppMain() {
     [whoSnapshot, refreshWho]
   );
 
+  // Loadout context value. The hands re-sync routes through the gagged
+  // refresher (same as the Who panel's), so it never spams the terminal.
+  const loadoutValue = useMemo(
+    () => ({
+      state: loadout.state,
+      refreshHands: refreshEquip,
+      refreshFull: loadout.refreshFull,
+    }),
+    [loadout.state, refreshEquip, loadout.refreshFull]
+  );
+
   // CommandInput context value
   const commandInputValue = useMemo(
     () => ({
@@ -2192,6 +2228,10 @@ function AppMain() {
       whoRefreshMinutes: appSettings.whoRefreshMinutes,
       whoNextAt,
       onToggleWhoAutoRefresh: () => appSettings.updateWhoAutoRefreshEnabled(false),
+      equipAutoRefreshEnabled: appSettings.equipAutoRefreshEnabled,
+      equipRefreshMinutes: appSettings.equipRefreshMinutes,
+      equipNextAt,
+      onToggleEquipAutoRefresh: () => appSettings.updateEquipAutoRefreshEnabled(false),
       activeTimers: activeTimerBadges,
       onToggleTimer: handleToggleTimer,
       initialHistory: commandHistory,
@@ -2246,6 +2286,10 @@ function AppMain() {
       appSettings.whoRefreshMinutes,
       whoNextAt,
       appSettings.updateWhoAutoRefreshEnabled,
+      appSettings.equipAutoRefreshEnabled,
+      appSettings.equipRefreshMinutes,
+      equipNextAt,
+      appSettings.updateEquipAutoRefreshEnabled,
       activeTimerBadges,
       handleToggleTimer,
       commandHistory,
@@ -2323,275 +2367,282 @@ function AppMain() {
                         <ImproveCounterProvider value={counterValue}>
                           <MapProvider value={mapTracker}>
                             <AllocProvider value={allocState}>
-                              <WhoProvider value={whoValue}>
-                                <WhoTitleProvider value={whoTitleState}>
-                                  <PanelProvider
-                                    layout={panelLayout}
-                                    activePanel={activePanel}
-                                    togglePanel={togglePanel}
-                                    pinPanel={pinPanel}
-                                  >
-                                    <SpotlightProvider>
-                                      <div className="flex flex-col h-dvh bg-bg-canvas text-text-primary relative p-1 gap-1 overflow-hidden">
-                                        <Toolbar
-                                          connected={connected}
-                                          onReconnect={handleReconnect}
-                                          onDisconnect={handleDisconnect}
-                                          onScreenshot={handleScreenshot}
-                                        />
-                                        <div className="flex-1 overflow-hidden flex flex-row gap-1 relative">
-                                          {/* Left pinned region — full, collapsed strip, or hidden */}
-                                          {effectiveLeftWidth > 0 ? (
-                                            <>
-                                              <PinnedRegion
+                              <LoadoutProvider value={loadoutValue}>
+                                <WhoProvider value={whoValue}>
+                                  <WhoTitleProvider value={whoTitleState}>
+                                    <PanelProvider
+                                      layout={panelLayout}
+                                      activePanel={activePanel}
+                                      togglePanel={togglePanel}
+                                      pinPanel={pinPanel}
+                                    >
+                                      <SpotlightProvider>
+                                        <div className="flex flex-col h-dvh bg-bg-canvas text-text-primary relative p-1 gap-1 overflow-hidden">
+                                          <Toolbar
+                                            connected={connected}
+                                            onReconnect={handleReconnect}
+                                            onDisconnect={handleDisconnect}
+                                            onScreenshot={handleScreenshot}
+                                          />
+                                          <div className="flex-1 overflow-hidden flex flex-row gap-1 relative">
+                                            {/* Left pinned region — full, collapsed strip, or hidden */}
+                                            {effectiveLeftWidth > 0 ? (
+                                              <>
+                                                <PinnedRegion
+                                                  side="left"
+                                                  panels={panelLayout.left}
+                                                  width={effectiveLeftWidth}
+                                                  otherSidePanels={panelLayout.right}
+                                                  onUnpin={unpinPanel}
+                                                  onSwapSide={swapPanelSide}
+                                                  onSwapWith={swapPanelsWith}
+                                                  onMovePanel={movePanel}
+                                                  heightRatios={panelHeights.left}
+                                                  onHeightRatiosChange={onLeftHeightRatiosChange}
+                                                />
+                                                {panelLayout.left.length > 0 && (
+                                                  <ResizeHandle
+                                                    side="left"
+                                                    onMouseDown={leftResize.handleMouseDown}
+                                                    isDragging={leftResize.isDragging}
+                                                    constrained={
+                                                      effectiveLeftWidth < pinnedWidths.left
+                                                    }
+                                                    onCollapse={collapseLeft}
+                                                  />
+                                                )}
+                                              </>
+                                            ) : leftIsCollapsed && panelLayout.left.length > 0 ? (
+                                              <CollapsedPanelStrip
                                                 side="left"
                                                 panels={panelLayout.left}
-                                                width={effectiveLeftWidth}
+                                                panelWidth={pinnedWidths.left}
                                                 otherSidePanels={panelLayout.right}
                                                 onUnpin={unpinPanel}
                                                 onSwapSide={swapPanelSide}
                                                 onSwapWith={swapPanelsWith}
                                                 onMovePanel={movePanel}
-                                                heightRatios={panelHeights.left}
-                                                onHeightRatiosChange={onLeftHeightRatiosChange}
+                                                onExpand={
+                                                  collapsedSides.left && !budget.leftCollapsed
+                                                    ? expandLeft
+                                                    : undefined
+                                                }
                                               />
-                                              {panelLayout.left.length > 0 && (
-                                                <ResizeHandle
-                                                  side="left"
-                                                  onMouseDown={leftResize.handleMouseDown}
-                                                  isDragging={leftResize.isDragging}
-                                                  constrained={
-                                                    effectiveLeftWidth < pinnedWidths.left
-                                                  }
-                                                  onCollapse={collapseLeft}
-                                                />
-                                              )}
-                                            </>
-                                          ) : leftIsCollapsed && panelLayout.left.length > 0 ? (
-                                            <CollapsedPanelStrip
-                                              side="left"
-                                              panels={panelLayout.left}
-                                              panelWidth={pinnedWidths.left}
-                                              otherSidePanels={panelLayout.right}
-                                              onUnpin={unpinPanel}
-                                              onSwapSide={swapPanelSide}
-                                              onSwapWith={swapPanelsWith}
-                                              onMovePanel={movePanel}
-                                              onExpand={
-                                                collapsedSides.left && !budget.leftCollapsed
-                                                  ? expandLeft
-                                                  : undefined
-                                              }
-                                            />
-                                          ) : null}
+                                            ) : null}
 
-                                          {/* Center: Terminal + bottom controls */}
-                                          <div
-                                            className="flex-1 overflow-hidden flex flex-col"
-                                            style={{ minWidth: MIN_TERMINAL_WIDTH }}
-                                          >
-                                            <div className="flex-1 overflow-hidden rounded-lg flex flex-col">
-                                              <Terminal
-                                                terminalRef={terminalRef}
-                                                inputRef={inputRef}
-                                                theme={xtermTheme}
-                                                display={display}
-                                                onUpdateDisplay={updateDisplay}
-                                                onAddToTrigger={handleAddToTrigger}
-                                                onGagLine={handleGagLine}
-                                                onOpenInNotes={handleOpenInNotes}
-                                                onScreenshot={handleScreenshot}
+                                            {/* Center: Terminal + bottom controls */}
+                                            <div
+                                              className="flex-1 overflow-hidden flex flex-col"
+                                              style={{ minWidth: MIN_TERMINAL_WIDTH }}
+                                            >
+                                              <div className="flex-1 overflow-hidden rounded-lg flex flex-col">
+                                                <Terminal
+                                                  terminalRef={terminalRef}
+                                                  inputRef={inputRef}
+                                                  theme={xtermTheme}
+                                                  display={display}
+                                                  onUpdateDisplay={updateDisplay}
+                                                  onAddToTrigger={handleAddToTrigger}
+                                                  onGagLine={handleGagLine}
+                                                  onOpenInNotes={handleOpenInNotes}
+                                                  onScreenshot={handleScreenshot}
+                                                />
+                                              </div>
+                                              {/* Quick buttons */}
+                                              <QuickButtonBar
+                                                buttons={quickButtonsCRUD.items}
+                                                onFire={fireQuickButton}
+                                                onAdd={quickButtonsCRUD.add}
+                                                onUpdate={quickButtonsCRUD.update}
+                                                onDelete={quickButtonsCRUD.remove}
+                                                onReorder={quickButtonsCRUD.reorder}
+                                                getVariable={getVariableByName}
                                               />
+                                              {/* Status bar + command input */}
+                                              <div className="rounded-lg bg-bg-primary overflow-hidden shrink-0">
+                                                <div
+                                                  ref={statusBarRef}
+                                                  data-help-id="status-bar"
+                                                  className="flex items-center gap-1 px-1.5 py-0.5"
+                                                  style={{
+                                                    background:
+                                                      'linear-gradient(to bottom, #1e1e1e, #1a1a1a)',
+                                                  }}
+                                                >
+                                                  {loggedIn && (
+                                                    <SortableStatusBar
+                                                      items={readoutConfigs}
+                                                      order={statusBarOrder}
+                                                      onReorder={reorderStatusBar}
+                                                      theme={theme}
+                                                      autoCompact={autoCompact}
+                                                      compactReadouts={compactReadouts}
+                                                      filterFlags={filterFlags}
+                                                      toggleFilter={toggleFilter}
+                                                      toggleCompactReadout={toggleCompactReadout}
+                                                    />
+                                                  )}
+                                                  <div className="ml-auto">
+                                                    <GameClock
+                                                      compact={
+                                                        autoCompact || !!compactReadouts.clock
+                                                      }
+                                                      onToggleCompact={() =>
+                                                        toggleCompactReadout('clock')
+                                                      }
+                                                    />
+                                                  </div>
+                                                </div>
+                                                <CommandInput
+                                                  ref={inputRef}
+                                                  onSend={handleSend}
+                                                  onReconnect={reconnect}
+                                                  promptChar={display.promptChar}
+                                                  promptColor={display.promptColor}
+                                                />
+                                              </div>
                                             </div>
-                                            {/* Quick buttons */}
-                                            <QuickButtonBar
-                                              buttons={quickButtonsCRUD.items}
-                                              onFire={fireQuickButton}
-                                              onAdd={quickButtonsCRUD.add}
-                                              onUpdate={quickButtonsCRUD.update}
-                                              onDelete={quickButtonsCRUD.remove}
-                                              onReorder={quickButtonsCRUD.reorder}
-                                              getVariable={getVariableByName}
-                                            />
-                                            {/* Status bar + command input */}
-                                            <div className="rounded-lg bg-bg-primary overflow-hidden shrink-0">
-                                              <div
-                                                ref={statusBarRef}
-                                                data-help-id="status-bar"
-                                                className="flex items-center gap-1 px-1.5 py-0.5"
-                                                style={{
-                                                  background:
-                                                    'linear-gradient(to bottom, #1e1e1e, #1a1a1a)',
-                                                }}
-                                              >
-                                                {loggedIn && (
-                                                  <SortableStatusBar
-                                                    items={readoutConfigs}
-                                                    order={statusBarOrder}
-                                                    onReorder={reorderStatusBar}
-                                                    theme={theme}
-                                                    autoCompact={autoCompact}
-                                                    compactReadouts={compactReadouts}
-                                                    filterFlags={filterFlags}
-                                                    toggleFilter={toggleFilter}
-                                                    toggleCompactReadout={toggleCompactReadout}
+
+                                            {/* Right pinned region — full, collapsed strip, or hidden */}
+                                            {effectiveRightWidth > 0 ? (
+                                              <>
+                                                {panelLayout.right.length > 0 && (
+                                                  <ResizeHandle
+                                                    side="right"
+                                                    onMouseDown={rightResize.handleMouseDown}
+                                                    isDragging={rightResize.isDragging}
+                                                    constrained={
+                                                      effectiveRightWidth < pinnedWidths.right
+                                                    }
+                                                    onCollapse={collapseRight}
                                                   />
                                                 )}
-                                                <div className="ml-auto">
-                                                  <GameClock
-                                                    compact={autoCompact || !!compactReadouts.clock}
-                                                    onToggleCompact={() =>
-                                                      toggleCompactReadout('clock')
-                                                    }
-                                                  />
-                                                </div>
-                                              </div>
-                                              <CommandInput
-                                                ref={inputRef}
-                                                onSend={handleSend}
-                                                onReconnect={reconnect}
-                                                promptChar={display.promptChar}
-                                                promptColor={display.promptColor}
-                                              />
-                                            </div>
-                                          </div>
-
-                                          {/* Right pinned region — full, collapsed strip, or hidden */}
-                                          {effectiveRightWidth > 0 ? (
-                                            <>
-                                              {panelLayout.right.length > 0 && (
-                                                <ResizeHandle
+                                                <PinnedRegion
                                                   side="right"
-                                                  onMouseDown={rightResize.handleMouseDown}
-                                                  isDragging={rightResize.isDragging}
-                                                  constrained={
-                                                    effectiveRightWidth < pinnedWidths.right
-                                                  }
-                                                  onCollapse={collapseRight}
+                                                  panels={panelLayout.right}
+                                                  width={effectiveRightWidth}
+                                                  otherSidePanels={panelLayout.left}
+                                                  onUnpin={unpinPanel}
+                                                  onSwapSide={swapPanelSide}
+                                                  onSwapWith={swapPanelsWith}
+                                                  onMovePanel={movePanel}
+                                                  heightRatios={panelHeights.right}
+                                                  onHeightRatiosChange={onRightHeightRatiosChange}
                                                 />
-                                              )}
-                                              <PinnedRegion
+                                              </>
+                                            ) : rightIsCollapsed && panelLayout.right.length > 0 ? (
+                                              <CollapsedPanelStrip
                                                 side="right"
                                                 panels={panelLayout.right}
-                                                width={effectiveRightWidth}
+                                                panelWidth={pinnedWidths.right}
                                                 otherSidePanels={panelLayout.left}
                                                 onUnpin={unpinPanel}
                                                 onSwapSide={swapPanelSide}
                                                 onSwapWith={swapPanelsWith}
                                                 onMovePanel={movePanel}
-                                                heightRatios={panelHeights.right}
-                                                onHeightRatiosChange={onRightHeightRatiosChange}
+                                                onExpand={
+                                                  collapsedSides.right && !budget.rightCollapsed
+                                                    ? expandRight
+                                                    : undefined
+                                                }
                                               />
-                                            </>
-                                          ) : rightIsCollapsed && panelLayout.right.length > 0 ? (
-                                            <CollapsedPanelStrip
-                                              side="right"
-                                              panels={panelLayout.right}
-                                              panelWidth={pinnedWidths.right}
-                                              otherSidePanels={panelLayout.left}
-                                              onUnpin={unpinPanel}
-                                              onSwapSide={swapPanelSide}
-                                              onSwapWith={swapPanelsWith}
-                                              onMovePanel={movePanel}
-                                              onExpand={
-                                                collapsedSides.right && !budget.rightCollapsed
-                                                  ? expandRight
-                                                  : undefined
-                                              }
-                                            />
-                                          ) : null}
+                                            ) : null}
 
-                                          {/* Slide-out overlays */}
-                                          <SlideOut panel="appearance">
-                                            <ColorSettings
-                                              theme={theme}
-                                              onUpdateColor={updateColor}
-                                              onResetColor={resetColor}
-                                              onReset={resetAll}
-                                              display={display}
-                                              onUpdateDisplay={updateDisplay}
-                                              onResetDisplay={resetDisplay}
-                                              debugMode={debugMode}
-                                              onToggleDebug={toggleDebug}
-                                              onClose={closePanel}
-                                            />
-                                          </SlideOut>
-                                          <SlideOut panel="settings">
-                                            <SettingsPanel onClose={closePanel} />
-                                          </SlideOut>
-                                          <SlideOut panel="skills" pinnable="skills">
-                                            <SkillPanel mode="slideout" />
-                                          </SlideOut>
-                                          <SlideOut panel="chat" pinnable="chat">
-                                            <ChatPanel mode="slideout" />
-                                          </SlideOut>
-                                          <SlideOut panel="counter" pinnable="counter">
-                                            <CounterPanel mode="slideout" />
-                                          </SlideOut>
-                                          <SlideOut panel="notes" pinnable="notes">
-                                            <NotesPanel mode="slideout" />
-                                          </SlideOut>
-                                          <SlideOut panel="aliases">
-                                            <AliasPanel onClose={closePanel} />
-                                          </SlideOut>
-                                          <SlideOut panel="triggers">
-                                            <TriggerPanel onClose={closePanel} />
-                                          </SlideOut>
-                                          <SlideOut panel="timers">
-                                            <TimerPanel onClose={closePanel} />
-                                          </SlideOut>
-                                          <SlideOut panel="macros">
-                                            <MacroPanel
-                                              onClose={closePanel}
-                                              macros={macrosCRUD.items}
-                                              onAdd={macrosCRUD.add}
-                                              onUpdate={macrosCRUD.update}
-                                              onDelete={macrosCRUD.remove}
-                                            />
-                                          </SlideOut>
-                                          <SlideOut panel="variables">
-                                            <VariablePanel onClose={closePanel} />
-                                          </SlideOut>
-                                          <SlideOut panel="scripts">
-                                            <ScriptPanel
-                                              script={globalScript}
-                                              onSave={saveGlobalScript}
-                                              onClose={closePanel}
-                                            />
-                                          </SlideOut>
-                                          <SlideOut panel="map" pinnable="map">
-                                            <MapPanel mode="slideout" />
-                                          </SlideOut>
-                                          <SlideOut panel="alloc" pinnable="alloc">
-                                            <AllocPanel mode="slideout" />
-                                          </SlideOut>
-                                          <SlideOut panel="currency" pinnable="currency">
-                                            <CurrencyPanel mode="slideout" />
-                                          </SlideOut>
-                                          <SlideOut panel="babel" pinnable="babel">
-                                            <BabelPanel mode="slideout" />
-                                          </SlideOut>
-                                          <SlideOut panel="who" pinnable="who">
-                                            <WhoPanel mode="slideout" />
-                                          </SlideOut>
-                                          {activePanel === 'logs' && (
-                                            <LogViewerModal onClose={closePanel} />
-                                          )}
-                                          <SlideOut panel="help">
-                                            <HelpPanel onClose={closePanel} />
-                                          </SlideOut>
+                                            {/* Slide-out overlays */}
+                                            <SlideOut panel="appearance">
+                                              <ColorSettings
+                                                theme={theme}
+                                                onUpdateColor={updateColor}
+                                                onResetColor={resetColor}
+                                                onReset={resetAll}
+                                                display={display}
+                                                onUpdateDisplay={updateDisplay}
+                                                onResetDisplay={resetDisplay}
+                                                debugMode={debugMode}
+                                                onToggleDebug={toggleDebug}
+                                                onClose={closePanel}
+                                              />
+                                            </SlideOut>
+                                            <SlideOut panel="settings">
+                                              <SettingsPanel onClose={closePanel} />
+                                            </SlideOut>
+                                            <SlideOut panel="skills" pinnable="skills">
+                                              <SkillPanel mode="slideout" />
+                                            </SlideOut>
+                                            <SlideOut panel="chat" pinnable="chat">
+                                              <ChatPanel mode="slideout" />
+                                            </SlideOut>
+                                            <SlideOut panel="counter" pinnable="counter">
+                                              <CounterPanel mode="slideout" />
+                                            </SlideOut>
+                                            <SlideOut panel="notes" pinnable="notes">
+                                              <NotesPanel mode="slideout" />
+                                            </SlideOut>
+                                            <SlideOut panel="aliases">
+                                              <AliasPanel onClose={closePanel} />
+                                            </SlideOut>
+                                            <SlideOut panel="triggers">
+                                              <TriggerPanel onClose={closePanel} />
+                                            </SlideOut>
+                                            <SlideOut panel="timers">
+                                              <TimerPanel onClose={closePanel} />
+                                            </SlideOut>
+                                            <SlideOut panel="macros">
+                                              <MacroPanel
+                                                onClose={closePanel}
+                                                macros={macrosCRUD.items}
+                                                onAdd={macrosCRUD.add}
+                                                onUpdate={macrosCRUD.update}
+                                                onDelete={macrosCRUD.remove}
+                                              />
+                                            </SlideOut>
+                                            <SlideOut panel="variables">
+                                              <VariablePanel onClose={closePanel} />
+                                            </SlideOut>
+                                            <SlideOut panel="scripts">
+                                              <ScriptPanel
+                                                script={globalScript}
+                                                onSave={saveGlobalScript}
+                                                onClose={closePanel}
+                                              />
+                                            </SlideOut>
+                                            <SlideOut panel="map" pinnable="map">
+                                              <MapPanel mode="slideout" />
+                                            </SlideOut>
+                                            <SlideOut panel="alloc" pinnable="alloc">
+                                              <AllocPanel mode="slideout" />
+                                            </SlideOut>
+                                            <SlideOut panel="currency" pinnable="currency">
+                                              <CurrencyPanel mode="slideout" />
+                                            </SlideOut>
+                                            <SlideOut panel="babel" pinnable="babel">
+                                              <BabelPanel mode="slideout" />
+                                            </SlideOut>
+                                            <SlideOut panel="who" pinnable="who">
+                                              <WhoPanel mode="slideout" />
+                                            </SlideOut>
+                                            <SlideOut panel="loadout" pinnable="loadout">
+                                              <LoadoutPanel mode="slideout" />
+                                            </SlideOut>
+                                            {activePanel === 'logs' && (
+                                              <LogViewerModal onClose={closePanel} />
+                                            )}
+                                            <SlideOut panel="help">
+                                              <HelpPanel onClose={closePanel} />
+                                            </SlideOut>
+                                          </div>
                                         </div>
-                                      </div>
-                                      <SpotlightOverlay />
-                                      {showCompanionQR && (
-                                        <CompanionQRDialog
-                                          onClose={() => setShowCompanionQR(false)}
-                                        />
-                                      )}
-                                    </SpotlightProvider>
-                                  </PanelProvider>
-                                </WhoTitleProvider>
-                              </WhoProvider>
+                                        <SpotlightOverlay />
+                                        {showCompanionQR && (
+                                          <CompanionQRDialog
+                                            onClose={() => setShowCompanionQR(false)}
+                                          />
+                                        )}
+                                      </SpotlightProvider>
+                                    </PanelProvider>
+                                  </WhoTitleProvider>
+                                </WhoProvider>
+                              </LoadoutProvider>
                             </AllocProvider>
                           </MapProvider>
                         </ImproveCounterProvider>

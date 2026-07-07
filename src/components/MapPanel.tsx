@@ -6,9 +6,11 @@
  * being shown gets a cyan tint on its button). In town view a picker
  * browses ANY mapped town from anywhere; walking is only offered in the
  * town you're physically in. The toolbar stays compact enough for a pinned
- * sidebar: Hex/Town/Center are icons, the gear menu (far right) holds
- * Labels/Fog, town rename, and the delete actions, and the current
- * location is an overlay on the canvas instead of the title.
+ * sidebar: it holds only the Auto/Hex/Town segmented switcher, the town
+ * picker, and the gear menu (Labels/Fog, town rename, delete actions).
+ * Everything else lives as overlays on the canvas, like a real map UI:
+ * center / floor stepper / full screen bottom-right, the walking pill and
+ * LOST badge bottom-left, and the current location top-left.
  */
 
 import { useRef, useState, useEffect } from 'react';
@@ -32,6 +34,8 @@ import { ToggleSwitch } from './shared';
 import { useMapContext } from '../contexts/MapContext';
 import { useAppSettingsContext } from '../contexts/AppSettingsContext';
 import { TERRAIN_LABELS } from '../lib/hexTerrainPatterns';
+import { MARKER_COLOR } from '../lib/mapMarkers';
+import { PopoverMenu } from './PopoverMenu';
 
 type ViewMode = 'auto' | 'hex' | 'town';
 
@@ -188,15 +192,22 @@ export function MapPanel({ mode = 'slideout' }: PinnablePanelProps) {
       : null;
 
   /** Selected mode is amber; in Auto, the view actually shown is cyan. */
-  const viewBtnColor = (m: ViewMode) => {
-    if (viewMode === m) return 'border-[#e8a849]/30 text-[#e8a849] bg-[#e8a849]/10';
-    if (viewMode === 'auto' && m === effectiveView) return 'border-cyan/40 text-cyan bg-cyan/10';
-    return 'border-border-dim text-text-dim hover:text-text-label';
+  const segBtnColor = (m: ViewMode) => {
+    if (viewMode === m) return 'bg-[#e8a849]/15 text-[#e8a849]';
+    if (viewMode === 'auto' && m === effectiveView) return 'bg-cyan/10 text-cyan';
+    return 'text-text-dim hover:text-text-label hover:bg-white/[0.04]';
   };
 
-  const iconBtnBase =
-    'flex items-center justify-center w-[22px] h-[19px] rounded border transition-colors cursor-pointer';
-  const plainIconBtn = `${iconBtnBase} border-border-dim text-text-dim hover:text-text-label hover:border-border-subtle`;
+  const plainIconBtn =
+    'flex items-center justify-center w-[22px] h-[20px] rounded border transition-colors cursor-pointer border-border-dim text-text-dim hover:text-text-label hover:border-border-subtle';
+
+  /** Square buttons overlaid on the canvas (center, full screen) */
+  const overlayBtn =
+    'flex items-center justify-center w-6 h-6 rounded border border-border-subtle bg-[#171512]/90 text-text-dim hover:text-text-label hover:border-border transition-colors cursor-pointer';
+
+  const activeWalk = townView ? townWalking : walking;
+  const cancelActiveWalk = townView ? cancelTownWalk : cancelWalk;
+  const isLost = townView ? townLost && !browsing : lost;
 
   const commitRename = () => {
     if (displayed && nameDraft !== null && nameDraft.trim() && nameDraft !== displayed.name) {
@@ -209,100 +220,34 @@ export function MapPanel({ mode = 'slideout' }: PinnablePanelProps) {
   // inside the full-screen popout (widescreen, like the script editor's).
   const content = (
     <>
-      {/* Toolbar row */}
-      <div className="flex items-center gap-1 px-2 py-1 border-b border-border-subtle shrink-0 text-[10px]">
-        <button
-          onClick={() => setViewMode('auto')}
-          className={`px-1.5 py-0.5 rounded border transition-colors cursor-pointer ${viewBtnColor('auto')}`}
-          title="Follow the player — town view indoors, hex view outside"
-        >
-          Auto
-        </button>
-        <button
-          onClick={() => setViewMode('hex')}
-          className={`${iconBtnBase} ${viewBtnColor('hex')}`}
-          title="Hex wilderness map"
-        >
-          <HexGridIcon size={12} />
-        </button>
-        {townMapperEnabled && (
+      {/* Toolbar row — view switcher, town picker, gear. The map controls
+          (center, floors, full screen) are overlays on the canvas below. */}
+      <div className="flex items-center gap-1.5 px-2 py-1 border-b border-border-subtle shrink-0 text-[10px]">
+        <div className="flex items-stretch h-[20px] rounded border border-border-dim overflow-hidden shrink-0">
           <button
-            onClick={() => setViewMode('town')}
-            className={`${iconBtnBase} ${viewBtnColor('town')}`}
-            title="Town room map"
+            onClick={() => setViewMode('auto')}
+            className={`px-1.5 transition-colors cursor-pointer ${segBtnColor('auto')}`}
+            title="Follow the player — town view indoors, hex view outside"
           >
-            <HouseIcon size={12} />
+            Auto
           </button>
-        )}
-        <button
-          onClick={centerOnPlayer}
-          className={plainIconBtn}
-          title="Center on current position"
-        >
-          <FocusIcon size={12} />
-        </button>
-
-        {townView && floors.length > 1 && (
-          <div
-            className="flex items-center gap-0.5 rounded border border-border-dim px-1"
-            title="Browse floors (follows you when you take stairs)"
+          <button
+            onClick={() => setViewMode('hex')}
+            className={`flex items-center justify-center w-6 border-l border-border-dim transition-colors cursor-pointer ${segBtnColor('hex')}`}
+            title="Hex wilderness map"
           >
+            <HexGridIcon size={12} />
+          </button>
+          {townMapperEnabled && (
             <button
-              onClick={() => floorIdx > 0 && setFloorOverride(floors[floorIdx - 1])}
-              disabled={floorIdx <= 0}
-              className="text-text-dim hover:text-text-label disabled:opacity-30 cursor-pointer disabled:cursor-default"
+              onClick={() => setViewMode('town')}
+              className={`flex items-center justify-center w-6 border-l border-border-dim transition-colors cursor-pointer ${segBtnColor('town')}`}
+              title="Town room map"
             >
-              ▼
+              <HouseIcon size={12} />
             </button>
-            <span
-              className={`min-w-[22px] text-center ${!browsing && floor === playerFloor ? 'text-[#e8a849]' : 'text-text-label'}`}
-            >
-              F{floor}
-            </span>
-            <button
-              onClick={() =>
-                floorIdx >= 0 &&
-                floorIdx < floors.length - 1 &&
-                setFloorOverride(floors[floorIdx + 1])
-              }
-              disabled={floorIdx < 0 || floorIdx >= floors.length - 1}
-              className="text-text-dim hover:text-text-label disabled:opacity-30 cursor-pointer disabled:cursor-default"
-            >
-              ▲
-            </button>
-          </div>
-        )}
-
-        {!townView && walking && (
-          <button
-            onClick={cancelWalk}
-            className="px-1.5 py-0.5 rounded border border-[#e8a849]/40 text-[#e8a849] bg-[#e8a849]/10 hover:bg-[#e8a849]/20 transition-colors cursor-pointer animate-pulse"
-            title="Stop auto-walking"
-          >
-            Walking ({walking.remaining}) ✕
-          </button>
-        )}
-        {townView && townWalking && (
-          <button
-            onClick={cancelTownWalk}
-            className="px-1.5 py-0.5 rounded border border-[#e8a849]/40 text-[#e8a849] bg-[#e8a849]/10 hover:bg-[#e8a849]/20 transition-colors cursor-pointer animate-pulse"
-            title="Stop auto-walking"
-          >
-            Walking ({townWalking.remaining}) ✕
-          </button>
-        )}
-        {((townView && townLost && !browsing) || (!townView && lost)) && (
-          <span
-            className="px-1.5 py-0.5 rounded border border-red/40 text-red text-[9px]"
-            title={
-              townView
-                ? 'Room unknown — walk around to re-locate'
-                : 'Position unknown — move to distinctive terrain to re-locate'
-            }
-          >
-            LOST
-          </span>
-        )}
+          )}
+        </div>
 
         <div className="flex-1" />
 
@@ -313,7 +258,7 @@ export function MapPanel({ mode = 'slideout' }: PinnablePanelProps) {
               const id = Number(e.target.value);
               setBrowseTownId(id === town?.id ? null : id);
             }}
-            className="max-w-[110px] text-[10px] px-1 py-0.5 rounded border border-border-dim bg-bg-input text-text-dim hover:text-text-label focus:outline-none focus:border-border-subtle transition-colors cursor-pointer"
+            className="min-w-0 max-w-[130px] text-[10px] px-1 py-0.5 rounded border border-border-dim bg-bg-input text-text-dim hover:text-text-label focus:outline-none focus:border-border-subtle transition-colors cursor-pointer"
             title="Browse any mapped town (• marks where you are)"
           >
             {towns.map((t) => (
@@ -334,17 +279,6 @@ export function MapPanel({ mode = 'slideout' }: PinnablePanelProps) {
           )
         )}
 
-        <button
-          onClick={() => {
-            setMenuOpen(false);
-            setFullscreen((v) => !v);
-          }}
-          className={plainIconBtn}
-          title={fullscreen ? 'Exit full screen (Esc)' : 'Full screen map'}
-        >
-          {fullscreen ? <CollapseIcon size={11} /> : <ExpandIcon size={11} />}
-        </button>
-
         {/* Options menu (Labels / Fog / rename / delete) — far right.
             Rendered through a portal so a small pinned panel can't clip it. */}
         <div className="relative">
@@ -362,153 +296,148 @@ export function MapPanel({ mode = 'slideout' }: PinnablePanelProps) {
           >
             <GearIcon size={11} />
           </button>
-          {menuOpen &&
-            createPortal(
-              <>
-                <div className="fixed inset-0 z-[9998]" onClick={() => setMenuOpen(false)} />
-                <div
-                  className="fixed z-[9999] flex flex-col gap-1.5 bg-bg-secondary border border-border rounded-md p-2 shadow-lg min-w-[180px] max-h-[70vh] overflow-y-auto text-[10px]"
-                  style={{ top: menuPos.top, right: menuPos.right }}
-                >
-                  <div className="text-text-dim text-[9px]">
-                    {townView
-                      ? displayed
-                        ? `${displayed.roomCount} room${displayed.roomCount === 1 ? '' : 's'} · ${floors.length} floor${floors.length === 1 ? '' : 's'} · ${townCount} town${townCount === 1 ? '' : 's'} mapped`
-                        : 'No town mapped yet'
-                      : `${visitedCount}/${cellCount} hexes${islandCount > 1 ? ` · ${islandCount} regions` : ''}${townCount > 0 ? ` · ${townCount} town${townCount === 1 ? '' : 's'}` : ''}`}
-                  </div>
-                  <div className="h-px bg-border-subtle" />
-                  {townView && displayed && (
-                    <>
-                      <input
-                        value={roomSearch}
-                        onChange={(e) => setRoomSearch(e.target.value)}
-                        onKeyDown={(e) => {
-                          if (e.key === 'Enter' && searchMatches.length > 0) {
-                            jumpToRoom(searchMatches[0].id, searchMatches[0].z);
-                          }
-                        }}
-                        placeholder="Find room…"
-                        className="w-full bg-bg-primary border border-border-dim focus:border-border-subtle rounded px-1 py-0.5 text-text-label outline-none placeholder:text-text-dim/60"
-                        title="Search rooms by name — Enter jumps to the best match"
-                      />
-                      {searchMatches.length > 0 && (
-                        <div className="flex flex-col gap-0.5 max-h-[110px] overflow-y-auto">
-                          {searchMatches.map((r) => (
-                            <button
-                              key={r.id}
-                              onClick={() => jumpToRoom(r.id, r.z)}
-                              className="text-left px-1 py-0.5 rounded hover:bg-bg-primary text-text-label cursor-pointer truncate"
-                            >
-                              {r.name}{' '}
-                              <span className="opacity-50">
-                                F{r.z} · {r.visits}x
-                              </span>
-                            </button>
-                          ))}
-                        </div>
-                      )}
-                      <div className="h-px bg-border-subtle" />
-                    </>
+          {menuOpen && (
+            <PopoverMenu
+              top={menuPos.top}
+              right={menuPos.right}
+              onClose={() => setMenuOpen(false)}
+              className="flex flex-col gap-1.5 bg-bg-secondary border border-border rounded-md p-2 shadow-lg min-w-[180px] max-h-[70vh] overflow-y-auto text-[10px]"
+            >
+              <div className="text-text-dim text-[9px]">
+                {townView
+                  ? displayed
+                    ? `${displayed.roomCount} room${displayed.roomCount === 1 ? '' : 's'} · ${floors.length} floor${floors.length === 1 ? '' : 's'} · ${townCount} town${townCount === 1 ? '' : 's'} mapped`
+                    : 'No town mapped yet'
+                  : `${visitedCount}/${cellCount} hexes${islandCount > 1 ? ` · ${islandCount} regions` : ''}${townCount > 0 ? ` · ${townCount} town${townCount === 1 ? '' : 's'}` : ''}`}
+              </div>
+              <div className="h-px bg-border-subtle" />
+              {townView && displayed && (
+                <>
+                  <input
+                    value={roomSearch}
+                    onChange={(e) => setRoomSearch(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' && searchMatches.length > 0) {
+                        jumpToRoom(searchMatches[0].id, searchMatches[0].z);
+                      }
+                    }}
+                    placeholder="Find room…"
+                    className="w-full bg-bg-primary border border-border-dim focus:border-border-subtle rounded px-1 py-0.5 text-text-label outline-none placeholder:text-text-dim/60"
+                    title="Search rooms by name — Enter jumps to the best match"
+                  />
+                  {searchMatches.length > 0 && (
+                    <div className="flex flex-col gap-0.5 max-h-[110px] overflow-y-auto">
+                      {searchMatches.map((r) => (
+                        <button
+                          key={r.id}
+                          onClick={() => jumpToRoom(r.id, r.z)}
+                          className="text-left px-1 py-0.5 rounded hover:bg-bg-primary text-text-label cursor-pointer truncate"
+                        >
+                          {r.name}{' '}
+                          <span className="opacity-50">
+                            F{r.z} · {r.visits}x
+                          </span>
+                        </button>
+                      ))}
+                    </div>
                   )}
+                  <div className="h-px bg-border-subtle" />
+                </>
+              )}
+              <div className="flex items-center justify-between gap-3">
+                <span className="text-text-label">
+                  {townView ? 'Room labels' : 'Terrain labels'}
+                </span>
+                <ToggleSwitch
+                  checked={mapShowLabels}
+                  onChange={updateMapShowLabels}
+                  accent={ACCENT}
+                />
+              </div>
+              {!townView && (
+                <div className="flex items-center justify-between gap-3">
+                  <span className="text-text-label" title="Dim hexes you've seen but never entered">
+                    Fog of war
+                  </span>
+                  <ToggleSwitch checked={mapShowFog} onChange={updateMapShowFog} accent={ACCENT} />
+                </div>
+              )}
+              {townView && displayed && (
+                <div className="flex items-center justify-between gap-2">
+                  <span className="text-text-label shrink-0">Name</span>
+                  <input
+                    value={nameDraft ?? displayed.name}
+                    onChange={(e) => setNameDraft(e.target.value)}
+                    onBlur={commitRename}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') (e.target as HTMLInputElement).blur();
+                      if (e.key === 'Escape') {
+                        // Revert the draft only — don't let the menu's
+                        // Escape-to-close swallow the rename cancel
+                        e.stopPropagation();
+                        setNameDraft(null);
+                        (e.target as HTMLInputElement).blur();
+                      }
+                    }}
+                    className="w-24 bg-bg-primary border border-border-dim focus:border-border-subtle rounded px-1 py-0.5 text-text-label outline-none"
+                    title="Rename this town"
+                  />
+                </div>
+              )}
+              <div className="h-px bg-border-subtle" />
+              {townView ? (
+                displayed && (
                   <div className="flex items-center justify-between gap-3">
-                    <span className="text-text-label">
-                      {townView ? 'Room labels' : 'Terrain labels'}
-                    </span>
-                    <ToggleSwitch
-                      checked={mapShowLabels}
-                      onChange={updateMapShowLabels}
-                      accent={ACCENT}
+                    <span className="text-text-dim">Delete town map</span>
+                    <ConfirmDeleteButton
+                      onDelete={() => {
+                        deleteTown(displayed.id);
+                        setBrowseTownId(null);
+                        setMenuOpen(false);
+                      }}
+                      variant="fixed"
+                      title={`Delete "${displayed.name}" (it re-maps as you walk)`}
                     />
                   </div>
-                  {!townView && (
-                    <div className="flex items-center justify-between gap-3">
-                      <span
-                        className="text-text-label"
-                        title="Dim hexes you've seen but never entered"
-                      >
-                        Fog of war
-                      </span>
-                      <ToggleSwitch
-                        checked={mapShowFog}
-                        onChange={updateMapShowFog}
-                        accent={ACCENT}
-                      />
-                    </div>
-                  )}
-                  {townView && displayed && (
-                    <div className="flex items-center justify-between gap-2">
-                      <span className="text-text-label shrink-0">Name</span>
-                      <input
-                        value={nameDraft ?? displayed.name}
-                        onChange={(e) => setNameDraft(e.target.value)}
-                        onBlur={commitRename}
-                        onKeyDown={(e) => {
-                          if (e.key === 'Enter') (e.target as HTMLInputElement).blur();
-                          if (e.key === 'Escape') {
-                            setNameDraft(null);
-                            (e.target as HTMLInputElement).blur();
-                          }
-                        }}
-                        className="w-24 bg-bg-primary border border-border-dim focus:border-border-subtle rounded px-1 py-0.5 text-text-label outline-none"
-                        title="Rename this town"
-                      />
-                    </div>
-                  )}
-                  <div className="h-px bg-border-subtle" />
-                  {townView ? (
-                    displayed && (
-                      <div className="flex items-center justify-between gap-3">
-                        <span className="text-text-dim">Delete town map</span>
-                        <ConfirmDeleteButton
-                          onDelete={() => {
-                            deleteTown(displayed.id);
-                            setBrowseTownId(null);
-                            setMenuOpen(false);
-                          }}
-                          variant="fixed"
-                          title={`Delete "${displayed.name}" (it re-maps as you walk)`}
-                        />
-                      </div>
-                    )
-                  ) : (
-                    <div className="flex items-center justify-between gap-3">
-                      <span className="text-text-dim">Clear hex map</span>
-                      <ConfirmDeleteButton
-                        onDelete={() => {
-                          clearMap();
-                          setMenuOpen(false);
-                        }}
-                        variant="fixed"
-                        title="Clear hex map data (towns are kept)"
-                      />
-                    </div>
-                  )}
-                  {townView && (
-                    <>
-                      <div className="h-px bg-border-subtle" />
-                      <div className="text-[9px] leading-4 text-text-dim">
-                        <span style={{ color: 'rgba(150, 135, 110, 0.9)' }}>━</span> corridor{'  '}
-                        <span style={{ color: 'rgba(150, 135, 110, 0.6)' }}>╌</span> shortcut /
-                        squeezed
-                        <br />
-                        <span style={{ color: 'rgba(160, 120, 200, 0.9)' }}>╌</span> special exit
-                        {'  '}
-                        <span style={{ color: '#e8a849' }}>┃</span> door
-                        <br />
-                        <span className="text-text-label">▲▼</span> stairs (double-click to follow)
-                        <br />
-                        <span style={{ color: '#e8a849' }}>●</span> walk route{'  '}
-                        <span style={{ color: 'rgba(150, 135, 110, 0.5)' }}>╶</span> unexplored exit
-                        {'  '}
-                        <span style={{ color: 'rgba(160, 120, 200, 0.9)' }}>∩</span> portal
-                      </div>
-                    </>
-                  )}
+                )
+              ) : (
+                <div className="flex items-center justify-between gap-3">
+                  <span className="text-text-dim">Clear hex map</span>
+                  <ConfirmDeleteButton
+                    onDelete={() => {
+                      clearMap();
+                      setMenuOpen(false);
+                    }}
+                    variant="fixed"
+                    title="Clear hex map data (towns are kept)"
+                  />
                 </div>
-              </>,
-              document.body
-            )}
+              )}
+              {townView && (
+                <>
+                  <div className="h-px bg-border-subtle" />
+                  <div className="text-[9px] leading-4 text-text-dim">
+                    <span style={{ color: 'rgba(150, 135, 110, 0.9)' }}>━</span> corridor{'  '}
+                    <span style={{ color: 'rgba(150, 135, 110, 0.6)' }}>╌</span> shortcut / squeezed
+                    <br />
+                    <span style={{ color: 'rgba(160, 120, 200, 0.9)' }}>╌</span> special exit
+                    {'  '}
+                    <span style={{ color: '#e8a849' }}>┃</span> door
+                    <br />
+                    <span className="text-text-label">▲▼</span> stairs (double-click to follow)
+                    <br />
+                    <span style={{ color: '#e8a849' }}>●</span> walk route{'  '}
+                    <span style={{ color: 'rgba(150, 135, 110, 0.5)' }}>╶</span> unexplored exit
+                    {'  '}
+                    <span style={{ color: 'rgba(160, 120, 200, 0.9)' }}>∩</span> portal
+                    <br />
+                    <span style={{ color: MARKER_COLOR }}>◆</span> room icon (bank, shop, inn, …) —
+                    Shift+click a room to set
+                  </div>
+                </>
+              )}
+            </PopoverMenu>
+          )}
         </div>
       </div>
 
@@ -540,6 +469,84 @@ export function MapPanel({ mode = 'slideout' }: PinnablePanelProps) {
               onWalkTo={walkTo}
             />
           ))}
+        {/* Map controls — bottom-right, stacked like a real map UI */}
+        <div className="absolute bottom-2 right-2 z-20 flex flex-col items-end gap-1">
+          {townView && floors.length > 1 && (
+            <div
+              className="flex flex-col items-stretch w-6 rounded border border-border-subtle bg-[#171512]/90 overflow-hidden"
+              title="Browse floors (follows you when you take stairs)"
+            >
+              <button
+                onClick={() =>
+                  floorIdx >= 0 &&
+                  floorIdx < floors.length - 1 &&
+                  setFloorOverride(floors[floorIdx + 1])
+                }
+                disabled={floorIdx < 0 || floorIdx >= floors.length - 1}
+                className="h-5 flex items-center justify-center text-[8px] text-text-dim hover:text-text-label hover:bg-white/[0.06] disabled:opacity-30 cursor-pointer disabled:cursor-default transition-colors"
+              >
+                ▲
+              </button>
+              <span
+                className={`text-[9px] font-mono text-center leading-none py-1 border-y border-border-subtle ${!browsing && floor === playerFloor ? 'text-[#e8a849]' : 'text-text-label'}`}
+              >
+                F{floor}
+              </span>
+              <button
+                onClick={() => floorIdx > 0 && setFloorOverride(floors[floorIdx - 1])}
+                disabled={floorIdx <= 0}
+                className="h-5 flex items-center justify-center text-[8px] text-text-dim hover:text-text-label hover:bg-white/[0.06] disabled:opacity-30 cursor-pointer disabled:cursor-default transition-colors"
+              >
+                ▼
+              </button>
+            </div>
+          )}
+          <button
+            onClick={centerOnPlayer}
+            className={overlayBtn}
+            title="Center on current position"
+          >
+            <FocusIcon size={12} />
+          </button>
+          <button
+            onClick={() => {
+              setMenuOpen(false);
+              setFullscreen((v) => !v);
+            }}
+            className={overlayBtn}
+            title={fullscreen ? 'Exit full screen (Esc)' : 'Full screen map'}
+          >
+            {fullscreen ? <CollapseIcon size={11} /> : <ExpandIcon size={11} />}
+          </button>
+        </div>
+
+        {/* Walk status — bottom-left */}
+        {(activeWalk || isLost) && (
+          <div className="absolute bottom-2 left-2 z-20 flex items-center gap-1.5">
+            {activeWalk && (
+              <button
+                onClick={cancelActiveWalk}
+                className="px-2 py-1 rounded border border-[#e8a849]/40 text-[#e8a849] text-[9px] font-mono leading-none bg-[#171512]/90 hover:bg-[#e8a849]/15 transition-colors cursor-pointer animate-pulse"
+                title="Stop auto-walking"
+              >
+                Walking ({activeWalk.remaining}) ✕
+              </button>
+            )}
+            {isLost && (
+              <span
+                className="px-2 py-1 rounded border border-red/40 text-red text-[9px] font-mono leading-none bg-[#171512]/90"
+                title={
+                  townView
+                    ? 'Room unknown — walk around to re-locate'
+                    : 'Position unknown — move to distinctive terrain to re-locate'
+                }
+              >
+                LOST
+              </span>
+            )}
+          </div>
+        )}
+
         {locationLabel && (
           <div
             className="absolute top-2 left-2 z-20 pointer-events-none max-w-[70%] px-2 py-1 rounded border border-border-subtle bg-[#171512]/85"
@@ -564,17 +571,18 @@ export function MapPanel({ mode = 'slideout' }: PinnablePanelProps) {
           </div>
         )}
         {townView && browsing && (
-          <div
-            className="absolute top-2 right-2 z-20 pointer-events-none flex items-center justify-center px-2.5 py-1 rounded border border-cyan/35 bg-[#121517]/85"
-            title="Browsing another town's map — walking is unavailable"
+          <button
+            onClick={() => setBrowseTownId(null)}
+            className="absolute top-2 right-2 z-20 flex items-center justify-center gap-1 px-2.5 py-1 rounded border border-cyan/35 bg-[#121517]/85 hover:bg-cyan/15 transition-colors cursor-pointer"
+            title="Browsing another town's map (walking is unavailable). Click to return to your current town"
           >
             <span
               className="text-[9px] font-mono font-semibold tracking-[0.14em] leading-none text-cyan"
               style={{ marginRight: '-0.14em' }}
             >
-              BROWSING
+              BROWSING ✕
             </span>
-          </div>
+          </button>
         )}
         {townView && !browsing && !indoors && (
           <div

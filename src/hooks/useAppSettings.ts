@@ -137,6 +137,10 @@ export function useAppSettings() {
   // Who list
   const [whoAutoRefreshEnabled, setWhoAutoRefreshEnabled] = useState(true);
   const [whoRefreshMinutes, setWhoRefreshMinutes] = useState(5);
+
+  // Loadout held-equipment refresh
+  const [equipAutoRefreshEnabled, setEquipAutoRefreshEnabled] = useState(true);
+  const [equipRefreshMinutes, setEquipRefreshMinutes] = useState(5);
   const [whoFontSize, setWhoFontSize] = useState<number | null>(null);
   const [chatFontSize, setChatFontSize] = useState<number | null>(null);
   const [allocFontSize, setAllocFontSize] = useState<number | null>(null);
@@ -261,6 +265,8 @@ export function useAppSettings() {
       await load('doorKeys', setDoorKeys, (v) => v >= 1 && v <= 10);
       await load('townMapperEnabled', setTownMapperEnabled);
       await load('whoAutoRefreshEnabled', setWhoAutoRefreshEnabled);
+      await load('equipAutoRefreshEnabled', setEquipAutoRefreshEnabled);
+      await load('equipRefreshMinutes', setEquipRefreshMinutes, (v) => v >= 1);
       await load('babelEnabled', setBabelEnabled);
       await load('selectOnSend', setSelectOnSend);
       await load('showSkillCounts', setShowSkillCounts);
@@ -418,6 +424,9 @@ export function useAppSettings() {
       // Who list
       updateWhoAutoRefreshEnabled: make(setWhoAutoRefreshEnabled, 'whoAutoRefreshEnabled'),
       updateWhoRefreshMinutes: make(setWhoRefreshMinutes, 'whoRefreshMinutes'),
+      // Loadout held-equipment refresh
+      updateEquipAutoRefreshEnabled: make(setEquipAutoRefreshEnabled, 'equipAutoRefreshEnabled'),
+      updateEquipRefreshMinutes: make(setEquipRefreshMinutes, 'equipRefreshMinutes'),
       // Gag groups
       updateGagGroups: make(setGagGroups, 'gagGroups'),
       updateGaggedNpcs: make(setGaggedNpcs, 'gaggedNpcs'),
@@ -606,6 +615,9 @@ export function useAppSettings() {
       // Who list
       whoAutoRefreshEnabled,
       whoRefreshMinutes,
+      // Loadout held-equipment refresh
+      equipAutoRefreshEnabled,
+      equipRefreshMinutes,
       whoFontSize,
       updateWhoFontSize,
       chatFontSize,
@@ -693,6 +705,8 @@ export function useAppSettings() {
       townMapperEnabled,
       whoAutoRefreshEnabled,
       whoRefreshMinutes,
+      equipAutoRefreshEnabled,
+      equipRefreshMinutes,
       whoFontSize,
       updateWhoFontSize,
       chatFontSize,

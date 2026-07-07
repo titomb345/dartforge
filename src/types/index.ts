@@ -21,6 +21,7 @@ export type Panel =
   | 'babel'
   | 'logs'
   | 'macros'
+  | 'loadout'
   | 'help';
 
 export type PinnablePanel =
@@ -32,7 +33,8 @@ export type PinnablePanel =
   | 'alloc'
   | 'currency'
   | 'who'
-  | 'babel';
+  | 'babel'
+  | 'loadout';
 export type DockSide = 'left' | 'right';
 
 export interface PanelLayout {
@@ -48,7 +50,13 @@ export interface PinnablePanelProps {
 export type { SkillTier, SkillRecord, CharacterSkillFile, SkillMatchResult } from './skills';
 export type { QuickButtonId, QuickButton, QuickButtonToggle } from './quickButton';
 export type { MacroId, Macro, HotkeyCombo } from './macro';
-export { formatHotkey, hotkeyToString, hotkeyFromEvent, isReservedHotkey, isNumpadKey } from './macro';
+export {
+  formatHotkey,
+  hotkeyToString,
+  hotkeyFromEvent,
+  isReservedHotkey,
+  isNumpadKey,
+} from './macro';
 
 export interface MudOutputPayload {
   data: string;

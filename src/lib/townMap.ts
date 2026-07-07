@@ -13,16 +13,21 @@
  *    STRETCHED: every placed room at/beyond the target cell shifts one cell
  *    along the movement axis, vacating the natural cell so the new room
  *    lands exactly where the move says. Straight streets stay straight and
- *    axis order stays monotone. Placements without a cardinal direction
- *    (diagonal hints, u/d, floaters, named exits) are nudged to the nearest
- *    free cell instead. Links — not grid adjacency — drive pathfinding, so
- *    a displaced room stays walkable either way.
+ *    axis order stays monotone. A DIAGONAL arrival into an occupied cell
+ *    stretches ONE component axis (a single half-plane shift already frees
+ *    the cell) — chosen so the displaced occupant's own street moves as one
+ *    piece — and the room still lands at its diagonal hint cell.
+ *    Placements without a direction at all (u/d, floaters, named exits)
+ *    are nudged to the nearest free cell instead. Links — not grid
+ *    adjacency — drive pathfinding, so a displaced room stays walkable
+ *    either way.
  *
  * Each town is keyed by the hex(es) it was entered from, so the hex map
  * can show which town you're in. z is the floor index (0 = entry level).
  */
 
 import { TOWN_DIR_VEC, TOWN_REVERSE, type TownDir, type TownRoomBlock } from './townParser';
+import { classifyRoomIcon, type RoomIconType } from './mapMarkers';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -43,10 +48,18 @@ export interface TownRoom {
   exitsEver: TownDir[];
   /** Directions that go through a door/gate */
   doorDirs: TownDir[];
+  /** Doors standing open at the latest sighting (subset of doorDirs) */
+  openDoorDirs: TownDir[];
   /** Non-directional exits ("back", "out", "exit") */
   namedExits: string[];
   /** A portal transit departed from or arrived at this room */
   portal: boolean;
+  /**
+   * Point-of-interest icon (bank, shop, inn, ...). Auto-classified from
+   * the room's name/description; 'none' = user explicitly removed it
+   * (auto must not re-add); null = unclassified.
+   */
+  icon: RoomIconType | 'none' | null;
   /** Confirmed connections: dir → destination room id */
   links: Partial<Record<TownDir, number>>;
   /** Confirmed non-directional connections: command → destination room id */
@@ -88,6 +101,14 @@ export interface TownWalkStep {
 
 const gridKey = (x: number, y: number, z: number) => `${x},${y},${z}`;
 
+/** Component cardinal axes of each diagonal, [vertical, horizontal] */
+const DIAG_COMPONENTS: Partial<Record<TownDir, [TownDir, TownDir]>> = {
+  ne: ['n', 'e'],
+  nw: ['n', 'w'],
+  se: ['s', 'e'],
+  sw: ['s', 'w'],
+};
+
 /**
  * Canonical description for identity comparison. Lighting sentences ("It is
  * painfully bright.") change with the time of day, so every "It is ..."
@@ -97,9 +118,13 @@ const gridKey = (x: number, y: number, z: number) => `${x},${y},${z}`;
  * western side" mid-description). Too-short results are unusable: comparing
  * them proves nothing, so callers must check descUsable() first.
  */
+/** Lighting sentences change with the time of day — one definition shared
+ *  by descKey (global strip) and stableSentenceCandidates (per-sentence). */
+const LIGHTING_SENTENCE = 'It is [^.]{1,60}\\.';
+
 export function descKey(desc: string): string {
   return desc
-    .replace(/\bIt is [^.]{1,60}\./g, '')
+    .replace(new RegExp('\\b' + LIGHTING_SENTENCE, 'g'), '')
     .replace(/\s+/g, ' ')
     .trim();
 }
@@ -109,6 +134,28 @@ const DESC_KEY_MIN = 20;
 export function descUsable(desc: string): boolean {
   return descKey(desc).length >= DESC_KEY_MIN;
 }
+
+/** Split prose into normalized sentences (whitespace collapsed). */
+function splitSentences(text: string): string[] {
+  return text
+    .replace(/\s+/g, ' ')
+    .trim()
+    .split(/(?<=[.!?])\s+/)
+    .map((s) => s.trim())
+    .filter(Boolean);
+}
+
+/** Sentences too short to be meaningful volatile-prose evidence, plus the
+ *  lighting sentences descKey already handles. */
+const LIGHTING_SENTENCE_START = new RegExp('^' + LIGHTING_SENTENCE);
+function stableSentenceCandidates(text: string): string[] {
+  return splitSentences(text).filter((s) => s.length >= 20 && !LIGHTING_SENTENCE_START.test(s));
+}
+
+/** Max learned volatile sentences kept (and serialized) */
+const VOLATILE_MAX = 64;
+/** Max unpromoted alternation pairs tracked */
+const VOLATILE_PENDING_MAX = 200;
 
 export function hexAnchorKey(island: number, q: number, r: number): string {
   return `${island}:${q},${r}`;
@@ -126,6 +173,32 @@ export class TownMapStore {
   nudges = 0;
   /** Stretch counter — collisions resolved by shifting the map (diagnostics) */
   stretches = 0;
+  /**
+   * Portal destination memory: "townId:roomId:dirWord" of the room a portal
+   * was stepped into (dirWord '*' when the transit line names no direction)
+   * → the room it delivered to. This is the hex map's anchor idea applied
+   * to portals: every temple Forecourt looks identical, so entry matching
+   * is hopelessly ambiguous — but WHICH portal was stepped through is not.
+   * Without it, every hub transit spawned a fresh fragment town that later
+   * merge-scarred the real town with desc-divergent duplicates.
+   */
+  portalDests = new Map<string, TownPos>();
+  /**
+   * Learned VOLATILE prose: sentences that swap with world state (time of
+   * day) inside otherwise-identical descriptions — "The market is active
+   * with shoppers..." alternating with "...mostly empty except for a few
+   * adventurers..." (the Eris market cycles through six such variants).
+   * These defeat the description tiebreaker: the same room reads as a
+   * desc-DISAGREEING twin across an hour boundary, and the disagreement
+   * veto then duplicates it. Learning: a positively-identified revisit
+   * (confirmed link / look re-print) whose desc differs in EXACTLY one
+   * swapped sentence records the pair; a pair witnessed on 2+ DIFFERENT
+   * rooms promotes both sentences. World-state prose is shared across
+   * rooms by nature; twin-distinguishing prose is room-specific — that
+   * asymmetry is what makes the promotion safe.
+   */
+  volatileSentences = new Set<string>();
+  private volatilePending = new Map<string, Set<number>>();
 
   get(townId: number): Town | undefined {
     return this.towns.get(townId);
@@ -165,6 +238,25 @@ export class TownMapStore {
   deleteTown(townId: number): void {
     this.towns.delete(townId);
     if (this.pos?.townId === townId) this.pos = null;
+    for (const [key, dest] of this.portalDests) {
+      if (dest.townId === townId || key.startsWith(`${townId}:`)) this.portalDests.delete(key);
+    }
+  }
+
+  // -------------------------------------------------------------------------
+  // Portal destination memory
+  // -------------------------------------------------------------------------
+
+  private portalKey(from: TownPos, dirWord: string | null): string {
+    return `${from.townId}:${from.roomId}:${dirWord ?? '*'}`;
+  }
+
+  setPortalDest(from: TownPos, dirWord: string | null, dest: TownPos): void {
+    this.portalDests.set(this.portalKey(from, dirWord), dest);
+  }
+
+  getPortalDest(from: TownPos, dirWord: string | null): TownPos | undefined {
+    return this.portalDests.get(this.portalKey(from, dirWord));
   }
 
   renameTown(townId: number, name: string): void {
@@ -178,6 +270,9 @@ export class TownMapStore {
     this.pos = null;
     this.nudges = 0;
     this.stretches = 0;
+    this.portalDests.clear();
+    this.volatileSentences.clear();
+    this.volatilePending.clear();
   }
 
   // -------------------------------------------------------------------------
@@ -186,12 +281,13 @@ export class TownMapStore {
 
   /**
    * Create a room from a parsed block at/near (x,y,z). When `via` is the
-   * cardinal direction that was walked to reach the room, an occupied cell
-   * is resolved by STRETCHING the map (the new room always lands exactly at
-   * (x,y,z) — see stretchToVacate). Without a cardinal `via` (diagonal
-   * hints, u/d, floaters, named exits) the room is nudged to the nearest
-   * free cell instead (grid position is presentation; links carry
-   * connectivity).
+   * direction that was walked to reach the room, an occupied cell is
+   * resolved by STRETCHING the map so the new room always lands exactly at
+   * (x,y,z): one shift along the movement axis for a cardinal arrival, one
+   * shift along a single component axis for a diagonal (see
+   * stretchToVacate). Without a lateral `via` (u/d, floaters, named exits)
+   * the room is nudged to the nearest free cell instead (grid position is
+   * presentation; links carry connectivity).
    */
   addRoom(
     town: Town,
@@ -204,8 +300,23 @@ export class TownMapStore {
   ): TownRoom {
     let spot = { x, y };
     const vec = via !== undefined ? TOWN_DIR_VEC[via] : undefined;
-    if (vec && vec[2] === 0 && town.grid.has(gridKey(x, y, z))) {
+    const diag = via !== undefined ? DIAG_COMPONENTS[via] : undefined;
+    const occupied = town.grid.has(gridKey(x, y, z));
+    if (occupied && vec && vec[2] === 0) {
       this.stretchToVacate(town, { x, y }, via!);
+    } else if (occupied && diag) {
+      // Diagonal arrival: a single half-plane shift already vacates the
+      // hint cell, so stretch only ONE component axis (stretching both
+      // spread the map an extra cell in each direction on every diagonal
+      // collision). Pick the axis perpendicular to the occupant's own
+      // linked run: a vertical stretch moves its whole row as one piece, a
+      // horizontal one its whole column — so its street stays intact
+      // instead of having the new room wedged into the middle of it.
+      const occupant = town.rooms.get(town.grid.get(gridKey(x, y, z))!);
+      const runsEW = occupant?.links.e !== undefined || occupant?.links.w !== undefined;
+      const runsNS = occupant?.links.n !== undefined || occupant?.links.s !== undefined;
+      const [vertical, horizontal] = diag;
+      this.stretchToVacate(town, { x, y }, runsNS && !runsEW ? horizontal : vertical);
     } else {
       spot = this.findFreeCell(town, x, y, z);
       if (spot.x !== x || spot.y !== y) this.nudges++;
@@ -221,8 +332,10 @@ export class TownMapStore {
       exits: block.exits.dirs,
       exitsEver: [...block.exits.dirs],
       doorDirs: block.exits.doorDirs,
+      openDoorDirs: block.exits.openDoorDirs,
       namedExits: block.exits.named,
       portal: false,
+      icon: classifyRoomIcon(block.name, block.desc),
       links: {},
       namedLinks: {},
       visits: 1,
@@ -294,10 +407,13 @@ export class TownMapStore {
   placementTarget(from: TownRoom, dir: TownDir): { x: number; y: number; z: number } {
     const vec = TOWN_DIR_VEC[dir];
     if (vec) return { x: from.x + vec[0], y: from.y + vec[1], z: from.z + vec[2] };
-    // Diagonal — use the visual diagonal as a placement hint only
-    const dx = dir.includes('e') ? 1 : -1;
-    const dy = dir.startsWith('n') ? -1 : 1;
-    return { x: from.x + dx, y: from.y + dy, z: from.z };
+    // Diagonal — the visual diagonal is a placement hint only. Derived
+    // from the same DIAG_COMPONENTS table addRoom's collision stretch uses,
+    // so the hint cell and the vacated row/column can never disagree.
+    const [d1, d2] = DIAG_COMPONENTS[dir]!;
+    const v1 = TOWN_DIR_VEC[d1]!;
+    const v2 = TOWN_DIR_VEC[d2]!;
+    return { x: from.x + v1[0] + v2[0], y: from.y + v1[1] + v2[1], z: from.z };
   }
 
   /** Record a confirmed transition. The reverse link is inferred (98%+ of
@@ -312,18 +428,83 @@ export class TownMapStore {
     from.namedLinks[cmd] = to.id;
   }
 
-  /** Refresh a room's volatile fields from a fresh sighting. */
-  touchRoom(room: TownRoom, block: TownRoomBlock, now: number): void {
+  /**
+   * Record a desc alternation observed on a POSITIVELY identified revisit:
+   * old and new descs sharing 2+ sentences and differing in exactly one
+   * swapped sentence. The pair promotes to volatileSentences once seen on
+   * two different rooms (see the field's doc for why that guard matters).
+   */
+  private learnVolatileDesc(roomId: number, oldDesc: string, newDesc: string): void {
+    const a = stableSentenceCandidates(oldDesc);
+    const b = stableSentenceCandidates(newDesc);
+    if (a.length < 3 || b.length < 3) return;
+    const setA = new Set(a);
+    const setB = new Set(b);
+    const removed = a.filter((s) => !setB.has(s));
+    const added = b.filter((s) => !setA.has(s));
+    // (a.length >= 3 above + exactly one swap ⇒ at least 2 shared sentences)
+    if (removed.length !== 1 || added.length !== 1) return;
+    // A description's FIRST sentence is the room's identity headline, never
+    // world-state: every corpus-confirmed volatile sentence (market crowds,
+    // weather, street traffic) lives mid-description. A swapped headline
+    // means the "revisit" was really two look-alike rooms conflated by a
+    // wrong link — the Blue Pearl Inn's floors differ only by their
+    // "second/third floor" headline, and learning that pair glued the
+    // floors together for good (cross-floor links, duplicated bedrooms).
+    if (removed[0] === splitSentences(oldDesc)[0] || added[0] === splitSentences(newDesc)[0]) {
+      return;
+    }
+    if (this.volatileSentences.has(removed[0]) && this.volatileSentences.has(added[0])) return;
+    const pair = [removed[0], added[0]].sort();
+    const key = pair.join(' ');
+    let seenOn = this.volatilePending.get(key);
+    if (!seenOn) {
+      if (this.volatilePending.size >= VOLATILE_PENDING_MAX) return;
+      seenOn = new Set();
+      this.volatilePending.set(key, seenOn);
+    }
+    seenOn.add(roomId);
+    if (seenOn.size >= 2 && this.volatileSentences.size <= VOLATILE_MAX - 2) {
+      this.volatileSentences.add(pair[0]);
+      this.volatileSentences.add(pair[1]);
+      this.volatilePending.delete(key);
+    }
+  }
+
+  /**
+   * Refresh a room's volatile fields from a fresh sighting. Pass
+   * `positiveId` only when the identification did NOT lean on heuristics
+   * (confirmed link follow, look re-print) — it feeds volatile-prose
+   * learning, and learning from a wrong reuse would poison the set.
+   */
+  touchRoom(room: TownRoom, block: TownRoomBlock, now: number, positiveId = false): void {
+    if (positiveId && room.desc && block.desc) {
+      this.learnVolatileDesc(room.id, room.desc, block.desc);
+    }
     room.exits = block.exits.dirs;
     for (const d of block.exits.dirs) {
       if (!room.exitsEver.includes(d)) room.exitsEver.push(d);
     }
     room.doorDirs = block.exits.doorDirs;
+    room.openDoorDirs = block.exits.openDoorDirs;
     room.namedExits = block.exits.named;
     room.descFirst = block.descFirst || room.descFirst;
     room.desc = block.desc || room.desc;
+    // A fuller description can newly reveal an icon (bulletin boards live
+    // mid-desc); explicit choices (any icon, or 'none') are never touched.
+    if (room.icon === null) room.icon = classifyRoomIcon(room.name, room.desc);
     room.visits++;
     room.lastSeen = now;
+  }
+
+  /**
+   * Set a room's icon from the picker. 'none' records explicit removal;
+   * null returns the room to AUTO (re-classified immediately).
+   */
+  setRoomIcon(townId: number, roomId: number, icon: RoomIconType | 'none' | null): void {
+    const room = this.towns.get(townId)?.rooms.get(roomId);
+    if (!room) return;
+    room.icon = icon === null ? classifyRoomIcon(room.name, room.desc) : icon;
   }
 
   // -------------------------------------------------------------------------
@@ -355,9 +536,18 @@ export class TownMapStore {
    * to veto an otherwise-unique match: descriptions can embed dynamic
    * content, so absence of agreement only means "no extra evidence".
    */
+  /** descKey with learned volatile sentences removed first. Stable prose
+   *  can never be learned as volatile (it never appears in a revisit diff),
+   *  so the stripped key always retains the room's distinguishing text. */
+  private canonDesc(text: string): string {
+    if (this.volatileSentences.size === 0) return descKey(text);
+    const kept = splitSentences(text).filter((s) => !this.volatileSentences.has(s));
+    return descKey(kept.join(' '));
+  }
+
   descAgrees(room: TownRoom, block: TownRoomBlock): boolean {
-    const a = descKey(room.desc);
-    const b = descKey(block.desc);
+    const a = this.canonDesc(room.desc);
+    const b = this.canonDesc(block.desc);
     if (a.length < DESC_KEY_MIN || b.length < DESC_KEY_MIN) return false;
     // Suffix containment, not just equality: session logs (and rarely the
     // live stream) can fragment lines, and the parser then captures a
@@ -572,6 +762,35 @@ export class TownMapStore {
       const mapped = idMap.get(this.pos.roomId);
       this.pos = mapped !== undefined ? { townId: into.id, roomId: mapped } : null;
     }
+
+    // Portal destination memory follows (both sides of each entry) — this is
+    // how the anchor learned on a first-trip fragment keeps working once the
+    // fragment fuses into the real town. Rebuilt into a fresh map so
+    // mutation-during-iteration can't happen by construction.
+    const remapped = new Map<string, TownPos>();
+    for (const [key, dest] of this.portalDests) {
+      let newKey = key;
+      const [townIdStr, roomIdStr, dirWord] = key.split(':');
+      if (Number(townIdStr) === from.id) {
+        const mapped = idMap.get(Number(roomIdStr));
+        if (mapped === undefined) continue; // drop — source room vanished
+        newKey = `${into.id}:${mapped}:${dirWord}`;
+      }
+      let newDest = dest;
+      if (dest.townId === from.id) {
+        const mapped = idMap.get(dest.roomId);
+        if (mapped === undefined) continue;
+        newDest = { townId: into.id, roomId: mapped };
+      }
+      remapped.set(newKey, newDest);
+    }
+    this.portalDests = remapped;
+
+    // Pending volatile-prose witnesses hold bare room ids that this merge
+    // just renumbered — a stale id plus its remapped twin could satisfy
+    // the "2+ different rooms" promotion guard with ONE physical room, so
+    // drop them (merges are rare; pending evidence re-accumulates).
+    this.volatilePending.clear();
 
     this.towns.delete(from.id);
     // Deliberately NO relayoutTown here: re-deriving the layout mid-session
@@ -803,6 +1022,11 @@ export class TownMapStore {
       v: 2,
       nextTownId: this.nextTownId,
       pos: this.pos,
+      portalDests: Object.fromEntries(this.portalDests),
+      volatileSentences: [...this.volatileSentences],
+      volatilePending: Object.fromEntries(
+        [...this.volatilePending].map(([k, ids]) => [k, [...ids]])
+      ),
       towns: [...this.towns.values()].map((t) => ({
         id: t.id,
         name: t.name,
@@ -846,7 +1070,10 @@ export class TownMapStore {
         town.rooms.set(r.id, {
           ...r,
           exitsEver: r.exitsEver ?? [...(r.exits ?? [])],
+          openDoorDirs: r.openDoorDirs ?? [],
           portal: r.portal ?? false,
+          // Classify pre-existing rooms on load; explicit choices persist
+          icon: r.icon !== undefined ? r.icon : classifyRoomIcon(r.name ?? '', r.desc ?? ''),
           links: r.links ?? {},
           namedLinks: r.namedLinks ?? {},
           notes: r.notes ?? '',
@@ -864,6 +1091,72 @@ export class TownMapStore {
       store.towns.get(pos.townId)?.rooms.has(pos.roomId)
     ) {
       store.pos = pos;
+    }
+    const vol = (d as { volatileSentences?: unknown }).volatileSentences;
+    if (Array.isArray(vol)) {
+      for (const s of vol.slice(0, VOLATILE_MAX)) {
+        if (typeof s === 'string') store.volatileSentences.add(s);
+      }
+    }
+    const pending = (d as { volatilePending?: Record<string, unknown> }).volatilePending;
+    if (pending && typeof pending === 'object') {
+      for (const [k, ids] of Object.entries(pending).slice(0, VOLATILE_PENDING_MAX)) {
+        if (Array.isArray(ids)) {
+          store.volatilePending.set(k, new Set(ids.filter((n) => typeof n === 'number')));
+        }
+      }
+    }
+    // Identity headlines can never be world-state prose — drop any learned
+    // (or pending) volatile sentence matching a room's first sentence.
+    // Heals saves poisoned before learnVolatileDesc gained its headline
+    // guard: the Blue Pearl Inn's "second/third floor" hallway headlines
+    // got learned as volatile, gluing the inn's floors together.
+    const headlines = new Set<string>();
+    for (const town of store.towns.values()) {
+      for (const r of town.rooms.values()) {
+        const first = splitSentences(r.desc ?? '')[0];
+        if (first) headlines.add(first);
+        const firstShown = splitSentences(r.descFirst ?? '')[0];
+        if (firstShown) headlines.add(firstShown);
+      }
+    }
+    for (const s of [...store.volatileSentences]) {
+      if (headlines.has(s)) store.volatileSentences.delete(s);
+    }
+    for (const k of [...store.volatilePending.keys()]) {
+      if (k.split('\0').some((s) => headlines.has(s))) store.volatilePending.delete(k);
+    }
+    const portalDests = (d as { portalDests?: Record<string, TownPos> }).portalDests;
+    if (portalDests && typeof portalDests === 'object') {
+      for (const [key, dest] of Object.entries(portalDests)) {
+        if (
+          dest &&
+          typeof dest.townId === 'number' &&
+          typeof dest.roomId === 'number' &&
+          store.towns.get(dest.townId)?.rooms.has(dest.roomId)
+        ) {
+          store.portalDests.set(key, { townId: dest.townId, roomId: dest.roomId });
+        }
+      }
+    }
+    // Ground-truth link invariant: a lateral move can never change floors,
+    // and stairs move exactly one. Every placement path preserves that
+    // (placementTarget, findFreeCell, stretch all keep z), so a recorded
+    // link violating it can only be a cross-floor merge scar — mirror-
+    // identical stacked floors reusing each other's rooms (the rangers'
+    // keep bedrooms, the Blue Pearl Inn hallways) before the localizer
+    // gained its floor filter. Sever such links; walking the exit again
+    // maps the real destination. Must run BEFORE the relayout migration,
+    // which embeds rooms by following links.
+    for (const town of store.towns.values()) {
+      for (const room of town.rooms.values()) {
+        for (const [dir, id] of Object.entries(room.links) as [TownDir, number][]) {
+          const dest = id !== undefined ? town.rooms.get(id) : undefined;
+          if (!dest) continue;
+          const dz = dir === 'u' ? 1 : dir === 'd' ? -1 : 0;
+          if (dest.z !== room.z + dz) delete room.links[dir];
+        }
+      }
     }
     // Pre-v2 layouts were nudge-scarred (and last-write-wins above can
     // silently collapse corrupt duplicate cells) — re-embed once from the

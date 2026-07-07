@@ -14,6 +14,13 @@ import { createPortal } from 'react-dom';
 import { useMapContext } from '../contexts/MapContext';
 import type { TownRoom } from '../lib/townMap';
 import type { TownDir } from '../lib/townParser';
+import {
+  paintMarkerGlyph,
+  ROOM_ICON_TYPES,
+  MARKER_COLOR,
+  type RoomIconType,
+} from '../lib/mapMarkers';
+import { MarkerPicker } from './MarkerPicker';
 
 // ---------------------------------------------------------------------------
 // Design tokens (shared vocabulary with MapCanvas)
@@ -32,6 +39,7 @@ const ROOM_FILL_OUTDOOR = 'rgba(100, 115, 70, 0.30)';
 const LINK_COLOR = 'rgba(150, 135, 110, 0.45)';
 const LINK_DIAG_COLOR = 'rgba(150, 135, 110, 0.30)';
 const DOOR_COLOR = '#e8a849';
+const ICON_COLOR = MARKER_COLOR;
 const STAIR_COLOR = 'rgba(200, 185, 160, 0.9)';
 const NAMED_COLOR = 'rgba(160, 120, 200, 0.9)';
 const LABEL_COLOR = 'rgba(200, 185, 160, 0.85)';
@@ -81,9 +89,16 @@ export function TownMapCanvas({
   onStairJump,
 }: TownMapCanvasProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  const { version, town, townWalking, centerVersion, getTownRooms } = useMapContext();
+  const { version, town, townWalking, centerVersion, getTownRooms, setRoomIcon } = useMapContext();
   /** Is the displayed town the one the player is (last) in? */
   const isPlayerTown = town !== null && town.id === townId;
+  // Shift+click room icon picker (portal popover at viewport coords)
+  const [picker, setPicker] = useState<{
+    x: number;
+    y: number;
+    roomId: number;
+    current: RoomIconType | 'none' | null;
+  } | null>(null);
 
   // Pan/zoom state
   const panRef = useRef({ x: 0, y: 0 });
@@ -381,6 +396,18 @@ export function TownMapCanvas({
     [roomAtMouse, onWalkTo]
   );
 
+  const handleClick = useCallback(
+    (e: React.MouseEvent) => {
+      // Shift+click opens the room icon picker
+      if (!e.shiftKey) return;
+      const room = roomAtMouse(e);
+      if (!room) return;
+      setPicker({ x: e.clientX, y: e.clientY, roomId: room.id, current: room.icon });
+      cancelHover(true);
+    },
+    [roomAtMouse, cancelHover]
+  );
+
   const handleDoubleClick = useCallback(
     (e: React.MouseEvent) => {
       if (!onStairJump) return;
@@ -406,6 +433,7 @@ export function TownMapCanvas({
         onMouseUp={handleMouseUp}
         onMouseLeave={handleMouseLeave}
         onWheel={handleWheel}
+        onClick={handleClick}
         onContextMenu={handleContextMenu}
         onDoubleClick={handleDoubleClick}
       />
@@ -416,6 +444,17 @@ export function TownMapCanvas({
           y={tooltip.y}
           isCurrent={isPlayerTown && !!town && tooltip.room.id === town.roomId}
           showWalkHint={!!onWalkTo}
+        />
+      )}
+      {picker && (
+        <MarkerPicker
+          x={picker.x}
+          y={picker.y}
+          title="Room icon"
+          options={ROOM_ICON_TYPES}
+          current={picker.current}
+          onPick={(value) => setRoomIcon(townId, picker.roomId, value)}
+          onClose={() => setPicker(null)}
         />
       )}
     </div>
@@ -596,6 +635,19 @@ function drawRoom(ctx: CanvasRenderingContext2D, room: TownRoom, isCurrent: bool
     ctx.fillText(glyph, x, y - ROOM_HALF + 5);
   }
 
+  // Point-of-interest icon (bank, shop, inn, ...) in landmark gold
+  if (room.icon && room.icon !== 'none') {
+    paintMarkerGlyph(
+      ctx,
+      room.icon,
+      x + ROOM_HALF - 6,
+      y - ROOM_HALF + 6,
+      4.5,
+      ICON_COLOR,
+      BG_COLOR
+    );
+  }
+
   // Named-exit badge (boats, "back" rooms)
   if (room.namedExits.length > 0) {
     ctx.fillStyle = NAMED_COLOR;
@@ -715,6 +767,12 @@ function RoomTooltip({
         style={{ color: isCurrent ? CURRENT_ROOM_GLOW : TOOLTIP_TEXT }}
       >
         {room.name}
+        {room.icon && room.icon !== 'none' && (
+          <span style={{ color: ICON_COLOR }}>
+            {' '}
+            · {ROOM_ICON_TYPES.find((i) => i.type === room.icon)?.label ?? room.icon}
+          </span>
+        )}
         {room.portal && <span style={{ color: NAMED_COLOR }}> · portal</span>}
         <span className="font-normal opacity-50 ml-1.5">F{room.z}</span>
       </div>
@@ -726,9 +784,9 @@ function RoomTooltip({
         </div>
       )}
       <div className="text-[9px] opacity-40 mt-0.5">Visited {room.visits}x</div>
-      {!isCurrent && showWalkHint && (
-        <div className="text-[9px] opacity-40 mt-0.5 italic">Right-click to walk here</div>
-      )}
+      <div className="text-[9px] opacity-40 mt-0.5 italic">
+        {!isCurrent && showWalkHint ? 'Right-click to walk here · ' : ''}Shift+click to set icon
+      </div>
     </div>,
     document.body
   );

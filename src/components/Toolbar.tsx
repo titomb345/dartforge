@@ -22,6 +22,7 @@ import {
   CameraIcon,
   LogIcon,
   MacroIcon,
+  LoadoutIcon,
 } from './icons';
 import { getPlatform } from '../lib/platform';
 import { cn } from '../lib/cn';
@@ -138,6 +139,16 @@ export function Toolbar({ connected, onReconnect, onDisconnect, onScreenshot }: 
           toggled={activePanel === 'alloc'}
           pinned={isPinned('alloc')}
           onClick={() => togglePanel('alloc')}
+        />
+        <IconButton
+          icon={<LoadoutIcon />}
+          title="Loadout"
+          accent="#bd93f9"
+          helpId="toolbar-loadout"
+          panelId="loadout"
+          toggled={activePanel === 'loadout'}
+          pinned={isPinned('loadout')}
+          onClick={() => togglePanel('loadout')}
         />
         <IconButton
           icon={<CoinIcon />}

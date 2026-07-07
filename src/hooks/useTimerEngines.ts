@@ -11,11 +11,7 @@ import { executeTimerScript } from '../lib/scriptEngine';
 import { DEFAULT_BABEL_PHRASES } from '../lib/babelPhrases';
 
 /** Shared hook for the recurring guard → setInterval → cleanup pattern. */
-function usePollingTimer(
-  active: boolean,
-  intervalMs: number,
-  onTick: () => void,
-): number | null {
+function usePollingTimer(active: boolean, intervalMs: number, onTick: () => void): number | null {
   const onTickRef = useLatestRef(onTick);
   const [nextAt, setNextAt] = useState<number | null>(null);
   useEffect(() => {
@@ -52,6 +48,8 @@ interface TimerEnginesDeps {
   alignmentTrackingMinutes: number;
   whoAutoRefreshEnabled: boolean;
   whoRefreshMinutes: number;
+  equipAutoRefreshEnabled: boolean;
+  equipRefreshMinutes: number;
   babelEnabled: boolean;
   babelLanguage: string;
   babelIntervalSeconds: number;
@@ -79,6 +77,8 @@ export function useTimerEngines({
   alignmentTrackingMinutes,
   whoAutoRefreshEnabled,
   whoRefreshMinutes,
+  equipAutoRefreshEnabled,
+  equipRefreshMinutes,
   babelEnabled,
   babelLanguage,
   babelIntervalSeconds,
@@ -108,7 +108,7 @@ export function useTimerEngines({
         writeToTermRef.current?.(`\x1b[90m[anti-idle: ${cmd}]\x1b[0m\r\n`);
         sendCommandRef.current(cmd);
       }
-    },
+    }
   );
 
   // Alignment tracking timer — polls "show alignment" at interval when enabled
@@ -124,7 +124,7 @@ export function useTimerEngines({
         }
         sendCommandRef.current('show alignment');
       }
-    },
+    }
   );
 
   // Shared who refresh: gag output via sync, then send `who`
@@ -139,7 +139,24 @@ export function useTimerEngines({
   const whoNextAt = usePollingTimer(
     connected && loggedIn && whoAutoRefreshEnabled,
     whoRefreshMinutes * 60_000,
-    refreshWho,
+    refreshWho
+  );
+
+  // Shared held-equipment refresh: gag output via sync, then send `equip held`.
+  // Used by the Loadout panel's re-sync button AND the background timer, so
+  // manual re-syncs are just as silent as automatic ones.
+  const refreshEquip = useCallback(() => {
+    if (sendCommandRef.current && outputFilterRef.current) {
+      outputFilterRef.current.startEquipSync();
+      sendCommandRef.current('equip held');
+    }
+  }, []);
+
+  // Held-equipment auto-refresh — keeps the Loadout panel's hands verified
+  const equipNextAt = usePollingTimer(
+    connected && loggedIn && equipAutoRefreshEnabled,
+    equipRefreshMinutes * 60_000,
+    refreshEquip
   );
 
   // Babel language trainer — sends a random phrase in a target language at interval
@@ -299,9 +316,11 @@ export function useTimerEngines({
     antiIdleNextAt,
     alignmentNextAt,
     whoNextAt,
+    equipNextAt,
     babelNextAt,
     activeTimerBadges,
     handleToggleTimer,
     refreshWho,
+    refreshEquip,
   };
 }

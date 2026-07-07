@@ -126,6 +126,7 @@ Before building new UI, check `src/components/` for existing shared components. 
 | `StatusBadge` | `StatusBar.tsx` | Colored status dots with optional animation and glow. |
 | `StatusReadout` | `StatusBar.tsx` | Collapsible status displays (icon + label) with compact/auto-compact modes. |
 | `SlideOut` | `SlideOut.tsx` | Wrapper for slide-out panels with open/close transitions. |
+| `PopoverMenu` | `PopoverMenu.tsx` | **Every** portal-rendered context menu / popover (right-click menus, gear menus, pickers). Owns backdrop, Escape-to-close, and viewport clamping; anchor at cursor (`x`/`y`) or toolbar (`top`/`right`). Never hand-roll `createPortal` + backdrop again. |
 | `ErrorBoundary` | `ErrorBoundary.tsx` | Wrap panel content to catch rendering crashes gracefully. |
 | `icons.tsx` | `icons.tsx` | 60+ SVG icons. Always import from here — never inline raw SVGs. |
 

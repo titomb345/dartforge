@@ -1,5 +1,4 @@
-import { useState, useRef, useCallback, useEffect } from 'react';
-import { createPortal } from 'react-dom';
+import { useState, useRef, useCallback } from 'react';
 import {
   DndContext,
   closestCenter,
@@ -19,6 +18,7 @@ import {
 import { CSS } from '@dnd-kit/utilities';
 import type { QuickButton } from '../types';
 import { QuickButtonEditor } from './QuickButtonEditor';
+import { PopoverMenu } from './PopoverMenu';
 
 interface QuickButtonBarProps {
   buttons: QuickButton[];
@@ -277,87 +277,53 @@ function ContextMenuOverlay({
   onDelete,
   onToggleEnabled,
 }: ContextMenuOverlayProps) {
-  const menuRef = useRef<HTMLDivElement>(null);
-
-  // Close on Escape
-  useEffect(() => {
-    const handler = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') onClose();
-    };
-    document.addEventListener('keydown', handler);
-    return () => document.removeEventListener('keydown', handler);
-  }, [onClose]);
-
-  const handleBackdropClick = useCallback(
-    (e: React.MouseEvent) => {
-      if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
-        onClose();
-      }
-    },
-    [onClose]
-  );
-
   const itemClass =
     'w-full px-3 py-1.5 text-[11px] text-left transition-colors cursor-pointer';
   const activeClass = `${itemClass} text-text-label hover:bg-bg-secondary/60`;
   const dangerClass = `${itemClass} text-red hover:bg-red/10`;
 
-  // Keep menu in viewport
-  const style: React.CSSProperties = {
-    position: 'fixed',
-    zIndex: 9999,
-    top: Math.min(y, window.innerHeight - 140),
-    left: Math.min(x, window.innerWidth - 150),
-  };
-
-  return createPortal(
-    <div
-      className="fixed inset-0"
-      style={{ zIndex: 9998 }}
-      onMouseDown={handleBackdropClick}
+  return (
+    <PopoverMenu
+      x={x}
+      y={y}
+      onClose={onClose}
+      className="bg-bg-primary border border-border rounded shadow-lg py-1 min-w-[140px]"
     >
+      {/* Header — button name */}
       <div
-        ref={menuRef}
-        style={style}
-        className="bg-bg-primary border border-border rounded shadow-lg z-[200] py-1 min-w-[140px]"
+        className="px-3 py-1 text-[10px] font-mono font-semibold truncate border-b border-border-dim mb-0.5"
+        style={{ color: button.color }}
       >
-        {/* Header — button name */}
-        <div
-          className="px-3 py-1 text-[10px] font-mono font-semibold truncate border-b border-border-dim mb-0.5"
-          style={{ color: button.color }}
-        >
-          {button.label}
-        </div>
-        <button
-          onClick={() => {
-            onEdit(button);
-            onClose();
-          }}
-          className={activeClass}
-        >
-          Edit
-        </button>
-        <button
-          onClick={() => {
-            onToggleEnabled(button);
-            onClose();
-          }}
-          className={activeClass}
-        >
-          {button.enabled ? 'Disable' : 'Enable'}
-        </button>
-        <div className="h-px bg-border-dim mx-1.5 my-0.5" />
-        <button
-          onClick={() => {
-            onDelete(button.id);
-            onClose();
-          }}
-          className={dangerClass}
-        >
-          Delete
-        </button>
+        {button.label}
       </div>
-    </div>,
-    document.body
+      <button
+        onClick={() => {
+          onEdit(button);
+          onClose();
+        }}
+        className={activeClass}
+      >
+        Edit
+      </button>
+      <button
+        onClick={() => {
+          onToggleEnabled(button);
+          onClose();
+        }}
+        className={activeClass}
+      >
+        {button.enabled ? 'Disable' : 'Enable'}
+      </button>
+      <div className="h-px bg-border-dim mx-1.5 my-0.5" />
+      <button
+        onClick={() => {
+          onDelete(button.id);
+          onClose();
+        }}
+        className={dangerClass}
+      >
+        Delete
+      </button>
+    </PopoverMenu>
   );
 }

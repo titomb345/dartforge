@@ -16,6 +16,7 @@ import { TownParser, PORTAL_TRANSIT_RE, TOWN_DIR_ALIASES, type TownDir } from '.
 import { buildDoorSequence } from '../lib/doorSequence';
 import { TownLocalizer, classifyTownCommand, type TownResolution } from '../lib/townLocalizer';
 import { TownMapStore, hexAnchorKey, type TownRoom, type TownWalkStep } from '../lib/townMap';
+import type { HexMarkerType, RoomIconType } from '../lib/mapMarkers';
 import { type DataStore } from '../contexts/DataStoreContext';
 
 function mapFilename(character: string): string {
@@ -97,8 +98,8 @@ export interface MapTrackerActions {
    * each edge). Correct data re-detects on the next survey there.
    */
   clearBlockedAt: (q: number, r: number) => void;
-  /** Toggle a hex's town marker (house icon) */
-  toggleTownAt: (q: number, r: number) => void;
+  /** Set a hex's landmark marker ('none' = remove, null = back to auto) */
+  setMarkerAt: (q: number, r: number, marker: HexMarkerType | 'none' | null) => void;
   clearMap: () => void;
   /** Center request — bumps a counter to signal MapCanvas to re-center */
   centerOnPlayer: () => void;
@@ -116,6 +117,8 @@ export interface MapTrackerActions {
   renameTown: (name: string, townId?: number) => void;
   /** Delete a town's map entirely (default: the player's town) */
   deleteTown: (townId?: number) => void;
+  /** Set a room's icon ('none' = remove, null = back to auto) */
+  setRoomIcon: (townId: number, roomId: number, icon: RoomIconType | 'none' | null) => void;
 }
 
 export function useMapTracker(
@@ -166,12 +169,13 @@ export function useMapTracker(
   } | null>(null);
   const walkSendingRef = useRef(false);
   // Town walk executor state — same shape, steps carry commands not dirs.
-  // Each step may expand to several commands (door steps send the full
-  // unlock/open/move/close/lock sequence).
+  // Door-crossing steps are marked at plan time; their commands are built
+  // at send time from the door's freshest known state.
   const townWalkRef = useRef<{
-    steps: (TownWalkStep & { cmds: string[] })[];
+    steps: (TownWalkStep & { door?: { dir: TownDir; fromId: number } })[];
     confirmed: number;
     sent: number;
+    townId: number;
     targetRoomId: number;
     timeout: ReturnType<typeof setTimeout> | null;
   } | null>(null);
@@ -368,7 +372,21 @@ export function useMapTracker(
     if (!walk) return;
     if (walk.sent >= walk.steps.length) return;
     if (walk.sent - walk.confirmed >= WALK_PIPELINE) return;
-    const cmds = walk.steps[walk.sent].cmds;
+    const step = walk.steps[walk.sent];
+    let cmds = [step.cmd];
+    if (step.door) {
+      // Door commands are built here (not at plan time) from the from-room's
+      // freshest exits line, so hold the step until arrival there is
+      // confirmed — the arrival block carries the live open/closed state.
+      // The pump re-runs on every confirmation, so a held step self-releases.
+      if (walk.confirmed < walk.sent) return;
+      const fromRoom = townMapRef.current.get(walk.townId)?.rooms.get(step.door.fromId);
+      const wasOpen = fromRoom?.openDoorDirs.includes(step.door.dir) ?? false;
+      // A door found standing open is left as found: walk straight through,
+      // no closing/locking behind. Only doors we opened ourselves (or whose
+      // state is unknown) get the full unlock/open/move/close/lock sequence.
+      if (!wasOpen) cmds = buildDoorSequence(step.cmd, doorKeysRef.current) ?? [step.cmd];
+    }
     walk.sent += 1;
     townWalkSendingRef.current = true;
     (async () => {
@@ -542,8 +560,10 @@ export function useMapTracker(
         townParserRef.current?.feedLine(line);
         // Portal transits teleport between towns — the next room block must
         // start a fresh town entry instead of gluing into the current town.
-        if (PORTAL_TRANSIT_RE.test(line)) {
-          townLocalizerRef.current.onPortalTransit();
+        // The named portal ("north") keys the destination memory.
+        const portal = PORTAL_TRANSIT_RE.exec(line);
+        if (portal) {
+          townLocalizerRef.current.onPortalTransit(portal[1] ?? null);
           if (townWalkRef.current) cancelTownWalk('stepped through a portal');
         }
       }
@@ -658,11 +678,20 @@ export function useMapTracker(
     [syncState, scheduleSave]
   );
 
-  const toggleTownAt = useCallback(
-    (q: number, r: number) => {
+  const setMarkerAt = useCallback(
+    (q: number, r: number, marker: HexMarkerType | 'none' | null) => {
       const map = mapRef.current;
       const island = map.pos?.island ?? map.primaryIsland();
-      map.toggleTownMarker(island, q, r);
+      map.setMarker(island, q, r, marker);
+      syncState();
+      scheduleSave();
+    },
+    [syncState, scheduleSave]
+  );
+
+  const setRoomIcon = useCallback(
+    (townId: number, roomId: number, icon: RoomIconType | 'none' | null) => {
+      townMapRef.current.setRoomIcon(townId, roomId, icon);
       syncState();
       scheduleSave();
     },
@@ -739,9 +768,10 @@ export function useMapTracker(
         echoRef.current('[Map] No known route there.');
         return;
       }
-      // Expand door crossings into the full unlock/open/move/close/lock
-      // sequence (the /door built-in) — the room being left knows which of
-      // its exits are doors from its own exits line.
+      // Mark door crossings — the room being left knows which of its exits
+      // are doors from its own exits line. The commands themselves (full
+      // unlock/open/move/close/lock, or a plain move through a door found
+      // standing open) are built at send time from the freshest door state.
       let doors = 0;
       const enriched = steps.map((s, i) => {
         const fromId = i === 0 ? pos.roomId : steps[i - 1].toRoomId;
@@ -749,9 +779,9 @@ export function useMapTracker(
         const dir = TOWN_DIR_ALIASES[s.cmd] as TownDir | undefined;
         if (fromRoom && dir && fromRoom.doorDirs.includes(dir)) {
           doors++;
-          return { ...s, cmds: buildDoorSequence(s.cmd, doorKeysRef.current) ?? [s.cmd] };
+          return { ...s, door: { dir, fromId } };
         }
-        return { ...s, cmds: [s.cmd] };
+        return { ...s };
       });
       cancelWalk();
       cancelTownWalk();
@@ -759,6 +789,7 @@ export function useMapTracker(
         steps: enriched,
         confirmed: 0,
         sent: 0,
+        townId: pos.townId,
         targetRoomId: roomId,
         timeout: null,
       };
@@ -815,7 +846,7 @@ export function useMapTracker(
       cancelWalk: cancelWalkAction,
       setCellNotes,
       clearBlockedAt,
-      toggleTownAt,
+      setMarkerAt,
       clearMap,
       centerOnPlayer,
       centerVersion,
@@ -826,6 +857,7 @@ export function useMapTracker(
       cancelTownWalk: cancelTownWalkAction,
       renameTown,
       deleteTown,
+      setRoomIcon,
     }),
     [
       state,
@@ -838,7 +870,7 @@ export function useMapTracker(
       cancelWalkAction,
       setCellNotes,
       clearBlockedAt,
-      toggleTownAt,
+      setMarkerAt,
       clearMap,
       centerOnPlayer,
       centerVersion,
@@ -849,6 +881,7 @@ export function useMapTracker(
       cancelTownWalkAction,
       renameTown,
       deleteTown,
+      setRoomIcon,
     ]
   );
 }

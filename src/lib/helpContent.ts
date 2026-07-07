@@ -124,14 +124,20 @@ export const HELP_CATEGORIES: HelpCategory[] = [
       {
         title: 'Map Panel',
         description:
-          'Auto-maps the hex wilderness as you explore. Every survey paints all visible hexes with their terrain, so the map fills in around your path. Landmarks (towns, caves, towers) are marked with a gold diamond. If you teleport somewhere unrecognizable the map shows LOST until you reach distinctive terrain again. Step into a town or building and the panel switches to a room map (Auto view — the view being shown gets a cyan tint on its Hex/Town button): rooms you walk through are laid out on a grid, one floor at a time, with stair glyphs (▲▼), amber door ticks, and dashed purple lines for special exits like "back" or boats. Each town is remembered by the hexes you enter it from, so the map picks you right back up next visit — and stepping through a portal switches to the destination\'s own town map instead of tangling the two together. The town picker in the toolbar browses any mapped town from anywhere (walking stays disabled until you\'re actually there). The gear menu holds the view options: terrain/room name labels, fog of war (dim hexes seen but never entered — off by default), renaming a town, and the map delete actions.',
+          'Auto-maps the hex wilderness as you explore. Every survey paints all visible hexes with their terrain, so the map fills in around your path. Landmarks (towns, caves, towers) are marked with a gold diamond. If you teleport somewhere unrecognizable the map shows LOST until you reach distinctive terrain again. Step into a town or building and the panel switches to a room map (Auto view — the view being shown gets a cyan tint on its Hex/Town button): rooms you walk through are laid out on a grid, one floor at a time, with stair glyphs (▲▼), amber door ticks, and dashed purple lines for special exits like "back" or boats. Each town is remembered by the hexes you enter it from, so the map picks you right back up next visit — and stepping through a portal switches to the destination\'s own town map instead of tangling the two together. The town picker in the toolbar browses any mapped town from anywhere (walking stays disabled until you\'re actually there), and clicking the cyan BROWSING badge jumps back to your current town. The map controls sit on the map itself: center-on-player, the floor stepper, and full screen stack in the bottom-right corner, and a walk in progress shows its cancel pill in the bottom-left. The gear menu holds the view options: terrain/room name labels, fog of war (dim hexes seen but never entered — off by default), renaming a town, and the map delete actions.',
         helpId: 'toolbar-map',
       },
       {
         title: 'Allocations Panel',
         description:
-          'Tracks your combat and magic allocations. Auto-parses from "show combat allocation:all" output. Every limb shows a row of −/value/+ steppers under a sticky slot header — click a value to type an exact number, or use −/+ to step (hold Shift for ×5). The header\'s −/+ adjust that slot on every limb at once, and Apply All / Save sit in a sticky bottom bar.',
+          'Tracks your combat and magic allocations. Auto-parses from "show combat allocation:all" output. Every limb shows a row of −/value/+ steppers under a sticky slot header — click a value to type an exact number, or use −/+ to step (hold Shift for ×5). The header\'s −/+ adjust that slot on every limb at once, and Apply All / Save sit in a sticky bottom bar. The panel remembers where you left it per character — tab, view, and selected profiles are restored when the client reopens.',
         helpId: 'toolbar-alloc',
+      },
+      {
+        title: 'Loadout Panel',
+        description:
+          'Live view of what each of your limbs is holding and everything you\'re wearing — no more typing "eq" every few seconds. It reads the output the game already prints: a "view me" (or your x-me alias) gives it the full picture (limb roster, held and worn items, limb health as colored dots) and "equip held" re-syncs the hands. Hands are never guessed at between syncs: any hand-affecting event (summon, dismissal, hold, drop, stow, take) flips the header to "hands unverified" and a silent automatic re-sync replaces that with eq-verified truth moments later — worn tracking stays live from your wear/remove messages. Summoned items get a ✦ badge (they vanish when dismissed rather than being real gear). The two header buttons send "equip held" / "view me" for you; the hands re-sync is silent (its output never reaches the terminal, like the Who refresh). Hands are also primed automatically at login and re-synced in the background on a timer (configurable in Settings > Timers, like the Who list). Pin it next to the terminal while hunting.',
+        helpId: 'toolbar-loadout',
       },
       {
         title: 'Currency Panel',
@@ -190,9 +196,16 @@ export const HELP_CATEGORIES: HelpCategory[] = [
         interaction: 'right-click',
       },
       {
-        title: 'Mark Towns on the Map',
+        title: 'Landmark Icons on the Hex Map',
         description:
-          'Hexes whose landmarks name a town, village, city, or hamlet automatically get a house icon instead of the landmark diamond. Shift+click any hex to toggle its town marker manually — turning one off tells the mapper not to re-add it.',
+          'Hexes whose landmarks name a known kind of place get a matching icon instead of the generic landmark diamond — towns (house), castles and fortresses, towers/windmills/lighthouses, caves and chasms, temples, graveyards, camps, farms, and boats/ferry landings. Shift+click any hex to pick an icon yourself, remove one ("No icon"), or hand it back to auto-detection — an explicit choice is never overwritten.',
+        helpId: 'toolbar-map',
+        interaction: 'click',
+      },
+      {
+        title: 'Room Icons on the Town Map',
+        description:
+          "Rooms whose names give them away are tagged automatically: banks (coin), shops and stores (awning), inns and taverns (tankard), temples, smithies (anvil), stables (horseshoe), and rooms whose descriptions mention a bulletin board. Shift+click any room to set or clear its icon manually, or return it to auto-detection. Hover the room to see the icon's meaning.",
         helpId: 'toolbar-map',
         interaction: 'click',
       },
@@ -408,7 +421,7 @@ export const HELP_CATEGORIES: HelpCategory[] = [
       {
         title: '/door',
         description:
-          '"/door <dir>" passes through a (possibly locked) door in one go: unlocks trying each keyring slot (key, key 2, … — count configurable in Settings > Doors), opens, steps through, then closes and locks behind you. Accepts n/s/e/w/u/d, diagonals, in/out. The town map\'s auto-walk runs the same sequence automatically when a route crosses a known door.',
+          '"/door <dir>" passes through a (possibly locked) door in one go: unlocks trying each keyring slot (key, key 2, … — count configurable in Settings > Doors), opens, steps through, then closes and locks behind you. Accepts n/s/e/w/u/d, diagonals, in/out. The town map\'s auto-walk runs the same sequence automatically when a route crosses a known door — but leaves doors as it found them: a door already standing open is walked through and left open, not closed behind you.',
       },
       {
         title: '/convert',

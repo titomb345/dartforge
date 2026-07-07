@@ -32,17 +32,19 @@ const FORECOURT_B = block(
 );
 
 let t = 1000;
-const step = (cmd: string | null, b: TownRoomBlock, viaPortal = false) => {
+const step = (cmd: string | null, b: TownRoomBlock, portalLine?: string) => {
   if (cmd) loc.trackCommand(cmd, (t += 1000));
-  if (viaPortal) {
-    // Simulate the transit line arriving through the feed
-    if (!PORTAL_TRANSIT_RE.test('You step into the north portal.')) throw new Error('regex broken');
-    loc.onPortalTransit();
+  if (portalLine) {
+    // Simulate the transit line arriving through the feed — hub portals
+    // name their direction ("the north portal"), spoke portals don't.
+    const m = PORTAL_TRANSIT_RE.exec(portalLine);
+    if (!m) throw new Error('regex broken');
+    loc.onPortalTransit(m[1] ?? null);
   }
   const res = loc.onRoomBlock(b, null, (t += 1000));
   const room = map.room(res.pos);
   console.log(
-    `${(cmd ?? (viaPortal ? 'PORTAL' : 'enter')).padEnd(6)} → [${res.kind.padEnd(9)}] town#${res.pos?.townId} room#${room?.id} "${room?.name}"`
+    `${(cmd ?? (portalLine ? 'PORTAL' : 'enter')).padEnd(6)} → [${res.kind.padEnd(9)}] town#${res.pos?.townId} room#${room?.id} "${room?.name}"`
   );
   return res;
 };
@@ -52,13 +54,13 @@ const erisTown = map.pos!.townId;
 const erisForecourtId = map.pos!.roomId;
 step('w', MARKET);
 step('e', FORECOURT_A);
-step(null, CHAMBER, true); // port → hub
+step(null, CHAMBER, 'You step into the portal.'); // port → hub (spoke side)
 const hubTown = map.pos!.townId;
-step(null, FORECOURT_B, true); // port n → Tobermore
+step(null, FORECOURT_B, 'You step into the north portal.'); // port n → Tobermore
 const tobTown = map.pos!.townId;
-step(null, CHAMBER, true); // port → hub again
+step(null, CHAMBER, 'You step into the portal.'); // port → hub again
 const hubTown2 = map.pos!.townId;
-const res = step(null, FORECOURT_A, true); // port ne → back to Eris
+const res = step(null, FORECOURT_A, 'You step into the northeast portal.'); // port ne → Eris
 
 console.log(`\nTowns: ${map.towns.size} (expected 3)`);
 const ok =

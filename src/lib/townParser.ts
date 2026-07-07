@@ -30,6 +30,8 @@ export interface TownExits {
   dirs: TownDir[];
   /** Directions reached through a door/gate ("a closed oak door leading west") */
   doorDirs: TownDir[];
+  /** Doors currently standing open ("an open oak door leading east") */
+  openDoorDirs: TownDir[];
   /** Non-directional exits ("back", "out", "exit") */
   named: string[];
   /** Raw exits sentence body (after the colon), for tooltips */
@@ -138,7 +140,10 @@ const EXITS_START_RE =
  * (Teleports with unknown messages — recall spells — are caught by the
  * localizer's generic teleport heuristic instead.)
  */
-export const PORTAL_TRANSIT_RE = /^(?:> )*You step (?:into|through) the(?: \w+)? portal\.\s*$/;
+/** Captures the portal word ("north", "shimmering", ...) when present —
+ *  hub-side transits name their portal by direction, which identifies the
+ *  destination (see portal destination memory in townMap.ts). */
+export const PORTAL_TRANSIT_RE = /^(?:> )*You step (?:into|through) the(?: (\w+))? portal\.\s*$/;
 
 const DIR_WORD_RE = /\b(north(?:east|west)?|south(?:east|west)?|east|west|up|down)\b/g;
 
@@ -167,13 +172,22 @@ export function parseTownExits(sentence: string): TownExits {
     .trim();
   const dirs = new Set<TownDir>();
   const doorDirs = new Set<TownDir>();
+  const openDoorDirs = new Set<TownDir>();
 
-  // Door/gate phrases name their directions after "leading": mark those dirs.
-  // "a closed pair of oak doors leading west and east" → doors west+east.
+  // Door/gate phrases name their directions after "leading": mark those
+  // dirs ("a closed pair of oak doors leading west and east" → doors
+  // west+east). The open/closed state word sits earlier in the same
+  // comma-separated phrase — phrases without an "open" (closed doors,
+  // bare gates) default to closed.
   for (const m of body.matchAll(/\bleading ([a-z, and]+?)(?=[,.]|$)/g)) {
+    const segStart = Math.max(body.lastIndexOf(',', m.index), body.lastIndexOf('.', m.index)) + 1;
+    const isOpen = /\bopen\b/.test(body.slice(segStart, m.index));
     for (const w of m[1].split(/[^a-z]+/)) {
       const d = TOWN_DIR_ALIASES[w];
-      if (d) doorDirs.add(d);
+      if (d) {
+        doorDirs.add(d);
+        if (isOpen) openDoorDirs.add(d);
+      }
     }
   }
   for (const m of body.matchAll(DIR_WORD_RE)) {
@@ -186,6 +200,7 @@ export function parseTownExits(sentence: string): TownExits {
   return {
     dirs: [...dirs].sort(),
     doorDirs: [...doorDirs].sort(),
+    openDoorDirs: [...openDoorDirs].sort(),
     named: [...named].sort(),
     raw: body,
   };
@@ -290,6 +305,16 @@ export class TownParser {
         // Candidate name line. Capitalized start filters mid-sentence
         // fragments; length guards against stray tokens.
         if (t.length < 3 || t.length > 60 || !/^[A-Z0-9"']/.test(t)) return null;
+        // Fragmented streams can slice a description/contents sentence so
+        // its tail lands on its own short line ("There is an oak chest in
+        // the opposite corner.  It") — sentence-shaped starts and dangling
+        // function-word endings are prose, never room names. Capitalized
+        // articles are NOT in the trailing list: "Pier A" / "Cell Block A"
+        // are legitimate names, while mid-sentence truncation dangles
+        // pronouns or lowercase function words.
+        if (/^(?:There (?:is|are)|You )\b/.test(t)) return null;
+        if (/\b(?:It|He|She|They|and|or|of|to|with|in|on|at|is|are|was|from|by|the|a|an)$/.test(t))
+          return null;
         return { name: t, descLines: desc };
       }
       desc.unshift(t);
