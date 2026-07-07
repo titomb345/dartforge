@@ -114,16 +114,13 @@ export function useLoadout(
     [armFlush]
   );
 
-  /** Re-sync held items — sends `equip held` (tiny, one line per limb). */
-  const refreshHands = useCallback(() => {
-    sendCommandRef.current?.('equip held').catch(console.error);
-  }, [sendCommandRef]);
-
   /** Full re-sync (hands + worn + limb health) — sends `view me` (the
-   *  native DartMUD examine; `x` is only an alias for it). */
+   *  native DartMUD examine; `x` is only an alias for it). Hands-only
+   *  re-syncs live in useTimerEngines (refreshEquip), which gags the
+   *  response like the Who refresher. */
   const refreshFull = useCallback(() => {
     sendCommandRef.current?.('view me').catch(console.error);
   }, [sendCommandRef]);
 
-  return { state, feedLine, trackCommand, refreshHands, refreshFull };
+  return { state, feedLine, trackCommand, refreshFull };
 }

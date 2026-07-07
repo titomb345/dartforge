@@ -247,6 +247,10 @@ export function SettingsPanel({ onClose }: { onClose: () => void }) {
     whoRefreshMinutes,
     updateWhoAutoRefreshEnabled,
     updateWhoRefreshMinutes,
+    equipAutoRefreshEnabled,
+    equipRefreshMinutes,
+    updateEquipAutoRefreshEnabled,
+    updateEquipRefreshMinutes,
     boardDatesEnabled,
     updateBoardDatesEnabled: onBoardDatesEnabledChange,
     stripPromptsEnabled,
@@ -512,6 +516,30 @@ export function SettingsPanel({ onClose }: { onClose: () => void }) {
           />
           <div className="text-[9px] text-text-dim font-mono leading-relaxed mt-1 mb-3">
             Silently refreshes the who list in the background.
+          </div>
+
+          {/* Loadout held-equipment refresh */}
+          <div className="text-[10px] font-semibold text-text-muted tracking-wide uppercase mb-1">
+            Held Equipment
+          </div>
+          <ToggleRow
+            label="Auto-refresh"
+            checked={equipAutoRefreshEnabled}
+            onChange={updateEquipAutoRefreshEnabled}
+            accent="#bd93f9"
+          />
+          <NumberRow
+            label="Interval"
+            value={equipRefreshMinutes}
+            onChange={updateEquipRefreshMinutes}
+            accent="purple"
+            min={1}
+            max={30}
+            unit="min"
+            dimmed={!equipAutoRefreshEnabled}
+          />
+          <div className="text-[9px] text-text-dim font-mono leading-relaxed mt-1 mb-3">
+            Silently re-syncs the Loadout panel's hands ("equip held") in the background.
           </div>
 
           {/* Anti-idle */}

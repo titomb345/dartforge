@@ -92,6 +92,15 @@ export function isHandLimb(limb: string): boolean {
   return /\bhands?\b/.test(limb);
 }
 
+/** Line-shape tests for `equip held` output, used by the OutputFilter's
+ *  sync gag so background hand re-syncs don't spam the terminal. */
+export function isEquipHeldLine(stripped: string): boolean {
+  return EQ_LINE.test(stripped);
+}
+export function isEquipNotHoldingLine(stripped: string): boolean {
+  return /^You (?:are not|aren't) (?:holding|wielding)/.test(stripped);
+}
+
 // ---------------------------------------------------------------------------
 // Line patterns
 // ---------------------------------------------------------------------------

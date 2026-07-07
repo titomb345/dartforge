@@ -173,6 +173,7 @@ const LOGIN_COMMANDS = [
   'show magic allocation',
   'show alignment',
   'who',
+  'equip held',
 ];
 
 /** Max recent output lines kept for tab completion */
@@ -1818,6 +1819,7 @@ function AppMain() {
     activeTimerBadges,
     handleToggleTimer,
     refreshWho,
+    refreshEquip,
   } = useTimerEngines({
     connected,
     loggedIn,
@@ -1828,6 +1830,8 @@ function AppMain() {
     alignmentTrackingMinutes,
     whoAutoRefreshEnabled: appSettings.whoAutoRefreshEnabled,
     whoRefreshMinutes: appSettings.whoRefreshMinutes,
+    equipAutoRefreshEnabled: appSettings.equipAutoRefreshEnabled,
+    equipRefreshMinutes: appSettings.equipRefreshMinutes,
     babelEnabled: appSettings.babelEnabled,
     babelLanguage: appSettings.babelLanguage,
     babelIntervalSeconds: appSettings.babelIntervalSeconds,
@@ -2184,14 +2188,15 @@ function AppMain() {
     [whoSnapshot, refreshWho]
   );
 
-  // Loadout context value
+  // Loadout context value. The hands re-sync routes through the gagged
+  // refresher (same as the Who panel's), so it never spams the terminal.
   const loadoutValue = useMemo(
     () => ({
       state: loadout.state,
-      refreshHands: loadout.refreshHands,
+      refreshHands: refreshEquip,
       refreshFull: loadout.refreshFull,
     }),
-    [loadout.state, loadout.refreshHands, loadout.refreshFull]
+    [loadout.state, refreshEquip, loadout.refreshFull]
   );
 
   // CommandInput context value

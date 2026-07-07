@@ -8,6 +8,7 @@ import { matchAlignmentLine, type AlignmentMatch } from './alignmentPatterns';
 import { matchChatLine, isIncompleteChatLine } from './chatPatterns';
 import { transformBoardDateLine } from './boardDatePatterns';
 import { isWhoHeaderLine, isWhoFinalLine, buildWhoSnapshot, type WhoSnapshot } from './whoPatterns';
+import { isEquipHeldLine, isEquipNotHoldingLine } from './loadout';
 import type { ChatMessage } from '../types/chat';
 import { stripAnsi } from './ansiUtils';
 
@@ -20,7 +21,15 @@ import { stripAnsi } from './ansiUtils';
 const ANTI_SPAM_WINDOW_MS = 1000;
 
 /** Sync gag flag keys. */
-type SyncGagFlags = { hp: boolean; score: boolean; combatAlloc: boolean; magicAlloc: boolean; alignment: boolean; who: boolean };
+type SyncGagFlags = {
+  hp: boolean;
+  score: boolean;
+  combatAlloc: boolean;
+  magicAlloc: boolean;
+  alignment: boolean;
+  who: boolean;
+  equip: boolean;
+};
 
 /** Default sync gag flags (all disabled). */
 const SYNC_GAGS_CLEAR: SyncGagFlags = {
@@ -30,6 +39,7 @@ const SYNC_GAGS_CLEAR: SyncGagFlags = {
   magicAlloc: false,
   alignment: false,
   who: false,
+  equip: false,
 };
 
 /** Pre-compiled regexes for score block detection (avoid recompiling on every call) */
@@ -152,6 +162,8 @@ export class OutputFilter {
   private syncAllocHasData = false;
   /** True after "elemental affinity:" header seen, waiting for values. */
   private syncMagicPending = false;
+  /** True after at least one equip-held line has been gagged. */
+  private syncEquipHasData = false;
   /** True while inside the who list block during sync. */
   private syncInWhoBlock = false;
   /** Accumulated who list lines during sync (stripped). */
@@ -243,7 +255,7 @@ export class OutputFilter {
     stripped: string,
     raw: string,
     lines: string[],
-    rawLines: string[],
+    rawLines: string[]
   ): boolean {
     lines.push(stripped);
     rawLines.push(raw);
@@ -278,11 +290,20 @@ export class OutputFilter {
    */
   startSync(): void {
     this.syncActive = true;
-    this.syncGags = { hp: true, score: true, combatAlloc: true, magicAlloc: true, alignment: true, who: true };
+    this.syncGags = {
+      hp: true,
+      score: true,
+      combatAlloc: true,
+      magicAlloc: true,
+      alignment: true,
+      who: true,
+      equip: true,
+    };
     this.syncInScoreBlock = false;
     this.syncAllocPending = false;
     this.syncAllocHasData = false;
     this.syncMagicPending = false;
+    this.syncEquipHasData = false;
     this.resetWhoState();
     this.startSyncTimer(5000);
   }
@@ -298,6 +319,18 @@ export class OutputFilter {
     this.startSyncTimer(5000);
   }
 
+  /**
+   * Begin sync gagging for just the `equip held` response — the Loadout
+   * panel's hand re-syncs (manual button and background timer). The gagged
+   * lines still reach onLine, so the tracker parses them normally.
+   */
+  startEquipSync(): void {
+    this.syncActive = true;
+    this.syncGags.equip = true;
+    this.syncEquipHasData = false;
+    this.startSyncTimer(5000);
+  }
+
   /** End sync gagging. */
   endSync(): void {
     const wasActive = this.syncActive;
@@ -307,6 +340,7 @@ export class OutputFilter {
     this.syncAllocPending = false;
     this.syncAllocHasData = false;
     this.syncMagicPending = false;
+    this.syncEquipHasData = false;
     this.resetWhoState();
     this.clearSyncTimer();
     if (wasActive) this.onSyncEnd?.();
@@ -472,6 +506,30 @@ export class OutputFilter {
       }
     }
 
+    // Equip-held block — one "<limb>: <item>" line per occupied limb (or a
+    // single "not holding" line). Checked AFTER the alloc gags: alloc output
+    // also prints limb-header-shaped lines, and the login responses arrive
+    // in command order, so alloc lines must be claimed by their own gag.
+    if (this.syncGags.equip) {
+      if (isEquipNotHoldingLine(stripped)) {
+        this.syncGags.equip = false;
+        this.syncEquipHasData = false;
+        this.checkSyncDone();
+        return true;
+      }
+      if (isEquipHeldLine(stripped)) {
+        this.syncEquipHasData = true;
+        return true;
+      }
+      if (this.syncEquipHasData) {
+        // First non-matching line after the block — response fully consumed
+        this.syncGags.equip = false;
+        this.syncEquipHasData = false;
+        this.checkSyncDone();
+        // Don't gag this line
+      }
+    }
+
     return false;
   }
 
@@ -528,12 +586,13 @@ export class OutputFilter {
       // Skip all 7 matchers (~95% of lines) when the line can't match.
       const maybeStatus =
         stripped.length > 0 &&
-        (stripped.charCodeAt(0) === 89 /* 'Y' — "You are/have/believe", "Your", "You're", "You fall" */ ||
+        (stripped.charCodeAt(0) ===
+          89 /* 'Y' — "You are/have/believe", "Your", "You're", "You fall" */ ||
           stripped.charCodeAt(0) === 78 /* 'N' — "Needs :" */ ||
           stripped.charCodeAt(0) === 65 /* 'A' — "Aura :" */ ||
           stripped.charCodeAt(0) === 69 /* 'E' — "Encumbrance :" */ ||
           stripped.charCodeAt(0) === 67 /* 'C' — "Concentration :" */ ||
-          stripped.charCodeAt(0) === 77 /* 'M' — "Movement :" */);
+          stripped.charCodeAt(0) === 77) /* 'M' — "Movement :" */;
 
       let concMatch: ConcentrationMatch | null = null;
       let needsMatch: ReturnType<typeof matchNeedsLine> = null;

@@ -16,7 +16,7 @@ import type { DataStore } from '../contexts/DataStoreContext';
  * Prior to this collapse, each feature had its own version bump (up to v17).
  * normalizeVersion() maps those old version numbers to the collapsed scheme.
  */
-export const CURRENT_VERSION = 8;
+export const CURRENT_VERSION = 9;
 
 /** Raw store contents — all keys are optional since older stores may lack them. */
 export type StoreData = Record<string, unknown>;
@@ -329,6 +329,15 @@ const MIGRATIONS: MigrationFn[] = [
     // Anti-spam collapse threshold — how many identical lines before the
     // `[repeated xN]` collapse kicks in (a few repeats are usually legit)
     if (!('antiSpamThreshold' in data)) data.antiSpamThreshold = 4;
+
+    return data;
+  },
+
+  // ── v8 → v9: v1.14 release ─────────────────────────────────────────
+  (data) => {
+    // Loadout panel — background held-equipment re-sync (gagged `equip held`)
+    if (!('equipAutoRefreshEnabled' in data)) data.equipAutoRefreshEnabled = true;
+    if (!('equipRefreshMinutes' in data)) data.equipRefreshMinutes = 5;
 
     return data;
   },

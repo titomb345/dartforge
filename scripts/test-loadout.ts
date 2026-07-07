@@ -7,6 +7,7 @@
  * Usage: npx tsx scripts/test-loadout.ts
  */
 import { LoadoutTracker, isHandLimb } from '../src/lib/loadout';
+import { OutputFilter } from '../src/lib/outputFilter';
 
 let t = 0;
 let failed = 0;
@@ -173,6 +174,35 @@ check(
     revived.state.wornLoose.length === tracker.state.wornLoose.length
 );
 check('reload marks hands approximate', revived.state.handsStale === true);
+
+// --- 6. Equip sync gag: background re-syncs must not spam the terminal ------
+{
+  const seenByParsers: string[] = [];
+  const filter = new OutputFilter({
+    onLine: (stripped) => {
+      seenByParsers.push(stripped);
+      return undefined;
+    },
+  });
+  filter.startEquipSync();
+  const shown = filter.filter(
+    'upper left hand: a bloody axe\r\n' +
+      'lower left hand: a large black steel great chain\r\n' +
+      'A rabbit hops in from the west.\r\n'
+  );
+  check('gag: eq lines suppressed from terminal', !shown.includes('bloody axe'));
+  check('gag: unrelated line still shown', shown.includes('rabbit'));
+  check(
+    'gag: parsers still saw the eq lines',
+    seenByParsers.some((l) => l.includes('bloody axe')) &&
+      seenByParsers.some((l) => l.includes('great chain'))
+  );
+
+  // Without an armed sync, typed eq output passes through untouched
+  const filter2 = new OutputFilter({ onLine: () => undefined });
+  const shown2 = filter2.filter('upper left hand: a bloody axe\r\n');
+  check('gag: typed eq output is NOT gagged', shown2.includes('bloody axe'));
+}
 
 console.log(failed ? '\nFAILURES above' : '\nAll loadout tracker checks passed');
 process.exit(failed);

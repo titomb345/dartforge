@@ -113,6 +113,11 @@ export interface AppSettingsState {
   updateWhoAutoRefreshEnabled: (v: boolean) => void;
   updateWhoRefreshMinutes: (v: number) => void;
   updateWhoFontSize: (v: number | null) => void;
+  // Loadout held-equipment refresh
+  equipAutoRefreshEnabled: boolean;
+  equipRefreshMinutes: number;
+  updateEquipAutoRefreshEnabled: (v: boolean) => void;
+  updateEquipRefreshMinutes: (v: number) => void;
   // Chat font size
   chatFontSize: number | null;
   updateChatFontSize: (v: number | null) => void;
