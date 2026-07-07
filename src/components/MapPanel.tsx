@@ -33,6 +33,7 @@ import { useMapContext } from '../contexts/MapContext';
 import { useAppSettingsContext } from '../contexts/AppSettingsContext';
 import { TERRAIN_LABELS } from '../lib/hexTerrainPatterns';
 import { MARKER_COLOR } from '../lib/mapMarkers';
+import { PopoverMenu } from './PopoverMenu';
 
 type ViewMode = 'auto' | 'hex' | 'town';
 
@@ -363,14 +364,13 @@ export function MapPanel({ mode = 'slideout' }: PinnablePanelProps) {
           >
             <GearIcon size={11} />
           </button>
-          {menuOpen &&
-            createPortal(
-              <>
-                <div className="fixed inset-0 z-[9998]" onClick={() => setMenuOpen(false)} />
-                <div
-                  className="fixed z-[9999] flex flex-col gap-1.5 bg-bg-secondary border border-border rounded-md p-2 shadow-lg min-w-[180px] max-h-[70vh] overflow-y-auto text-[10px]"
-                  style={{ top: menuPos.top, right: menuPos.right }}
-                >
+          {menuOpen && (
+            <PopoverMenu
+              top={menuPos.top}
+              right={menuPos.right}
+              onClose={() => setMenuOpen(false)}
+              className="flex flex-col gap-1.5 bg-bg-secondary border border-border rounded-md p-2 shadow-lg min-w-[180px] max-h-[70vh] overflow-y-auto text-[10px]"
+            >
                   <div className="text-text-dim text-[9px]">
                     {townView
                       ? displayed
@@ -447,6 +447,9 @@ export function MapPanel({ mode = 'slideout' }: PinnablePanelProps) {
                         onKeyDown={(e) => {
                           if (e.key === 'Enter') (e.target as HTMLInputElement).blur();
                           if (e.key === 'Escape') {
+                            // Revert the draft only — don't let the menu's
+                            // Escape-to-close swallow the rename cancel
+                            e.stopPropagation();
                             setNameDraft(null);
                             (e.target as HTMLInputElement).blur();
                           }
@@ -509,10 +512,8 @@ export function MapPanel({ mode = 'slideout' }: PinnablePanelProps) {
                       </div>
                     </>
                   )}
-                </div>
-              </>,
-              document.body
-            )}
+            </PopoverMenu>
+          )}
         </div>
       </div>
 

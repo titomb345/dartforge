@@ -1,14 +1,14 @@
 /**
  * MarkerPicker — the Shift+click popover for choosing a landmark marker
- * (hex map) or room icon (town map). Renders through a portal at viewport
- * coords like the map tooltips, with a full-screen backdrop that closes it.
- * Each option shows its actual canvas glyph, so what you pick is exactly
- * what the map draws.
+ * (hex map) or room icon (town map). Rendered through the shared
+ * PopoverMenu (portal, backdrop, Escape, viewport clamping). Each option
+ * shows its actual canvas glyph, so what you pick is exactly what the
+ * map draws.
  */
 
 import { useEffect, useRef } from 'react';
-import { createPortal } from 'react-dom';
 import { paintMarkerGlyph, MARKER_COLOR, type MarkerGlyph } from '../lib/mapMarkers';
+import { PopoverMenu } from './PopoverMenu';
 
 const PICKER_BG = 'rgba(20, 18, 16, 0.97)';
 const PICKER_BORDER = 'rgba(140, 125, 100, 0.5)';
@@ -54,20 +54,6 @@ export function MarkerPicker<T extends string>({
   onPick,
   onClose,
 }: MarkerPickerProps<T>) {
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') onClose();
-    };
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
-  }, [onClose]);
-
-  const width = 148;
-  const height = options.length * 24 + 76;
-  const tx = x + width + 12 > window.innerWidth ? x - width - 4 : x + 4;
-  const ty =
-    y + height + 12 > window.innerHeight ? Math.max(8, window.innerHeight - height - 8) : y + 4;
-
   // Selection is derived in one place: `current === value` also covers the
   // Auto row (both null) so an unclassified cell shows Auto as active.
   const row = (label: string, value: T | 'none' | null, swatch: React.ReactNode) => {
@@ -89,32 +75,29 @@ export function MarkerPicker<T extends string>({
     );
   };
 
-  return createPortal(
-    <>
-      <div className="fixed inset-0 z-[10001]" onClick={onClose} onContextMenu={onClose} />
+  return (
+    <PopoverMenu
+      x={x}
+      y={y}
+      onClose={onClose}
+      className="rounded px-1.5 py-1.5"
+      style={{
+        width: 148,
+        background: PICKER_BG,
+        border: `1px solid ${PICKER_BORDER}`,
+        boxShadow: '0 4px 16px rgba(0,0,0,0.5)',
+      }}
+    >
       <div
-        className="fixed z-[10002] rounded px-1.5 py-1.5"
-        style={{
-          left: tx,
-          top: ty,
-          width,
-          background: PICKER_BG,
-          border: `1px solid ${PICKER_BORDER}`,
-          boxShadow: '0 4px 16px rgba(0,0,0,0.5)',
-        }}
+        className="text-[9px] font-semibold uppercase tracking-wider opacity-50 px-2 pb-1"
+        style={{ color: PICKER_TEXT }}
       >
-        <div
-          className="text-[9px] font-semibold uppercase tracking-wider opacity-50 px-2 pb-1"
-          style={{ color: PICKER_TEXT }}
-        >
-          {title}
-        </div>
-        {options.map((o) => row(o.label, o.type, <GlyphSwatch glyph={o.type as MarkerGlyph} />))}
-        <div className="h-px my-1" style={{ background: PICKER_BORDER }} />
-        {row('Auto-detect', null, <span className="text-[9px] opacity-60">◈</span>)}
-        {row('No icon', 'none', <span className="text-[9px] opacity-60">✕</span>)}
+        {title}
       </div>
-    </>,
-    document.body
+      {options.map((o) => row(o.label, o.type, <GlyphSwatch glyph={o.type as MarkerGlyph} />))}
+      <div className="h-px my-1" style={{ background: PICKER_BORDER }} />
+      {row('Auto-detect', null, <span className="text-[9px] opacity-60">◈</span>)}
+      {row('No icon', 'none', <span className="text-[9px] opacity-60">✕</span>)}
+    </PopoverMenu>
   );
 }
