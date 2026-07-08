@@ -10,6 +10,12 @@ The `[Unreleased]` header controls automatic version bumping on merge:
 - `[Unreleased-minor]` → 0.1.0 → 0.2.0
 - `[Unreleased-major]` → 0.1.0 → 1.0.0
 
+## [Unreleased-patch]
+
+### Fixed
+
+- The Loadout panel now understands the empty-hands reply. `equip held` answers "No equipment to show." when nothing is held, but the tracker only knew the "You are not holding..." shape — so the panel's silent auto re-syncs never completed, the "hands unverified" flag stuck forever, and each background re-sync leaked a stray "No equipment to show." line into the terminal. The reply now commits an all-hands-empty snapshot (and is gagged like the rest of the sync output), and empty hands read "(empty)" in the panel instead of a bare dash
+
 ## [1.14.0] - 2026-07-07
 
 ### Added

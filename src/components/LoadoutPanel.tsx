@@ -164,7 +164,7 @@ export function LoadoutPanel({ mode = 'slideout' }: PinnablePanelProps) {
                       {handLabel(l.limb)}
                     </span>
                     {l.held.length === 0 ? (
-                      <span className="text-text-dim/40">—</span>
+                      <span className="text-text-dim/40">(empty)</span>
                     ) : (
                       <span className="flex-1 min-w-0 text-text-label">
                         {l.held.map((h, i) => (
