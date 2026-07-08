@@ -149,6 +149,19 @@ check(
   tracker.state.limbs.find((l) => l.limb === 'lower right hand')!.held[0].summoned === true
 );
 
+// Empty hands: `equip held` replies "No equipment to show." — must commit
+// an all-hands-empty snapshot (the live bug left handsStale stuck forever).
+tracker.state.handsStale = true;
+cmd('equip held');
+const emptyEnd = line('No equipment to show.');
+check('eq empty: reply is REPORTED as a change', emptyEnd === 'snapshot');
+check(
+  'eq empty: every hand cleared',
+  tracker.state.limbs.filter((l) => isHandLimb(l.limb)).every((l) => l.held.length === 0)
+);
+check('eq empty: clears stale flag', tracker.state.handsStale === false);
+check('eq empty: nothing pending after reply', tracker.hasPendingCapture === false);
+
 // In a quiet room no foreign line arrives — the idle flush must commit.
 cmd('equip held');
 line('upper right hand: a mythril longsword');
@@ -208,6 +221,16 @@ check('reload marks hands approximate', revived.state.handsStale === true);
     seenByParsers.some((l) => l.includes('bloody axe')) &&
       seenByParsers.some((l) => l.includes('great chain'))
   );
+
+  // Empty hands: the reply is a single "No equipment to show." line — the
+  // gag must swallow it (it leaked on every background re-sync live).
+  const filterEmpty = new OutputFilter({ onLine: () => undefined });
+  filterEmpty.startEquipSync();
+  const shownEmpty = filterEmpty.filter(
+    'No equipment to show.\r\nA rabbit hops in from the west.\r\n'
+  );
+  check('gag: empty-hands reply suppressed', !shownEmpty.includes('No equipment to show'));
+  check('gag: line after empty reply still shown', shownEmpty.includes('rabbit'));
 
   // Without an armed sync, typed eq output passes through untouched
   const filter2 = new OutputFilter({ onLine: () => undefined });

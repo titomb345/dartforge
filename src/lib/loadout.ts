@@ -88,7 +88,9 @@ export function isEquipHeldLine(stripped: string): boolean {
   return EQ_LINE.test(stripped);
 }
 export function isEquipNotHoldingLine(stripped: string): boolean {
-  return /^You (?:are not|aren't) (?:holding|wielding)/.test(stripped);
+  // "No equipment to show." is the live empty-hands reply to `equip held`;
+  // the "not holding/wielding" shape covers other equip variants.
+  return /^(?:No equipment to show\.|You (?:are not|aren't) (?:holding|wielding))/.test(stripped);
 }
 
 // ---------------------------------------------------------------------------
@@ -377,7 +379,8 @@ export class LoadoutTracker {
       cap.seen.set(m[1].trim(), m[2].trim());
       return true;
     }
-    if (/^You (?:are not|aren't) (?:holding|wielding)/.test(line)) {
+    if (isEquipNotHoldingLine(line)) {
+      // Empty-hands reply — commits with nothing seen, clearing every hand
       this.commitEquip(cap, now);
       this.capture = null;
       return true;
