@@ -642,6 +642,7 @@ function AppMain() {
             for (const cmd of toSend) {
               mapTrackCommandRef.current(cmd);
               loadoutTrackCommandRef.current(cmd);
+              outputFilterRef.current?.noteEquipCommand(cmd);
               await sendCommand(cmd);
             }
           })();
@@ -1202,6 +1203,9 @@ function AppMain() {
     mapTrackCommandRef.current(command);
     // Loadout — arm block captures / hold pairing for equipment commands
     loadoutTrackCommandRef.current(command);
+    // Equip reply attribution — record equip sends in true send order so
+    // the filter can tell background re-sync replies from the player's own
+    outputFilterRef.current?.noteEquipCommand(command);
     await sendCommand(command);
   };
 

@@ -42,6 +42,35 @@ const SYNC_GAGS_CLEAR: SyncGagFlags = {
   equip: false,
 };
 
+/*
+ * ---- Equip response attribution ------------------------------------------
+ * The `equip held` reply has no header or footer, and the app's silent
+ * background re-syncs race the player's own eq commands — so deciding
+ * gag-vs-show by line shape and timing is fundamentally ambiguous (it
+ * leaked split responses AND swallowed manual eq output). Instead, every
+ * outgoing equip command is queued in true send order, tagged 'gag'
+ * (app-initiated re-sync) or 'show' (sent by the player), and each reply
+ * block consumes exactly one entry — DartMUD answers commands strictly in
+ * order. A manual eq can therefore never be swallowed by a background
+ * gag, and every doubt (empty queue, expired entry) defaults to 'show'.
+ */
+
+/** A reply block is closed after this much quiet with no foreign line (a
+ *  reply in an otherwise silent room has nothing to terminate it). The
+ *  block itself survives chunk boundaries — replies regularly split
+ *  across TCP reads, even mid-word. */
+const EQUIP_BLOCK_IDLE_MS = 400;
+/** Queue entries older than this are dropped: the reply would have long
+ *  arrived, so a stale entry means it was lost — it must never claim a
+ *  later reply. */
+const EQUIP_ENTRY_TTL_MS = 10_000;
+/** The startSync/startEquipSync "the next equip command is ours"
+ *  handshake expires after this long, so an app send that never goes out
+ *  can't tag a later manual command as gagged. */
+const EQUIP_EXPECT_TTL_MS = 2_000;
+/** Outgoing commands that produce equip-shaped replies. */
+const EQUIP_CMD_RE = /^(?:eq|equip)\b/i;
+
 /** Pre-compiled regexes for score block detection (avoid recompiling on every call) */
 const SCORE_NAME_RE = /^You are .+ the .+\.\s+You are a /;
 const SCORE_STATUS_RE = /^(Needs|Encumbrance|Concentration|Movement|Aura)\s*:/i;
@@ -162,8 +191,20 @@ export class OutputFilter {
   private syncAllocHasData = false;
   /** True after "elemental affinity:" header seen, waiting for values. */
   private syncMagicPending = false;
-  /** True after at least one equip-held line has been gagged. */
-  private syncEquipHasData = false;
+  /* ---- Equip response attribution (always on, independent of sync) ---- */
+  /** Pending equip commands in send order — each reply block pops one. */
+  private equipQueue: { vis: 'gag' | 'show'; at: number }[] = [];
+  /** Timestamp of a pending "next equip command is app-initiated"
+   *  handshake (0 = none). Set by startSync/startEquipSync immediately
+   *  before their own send, consumed by noteEquipCommand. */
+  private equipExpectGaggedAt = 0;
+  /** Limbs seen in the currently open reply block (null = no block open).
+   *  A repeated limb means a NEW reply started with no separator line. */
+  private equipBlockLimbs: Set<string> | null = null;
+  /** Whether the currently open reply block is being gagged. */
+  private equipBlockGagged = false;
+  /** Closes an open reply block after a quiet period. */
+  private equipBlockTimer: ReturnType<typeof setTimeout> | null = null;
   /** True while inside the who list block during sync. */
   private syncInWhoBlock = false;
   /** Accumulated who list lines during sync (stripped). */
@@ -284,6 +325,100 @@ export class OutputFilter {
   }
 
   /**
+   * Record an outgoing command in true send order (the caller taps both
+   * the direct send path and the action-blocker flush). Equip commands
+   * are queued for reply attribution; everything else is ignored.
+   */
+  noteEquipCommand(cmd: string): void {
+    if (!EQUIP_CMD_RE.test(cmd.trim())) return;
+    const now = Date.now();
+    const gagged =
+      this.equipExpectGaggedAt > 0 && now - this.equipExpectGaggedAt < EQUIP_EXPECT_TTL_MS;
+    this.equipExpectGaggedAt = 0;
+    this.equipQueue.push({ vis: gagged ? 'gag' : 'show', at: now });
+  }
+
+  /** Pop the visibility for a reply block that just started. Expired
+   *  entries are dropped first; an empty queue means the reply wasn't
+   *  ours to track — show it. */
+  private shiftEquipVis(): 'gag' | 'show' {
+    const now = Date.now();
+    while (this.equipQueue.length && now - this.equipQueue[0].at > EQUIP_ENTRY_TTL_MS) {
+      this.equipQueue.shift();
+    }
+    return this.equipQueue.shift()?.vis ?? 'show';
+  }
+
+  /** Cancel the pending equip block idle timer. */
+  private clearEquipBlockTimer(): void {
+    if (this.equipBlockTimer) {
+      clearTimeout(this.equipBlockTimer);
+      this.equipBlockTimer = null;
+    }
+  }
+
+  /** (Re)arm the equip block idle timer — closes the block when no
+   *  foreign line arrives to end it (quiet room). */
+  private armEquipBlockTimer(): void {
+    this.clearEquipBlockTimer();
+    this.equipBlockTimer = setTimeout(() => {
+      this.equipBlockTimer = null;
+      if (this.equipBlockLimbs) this.closeEquipBlock();
+    }, EQUIP_BLOCK_IDLE_MS);
+  }
+
+  /** Close the open reply block, and release the equip sync flag once no
+   *  app-initiated reply remains outstanding (lets a login or background
+   *  sync complete). */
+  private closeEquipBlock(): void {
+    this.equipBlockLimbs = null;
+    this.equipBlockGagged = false;
+    this.clearEquipBlockTimer();
+    if (
+      this.syncGags.equip &&
+      this.equipExpectGaggedAt === 0 &&
+      !this.equipQueue.some((e) => e.vis === 'gag')
+    ) {
+      this.syncGags.equip = false;
+      this.checkSyncDone();
+    }
+  }
+
+  /**
+   * Always-on equip reply tracker — runs on every line, independent of
+   * sync state. Returns true when the line belongs to an app-initiated
+   * reply and must be suppressed. Blocks survive chunk boundaries; they
+   * end at the first foreign line, at a repeated limb (a new reply
+   * starting back-to-back with no separator), or on the idle timer.
+   */
+  private trackEquipLine(stripped: string): boolean {
+    if (isEquipNotHoldingLine(stripped)) {
+      // Single-line "nothing held" reply — a complete reply on its own.
+      if (this.equipBlockLimbs) this.closeEquipBlock();
+      const gag = this.shiftEquipVis() === 'gag';
+      this.closeEquipBlock(); // release the sync flag if that was the last one
+      return gag;
+    }
+    if (isEquipHeldLine(stripped)) {
+      const limb = stripped.slice(0, stripped.indexOf(':'));
+      if (this.equipBlockLimbs?.has(limb)) {
+        // eq lists each limb once — a repeat means a new reply started
+        this.closeEquipBlock();
+      }
+      if (!this.equipBlockLimbs) {
+        this.equipBlockLimbs = new Set();
+        this.equipBlockGagged = this.shiftEquipVis() === 'gag';
+      }
+      this.equipBlockLimbs.add(limb);
+      this.armEquipBlockTimer();
+      return this.equipBlockGagged;
+    }
+    // Foreign line — replies are contiguous, so it ends any open block
+    if (this.equipBlockLimbs) this.closeEquipBlock();
+    return false;
+  }
+
+  /**
    * Begin sync gagging for login command responses.
    * Only specific patterns (hp, score, alloc, magic) are suppressed.
    * All other MUD output passes through immediately.
@@ -303,7 +438,9 @@ export class OutputFilter {
     this.syncAllocPending = false;
     this.syncAllocHasData = false;
     this.syncMagicPending = false;
-    this.syncEquipHasData = false;
+    // The caller sends LOGIN_COMMANDS (which include one `equip held`)
+    // immediately after — tag that send as app-initiated.
+    this.equipExpectGaggedAt = Date.now();
     this.resetWhoState();
     this.startSyncTimer(5000);
   }
@@ -320,14 +457,16 @@ export class OutputFilter {
   }
 
   /**
-   * Begin sync gagging for just the `equip held` response — the Loadout
-   * panel's hand re-syncs (manual button and background timer). The gagged
-   * lines still reach onLine, so the tracker parses them normally.
+   * Begin a silent `equip held` re-sync — the Loadout panel's background
+   * timer, delta auto-verify, and re-sync button. The caller MUST send the
+   * equip command immediately after (same tick): this arms a handshake
+   * that tags the next observed equip send as app-initiated ('gag').
+   * Gagged lines still reach onLine, so the tracker parses them normally.
    */
   startEquipSync(): void {
     this.syncActive = true;
     this.syncGags.equip = true;
-    this.syncEquipHasData = false;
+    this.equipExpectGaggedAt = Date.now();
     this.startSyncTimer(5000);
   }
 
@@ -340,7 +479,11 @@ export class OutputFilter {
     this.syncAllocPending = false;
     this.syncAllocHasData = false;
     this.syncMagicPending = false;
-    this.syncEquipHasData = false;
+    this.equipExpectGaggedAt = 0;
+    // Drop app-initiated entries — their replies were consumed or lost
+    // (safety timeout); a stale 'gag' must never claim a later manual
+    // reply. Player entries stay: they default to 'show' anyway.
+    this.equipQueue = this.equipQueue.filter((e) => e.vis === 'show');
     this.resetWhoState();
     this.clearSyncTimer();
     if (wasActive) this.onSyncEnd?.();
@@ -506,30 +649,11 @@ export class OutputFilter {
       }
     }
 
-    // Equip-held block — one "<limb>: <item>" line per occupied limb (or a
-    // single "not holding" line). Checked AFTER the alloc gags: alloc output
-    // also prints limb-header-shaped lines, and the login responses arrive
-    // in command order, so alloc lines must be claimed by their own gag.
-    if (this.syncGags.equip) {
-      if (isEquipNotHoldingLine(stripped)) {
-        this.syncGags.equip = false;
-        this.syncEquipHasData = false;
-        this.checkSyncDone();
-        return true;
-      }
-      if (isEquipHeldLine(stripped)) {
-        this.syncEquipHasData = true;
-        return true;
-      }
-      if (this.syncEquipHasData) {
-        // First non-matching line after the block — response fully consumed
-        this.syncGags.equip = false;
-        this.syncEquipHasData = false;
-        this.checkSyncDone();
-        // Don't gag this line
-      }
-    }
-
+    // Equip replies are NOT handled here — the always-on attribution
+    // tracker (trackEquipLine) runs before this and claims them, keyed by
+    // the queued send order rather than sync state. `syncGags.equip` only
+    // marks that an app-initiated reply is still outstanding, so login /
+    // background syncs end at the right moment (see closeEquipBlock).
     return false;
   }
 
@@ -651,6 +775,18 @@ export class OutputFilter {
         }
       }
 
+      // --- Equip reply attribution (always on) ---
+      // Decides per queued equip command whether a reply block is an
+      // app-initiated silent re-sync (gagged) or the player's own (shown).
+      // Must run on EVERY line: foreign lines close open blocks.
+      if (this.trackEquipLine(stripped)) {
+        // Fire onLine so the loadout tracker still parses the reply
+        this.callbacks.onLine?.(stripped, seg);
+        output += '\x1b[0m'; // reset color state so gagged line doesn't bleed
+        this.lastLineGagged = true;
+        continue;
+      }
+
       // --- Sync gagging (pattern-based, only login command responses) ---
       // Check if this line is a sync response that should be suppressed.
       // Callbacks (onLine, etc.) still fire so parsers always run.
@@ -763,17 +899,6 @@ export class OutputFilter {
     // The count accumulates across filter() calls and flushes when
     // a different line arrives, ensuring a single accurate total.
 
-    // The equip-held response arrives in ONE server write, so once its
-    // lines have been gagged the equip gag ends with the chunk. Without
-    // this, the gag lingered until the next unrelated line (or the 5s
-    // safety timer) and swallowed the output of a MANUAL eq typed moments
-    // after a background re-sync.
-    if (this.syncActive && this.syncGags.equip && this.syncEquipHasData) {
-      this.syncGags.equip = false;
-      this.syncEquipHasData = false;
-      this.checkSyncDone();
-    }
-
     // Flush remaining buffer if it looks like a prompt or is empty.
     if (this.buffer) {
       const strippedRemaining = stripAnsi(this.buffer).trim();
@@ -810,6 +935,11 @@ export class OutputFilter {
   reset(): void {
     this.buffer = '';
     this.chatLineBuffer = null;
+    this.equipQueue = [];
+    this.equipExpectGaggedAt = 0;
+    this.equipBlockLimbs = null;
+    this.equipBlockGagged = false;
+    this.clearEquipBlockTimer();
     this.passiveWhoActive = false;
     this.passiveWhoLines = [];
     this.passiveWhoRawLines = [];
