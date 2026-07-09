@@ -199,7 +199,17 @@ check(
 );
 check('reload marks hands approximate', revived.state.handsStale === true);
 
-// --- 6. Equip sync gag: background re-syncs must not spam the terminal ------
+// --- 6. Equip reply attribution: background re-syncs gagged, manual shown ---
+// Replies are attributed by SEND ORDER, not shape/timing: every equip send
+// is queued tagged gag (app-initiated, via the startEquipSync handshake) or
+// show (the player's own), and each reply block pops one entry. A manual eq
+// must NEVER be swallowed, no matter how it interleaves with re-syncs.
+// `bg()` mimics useTimerEngines.refreshEquip + the App.tsx send tap.
+const bg = (f: OutputFilter) => {
+  f.startEquipSync();
+  f.noteEquipCommand('equip held');
+};
+
 {
   const seenByParsers: string[] = [];
   const filter = new OutputFilter({
@@ -208,7 +218,7 @@ check('reload marks hands approximate', revived.state.handsStale === true);
       return undefined;
     },
   });
-  filter.startEquipSync();
+  bg(filter);
   const shown = filter.filter(
     'upper left hand: a bloody axe\r\n' +
       'lower left hand: a large black steel great chain\r\n' +
@@ -225,30 +235,73 @@ check('reload marks hands approximate', revived.state.handsStale === true);
   // Empty hands: the reply is a single "No equipment to show." line — the
   // gag must swallow it (it leaked on every background re-sync live).
   const filterEmpty = new OutputFilter({ onLine: () => undefined });
-  filterEmpty.startEquipSync();
+  bg(filterEmpty);
   const shownEmpty = filterEmpty.filter(
     'No equipment to show.\r\nA rabbit hops in from the west.\r\n'
   );
   check('gag: empty-hands reply suppressed', !shownEmpty.includes('No equipment to show'));
   check('gag: line after empty reply still shown', shownEmpty.includes('rabbit'));
 
-  // Without an armed sync, typed eq output passes through untouched
+  // Without any pending background sync, typed eq output passes through
   const filter2 = new OutputFilter({ onLine: () => undefined });
+  filter2.noteEquipCommand('eq');
   const shown2 = filter2.filter('upper left hand: a bloody axe\r\n');
   check('gag: typed eq output is NOT gagged', shown2.includes('bloody axe'));
 }
 
-// --- 7. Equip sync gag across chunk boundaries -------------------------------
-// The response routinely spans multiple TCP reads (session logs from
+// --- 7. Manual eq must survive every race with background re-syncs ----------
+{
+  // Manual eq typed AFTER a hold/summon armed the auto-verify (the live
+  // bug: the verify's gag swallowed the player's own reply). Both replies
+  // arrive in ONE chunk, back-to-back with only a repeated limb as the
+  // boundary — the verify reply is gagged, the manual one shown.
+  const f1 = new OutputFilter({ onLine: () => undefined });
+  bg(f1);
+  f1.noteEquipCommand('equip held'); // the player's own eq, sent moments later
+  const s1 = f1.filter(
+    'upper left hand: a bloody axe\r\n' +
+      'lower left hand: a great chain\r\n' +
+      'upper left hand: a bloody axe\r\n' +
+      'lower left hand: a great chain\r\n'
+  );
+  check('race: verify reply gagged', s1.indexOf('bloody axe') === s1.lastIndexOf('bloody axe'));
+  check('race: manual reply after verify SHOWN', s1.includes('bloody axe'));
+
+  // Manual eq typed BEFORE the debounced verify fired — reply order flips:
+  // the manual reply comes first and must be shown, the verify's gagged.
+  const f2 = new OutputFilter({ onLine: () => undefined });
+  f2.noteEquipCommand('eq'); // player's eq sent first
+  bg(f2); // verify fires 400ms later
+  const s2 = f2.filter('No equipment to show.\r\nNo equipment to show.\r\n');
+  check(
+    'race: manual reply before verify SHOWN',
+    (s2.match(/No equipment to show/g) ?? []).length === 1
+  );
+
+  // Login: one login-sync eq plus two wear-burst verifies = three queued
+  // background sends; ALL three "No equipment to show." replies gag (live,
+  // the single-shot gag only ate the first and the other two leaked).
+  const f3 = new OutputFilter({ onLine: () => undefined });
+  bg(f3);
+  bg(f3);
+  bg(f3);
+  const s3 = f3.filter(
+    'No equipment to show.\r\n> No equipment to show.\r\n> No equipment to show.\r\n'
+  );
+  check('login: all three background replies gagged', !s3.includes('No equipment to show'));
+}
+
+// --- 8. Gagged replies must survive chunk boundaries -------------------------
+// The reply routinely spans multiple TCP reads (session logs from
 // 2026-07-08 show it splitting even mid-word at the 5-minute refresh
-// bursts). Ending the gag at end-of-chunk leaked every line in the next
-// read — the gag must survive the boundary and end on idle instead.
+// bursts). Blocks are keyed to queue entries, so a boundary mid-reply
+// must not end the gag.
 (async () => {
   const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
   // Split BETWEEN lines: chunk 1 ends exactly at a newline
   const fa = new OutputFilter({ onLine: () => undefined });
-  fa.startEquipSync();
+  bg(fa);
   const a1 = fa.filter('upper left hand: a bloody axe\r\n');
   const a2 = fa.filter(
     'lower left hand: a large black steel great chain\r\nA rabbit hops in from the west.\r\n'
@@ -259,17 +312,21 @@ check('reload marks hands approximate', revived.state.handsStale === true);
 
   // Split MID-LINE: chunk 1 ends in the middle of an item name
   const fb = new OutputFilter({ onLine: () => undefined });
-  fb.startEquipSync();
+  bg(fb);
   const b1 = fb.filter('upper left hand: a bloody axe\r\nlower left ha');
   const b2 = fb.filter('nd: a large black steel great chain\r\n');
   check('gag: mid-line split — 1st chunk gagged', !b1.includes('bloody axe'));
   check('gag: mid-line split — rejoined line still gagged', !b2.includes('great chain'));
 
-  // After the idle window lapses, a manual eq must NOT be swallowed
+  // A quiet room gives the reply no foreign line to end it — the idle
+  // timer must close the block and let the sync state wind down, and a
+  // manual eq afterwards is (as always) shown.
   const fc = new OutputFilter({ onLine: () => undefined });
-  fc.startEquipSync();
+  bg(fc);
   fc.filter('upper left hand: a bloody axe\r\n');
-  await sleep(700); // > EQUIP_GAG_IDLE_MS (400) + the 250ms sync-end grace
+  await sleep(700); // > EQUIP_BLOCK_IDLE_MS (400) + the 250ms sync-end grace
+  check('gag: sync state wound down after idle', !fc.isSyncing);
+  fc.noteEquipCommand('eq');
   const c2 = fc.filter('upper left hand: a bloody axe\r\n');
   check('gag: manual eq after idle window is shown', c2.includes('bloody axe'));
 
