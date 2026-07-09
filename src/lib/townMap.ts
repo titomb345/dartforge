@@ -161,6 +161,27 @@ export function hexAnchorKey(island: number, q: number, r: number): string {
   return `${island}:${q},${r}`;
 }
 
+/**
+ * Exits-line ground truth on a recorded link: walking `dir` out of `from`
+ * requires `from` to have EVER listed that exit, and `to` to have EVER
+ * listed the way back (unless `to` offers named exits — "out"-style
+ * returns). A link violating either side is a queue-desync scar, not
+ * geometry: an unrecognized soft move failure shifts the FIFO and the next
+ * block gets linked in the DEAD move's direction (Soriktos: the Blue
+ * Pearl's one-exit Garden Courtyard wired west of the Salon). exitsEver is
+ * the union of all sightings, so world-state truncation (portcullis,
+ * darkness) only bites rooms sighted exclusively in that state — and a
+ * wrongly severed link re-forms on the next real walk.
+ */
+export function linkContradicted(from: TownRoom, dir: TownDir, to: TownRoom): boolean {
+  if (from.exitsEver.length > 0 && !from.exitsEver.includes(dir)) return true;
+  return (
+    to.exitsEver.length > 0 &&
+    !to.exitsEver.includes(TOWN_REVERSE[dir]) &&
+    to.namedExits.length === 0
+  );
+}
+
 // ---------------------------------------------------------------------------
 // Store
 // ---------------------------------------------------------------------------
@@ -1155,6 +1176,20 @@ export class TownMapStore {
           if (!dest) continue;
           const dz = dir === 'u' ? 1 : dir === 'd' ? -1 : 0;
           if (dest.z !== room.z + dz) delete room.links[dir];
+        }
+      }
+    }
+    // Second link invariant: a link must be possible per both rooms' own
+    // exits lines (see linkContradicted). Severs queue-desync scars from
+    // unrecognized soft move failures, which healed-over saves carry as
+    // wrong-direction links — those links then block the reuse guards from
+    // ever re-matching the real room, duplicating it on every revisit.
+    for (const town of store.towns.values()) {
+      for (const room of town.rooms.values()) {
+        for (const [dir, id] of Object.entries(room.links) as [TownDir, number][]) {
+          const dest = id !== undefined ? town.rooms.get(id) : undefined;
+          if (!dest) continue;
+          if (linkContradicted(room, dir, dest)) delete room.links[dir];
         }
       }
     }

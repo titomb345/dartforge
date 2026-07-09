@@ -61,8 +61,13 @@ const SPEEDWALK_SEG = /(\d+)(n|s|e|w|ne|nw|se|sw|u|d)/gi;
 function expandRawInput(raw: string): string[] {
   const out: string[] = [];
   for (const part of raw.split(';')) {
-    const p = part.trim();
+    let p = part.trim();
     if (!p) continue;
+    // door built-in: logs record the raw input, but live the client expands
+    // it to unlock/open/<dir>/close/lock and TRACKS the move — replay the
+    // move or every door crossing resolves as a floater.
+    const door = /^\/?doorp?\s*(ne|se|nw|sw|n|s|e|w|d|u|in|out)\s*$/i.exec(p);
+    if (door) p = door[1];
     if (SPEEDWALK_LINE.test(p)) {
       SPEEDWALK_SEG.lastIndex = 0;
       let m;
