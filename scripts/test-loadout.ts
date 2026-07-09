@@ -238,5 +238,41 @@ check('reload marks hands approximate', revived.state.handsStale === true);
   check('gag: typed eq output is NOT gagged', shown2.includes('bloody axe'));
 }
 
-console.log(failed ? '\nFAILURES above' : '\nAll loadout tracker checks passed');
-process.exit(failed);
+// --- 7. Equip sync gag across chunk boundaries -------------------------------
+// The response routinely spans multiple TCP reads (session logs from
+// 2026-07-08 show it splitting even mid-word at the 5-minute refresh
+// bursts). Ending the gag at end-of-chunk leaked every line in the next
+// read — the gag must survive the boundary and end on idle instead.
+(async () => {
+  const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+
+  // Split BETWEEN lines: chunk 1 ends exactly at a newline
+  const fa = new OutputFilter({ onLine: () => undefined });
+  fa.startEquipSync();
+  const a1 = fa.filter('upper left hand: a bloody axe\r\n');
+  const a2 = fa.filter(
+    'lower left hand: a large black steel great chain\r\nA rabbit hops in from the west.\r\n'
+  );
+  check('gag: line-boundary split — 1st chunk gagged', !a1.includes('bloody axe'));
+  check('gag: line-boundary split — 2nd chunk still gagged', !a2.includes('great chain'));
+  check('gag: foreign line after split response shown', a2.includes('rabbit'));
+
+  // Split MID-LINE: chunk 1 ends in the middle of an item name
+  const fb = new OutputFilter({ onLine: () => undefined });
+  fb.startEquipSync();
+  const b1 = fb.filter('upper left hand: a bloody axe\r\nlower left ha');
+  const b2 = fb.filter('nd: a large black steel great chain\r\n');
+  check('gag: mid-line split — 1st chunk gagged', !b1.includes('bloody axe'));
+  check('gag: mid-line split — rejoined line still gagged', !b2.includes('great chain'));
+
+  // After the idle window lapses, a manual eq must NOT be swallowed
+  const fc = new OutputFilter({ onLine: () => undefined });
+  fc.startEquipSync();
+  fc.filter('upper left hand: a bloody axe\r\n');
+  await sleep(700); // > EQUIP_GAG_IDLE_MS (400) + the 250ms sync-end grace
+  const c2 = fc.filter('upper left hand: a bloody axe\r\n');
+  check('gag: manual eq after idle window is shown', c2.includes('bloody axe'));
+
+  console.log(failed ? '\nFAILURES above' : '\nAll loadout tracker checks passed');
+  process.exit(failed);
+})();

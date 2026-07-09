@@ -42,6 +42,17 @@ const SYNC_GAGS_CLEAR: SyncGagFlags = {
   equip: false,
 };
 
+/**
+ * How long the equip sync gag survives after the last gagged equip line.
+ * The `equip held` response routinely spans multiple TCP reads (the
+ * 5-minute who+equip refresh burst splits mid-response, even mid-word), so
+ * the gag cannot end at end-of-chunk — that leaked the remainder of split
+ * responses. It ends at the first foreign line after the block, or after
+ * this brief quiet period, so a manual eq typed moments after a background
+ * re-sync is still never swallowed.
+ */
+const EQUIP_GAG_IDLE_MS = 400;
+
 /** Pre-compiled regexes for score block detection (avoid recompiling on every call) */
 const SCORE_NAME_RE = /^You are .+ the .+\.\s+You are a /;
 const SCORE_STATUS_RE = /^(Needs|Encumbrance|Concentration|Movement|Aura)\s*:/i;
@@ -164,6 +175,9 @@ export class OutputFilter {
   private syncMagicPending = false;
   /** True after at least one equip-held line has been gagged. */
   private syncEquipHasData = false;
+  /** Ends the equip gag after a quiet period — the response can span
+   *  multiple TCP reads, so its end can't be tied to a chunk boundary. */
+  private equipGagTimer: ReturnType<typeof setTimeout> | null = null;
   /** True while inside the who list block during sync. */
   private syncInWhoBlock = false;
   /** Accumulated who list lines during sync (stripped). */
@@ -283,6 +297,32 @@ export class OutputFilter {
     }, ms);
   }
 
+  /** Cancel the pending equip gag idle timer. */
+  private clearEquipGagTimer(): void {
+    if (this.equipGagTimer) {
+      clearTimeout(this.equipGagTimer);
+      this.equipGagTimer = null;
+    }
+  }
+
+  /** (Re)arm the equip gag idle timer — called on every gagged equip line
+   *  so the gag outlives chunk boundaries but not a quiet period. */
+  private startEquipGagTimer(): void {
+    this.clearEquipGagTimer();
+    this.equipGagTimer = setTimeout(() => {
+      this.equipGagTimer = null;
+      if (this.syncActive && this.syncGags.equip) this.endEquipGag();
+    }, EQUIP_GAG_IDLE_MS);
+  }
+
+  /** End the equip gag (response consumed, foreign line seen, or idle). */
+  private endEquipGag(): void {
+    this.clearEquipGagTimer();
+    this.syncGags.equip = false;
+    this.syncEquipHasData = false;
+    this.checkSyncDone();
+  }
+
   /**
    * Begin sync gagging for login command responses.
    * Only specific patterns (hp, score, alloc, magic) are suppressed.
@@ -304,6 +344,7 @@ export class OutputFilter {
     this.syncAllocHasData = false;
     this.syncMagicPending = false;
     this.syncEquipHasData = false;
+    this.clearEquipGagTimer();
     this.resetWhoState();
     this.startSyncTimer(5000);
   }
@@ -328,6 +369,8 @@ export class OutputFilter {
     this.syncActive = true;
     this.syncGags.equip = true;
     this.syncEquipHasData = false;
+    // A stale idle timer from a previous re-sync must not kill this one
+    this.clearEquipGagTimer();
     this.startSyncTimer(5000);
   }
 
@@ -341,6 +384,7 @@ export class OutputFilter {
     this.syncAllocHasData = false;
     this.syncMagicPending = false;
     this.syncEquipHasData = false;
+    this.clearEquipGagTimer();
     this.resetWhoState();
     this.clearSyncTimer();
     if (wasActive) this.onSyncEnd?.();
@@ -512,20 +556,20 @@ export class OutputFilter {
     // in command order, so alloc lines must be claimed by their own gag.
     if (this.syncGags.equip) {
       if (isEquipNotHoldingLine(stripped)) {
-        this.syncGags.equip = false;
-        this.syncEquipHasData = false;
-        this.checkSyncDone();
+        this.endEquipGag();
         return true;
       }
       if (isEquipHeldLine(stripped)) {
         this.syncEquipHasData = true;
+        // The response can span multiple TCP reads (mid-line or between
+        // lines), so the gag must survive chunk boundaries — it ends at
+        // the first foreign line below, or after a brief quiet period.
+        this.startEquipGagTimer();
         return true;
       }
       if (this.syncEquipHasData) {
         // First non-matching line after the block — response fully consumed
-        this.syncGags.equip = false;
-        this.syncEquipHasData = false;
-        this.checkSyncDone();
+        this.endEquipGag();
         // Don't gag this line
       }
     }
@@ -763,16 +807,12 @@ export class OutputFilter {
     // The count accumulates across filter() calls and flushes when
     // a different line arrives, ensuring a single accurate total.
 
-    // The equip-held response arrives in ONE server write, so once its
-    // lines have been gagged the equip gag ends with the chunk. Without
-    // this, the gag lingered until the next unrelated line (or the 5s
-    // safety timer) and swallowed the output of a MANUAL eq typed moments
-    // after a background re-sync.
-    if (this.syncActive && this.syncGags.equip && this.syncEquipHasData) {
-      this.syncGags.equip = false;
-      this.syncEquipHasData = false;
-      this.checkSyncDone();
-    }
+    // Note: the equip gag is NOT ended at chunk boundaries. The response
+    // regularly spans multiple TCP reads (session logs show it splitting
+    // even mid-word), so ending the gag with the chunk leaked whatever
+    // lines arrived in the next read. The idle timer armed per gagged
+    // equip line ends it shortly after the response instead, which still
+    // keeps a MANUAL eq typed moments later from being swallowed.
 
     // Flush remaining buffer if it looks like a prompt or is empty.
     if (this.buffer) {
