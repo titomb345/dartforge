@@ -453,7 +453,7 @@ export function MapPanel({ mode = 'slideout' }: PinnablePanelProps) {
                 townId={displayedTownId}
                 floor={floor}
                 showLabels={mapShowLabels}
-                dimmed={!browsing && !indoors}
+                dimmed={!browsing && !indoors && !fullscreen}
                 onWalkTo={browsing ? undefined : walkToRoom}
                 focus={focusRoom}
                 onStairJump={handleStairJump}
@@ -465,7 +465,7 @@ export function MapPanel({ mode = 'slideout' }: PinnablePanelProps) {
               height={size.height}
               showLabels={mapShowLabels}
               showFog={mapShowFog}
-              dimmed={indoors}
+              dimmed={indoors && !fullscreen}
               onWalkTo={walkTo}
             />
           ))}
