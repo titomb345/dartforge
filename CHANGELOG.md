@@ -10,6 +10,12 @@ The `[Unreleased]` header controls automatic version bumping on merge:
 - `[Unreleased-minor]` → 0.1.0 → 0.2.0
 - `[Unreleased-major]` → 0.1.0 → 1.0.0
 
+## [Unreleased-patch]
+
+### Changed
+
+- The full-screen map no longer applies the away-from-this-map dim (shown when you're in town on the hex map, or outdoors on a town map). In the small panel the dim is a useful "you're not here" cue, but in full screen it darkened the entire display; the IN TOWN / OUTDOORS badge already carries that signal
+
 ## [1.15.0] - 2026-07-17
 
 ### Changed
