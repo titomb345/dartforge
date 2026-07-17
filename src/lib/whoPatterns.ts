@@ -7,10 +7,9 @@ export interface WhoPlayer {
   name: string;
   /** Guild tag, e.g. "MG", "HG", or null */
   guild: string | null;
-  /** Player state */
-  state: 'online' | 'idle' | 'away' | 'busy' | 'walkup';
-  /** Idle duration string, e.g. "28s", "5m", or null if not idle */
-  idleTime: string | null;
+  /** Player soul state. Vibrant = active, engaged = busy, distant = afk,
+   *  receptive = open to walkups, dim = inactive (or dead for a while). */
+  state: 'vibrant' | 'engaged' | 'distant' | 'receptive' | 'dim';
   /** Theme color key extracted from the player's ANSI name color, or null for default */
   nameColor: ThemeColorKey | null;
   /** True if this entry is a who title (doesn't match "Name the race" pattern) */
@@ -42,7 +41,7 @@ const WHO_HEADER_RE = /^\s*Name\s+(?:Idle(?: Time)?|State)(?:\s+Name\s+(?:Idle(?
 
 /** Real DartMUD names follow "Name the race", optionally with a title prefix like "Master" */
 const REAL_NAME_RE = /^(?:[A-Z][a-z]+ )*[A-Z][a-z]+ the \w+$/;
-const WHO_PLAYER_RE = /^\s*(?:\[(\w+)\]\s+)?(.+?)\s{2,}(Online|Away|Busy|Walkup|Idle(?:\s+\S+)*)\s*$/;
+const WHO_PLAYER_RE = /^\s*(?:\[(\w+)\]\s+)?(.+?)\s{2,}(Vibrant|Engaged|Distant|Receptive|Dim)\s*$/;
 
 // Variation 1: "We extrapolate that there are N players/people on. Only N returned..."
 // Also handles "...N players, but Only N..." alternative phrasing.
@@ -74,14 +73,10 @@ export function parseWhoPlayerLine(stripped: string): WhoPlayer | null {
   const m = WHO_PLAYER_RE.exec(stripped);
   if (!m) return null;
   const name = m[2].trim();
-  const stateRaw = m[3].trim();
-  const isIdle = stateRaw.startsWith('Idle');
-  const stateLower = stateRaw.toLowerCase() as WhoPlayer['state'];
   return {
     guild: m[1] ?? null,
     name,
-    state: isIdle ? 'idle' : stateLower,
-    idleTime: isIdle ? stateRaw.replace(/^Idle\s*/, '') || null : null,
+    state: m[3].toLowerCase() as WhoPlayer['state'],
     nameColor: null,
     isTitle: !REAL_NAME_RE.test(name),
   };
@@ -89,10 +84,9 @@ export function parseWhoPlayerLine(stripped: string): WhoPlayer | null {
 
 /**
  * Regex to find state boundaries in a who line. Used to split two-column
- * lines into individual player segments. Idle durations use `\d+\w+` tokens
- * (e.g. "6m", "54s") so the match stops before the next player entry.
+ * lines into individual player segments.
  */
-const WHO_STATE_SPLIT_RE = /(Online|Away|Busy|Walkup|Idle(?:\s+\d+\w+)*)/g;
+const WHO_STATE_SPLIT_RE = /(Vibrant|Engaged|Distant|Receptive|Dim)/g;
 
 /**
  * Parse all players from a who line (handles both single- and two-column format).

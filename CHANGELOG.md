@@ -10,6 +10,16 @@ The `[Unreleased]` header controls automatic version bumping on merge:
 - `[Unreleased-minor]` → 0.1.0 → 0.2.0
 - `[Unreleased-major]` → 0.1.0 → 1.0.0
 
+## [Unreleased-minor]
+
+### Changed
+
+- The Who panel now understands DartMUD's reworked who list. The July reboot re-labeled player states from MMO terms to soul senses — Vibrant (online), Engaged (busy), Distant (afk), Receptive (walkup), and Dim (inactive, including the long-dead) — and removed idle times from the list entirely, which broke parsing. Every state now renders as a colored dot (vibrant green, engaged orange, distant yellow, receptive blue, dim gray; hover a dot for the state name), and the mobile companion shows the same state dots where idle times used to be
+
+### Fixed
+
+- The mobile companion terminal now renders inverse-video ANSI (SGR 7/27), which DartMUD uses for guild tags — the black-on-white [HG] tag in who output previously lost its colors and displayed as plain default-colored text on the phone
+
 ## [1.14.2] - 2026-07-09
 
 ### Fixed
