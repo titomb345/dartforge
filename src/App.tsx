@@ -2019,7 +2019,6 @@ function AppMain() {
             name: p.name,
             guild: p.guild,
             state: p.state,
-            idle: p.idleTime,
             color: p.nameColor ? theme[p.nameColor] : null,
             isTitle: p.isTitle,
           })),

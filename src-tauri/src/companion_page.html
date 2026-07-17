@@ -276,7 +276,7 @@
   /* Per-guild colored tag (brackets + abbreviation), mirrors the desktop
      Who panel's GUILD_STYLES rather than a flat purple. */
   .who-guild-tag { font-size: 9px; font-weight: bold; white-space: nowrap; flex-shrink: 0; }
-  .who-idle { color: var(--fg-dim); font-size: 10px; margin-left: auto; padding-left: 8px; }
+  .who-state { width: 5px; height: 5px; border-radius: 50%; margin-left: auto; align-self: center; flex-shrink: 0; }
   .who-row.title-row { color: var(--fg-dim); font-style: italic; }
   .counter-row { display: flex; align-items: baseline; gap: 8px; padding: 3px 0; flex-wrap: wrap; }
   .counter-name { font-weight: bold; }
@@ -389,6 +389,9 @@
   .ansi-bg-bright-magenta { background-color: var(--ansi-bright-magenta); }
   .ansi-bg-bright-cyan { background-color: var(--ansi-bright-cyan); }
   .ansi-bg-bright-white { background-color: var(--ansi-bright-white); }
+  /* Inverse video (SGR 7) with default fg/bg: swap terminal fg and bg. */
+  .ansi-inv-bg { background-color: var(--out-fg); }
+  .ansi-inv-fg { color: var(--bg); }
 
   /* ── Scroll-to-bottom button ────────────────────── */
   #scroll-notice {
@@ -724,26 +727,38 @@
     106: 'ansi-bg-bright-cyan', 107: 'ansi-bg-bright-white'
   };
 
-  // Stateful SGR parser. Tracks bold + current fg/bg across escapes and emits
-  // one span per text run. Bold upgrades a normal foreground (30-37) to its
-  // bright variant, matching xterm's default drawBoldTextInBrightColors — many
-  // MUDs (DartMUD included) send "bright" colors as bold + normal color.
+  // Stateful SGR parser. Tracks bold + inverse + current fg/bg across escapes
+  // and emits one span per text run. Bold upgrades a normal foreground (30-37)
+  // to its bright variant, matching xterm's default drawBoldTextInBrightColors
+  // — many MUDs (DartMUD included) send "bright" colors as bold + normal
+  // color. Inverse (SGR 7) swaps fg/bg, which DartMUD uses for guild tags
+  // like the black-on-white [HG].
   function ansiToHtml(text) {
     var result = '';
     var spanOpen = false;
     var bold = false;
+    var inverse = false;
     var fg = null;      // numeric SGR code (30-37 / 90-97) or null
     var bgClass = null; // resolved ansi-bg-* class or null
 
     function stateClasses() {
       var cls = [];
       if (bold) cls.push('ansi-bold');
+      var fgCls = null;
       if (fg !== null) {
         var code = fg;
         if (bold && code >= 30 && code <= 37) code += 60; // bright variant
-        cls.push(ANSI_FG[code]);
+        fgCls = ANSI_FG[code];
       }
-      if (bgClass) cls.push(bgClass);
+      var bgCls = bgClass;
+      if (inverse) {
+        var swappedFg = bgCls ? bgCls.replace('ansi-bg-', 'ansi-') : 'ansi-inv-fg';
+        var swappedBg = fgCls ? fgCls.replace('ansi-', 'ansi-bg-') : 'ansi-inv-bg';
+        fgCls = swappedFg;
+        bgCls = swappedBg;
+      }
+      if (fgCls) cls.push(fgCls);
+      if (bgCls) cls.push(bgCls);
       return cls;
     }
     function reopenSpan() {
@@ -760,9 +775,11 @@
         var codes = match[1].split(';').map(Number);
         for (var j = 0; j < codes.length; j++) {
           var code = codes[j];
-          if (code === 0) { bold = false; fg = null; bgClass = null; }
+          if (code === 0) { bold = false; inverse = false; fg = null; bgClass = null; }
           else if (code === 1) bold = true;
+          else if (code === 7) inverse = true;
           else if (code === 22) bold = false;
+          else if (code === 27) inverse = false;
           else if (code === 39) fg = null;
           else if (code === 49) bgClass = null;
           else if (ANSI_FG[code]) fg = code;
@@ -973,6 +990,17 @@
     clockEl.innerHTML = html;
   }
 
+  // Soul-state colors — mirror the desktop Who panel's state colors. Values
+  // are theme color keys resolved against currentTheme at render time, or
+  // literal hex for states with no ANSI theme slot (engaged = accent orange).
+  var WHO_STATE_COLORS = {
+    vibrant: 'brightGreen',
+    engaged: '#f97316',
+    distant: 'brightYellow',
+    receptive: 'brightBlue',
+    dim: 'brightBlack'
+  };
+
   function renderWho(d) {
     lastWhoData = d;
     var players = d && d.players ? d.players : [];
@@ -995,10 +1023,12 @@
         continue;
       }
       var color = p.color ? ('' + p.color).replace(/"/g, '') : 'var(--out-fg)';
+      var stateKey = WHO_STATE_COLORS[p.state];
+      var stateColor = stateKey && (currentTheme[stateKey] || stateKey);
       html += '<div class="who-row">' +
         (p.guild ? guildTagHtml(p.guild) : '') +
         '<span style="color:' + color + '">' + esc(p.name) + '</span>' +
-        (p.idle ? '<span class="who-idle">' + esc(p.idle) + '</span>' : '') +
+        (stateColor ? '<span class="who-state" style="background:' + stateColor + '"></span>' : '') +
         '</div>';
     }
     whoPanel.innerHTML = html;

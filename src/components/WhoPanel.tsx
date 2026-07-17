@@ -63,26 +63,32 @@ function GuildTag({ guild }: { guild: string }) {
 }
 
 const STATE_THEME_COLORS: Record<string, ThemeColorKey> = {
-  online: 'brightGreen',
-  away: 'brightYellow',
-  busy: 'brightRed',
-  walkup: 'brightBlue',
+  vibrant: 'brightGreen',
+  distant: 'brightYellow',
+  receptive: 'brightBlue',
+  dim: 'brightBlack',
+};
+
+/** States with no matching ANSI theme slot use a fixed accent color. */
+const STATE_FIXED_COLORS: Record<string, string> = {
+  engaged: '#f97316',
 };
 
 const STATE_LABELS: Record<string, string> = {
-  online: 'Online',
-  away: 'Away',
-  busy: 'Busy',
-  walkup: 'Walkup',
+  vibrant: 'Vibrant',
+  engaged: 'Engaged',
+  distant: 'Distant',
+  receptive: 'Receptive',
+  dim: 'Dim',
 };
 
 function StateDot({ state }: { state: string }) {
   const theme = useTerminalTheme();
-  const colorKey = STATE_THEME_COLORS[state] ?? 'white';
+  const color = STATE_FIXED_COLORS[state] ?? theme[STATE_THEME_COLORS[state] ?? 'white'];
   return (
     <span
       className="w-[5px] h-[5px] rounded-full shrink-0"
-      style={{ backgroundColor: theme[colorKey] }}
+      style={{ backgroundColor: color }}
       title={STATE_LABELS[state] ?? state}
     />
   );
@@ -273,16 +279,7 @@ function PlayerRow({
         </span>
 
         {/* State */}
-        {player.state === 'idle' ? (
-          <span
-            className="text-[9px] font-mono text-white shrink-0"
-            title={`Idle ${player.idleTime}`}
-          >
-            {player.idleTime}
-          </span>
-        ) : (
-          <StateDot state={player.state} />
-        )}
+        <StateDot state={player.state} />
       </div>
 
       {/* Inline edit form */}

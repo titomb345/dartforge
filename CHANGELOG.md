@@ -10,6 +10,21 @@ The `[Unreleased]` header controls automatic version bumping on merge:
 - `[Unreleased-minor]` → 0.1.0 → 0.2.0
 - `[Unreleased-major]` → 0.1.0 → 1.0.0
 
+## [Unreleased-minor]
+
+### Changed
+
+- The Who panel now understands DartMUD's reworked who list. The July reboot re-labeled player states from MMO terms to soul senses — Vibrant (online), Engaged (busy), Distant (afk), Receptive (walkup), and Dim (inactive, including the long-dead) — and removed idle times from the list entirely, which broke parsing. Every state now renders as a colored dot (vibrant green, engaged orange, distant yellow, receptive blue, dim gray; hover a dot for the state name), and the mobile companion shows the same state dots where idle times used to be
+
+### Fixed
+
+- The mobile companion terminal now renders inverse-video ANSI (SGR 7/27), which DartMUD uses for guild tags — the black-on-white [HG] tag in who output previously lost its colors and displayed as plain default-colored text on the phone
+- The town mapper no longer remaps rooms it has already visited into duplicates (Soriktos was the worst offender: revisiting the same streets kept planting second copies of rooms one cell away from the originals). Three root causes, each reproduced from the session logs and now regression-tested (`scripts/town-tests/test-soft-fail-desync.ts`):
+  - **Moves that fail with room-specific flavor text desynced the tracker.** DartMUD rooms can refuse a move with arbitrary prose ("A very large eunuch, apparently the cook, glares at you… You decide it's not a good idea to go in there.") that no pattern list can ever cover, so the dead move stayed queued and the NEXT room got filed in the dead move's direction — the Blue Pearl's Garden Courtyard spent two days wired west of the Salon when it really lies south, and every true arrival after that created a fresh duplicate. The arrival room's own exits line is now treated as ground truth: a block that doesn't list the way back for the queued move can't be that move's destination, so the dead move is dropped and the room resolves under the move that actually produced it. Genuinely one-way arrivals (sloped trails where "down" returns as "north" — about 2% of all moves) are unaffected: the queue is only repaired when a better explanation is actually waiting behind the dead move
+  - **Word-identical twin rooms stole each other's side rooms.** The Royal Stables are three segments with the same name, description, and exits, each with its own pair of word-identical Stalls — and the duplicate-healing rule ("this room's recorded neighbor looks exactly like where I'm standing, so I'm probably standing on a duplicate of it") couldn't tell "duplicate of current" from "identical twin standing next to current". Stepping into segment B's stall reused segment A's stall, silently shifting the whole walk one cell sideways — every move after that resolved one room off, spawning duplicate stalls and swallowing real moves as re-prints. Rooms you have walked between are provably distinct, never duplicates of each other, and the healing rule now refuses them
+  - **Wrong-direction links blocked their own repair forever.** The guard that stops a room from being reused as two different neighbors of the same room ("the Landing knows the vestibule is north — it can't also be south") was also protecting the poison links the desync created, so the map could never heal itself. A link is now ignored (and severed on load) when the linked rooms' own exits lines say it's impossible — the next real walk re-maps it correctly. Existing scarred maps heal the first time they're loaded
+- Replay validation now mirrors the live client faithfully: session-log replays use the logs' real timestamps (login gaps and queue expiry behave as they did live), replay `door <dir>` as the movement it expands to live (door crossings used to replay as unexplained floaters — the corpus replay counted 15 keep Vestibules where the real keep has 4), and round-trip the map store between chained sessions so the load-time cleanses run. Corpus accuracy moved from 74.9% to 81.9% expected resolutions, unexplained rooms dropped 36 → 7, and every remaining duplicate fingerprint group in the corpus map is a genuinely word-identical set of rooms
+
 ## [1.14.2] - 2026-07-09
 
 ### Fixed

@@ -25,7 +25,14 @@ import {
   type TownDir,
   type TownRoomBlock,
 } from './townParser';
-import { TownMapStore, descUsable, type Town, type TownRoom, type TownPos } from './townMap';
+import {
+  TownMapStore,
+  descUsable,
+  linkContradicted,
+  type Town,
+  type TownRoom,
+  type TownPos,
+} from './townMap';
 
 // ---------------------------------------------------------------------------
 // Tuning
@@ -291,6 +298,44 @@ export class TownLocalizer {
       return this.relocalize(block, town, anchor, now);
     }
 
+    // --- Queue repair: the block's own exits are arrival-side ground truth ---
+    // A room whose exits line omits the way back (and offers no named exits)
+    // is very unlikely to be the destination of the queue-head move. Soft
+    // move failures with room-specific flavor text ("A very large eunuch ...
+    // You decide it's not a good idea to go in there.") are unrecognizable
+    // in general and leave their dead move at the head; consuming it for the
+    // NEXT move's block places the room in the wrong direction and wires a
+    // poison link that the twin-guards below then defend forever (Soriktos:
+    // the Blue Pearl's one-exit Garden Courtyard spent days wired WEST of
+    // the Salon, and every true southern arrival then duplicated it).
+    // Genuinely non-reciprocal arrivals DO exist (~2% of corpus moves:
+    // sloped trails where "down" returns as "north", the Ancient Temple's
+    // Eye) — so a contradicted head is only dropped when the block has a
+    // strictly BETTER explanation: a later queued move whose reverse the
+    // block lists, or a verbatim re-print of the current room (dead move
+    // followed by a look). A recorded link whose destination matches the
+    // block also keeps the head: a walked link is proof the exit exists
+    // even when state-truncated exits lines (portcullis, darkness) hide it.
+    if (block.exits.dirs.length > 0 && block.exits.named.length === 0) {
+      const reprint =
+        this.map.matchesStrict(current, block) &&
+        (!descUsable(block.desc) ||
+          !descUsable(current.desc) ||
+          this.map.descAgrees(current, block));
+      while (this.queue[0]?.kind === 'dir') {
+        const head = this.queue[0] as { kind: 'dir'; dir: TownDir; at: number };
+        if (block.exits.dirs.includes(TOWN_REVERSE[head.dir])) break;
+        const linked = current.links[head.dir];
+        const dest = linked !== undefined ? town.rooms.get(linked) : undefined;
+        if (dest && this.map.matches(dest, block)) break;
+        const laterFit = this.queue.some(
+          (m, i) => i > 0 && m.kind === 'dir' && block.exits.dirs.includes(TOWN_REVERSE[m.dir])
+        );
+        if (!laterFit && !reprint) break;
+        this.queue.shift();
+      }
+    }
+
     // --- Try the queue prediction first ---
     const move = this.queue[0];
 
@@ -389,6 +434,17 @@ export class TownLocalizer {
             }
             return false;
           };
+          // Walked-between proof: a room we hold a direct link with (either
+          // direction) is a physically DISTINCT room — the player traveled
+          // between them — so it can never be "a duplicate of current" and
+          // must not enable the healing exception. Identical twin ROWS
+          // (Soriktos' Royal Stables: three word-identical segments in a
+          // row, each with word-identical satellite Stalls) otherwise pass
+          // the fingerprint test with no shared-neighbor conflict, and one
+          // segment steals its neighbor's satellite — silently shifting the
+          // player's map frame one cell sideways for the rest of the walk.
+          const walkLinked = (a: TownRoom, b: TownRoom) =>
+            Object.values(a.links).includes(b.id) || Object.values(b.links).includes(a.id);
           const relaxedReciprocal = (r: TownRoom) => {
             if (strictReciprocal(r)) return true;
             const back = town.rooms.get(r.links[TOWN_REVERSE[move.dir]]!);
@@ -396,7 +452,8 @@ export class TownLocalizer {
               !!back &&
               back.name === current.name &&
               back.exits.join(',') === current.exits.join(',') &&
-              !sharedNeighborConflict(current, back)
+              !sharedNeighborConflict(current, back) &&
+              !walkLinked(current, back)
             );
           };
           if (
@@ -425,12 +482,22 @@ export class TownLocalizer {
           // to in a DIFFERENT direction can never be this move's
           // destination (the Landing knows the north wing's vestibule is
           // north — it cannot also be south), and vice versa.
+          // ... unless the conflicting link is CONTRADICTED by the rooms'
+          // own exits lines (a queue-desync scar, not geometry — see
+          // linkContradicted): a poison wrong-direction link must not also
+          // get to veto the true arrival forever.
           const alreadyNeighborElsewhere = (r: TownRoom) => {
-            for (const [d, id] of Object.entries(current.links)) {
-              if (id === r.id && d !== move.dir) return true;
+            for (const [d, id] of Object.entries(current.links) as [TownDir, number][]) {
+              if (id === r.id && d !== move.dir && !linkContradicted(current, d, r)) return true;
             }
-            for (const [d, id] of Object.entries(r.links)) {
-              if (id === current.id && d !== TOWN_REVERSE[move.dir]) return true;
+            for (const [d, id] of Object.entries(r.links) as [TownDir, number][]) {
+              if (
+                id === current.id &&
+                d !== TOWN_REVERSE[move.dir] &&
+                !linkContradicted(r, d, current)
+              ) {
+                return true;
+              }
             }
             return false;
           };
