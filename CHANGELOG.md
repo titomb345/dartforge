@@ -10,6 +10,12 @@ The `[Unreleased]` header controls automatic version bumping on merge:
 - `[Unreleased-minor]` → 0.1.0 → 0.2.0
 - `[Unreleased-major]` → 0.1.0 → 1.0.0
 
+## [Unreleased-patch]
+
+### Fixed
+
+- Player name colors in the Who panel went blank when the game's terminal was set to `ansi256`. The color parser only understood the 16 basic ANSI codes, so 256-color and truecolor sequences were ignored (and background codes could even be misread as a foreground color). The panel now uses the exact color the MUD sent: the 16 basic colors still follow your terminal theme, and 256-color/truecolor values are used verbatim. The same parser feeds the aura readout in the status bar and the automapper's terrain colors, so those work in `ansi256` now too
+
 ## [1.15.1] - 2026-07-17
 
 ### Changed

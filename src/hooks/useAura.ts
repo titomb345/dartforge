@@ -1,11 +1,10 @@
 import { useState, useCallback } from 'react';
 import type { AuraMatch, AuraLevel } from '../lib/auraPatterns';
-import type { ThemeColorKey } from '../lib/defaultTheme';
-import type { AnsiColorSegment } from '../lib/ansiColorExtract';
+import type { AnsiColorSegment, MudColor } from '../lib/ansiColorExtract';
 
 export function useAura() {
   const [aura, setAura] = useState<AuraLevel | null>(null);
-  const [auraMudColor, setAuraMudColor] = useState<ThemeColorKey | null>(null);
+  const [auraMudColor, setAuraMudColor] = useState<MudColor | null>(null);
   const [auraMudColors, setAuraMudColors] = useState<AnsiColorSegment[] | null>(null);
 
   const updateAura = useCallback((match: AuraMatch) => {

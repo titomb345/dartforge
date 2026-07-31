@@ -1,4 +1,4 @@
-import type { ThemeColorKey } from './defaultTheme';
+import type { MudColor } from './ansiColorExtract';
 import { extractAnsiColor } from './ansiColorExtract';
 
 /** A player entry from the `who` output */
@@ -10,8 +10,8 @@ export interface WhoPlayer {
   /** Player soul state. Vibrant = active, engaged = busy, distant = afk,
    *  receptive = open to walkups, dim = inactive (or dead for a while). */
   state: 'vibrant' | 'engaged' | 'distant' | 'receptive' | 'dim';
-  /** Theme color key extracted from the player's ANSI name color, or null for default */
-  nameColor: ThemeColorKey | null;
+  /** Color extracted from the player's ANSI name color, or null for default */
+  nameColor: MudColor | null;
   /** True if this entry is a who title (doesn't match "Name the race" pattern) */
   isTitle: boolean;
 }
@@ -37,7 +37,8 @@ export interface WhoSnapshot {
 // Line matchers
 // ---------------------------------------------------------------------------
 
-const WHO_HEADER_RE = /^\s*Name\s+(?:Idle(?: Time)?|State)(?:\s+Name\s+(?:Idle(?: Time)?|State))?\s*$/;
+const WHO_HEADER_RE =
+  /^\s*Name\s+(?:Idle(?: Time)?|State)(?:\s+Name\s+(?:Idle(?: Time)?|State))?\s*$/;
 
 /** Real DartMUD names follow "Name the race", optionally with a title prefix like "Master" */
 const REAL_NAME_RE = /^(?:[A-Z][a-z]+ )*[A-Z][a-z]+ the \w+$/;

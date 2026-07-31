@@ -147,6 +147,7 @@ import { QuickButtonBar } from './components/QuickButtonBar';
 import { MacroPanel } from './components/MacroPanel';
 import type { QuickButton, Macro } from './types';
 import { hotkeyToString, hotkeyFromEvent, isNumpadKey } from './types';
+import { mudColorToCss } from './lib/ansiColorExtract';
 
 /* ── Lazy Tauri imports for companion integration ────────────── */
 let tauriInvoke: ((cmd: string, args?: Record<string, unknown>) => Promise<unknown>) | null = null;
@@ -1970,7 +1971,7 @@ function AppMain() {
       .filter((c): c is ReadoutConfig => !!c && c.data != null)
       .map((c) => {
         const d = c.data!;
-        const color = d.mudColor ? theme[d.mudColor] : (d.color ?? theme[d.themeColor]);
+        const color = mudColorToCss(d.mudColor, theme) ?? d.color ?? theme[d.themeColor];
         return {
           key: c.id,
           label: d.label,
@@ -2019,7 +2020,7 @@ function AppMain() {
             name: p.name,
             guild: p.guild,
             state: p.state,
-            color: p.nameColor ? theme[p.nameColor] : null,
+            color: mudColorToCss(p.nameColor, theme) ?? null,
             isTitle: p.isTitle,
           })),
           totalEstimated: whoSnapshot.totalEstimated,

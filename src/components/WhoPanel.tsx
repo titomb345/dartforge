@@ -13,6 +13,7 @@ import { useWhoContext } from '../contexts/WhoContext';
 import { useWhoTitleContext } from '../contexts/WhoTitleContext';
 import { useTerminalTheme } from '../contexts/TerminalThemeContext';
 import { useAppSettingsContext } from '../contexts/AppSettingsContext';
+import { mudColorToCss } from '../lib/ansiColorExtract';
 
 interface GuildStyle {
   color: ThemeColorKey;
@@ -137,9 +138,7 @@ function TitleMappingForm({
 
   return (
     <div className="flex items-center gap-1.5 px-3 py-1 bg-[#8be9fd]/5 border-y border-[#8be9fd]/10">
-      {onDelete && (
-        <ConfirmDeleteButton onDelete={onDelete} size={10} variant="fixed" />
-      )}
+      {onDelete && <ConfirmDeleteButton onDelete={onDelete} size={10} variant="fixed" />}
       <MudInput
         ref={inputRef}
         accent="cyan"
@@ -255,7 +254,7 @@ function PlayerRow({
           className="font-mono truncate flex-1 inline-flex items-center"
           style={{
             fontSize: `${fontSize}px`,
-            color: player.nameColor ? theme[player.nameColor] : undefined,
+            color: mudColorToCss(player.nameColor, theme),
           }}
         >
           {player.name}
@@ -330,12 +329,7 @@ export function WhoPanel({ mode = 'slideout' }: PinnablePanelProps) {
 
   return (
     <div className={panelRootClass(isPinned)}>
-      <PanelHeader
-        icon={<WhoIcon size={12} />}
-        title="Who"
-        panel="who"
-        mode={mode}
-      >
+      <PanelHeader icon={<WhoIcon size={12} />} title="Who" panel="who" mode={mode}>
         <FontSizeControl
           value={effectiveWhoFontSize}
           onChange={updateWhoFontSize}
@@ -352,7 +346,10 @@ export function WhoPanel({ mode = 'slideout' }: PinnablePanelProps) {
       </PanelHeader>
 
       {/* Content */}
-      <div className="panel-content flex-1 overflow-y-auto" style={{ fontSize: effectiveWhoFontSize + 'px' }}>
+      <div
+        className="panel-content flex-1 overflow-y-auto"
+        style={{ fontSize: effectiveWhoFontSize + 'px' }}
+      >
         {!snapshot ? (
           <div className="flex items-center justify-center h-full text-[10px] text-text-dim font-mono">
             Not connected
