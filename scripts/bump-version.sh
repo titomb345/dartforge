@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Reads bump type from CHANGELOG.md [Unreleased-<type>] header,
-# bumps version in package.json + tauri.conf.json + Cargo.toml,
+# bumps version in package.json + tauri.conf.json + Cargo.toml + Cargo.lock,
 # and stamps the changelog with the new version and today's date.
 #
 # Usage: ./scripts/bump-version.sh [--no-stamp]
@@ -73,6 +73,13 @@ sed -i 's/"version": "[0-9][0-9]*\.[0-9][0-9]*\.[0-9][0-9]*"/"version": "'"$NEW"
 
 # Update Cargo.toml (only the first version line — the package version)
 sed -i '0,/^version = "[0-9][0-9]*\.[0-9][0-9]*\.[0-9][0-9]*"/s//version = "'"$NEW"'"/' "$ROOT/src-tauri/Cargo.toml"
+
+# Update Cargo.lock's entry for our own crate. Cargo would do this itself, but
+# the bump workflow has no Rust toolchain, so rewrite the one line directly:
+# find the `name = "dartforge"` line and substitute the `version` line after it.
+# Left stale, the lockfile drifts a release behind and dirties the working tree
+# the next time anyone runs cargo locally.
+sed -i '/^name = "dartforge"$/{n;s/^version = "[0-9][0-9]*\.[0-9][0-9]*\.[0-9][0-9]*"$/version = "'"$NEW"'"/;}' "$ROOT/src-tauri/Cargo.lock"
 
 echo "Updated version files to $NEW"
 

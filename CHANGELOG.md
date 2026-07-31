@@ -10,6 +10,12 @@ The `[Unreleased]` header controls automatic version bumping on merge:
 - `[Unreleased-minor]` → 0.1.0 → 0.2.0
 - `[Unreleased-major]` → 0.1.0 → 1.0.0
 
+## [Unreleased-patch]
+
+### Fixed
+
+- `scripts/bump-version.sh` now updates `src-tauri/Cargo.lock` alongside the other version files. It only ever updated `Cargo.toml`, so the lockfile's entry for the app itself stayed a release behind and got rewritten by the next local cargo build, showing up as an unrelated dirty file
+
 ## [1.15.2] - 2026-07-31
 
 ### Changed
