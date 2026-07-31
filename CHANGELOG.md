@@ -10,6 +10,17 @@ The `[Unreleased]` header controls automatic version bumping on merge:
 - `[Unreleased-minor]` → 0.1.0 → 0.2.0
 - `[Unreleased-major]` → 0.1.0 → 1.0.0
 
+## [Unreleased-patch]
+
+### Changed
+
+- Tapping anywhere on the Mobile Companion screen now focuses the command input, matching the desktop client. Taps on buttons, panel controls, and text selections are left alone
+
+### Fixed
+
+- Mobile Companion output lost its coloring when the game's terminal was set to `ansi256`. Its ANSI parser only understood the 16 basic codes, so 256-color and truecolor sequences were dropped and background codes could be misread as a foreground color. It now mirrors the desktop terminal exactly: the 16 basic colors follow your theme, and 256-color/truecolor values are drawn as sent
+- The Mobile Companion no longer unsticks from the bottom of the output after sending a command. The on-screen keyboard opening or closing (and any other relayout) moved the scroll position, which was read as "the user scrolled up", leaving you stranded mid-history until you scrolled down by hand. Only a scroll you actually started unpins the view now, and sending a command always snaps back to the newest output
+
 ## [1.15.3] - 2026-07-31
 
 ### Fixed

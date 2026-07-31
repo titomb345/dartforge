@@ -712,59 +712,102 @@
   'use strict';
 
   // ── ANSI parser ───────────────────────────────────────────────
-  var ANSI_FG = {
-    30: 'ansi-black', 31: 'ansi-red', 32: 'ansi-green', 33: 'ansi-yellow',
-    34: 'ansi-blue', 35: 'ansi-magenta', 36: 'ansi-cyan', 37: 'ansi-white',
-    90: 'ansi-bright-black', 91: 'ansi-bright-red', 92: 'ansi-bright-green',
-    93: 'ansi-bright-yellow', 94: 'ansi-bright-blue', 95: 'ansi-bright-magenta',
-    96: 'ansi-bright-cyan', 97: 'ansi-bright-white'
-  };
-  var ANSI_BG = {
-    40: 'ansi-bg-black', 41: 'ansi-bg-red', 42: 'ansi-bg-green', 43: 'ansi-bg-yellow',
-    44: 'ansi-bg-blue', 45: 'ansi-bg-magenta', 46: 'ansi-bg-cyan', 47: 'ansi-bg-white',
-    100: 'ansi-bg-bright-black', 101: 'ansi-bg-bright-red', 102: 'ansi-bg-bright-green',
-    103: 'ansi-bg-bright-yellow', 104: 'ansi-bg-bright-blue', 105: 'ansi-bg-bright-magenta',
-    106: 'ansi-bg-bright-cyan', 107: 'ansi-bg-bright-white'
-  };
+  // Palette slots 0-15 map to CSS classes so they follow the pushed terminal
+  // theme (exactly as the desktop terminal treats them). 256-color and
+  // truecolor values are drawn from the fixed standard palette instead, so
+  // they're emitted as literal hex on the span — same split the desktop's
+  // ansiColorExtract.ts makes.
+  var FG_CLASSES = [
+    'ansi-black', 'ansi-red', 'ansi-green', 'ansi-yellow',
+    'ansi-blue', 'ansi-magenta', 'ansi-cyan', 'ansi-white',
+    'ansi-bright-black', 'ansi-bright-red', 'ansi-bright-green', 'ansi-bright-yellow',
+    'ansi-bright-blue', 'ansi-bright-magenta', 'ansi-bright-cyan', 'ansi-bright-white'
+  ];
+  var BG_CLASSES = [
+    'ansi-bg-black', 'ansi-bg-red', 'ansi-bg-green', 'ansi-bg-yellow',
+    'ansi-bg-blue', 'ansi-bg-magenta', 'ansi-bg-cyan', 'ansi-bg-white',
+    'ansi-bg-bright-black', 'ansi-bg-bright-red', 'ansi-bg-bright-green', 'ansi-bg-bright-yellow',
+    'ansi-bg-bright-blue', 'ansi-bg-bright-magenta', 'ansi-bg-bright-cyan', 'ansi-bg-bright-white'
+  ];
+
+  /** 6x6x6 color cube component levels used by xterm for indices 16-231. */
+  var CUBE_LEVELS = [0, 95, 135, 175, 215, 255];
+
+  function hex2(n) {
+    n = Math.max(0, Math.min(255, n | 0));
+    return (n < 16 ? '0' : '') + n.toString(16);
+  }
+
+  /** Convert a 256-color palette index (16-255) to a #rrggbb string. */
+  function paletteHex(idx) {
+    if (idx >= 232) {
+      var v = 8 + (idx - 232) * 10;
+      return '#' + hex2(v) + hex2(v) + hex2(v);
+    }
+    var n = idx - 16;
+    return '#' + hex2(CUBE_LEVELS[Math.floor(n / 36) % 6]) +
+      hex2(CUBE_LEVELS[Math.floor(n / 6) % 6]) +
+      hex2(CUBE_LEVELS[n % 6]);
+  }
+
+  /** Color spec for a `38;5;N` / `48;5;N` palette index, or null if invalid. */
+  function specFromIndex(n) {
+    if (typeof n !== 'number' || isNaN(n) || n < 0 || n > 255) return null;
+    if (n < 16) return { idx: n };
+    return { hex: paletteHex(n) };
+  }
 
   // Stateful SGR parser. Tracks bold + inverse + current fg/bg across escapes
-  // and emits one span per text run. Bold upgrades a normal foreground (30-37)
-  // to its bright variant, matching xterm's default drawBoldTextInBrightColors
-  // — many MUDs (DartMUD included) send "bright" colors as bold + normal
-  // color. Inverse (SGR 7) swaps fg/bg, which DartMUD uses for guild tags
-  // like the black-on-white [HG].
+  // and emits one span per text run. Parameters are consumed in order so the
+  // extended-color forms (`38;5;N`, `38;2;R;G;B` and their `48;…` background
+  // equivalents, which DartMUD sends when the character's terminal is set to
+  // ansi256) don't leak their arguments into the simple 30-37 branch.
+  // Bold upgrades a normal foreground (30-37) to its bright variant, matching
+  // xterm's default drawBoldTextInBrightColors — many MUDs (DartMUD included)
+  // send "bright" colors as bold + normal color. Inverse (SGR 7) swaps fg/bg,
+  // which DartMUD uses for guild tags like the black-on-white [HG].
   function ansiToHtml(text) {
     var result = '';
     var spanOpen = false;
     var bold = false;
     var inverse = false;
-    var fg = null;      // numeric SGR code (30-37 / 90-97) or null
-    var bgClass = null; // resolved ansi-bg-* class or null
+    var fg = null; // { idx: 0-15 } | { hex: '#rrggbb' } | null
+    var bg = null;
 
-    function stateClasses() {
-      var cls = [];
-      if (bold) cls.push('ansi-bold');
-      var fgCls = null;
-      if (fg !== null) {
-        var code = fg;
-        if (bold && code >= 30 && code <= 37) code += 60; // bright variant
-        fgCls = ANSI_FG[code];
-      }
-      var bgCls = bgClass;
-      if (inverse) {
-        var swappedFg = bgCls ? bgCls.replace('ansi-bg-', 'ansi-') : 'ansi-inv-fg';
-        var swappedBg = fgCls ? fgCls.replace('ansi-', 'ansi-bg-') : 'ansi-inv-bg';
-        fgCls = swappedFg;
-        bgCls = swappedBg;
-      }
-      if (fgCls) cls.push(fgCls);
-      if (bgCls) cls.push(bgCls);
-      return cls;
-    }
     function reopenSpan() {
       if (spanOpen) { result += '</span>'; spanOpen = false; }
-      var cls = stateClasses();
-      if (cls.length) { result += '<span class="' + cls.join(' ') + '">'; spanOpen = true; }
+
+      var cls = [];
+      var style = '';
+      var f = fg;
+      var b = bg;
+
+      // Bold promotes a normal palette color to its bright variant.
+      if (f && f.idx !== undefined && bold && f.idx < 8) f = { idx: f.idx + 8 };
+      if (bold) cls.push('ansi-bold');
+
+      if (inverse) {
+        var tmp = f;
+        f = b || 'inv';
+        b = tmp || 'inv';
+      }
+
+      if (f === 'inv') cls.push('ansi-inv-fg');
+      else if (f) {
+        if (f.hex) style += 'color:' + f.hex + ';';
+        else cls.push(FG_CLASSES[f.idx]);
+      }
+      if (b === 'inv') cls.push('ansi-inv-bg');
+      else if (b) {
+        if (b.hex) style += 'background-color:' + b.hex + ';';
+        else cls.push(BG_CLASSES[b.idx]);
+      }
+
+      if (cls.length || style) {
+        result += '<span' + (cls.length ? ' class="' + cls.join(' ') + '"' : '') +
+          (style ? ' style="' + style + '"' : '') + '>';
+        spanOpen = true;
+      }
     }
 
     var parts = text.split(/(\x1b\[[0-9;]*m)/);
@@ -772,18 +815,42 @@
       var part = parts[i];
       var match = part.match(/^\x1b\[([0-9;]*)m$/);
       if (match) {
-        var codes = match[1].split(';').map(Number);
+        // An empty parameter list (ESC[m) means reset.
+        var codes = match[1] === ''
+          ? [0]
+          : match[1].split(';').map(function(p) { return p === '' ? 0 : Number(p); });
         for (var j = 0; j < codes.length; j++) {
           var code = codes[j];
-          if (code === 0) { bold = false; inverse = false; fg = null; bgClass = null; }
+          if (code === 0) { bold = false; inverse = false; fg = null; bg = null; }
           else if (code === 1) bold = true;
           else if (code === 7) inverse = true;
           else if (code === 22) bold = false;
           else if (code === 27) inverse = false;
           else if (code === 39) fg = null;
-          else if (code === 49) bgClass = null;
-          else if (ANSI_FG[code]) fg = code;
-          else if (ANSI_BG[code]) bgClass = ANSI_BG[code];
+          else if (code === 49) bg = null;
+          else if (code >= 30 && code <= 37) fg = { idx: code - 30 };
+          else if (code >= 90 && code <= 97) fg = { idx: code - 90 + 8 };
+          else if (code >= 40 && code <= 47) bg = { idx: code - 40 };
+          else if (code >= 100 && code <= 107) bg = { idx: code - 100 + 8 };
+          else if (code === 38 || code === 48) {
+            var mode = codes[j + 1];
+            var spec = null;
+            if (mode === 5) {
+              spec = specFromIndex(codes[j + 2]);
+              j += 2;
+            } else if (mode === 2) {
+              spec = { hex: '#' + hex2(codes[j + 2]) + hex2(codes[j + 3]) + hex2(codes[j + 4]) };
+              j += 4;
+            } else {
+              // Unknown extended-color form; skip the mode selector so its
+              // arguments can't be misread as separate SGR codes.
+              j += 1;
+            }
+            if (spec) {
+              if (code === 38) fg = spec;
+              else bg = spec;
+            }
+          }
         }
         reopenSpan();
       } else if (part) {
@@ -1117,17 +1184,44 @@
   });
 
   // ── Auto-scroll detection ────────────────────────────────────
-  output.addEventListener('scroll', function() {
-    var atBottom = output.scrollHeight - output.scrollTop - output.clientHeight < 40;
-    autoScroll = atBottom;
-    scrollNotice.classList.toggle('visible', !atBottom);
+  // Only a scroll the *user* started may unpin the view. Layout changes the
+  // page doesn't control — the on-screen keyboard opening or closing, the
+  // quick bar collapsing, a font-size change, old lines being trimmed off the
+  // top — all move the scroll offset and used to be read as "the user scrolled
+  // up", which left the output stuck partway up after sending a command.
+  var userScrollUntil = 0;
+  /** Extend the window in which scroll events count as user-driven. */
+  function markUserScroll() {
+    userScrollUntil = Date.now() + 1200;
+  }
+  ['touchstart', 'touchmove', 'wheel', 'mousedown'].forEach(function(evt) {
+    output.addEventListener(evt, markUserScroll, { passive: true });
   });
 
-  scrollNotice.addEventListener('click', function() {
+  function pinToBottom() {
     output.scrollTop = output.scrollHeight;
     autoScroll = true;
     scrollNotice.classList.remove('visible');
+  }
+
+  output.addEventListener('scroll', function() {
+    var atBottom = output.scrollHeight - output.scrollTop - output.clientHeight < 40;
+    if (atBottom) {
+      autoScroll = true;
+    } else if (Date.now() < userScrollUntil) {
+      // Momentum scrolling keeps firing after the finger lifts, so each
+      // user-driven scroll event extends the window.
+      markUserScroll();
+      autoScroll = false;
+    } else if (autoScroll) {
+      // Pinned, but something resized under us — re-pin instead of unpinning.
+      output.scrollTop = output.scrollHeight;
+      return;
+    }
+    scrollNotice.classList.toggle('visible', !autoScroll);
   });
+
+  scrollNotice.addEventListener('click', pinToBottom);
 
   // ── Output management ────────────────────────────────────────
   function appendOutput(html) {
@@ -1236,6 +1330,9 @@
       historyIndex = -1;
       searchPrefix = '';
       if (cmd === cmdInput.value) cmdInput.value = '';
+      // Sending is intent to watch what happens next, so snap back to the
+      // newest output even if the view was scrolled up.
+      pinToBottom();
     }
   }
 
@@ -1375,6 +1472,8 @@
       window.scrollTo(0, 0);
       document.documentElement.scrollTop = 0;
       document.body.scrollTop = 0;
+      // The output just got shorter/taller; keep the newest line in view.
+      if (autoScroll) output.scrollTop = output.scrollHeight;
     }
   }
 
@@ -1388,6 +1487,29 @@
     });
     updateViewportHeight();
   }
+
+  window.addEventListener('resize', function() {
+    if (autoScroll) output.scrollTop = output.scrollHeight;
+  });
+
+  // ── Tap anywhere to focus the input ──────────────────────────
+  // Mirrors the desktop client, where clicking the window puts you back in the
+  // command line. Taps on anything interactive (buttons, the panels' own
+  // controls) keep their own behaviour, and a tap that finished a text
+  // selection is left alone so copying still works.
+  document.addEventListener('click', function(e) {
+    var t = e.target;
+    if (t && t.closest &&
+        t.closest('input, textarea, button, a, select, [contenteditable], #scroll-notice')) return;
+    var sel = window.getSelection();
+    if (sel && String(sel)) return;
+    if (document.activeElement === cmdInput) return;
+    try {
+      cmdInput.focus({ preventScroll: true });
+    } catch (err) {
+      cmdInput.focus();
+    }
+  });
 
   // ── Start ─────────────────────────────────────────────────────
   connect();
