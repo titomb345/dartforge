@@ -10,7 +10,7 @@ The `[Unreleased]` header controls automatic version bumping on merge:
 - `[Unreleased-minor]` → 0.1.0 → 0.2.0
 - `[Unreleased-major]` → 0.1.0 → 1.0.0
 
-## [Unreleased-patch]
+## [1.15.4] - 2026-07-31
 
 ### Changed
 
