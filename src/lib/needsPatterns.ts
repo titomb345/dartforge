@@ -1,4 +1,5 @@
 import type { ThemeColorKey } from './defaultTheme';
+import { extractAnsiColor, withMudColor, type MudColor } from './ansiColorExtract';
 import { cleanLine, stripScorePrefix } from './lineUtils';
 
 /** A single hunger or thirst state */
@@ -6,7 +7,10 @@ export interface NeedLevel {
   key: string;
   label: string;
   descriptor: string; // the text inside "You are <descriptor>."
+  /** Fallback color, used only when the line arrives without ANSI coloring */
   themeColor: ThemeColorKey;
+  /** The color the MUD actually drew this descriptor in, when the raw line is available */
+  mudColor?: MudColor | null;
   severity: number;
 }
 
@@ -144,6 +148,11 @@ export interface NeedsMatch {
   thirst?: NeedLevel;
 }
 
+/** Attach the MUD's own color for `target`, when the raw line is available. */
+function colored(level: NeedLevel, rawLine: string | undefined, target: string): NeedLevel {
+  return withMudColor(level, rawLine ? extractAnsiColor(rawLine, target) : null);
+}
+
 /**
  * Match a single ANSI-stripped line against hunger/thirst patterns.
  *
@@ -151,8 +160,12 @@ export interface NeedsMatch {
  * - Combined: "You are hungry, and thirsty."
  * - Combined with prefix: "Needs : You are hungry, and thirsty."
  * - Individual: "You are hungry." / "You are well fed."
+ *
+ * Pass `rawLine` (the same line with its ANSI codes intact) to pick up the
+ * colors the MUD drew each descriptor in. Hunger and thirst are sampled
+ * separately, since the MUD colors them independently.
  */
-export function matchNeedsLine(line: string): NeedsMatch | null {
+export function matchNeedsLine(line: string, rawLine?: string): NeedsMatch | null {
   let cleaned = cleanLine(line);
   if (!cleaned) return null;
 
@@ -169,17 +182,20 @@ export function matchNeedsLine(line: string): NeedsMatch | null {
     const hunger = HUNGER_LOOKUP.get(hungerText);
     const thirst = THIRST_LOOKUP.get(thirstText);
     if (hunger || thirst) {
-      return { hunger: hunger ?? undefined, thirst: thirst ?? undefined };
+      return {
+        hunger: hunger ? colored(hunger, rawLine, hungerText) : undefined,
+        thirst: thirst ? colored(thirst, rawLine, thirstText) : undefined,
+      };
     }
   }
 
   // Try individual hunger
   const hunger = HUNGER_LOOKUP.get(body);
-  if (hunger) return { hunger };
+  if (hunger) return { hunger: colored(hunger, rawLine, body) };
 
   // Try individual thirst
   const thirst = THIRST_LOOKUP.get(body);
-  if (thirst) return { thirst };
+  if (thirst) return { thirst: colored(thirst, rawLine, body) };
 
   return null;
 }

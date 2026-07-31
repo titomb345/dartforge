@@ -1,7 +1,7 @@
 import type { ThemeColorKey } from './defaultTheme';
 import { extractAnsiColor, extractAnsiColorSegments } from './ansiColorExtract';
 import { cleanLine, stripScorePrefix } from './lineUtils';
-import type { AnsiColorSegment } from './ansiColorExtract';
+import type { AnsiColorSegment, MudColor } from './ansiColorExtract';
 
 /** A single aura state with display metadata */
 export interface AuraLevel {
@@ -244,7 +244,7 @@ export interface AuraMatch {
   level: AuraLevel;
   raw: string;
   /** ANSI color extracted from the raw MUD line, if available */
-  mudColor: ThemeColorKey | null;
+  mudColor: MudColor | null;
   /** Per-word color segments when the MUD colors parts differently (e.g. "very dim red") */
   mudColors: AnsiColorSegment[] | null;
 }

@@ -1,4 +1,5 @@
 import type { ThemeColorKey } from './defaultTheme';
+import { extractAnsiColor, withMudColor, type MudColor } from './ansiColorExtract';
 import { cleanLine } from './lineUtils';
 
 /** A single health state with display metadata */
@@ -6,8 +7,10 @@ export interface HealthLevel {
   key: string;
   label: string;
   message: string;
-  /** ANSI theme color key — resolved at render time from the user's terminal theme */
+  /** Fallback color, used only when the line arrives without ANSI coloring */
   themeColor: ThemeColorKey;
+  /** The color the MUD actually drew this message in, when the raw line is available */
+  mudColor?: MudColor | null;
   severity: number; // 0 = best, 8 = worst
 }
 
@@ -114,14 +117,17 @@ const DEAD_LEVEL = HEALTH_LEVELS.find((l) => l.key === 'dead')!;
 /**
  * Match a single ANSI-stripped line against known health messages.
  * Handles "You are <state>.", "You are now <state>.", and "You have died!".
+ *
+ * Pass `rawLine` (the same line with its ANSI codes intact) to pick up the
+ * color the MUD drew the message in.
  */
-export function matchHealthLine(line: string): HealthMatch | null {
+export function matchHealthLine(line: string, rawLine?: string): HealthMatch | null {
   const cleaned = cleanLine(line);
   if (!cleaned) return null;
 
   // Death
   if (cleaned === 'You have died!') {
-    return { level: DEAD_LEVEL, raw: cleaned };
+    return colored(DEAD_LEVEL, cleaned, rawLine, cleaned);
   }
 
   const descriptor = extractHealthText(cleaned);
@@ -130,5 +136,16 @@ export function matchHealthLine(line: string): HealthMatch | null {
   const level = HEALTH_LOOKUP.get(descriptor);
   if (!level) return null;
 
-  return { level, raw: cleaned };
+  return colored(level, cleaned, rawLine, descriptor);
+}
+
+/** Attach the MUD's own color for `target`, falling back to the level's themeColor. */
+function colored(
+  level: HealthLevel,
+  cleaned: string,
+  rawLine: string | undefined,
+  target: string
+): HealthMatch {
+  const mudColor = rawLine ? extractAnsiColor(rawLine, target) : null;
+  return { level: withMudColor(level, mudColor), raw: cleaned };
 }
