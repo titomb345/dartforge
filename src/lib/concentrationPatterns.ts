@@ -1,4 +1,5 @@
 import type { ThemeColorKey } from './defaultTheme';
+import { extractAnsiColor, withMudColor, type MudColor } from './ansiColorExtract';
 import { cleanLine, stripScorePrefix } from './lineUtils';
 
 /** A single concentration state with display metadata */
@@ -6,14 +7,17 @@ export interface ConcentrationLevel {
   key: string;
   label: string;
   message: string;
-  /** ANSI theme color key — resolved at render time from the user's terminal theme */
+  /** Fallback color, used only when the line arrives without ANSI coloring */
   themeColor: ThemeColorKey;
+  /** The color the MUD actually drew this message in, when the raw line is available */
+  mudColor?: MudColor | null;
   severity: number; // 0 = best, 8 = worst
 }
 
 /**
  * All concentration states from best to worst.
- * Colors match the MUD's in-game ANSI colors, mapped to terminal theme keys.
+ * `themeColor` is only a fallback for uncolored output — the displayed color is
+ * read straight off the MUD's own ANSI codes whenever the raw line is at hand.
  */
 export const CONCENTRATION_LEVELS: ConcentrationLevel[] = [
   {
@@ -96,14 +100,18 @@ for (const level of CONCENTRATION_LEVELS) {
 /**
  * Match a single ANSI-stripped line against known concentration messages.
  * Handles optional "> " prompt prefix and "Concentration : " prefix.
+ *
+ * Pass `rawLine` (the same line with its ANSI codes intact) to pick up the
+ * color the MUD drew the message in.
  */
-export function matchConcentrationLine(line: string): ConcentrationMatch | null {
+export function matchConcentrationLine(line: string, rawLine?: string): ConcentrationMatch | null {
   const cleaned = cleanLine(line);
   if (!cleaned) return null;
 
   const withoutPrefix = stripScorePrefix(cleaned, 'Concentration');
   const level = CONCENTRATION_LOOKUP.get(withoutPrefix);
-  if (level) return { level, raw: cleaned };
+  if (!level) return null;
 
-  return null;
+  const mudColor = rawLine ? extractAnsiColor(rawLine, withoutPrefix) : null;
+  return { level: withMudColor(level, mudColor), raw: cleaned };
 }

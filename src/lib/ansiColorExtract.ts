@@ -102,6 +102,28 @@ export function mudColorToCss(
   return theme[color];
 }
 
+const mudColorCache = new WeakMap<object, Map<string, object>>();
+
+/**
+ * Return `base` with `mudColor` attached. Repeated calls with the same base and
+ * color hand back the very same object, so status-bar state updates can still
+ * bail out on identity instead of re-rendering on every score line.
+ */
+export function withMudColor<T extends object>(base: T, mudColor: MudColor | null): T {
+  if (!mudColor) return base;
+  let byColor = mudColorCache.get(base);
+  if (!byColor) {
+    byColor = new Map();
+    mudColorCache.set(base, byColor);
+  }
+  let hit = byColor.get(mudColor);
+  if (!hit) {
+    hit = { ...base, mudColor };
+    byColor.set(mudColor, hit);
+  }
+  return hit as T;
+}
+
 // ---------------------------------------------------------------------------
 // SGR state machine
 // ---------------------------------------------------------------------------

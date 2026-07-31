@@ -727,10 +727,10 @@ export class OutputFilter {
       let alignmentMatch: AlignmentMatch | null = null;
 
       if (maybeStatus) {
-        concMatch = matchConcentrationLine(stripped);
+        concMatch = matchConcentrationLine(stripped, seg);
         if (concMatch) this.callbacks.onConcentration?.(concMatch);
 
-        needsMatch = matchNeedsLine(stripped);
+        needsMatch = matchNeedsLine(stripped, seg);
         if (needsMatch) {
           if (needsMatch.hunger) this.callbacks.onHunger?.(needsMatch.hunger);
           if (needsMatch.thirst) this.callbacks.onThirst?.(needsMatch.thirst);
@@ -745,7 +745,7 @@ export class OutputFilter {
         movementMatch = matchMovementLine(stripped);
         if (movementMatch) this.callbacks.onMovement?.(movementMatch);
 
-        healthMatch = matchHealthLine(stripped);
+        healthMatch = matchHealthLine(stripped, seg);
         if (healthMatch) this.callbacks.onHealth?.(healthMatch);
 
         alignmentMatch = matchAlignmentLine(stripped);

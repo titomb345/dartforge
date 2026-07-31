@@ -12,9 +12,13 @@ The `[Unreleased]` header controls automatic version bumping on merge:
 
 ## [Unreleased-patch]
 
+### Changed
+
+- The health, concentration, hunger, and thirst readouts in the status bar now take their color straight from the MUD's own output instead of a hand-maintained text-to-color table. The old table had drifted out of sync with the game and needed updating whenever DartMUD changed a color; the readouts now match what you see in the terminal, in both `ansi` and `ansi256` modes. Hunger and thirst are sampled separately, so "hungry, and slightly thirsty" can show two different colors. The built-in colors remain as a fallback for output that arrives with no coloring at all
+
 ### Fixed
 
-- Player name colors in the Who panel went blank when the game's terminal was set to `ansi256`. The color parser only understood the 16 basic ANSI codes, so 256-color and truecolor sequences were ignored (and background codes could even be misread as a foreground color). The panel now uses the exact color the MUD sent: the 16 basic colors still follow your terminal theme, and 256-color/truecolor values are used verbatim. The same parser feeds the aura readout in the status bar and the automapper's terrain colors, so those work in `ansi256` now too
+- Player name colors in the Who panel went blank when the game's terminal was set to `ansi256`. The color parser only understood the 16 basic ANSI codes, so 256-color and truecolor sequences were ignored (and background codes could even be misread as a foreground color). The panel now uses the exact color the MUD sent: the 16 basic colors still follow your terminal theme, and 256-color/truecolor values are used verbatim. The aura readout in the status bar and the automapper's terrain colors share the same parser, so those work in `ansi256` now too
 
 ## [1.15.1] - 2026-07-17
 
