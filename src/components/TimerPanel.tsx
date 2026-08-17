@@ -357,24 +357,24 @@ function TimerEditor({
             <label className="text-[10px] text-text-dim mb-0.5 block">Scope</label>
             <div className="flex gap-0.5">
               <button
-                onClick={() => setScope('global')}
-                className={`flex-1 text-[10px] py-1 rounded-l border cursor-pointer transition-colors duration-150 ${
-                  scope === 'global'
-                    ? 'border-[#f97316]/40 text-[#f97316] bg-[#f97316]/10'
-                    : 'border-border-dim text-text-dim hover:text-text-label'
-                }`}
-              >
-                Global
-              </button>
-              <button
                 onClick={() => setScope('character')}
-                className={`flex-1 text-[10px] py-1 rounded-r border cursor-pointer transition-colors duration-150 ${
+                className={`flex-1 text-[10px] py-1 rounded-l border cursor-pointer transition-colors duration-150 ${
                   scope === 'character'
                     ? 'border-[#f97316]/40 text-[#f97316] bg-[#f97316]/10'
                     : 'border-border-dim text-text-dim hover:text-text-label'
                 }`}
               >
                 Char
+              </button>
+              <button
+                onClick={() => setScope('global')}
+                className={`flex-1 text-[10px] py-1 rounded-r border cursor-pointer transition-colors duration-150 ${
+                  scope === 'global'
+                    ? 'border-[#f97316]/40 text-[#f97316] bg-[#f97316]/10'
+                    : 'border-border-dim text-text-dim hover:text-text-label'
+                }`}
+              >
+                Global
               </button>
             </div>
           </div>
@@ -413,7 +413,9 @@ export function TimerPanel({ onClose }: TimerPanelProps) {
   const { activeCharacter } = useSkillTrackerContext();
   const { panelFontSize } = useAppSettingsContext();
 
-  const [scope, setScope] = useState<TimerScope>('global');
+  // Timers are character-specific by default; Global stays available for the
+  // handful that genuinely apply to every character.
+  const [scope, setScope] = useState<TimerScope>('character');
   const [groupFilter, setGroupFilter] = useState<string | null>(null);
   const [searchText, setSearchText] = useState('');
   const [editingId, setEditingId] = useState<TimerId | null>(null);
@@ -478,20 +480,20 @@ export function TimerPanel({ onClose }: TimerPanelProps) {
       {/* Scope toggle */}
       <div className="flex items-center gap-1.5 px-2 py-2 border-b border-border-subtle shrink-0">
         <FilterPill
-          label="Global"
-          active={scope === 'global'}
-          accent="orange"
-          onClick={() => {
-            setScope('global');
-            setGroupFilter(null);
-          }}
-        />
-        <FilterPill
           label="Character"
           active={scope === 'character'}
           accent="orange"
           onClick={() => {
             setScope('character');
+            setGroupFilter(null);
+          }}
+        />
+        <FilterPill
+          label="Global"
+          active={scope === 'global'}
+          accent="orange"
+          onClick={() => {
+            setScope('global');
             setGroupFilter(null);
           }}
         />

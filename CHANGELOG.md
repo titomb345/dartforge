@@ -10,7 +10,15 @@ The `[Unreleased]` header controls automatic version bumping on merge:
 - `[Unreleased-minor]` → 0.1.0 → 0.2.0
 - `[Unreleased-major]` → 0.1.0 → 1.0.0
 
-## [1.15.4] - 2026-07-31
+## [Unreleased-minor]
+
+### Changed
+
+- Improve counters are now kept per character instead of being shared by everyone. Each character gets its own set, the panel header names the character you are looking at, and switching characters swaps the counters with it. Your existing counters are handed to whichever character was last played, and the original shared copy is kept in `counters.json` as a backup
+- Timers now open on the Character scope by default, and new timers are created as character timers unless you switch the scope. Global timers still work exactly as before for the ones that should run for every character
+- Switching the active character in Settings > Characters is no longer blocked. It works while connected (disconnect and log straight back in as the other character) and while offline (just repoint counters, timers, skills, notes, aliases, and the map at them, without connecting). The 20 minute gap between characters is now a note under the button rather than a disabled button
+
+
 
 ### Changed
 

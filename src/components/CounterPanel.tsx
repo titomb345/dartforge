@@ -20,7 +20,7 @@ import { useImproveCounterContext } from '../contexts/ImproveCounterContext';
 import type { PeriodProgress } from '../hooks/useImproveCounters';
 import type { ImproveCounter } from '../types/counter';
 import type { PinnablePanelProps } from '../types';
-import { panelRootClass } from '../lib/panelUtils';
+import { panelRootClass, charDisplayName } from '../lib/panelUtils';
 import {
   PlayIcon,
   PauseIcon,
@@ -35,6 +35,7 @@ import {
 } from './icons';
 import { ConfirmDeleteButton } from './ConfirmDeleteButton';
 import { useAppSettingsContext } from '../contexts/AppSettingsContext';
+import { useSkillTrackerContext } from '../contexts/SkillTrackerContext';
 import { PanelHeader } from './PanelHeader';
 
 type CounterPanelProps = PinnablePanelProps;
@@ -207,6 +208,7 @@ export function CounterPanel({ mode = 'slideout' }: CounterPanelProps) {
   }, []);
 
   const { panelFontSize } = useAppSettingsContext();
+  const { activeCharacter } = useSkillTrackerContext();
 
   const isPinned = mode === 'pinned';
 
@@ -263,7 +265,12 @@ export function CounterPanel({ mode = 'slideout' }: CounterPanelProps) {
 
   return (
     <div className={panelRootClass(isPinned)}>
-      <PanelHeader icon={<CounterIcon size={12} />} title="Counters" panel="counter" mode={mode} />
+      <PanelHeader
+        icon={<CounterIcon size={12} />}
+        title={activeCharacter ? `Counters (${charDisplayName(activeCharacter)})` : 'Counters'}
+        panel="counter"
+        mode={mode}
+      />
       {/* Counter tabs — drag-and-drop sortable */}
       <div className="flex items-center gap-1 px-2 py-1 border-b border-border-subtle shrink-0">
         <div className="flex items-center gap-1 flex-1 min-w-0 overflow-x-auto">
@@ -285,13 +292,15 @@ export function CounterPanel({ mode = 'slideout' }: CounterPanelProps) {
               ))}
             </SortableContext>
           </DndContext>
-          <button
-            onClick={handleAddCounter}
-            title="Add counter"
-            className="flex items-center justify-center w-4 h-4 rounded-full border border-border-dim text-text-dim hover:text-amber hover:border-amber/40 cursor-pointer transition-colors duration-150 shrink-0"
-          >
-            <PlusIcon size={8} />
-          </button>
+          {activeCharacter && (
+            <button
+              onClick={handleAddCounter}
+              title="Add counter"
+              className="flex items-center justify-center w-4 h-4 rounded-full border border-border-dim text-text-dim hover:text-amber hover:border-amber/40 cursor-pointer transition-colors duration-150 shrink-0"
+            >
+              <PlusIcon size={8} />
+            </button>
+          )}
         </div>
         {/* Archive dropdown toggle */}
         {archivedCounters.length > 0 && (
@@ -524,13 +533,21 @@ export function CounterPanel({ mode = 'slideout' }: CounterPanelProps) {
       ) : (
         <div className="flex-1 flex items-center justify-center px-4">
           <div className="text-center">
-            <p className="text-[11px] text-text-dim mb-2">No counters yet.</p>
-            <button
-              onClick={handleAddCounter}
-              className="text-[10px] font-mono text-amber border border-amber/40 rounded px-2 py-1 cursor-pointer hover:bg-amber/10 transition-colors duration-150"
-            >
-              + Create Counter
-            </button>
+            {activeCharacter ? (
+              <>
+                <p className="text-[11px] text-text-dim mb-2">No counters yet.</p>
+                <button
+                  onClick={handleAddCounter}
+                  className="text-[10px] font-mono text-amber border border-amber/40 rounded px-2 py-1 cursor-pointer hover:bg-amber/10 transition-colors duration-150"
+                >
+                  + Create Counter
+                </button>
+              </>
+            ) : (
+              <p className="text-[11px] text-text-dim">
+                Log in to use counters. They are kept per character.
+              </p>
+            )}
           </div>
         </div>
       )}
@@ -669,8 +686,7 @@ function SortHeader({
       } ${active ? 'text-text-label' : 'text-text-dim'}`}
     >
       <span className="truncate">{label}</span>
-      {active &&
-        (sort.dir === 'asc' ? <ChevronUpIcon size={7} /> : <ChevronDownIcon size={7} />)}
+      {active && (sort.dir === 'asc' ? <ChevronUpIcon size={7} /> : <ChevronDownIcon size={7} />)}
     </button>
   );
 }

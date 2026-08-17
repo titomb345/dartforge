@@ -5,6 +5,13 @@ import type { SkillMatchResult } from '../types/skills';
 
 const COUNTERS_FILE = 'counters.json';
 const SETTINGS_FILE = 'settings.json';
+/** Pre-1.16 keys — counters used to be shared by every character. */
+const LEGACY_COUNTERS_KEY = 'counters';
+const LEGACY_ACTIVE_KEY = 'activeCounterId';
+/** Untouched copy of the shared counters, kept as a safety net after adoption. */
+const LEGACY_BACKUP_KEY = 'countersLegacyBackup';
+const countersKey = (char: string) => `counters:${char}`;
+const activeIdKey = (char: string) => `activeCounterId:${char}`;
 const SAVE_INTERVAL_MS = 30_000; // periodic save for running counters
 const HEARTBEAT_MS = 1_000; // liveness tick / suspension detector
 // A gap between heartbeats larger than this means the app or machine was
@@ -116,70 +123,150 @@ export interface PeriodProgress {
   active: boolean;
 }
 
-export function useImproveCounters() {
+export function useImproveCounters(activeCharacter: string | null) {
   const dataStore = useDataStore();
   const [counters, setCounters] = useState<ImproveCounter[]>([]);
   const [activeCounterId, setActiveCounterId] = useState<string | null>(null);
   const [periodLengthMinutes, setPeriodLengthMinutesState] = useState(10);
   const [tick, setTick] = useState(0);
+  /** True once the active character's counters have finished loading. */
   const loaded = useRef(false);
+  /** Character key the in-memory counters belong to. */
+  const loadedCharRef = useRef<string | null>(null);
   const lastImproveRef = useRef<{ skill: string } | null>(null);
   const dataStoreRef = useRef(dataStore);
   dataStoreRef.current = dataStore;
 
-  // Load from counters.json on mount
+  const charKey = activeCharacter ? activeCharacter.toLowerCase() : null;
+
+  const countersRef = useRef(counters);
+  countersRef.current = counters;
+  const activeCounterIdRef = useRef(activeCounterId);
+  activeCounterIdRef.current = activeCounterId;
+
+  // Save helper — counters are scoped to a character
+  const saveCounters = useCallback(
+    async (char: string, data: ImproveCounter[], activeId: string | null) => {
+      try {
+        const ds = dataStoreRef.current;
+        await ds.set(COUNTERS_FILE, countersKey(char), data);
+        await ds.set(COUNTERS_FILE, activeIdKey(char), activeId);
+        await ds.save(COUNTERS_FILE);
+      } catch (e) {
+        console.error('Failed to save counter data:', e);
+      }
+    },
+    []
+  );
+
+  // Period length is a preference, not per-character — load it once
   useEffect(() => {
     if (!dataStore.ready) return;
     (async () => {
       try {
-        const savedCounters = await dataStore.get<ImproveCounter[]>(COUNTERS_FILE, 'counters');
-        const savedActiveId = await dataStore.get<string | null>(COUNTERS_FILE, 'activeCounterId');
         const savedPeriod = await dataStore.get<number>(SETTINGS_FILE, 'counterPeriodLength');
-
         if (savedPeriod != null) setPeriodLengthMinutesState(savedPeriod);
-
-        if (savedCounters && savedCounters.length > 0) {
-          const now = Date.now();
-
-          // Migrate old format + resume running counters. The period window is
-          // active-time based, so the offline gap counts as neither active time
-          // nor period progress — just resume timing from now without touching
-          // the period (it picks up exactly where it left off).
-          const resumed = savedCounters.map((raw) => {
-            const c = migrateCounter(raw as ImproveCounter & Record<string, unknown>);
-            if (c.status === 'running' && c.lastResumedAt) {
-              // Don't add offline gap — only count time while app is open
-              return { ...c, lastResumedAt: now };
-            }
-            return c;
-          });
-
-          setCounters(resumed);
-          setActiveCounterId(savedActiveId ?? resumed[0]?.id ?? null);
-        }
       } catch (e) {
-        console.error('Failed to load counter data:', e);
+        console.error('Failed to load counter period length:', e);
       }
-      loaded.current = true;
     })();
   }, [dataStore.ready]);
 
-  // Save helper
-  const saveCounters = useCallback(async (data: ImproveCounter[], activeId: string | null) => {
-    try {
-      const ds = dataStoreRef.current;
-      await ds.set(COUNTERS_FILE, 'counters', data);
-      await ds.set(COUNTERS_FILE, 'activeCounterId', activeId);
-      await ds.save(COUNTERS_FILE);
-    } catch (e) {
-      console.error('Failed to save counter data:', e);
+  // Load the active character's counters, swapping sets when the character changes
+  useEffect(() => {
+    if (!dataStore.ready) return;
+    const ds = dataStoreRef.current;
+
+    // Freeze and flush the outgoing character's counters before swapping, so
+    // time accrued since the last periodic save isn't lost. A running counter
+    // keeps its status but its clock is re-based on load, so the stretch spent
+    // playing the other character is never credited.
+    const outgoing = loadedCharRef.current;
+    if (outgoing && outgoing !== charKey && loaded.current) {
+      const now = Date.now();
+      const flushed = countersRef.current.map((c) =>
+        c.status === 'running' && c.lastResumedAt
+          ? {
+              ...c,
+              accumulatedMs: c.accumulatedMs + awakeMs(c.lastResumedAt, now),
+              lastResumedAt: now,
+            }
+          : c
+      );
+      void saveCounters(outgoing, flushed, activeCounterIdRef.current);
     }
-  }, []);
+
+    loaded.current = false;
+    loadedCharRef.current = charKey;
+
+    if (!charKey) {
+      setCounters([]);
+      setActiveCounterId(null);
+      return;
+    }
+
+    let cancelled = false;
+    (async () => {
+      try {
+        let savedCounters = await ds.get<ImproveCounter[]>(COUNTERS_FILE, countersKey(charKey));
+        let savedActiveId = await ds.get<string | null>(COUNTERS_FILE, activeIdKey(charKey));
+
+        // Counters used to be shared across characters. The first character to
+        // load after upgrading adopts them (that's whoever was last played);
+        // the originals are kept under a backup key just in case.
+        if (savedCounters == null) {
+          const legacy = await ds.get<ImproveCounter[]>(COUNTERS_FILE, LEGACY_COUNTERS_KEY);
+          if (legacy && legacy.length > 0) {
+            savedCounters = legacy;
+            savedActiveId = await ds.get<string | null>(COUNTERS_FILE, LEGACY_ACTIVE_KEY);
+            await ds.set(COUNTERS_FILE, LEGACY_BACKUP_KEY, legacy);
+            await ds.set(COUNTERS_FILE, countersKey(charKey), legacy);
+            await ds.set(COUNTERS_FILE, activeIdKey(charKey), savedActiveId ?? null);
+            await ds.delete(COUNTERS_FILE, LEGACY_COUNTERS_KEY);
+            await ds.delete(COUNTERS_FILE, LEGACY_ACTIVE_KEY);
+            await ds.save(COUNTERS_FILE);
+          }
+        }
+
+        if (cancelled) return;
+
+        const now = Date.now();
+        // Migrate old format + resume running counters. The period window is
+        // active-time based, so the offline gap counts as neither active time
+        // nor period progress — just resume timing from now without touching
+        // the period (it picks up exactly where it left off).
+        const resumed = (savedCounters ?? []).map((raw) => {
+          const c = migrateCounter(raw as ImproveCounter & Record<string, unknown>);
+          if (c.status === 'running' && c.lastResumedAt) {
+            // Don't add offline gap — only count time while app is open
+            return { ...c, lastResumedAt: now };
+          }
+          return c;
+        });
+
+        setCounters(resumed);
+        setActiveCounterId(savedActiveId ?? resumed[0]?.id ?? null);
+      } catch (e) {
+        console.error('Failed to load counter data:', e);
+        if (!cancelled) {
+          setCounters([]);
+          setActiveCounterId(null);
+        }
+      }
+      if (!cancelled) loaded.current = true;
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [dataStore.ready, charKey, saveCounters]);
 
   // Persist on change
   useEffect(() => {
     if (!loaded.current) return;
-    saveCounters(counters, activeCounterId);
+    const char = loadedCharRef.current;
+    if (!char) return;
+    saveCounters(char, counters, activeCounterId);
   }, [counters, activeCounterId, saveCounters]);
 
   // Derive a stable boolean for whether any counter is running
