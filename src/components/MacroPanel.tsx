@@ -47,9 +47,7 @@ function MacroRow({
           onToggle(macro.id);
         }}
         className={`w-3 h-3 rounded-sm border cursor-pointer transition-colors duration-150 shrink-0 ${
-          macro.enabled
-            ? 'border-[#e8a849]/60 bg-[#e8a849]/30'
-            : 'border-border-dim bg-transparent'
+          macro.enabled ? 'border-[#e8a849]/60 bg-[#e8a849]/30' : 'border-border-dim bg-transparent'
         }`}
         title={macro.enabled ? 'Enabled — click to disable' : 'Disabled — click to enable'}
       />
@@ -59,9 +57,7 @@ function MacroRow({
         className="text-[10px] font-mono font-semibold px-1.5 py-px rounded border shrink-0"
         style={{
           color: macro.enabled ? ACCENT : '#555',
-          borderColor: macro.enabled
-            ? `color-mix(in srgb, ${ACCENT} 40%, transparent)`
-            : '#333',
+          borderColor: macro.enabled ? `color-mix(in srgb, ${ACCENT} 40%, transparent)` : '#333',
           background: macro.enabled
             ? `color-mix(in srgb, ${ACCENT} 8%, transparent)`
             : 'transparent',
@@ -84,10 +80,7 @@ function MacroRow({
 
       {/* Delete */}
       <div className="opacity-0 group-hover:opacity-100 transition-opacity duration-150 shrink-0">
-        <ConfirmDeleteButton
-          onDelete={() => onDelete(macro.id)}
-          title="Delete macro"
-        />
+        <ConfirmDeleteButton onDelete={() => onDelete(macro.id)} title="Delete macro" />
       </div>
     </div>
   );
@@ -110,7 +103,7 @@ export function MacroPanel({ onClose, macros, onAdd, onUpdate, onDelete }: Macro
     );
   }, [macros, searchText]);
 
-  const editingMacro = editingId ? macros.find((m) => m.id === editingId) ?? null : null;
+  const editingMacro = editingId ? (macros.find((m) => m.id === editingId) ?? null) : null;
 
   // Build set of existing hotkey strings for conflict detection
   const existingHotkeys = useMemo(() => {
@@ -187,7 +180,10 @@ export function MacroPanel({ onClose, macros, onAdd, onUpdate, onDelete }: Macro
       )}
 
       {/* Macro list */}
-      <div className="panel-content flex-1 overflow-y-auto overflow-x-hidden px-1 py-1" style={{ fontSize: panelFontSize + 'px' }}>
+      <div
+        className="panel-content flex-1 overflow-y-auto overflow-x-hidden px-1 py-1"
+        style={{ fontSize: panelFontSize + 'px' }}
+      >
         {filtered.length === 0 && (
           <div className="text-center text-[11px] text-text-dim py-6">
             {macros.length === 0

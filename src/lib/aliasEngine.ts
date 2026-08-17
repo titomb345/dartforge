@@ -102,7 +102,11 @@ const MATCH_MODE_PRIORITY: Record<AliasMatchMode, number> = {
  * so that e.g. an exact "port" fires before a prefix "port".
  * Returns the matched alias and extracted arguments, or null.
  */
-export function matchAlias(segment: string, aliases: Alias[], excludeIds?: Set<string>): { alias: Alias; args: string[] } | null {
+export function matchAlias(
+  segment: string,
+  aliases: Alias[],
+  excludeIds?: Set<string>
+): { alias: Alias; args: string[] } | null {
   const trimmed = segment.trim();
   if (!trimmed) return null;
 
@@ -224,7 +228,15 @@ function expandSegment(
     } else {
       // Recursively expand (may hit another alias, but not this one)
       commands.push(
-        ...expandSegment(subTrimmed, aliases, enableSpeedwalk, depth + 1, subOptions, separator, childExcludeIds)
+        ...expandSegment(
+          subTrimmed,
+          aliases,
+          enableSpeedwalk,
+          depth + 1,
+          subOptions,
+          separator,
+          childExcludeIds
+        )
       );
     }
   }
@@ -305,7 +317,8 @@ export function expandInput(
     // "ta scrip;;wear scrip" becomes two separate commands.
     const fullMatch = matchAlias(trimmed, aliases, excludeIds);
     const argsStartWithDirective = fullMatch && /^\/(?:spam|var)$/i.test(fullMatch.args[0] ?? '');
-    const bodyStartsWithGreedy = fullMatch && /^\/(?:spam|var)\s/i.test(fullMatch.alias.body.trim());
+    const bodyStartsWithGreedy =
+      fullMatch && /^\/(?:spam|var)\s/i.test(fullMatch.alias.body.trim());
     if (
       fullMatch &&
       fullMatch.alias.matchMode === 'prefix' &&

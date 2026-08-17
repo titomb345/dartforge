@@ -227,8 +227,7 @@ export function QuickButtonBar({
           onClose={closeContextMenu}
           onEdit={(btn) => {
             const el = document.querySelector(`[data-qb-id="${btn.id}"]`);
-            const rect =
-              el?.getBoundingClientRect() ?? new DOMRect(contextMenu.x, contextMenu.y);
+            const rect = el?.getBoundingClientRect() ?? new DOMRect(contextMenu.x, contextMenu.y);
             openEdit(btn, rect);
           }}
           onDelete={onDelete}
@@ -277,8 +276,7 @@ function ContextMenuOverlay({
   onDelete,
   onToggleEnabled,
 }: ContextMenuOverlayProps) {
-  const itemClass =
-    'w-full px-3 py-1.5 text-[11px] text-left transition-colors cursor-pointer';
+  const itemClass = 'w-full px-3 py-1.5 text-[11px] text-left transition-colors cursor-pointer';
   const activeClass = `${itemClass} text-text-label hover:bg-bg-secondary/60`;
   const dangerClass = `${itemClass} text-red hover:bg-red/10`;
 

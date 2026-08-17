@@ -13,10 +13,7 @@
 
 import { matchConcentrationLine } from './concentrationPatterns';
 
-export type AutoConcPhase =
-  | 'idle'
-  | 'waiting-bebt'
-  | 'executing';
+export type AutoConcPhase = 'idle' | 'waiting-bebt' | 'executing';
 
 export interface AutoConcState {
   active: boolean;

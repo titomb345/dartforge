@@ -24,13 +24,7 @@ interface QuickButtonEditorProps {
 
 /* ── Shared color picker row ─────────────────────────────────── */
 
-function ColorPicker({
-  value,
-  onChange,
-}: {
-  value: string;
-  onChange: (hex: string) => void;
-}) {
+function ColorPicker({ value, onChange }: { value: string; onChange: (hex: string) => void }) {
   const isCustom = !COLOR_PRESETS.some((c) => c.hex === value);
 
   return (
@@ -172,7 +166,12 @@ function PreviewPill({ label, color }: { label: string; color: string }) {
 
 /* ── Main Editor ──────────────────────────────────────────────── */
 
-export function QuickButtonEditor({ button, anchorRect, onSave, onCancel }: QuickButtonEditorProps) {
+export function QuickButtonEditor({
+  button,
+  anchorRect,
+  onSave,
+  onCancel,
+}: QuickButtonEditorProps) {
   // Simple button state
   const [label, setLabel] = useState(button?.label ?? '');
   const [color, setColor] = useState(button?.color ?? COLOR_PRESETS[0].hex);
@@ -346,10 +345,7 @@ export function QuickButtonEditor({ button, anchorRect, onSave, onCancel }: Quic
             style={{ borderColor: `color-mix(in srgb, ${onColor} 25%, transparent)` }}
           >
             <div className="flex items-center gap-1.5">
-              <span
-                className="text-[10px] font-semibold"
-                style={{ color: onColor }}
-              >
+              <span className="text-[10px] font-semibold" style={{ color: onColor }}>
                 ON State
               </span>
               <span className="text-[9px] text-text-dim">— runs when turning on</span>
@@ -390,10 +386,7 @@ export function QuickButtonEditor({ button, anchorRect, onSave, onCancel }: Quic
             style={{ borderColor: `color-mix(in srgb, ${offColor} 25%, transparent)` }}
           >
             <div className="flex items-center gap-1.5">
-              <span
-                className="text-[10px] font-semibold"
-                style={{ color: offColor }}
-              >
+              <span className="text-[10px] font-semibold" style={{ color: offColor }}>
                 OFF State
               </span>
               <span className="text-[9px] text-text-dim">— runs when turning off</span>

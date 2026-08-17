@@ -10,7 +10,7 @@ import { toBlob } from 'html-to-image';
 
 export async function captureTerminalScreenshot(
   terminalElement: HTMLElement,
-  terminalBackground: string,
+  terminalBackground: string
 ): Promise<void> {
   const screen = terminalElement.querySelector('.xterm-screen') as HTMLElement | null;
   if (!screen) throw new Error('Could not find .xterm-screen element');
@@ -141,7 +141,7 @@ function roundRect(
   y: number,
   w: number,
   h: number,
-  r: number,
+  r: number
 ) {
   ctx.beginPath();
   ctx.moveTo(x + r, y);
@@ -162,7 +162,7 @@ function roundRectTop(
   y: number,
   w: number,
   h: number,
-  r: number,
+  r: number
 ) {
   ctx.beginPath();
   ctx.moveTo(x + r, y);

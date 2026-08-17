@@ -313,17 +313,18 @@ export function SettingsPanel({ onClose }: { onClose: () => void }) {
   } = settings;
   const isTauri = getPlatform() === 'tauri';
 
-  // Character switch cooldown (20 minutes)
+  // Character switch advisory (20 minutes). This is a heads-up, never a block:
+  // switching the active character is always allowed.
   const SWITCH_COOLDOWN_MS = 20 * 60 * 1000;
   const [cooldownRemaining, setCooldownRemaining] = useState<number>(0);
   const otherSlot = (autoLoginActiveSlot === 0 ? 1 : 0) as 0 | 1;
   const otherCharacter = autoLoginCharacters[otherSlot];
 
-  // Cooldown logic:
+  // Advisory logic:
   // - lastLoginSlot = the slot that LAST successfully logged in
-  // - That same slot can always re-login (no cooldown)
-  // - The other slot must wait 20 minutes from lastLoginTimestamp
-  // - So cooldown applies when switching TO a slot that is NOT lastLoginSlot
+  // - That same slot can always re-login (no wait)
+  // - The other slot is best left for 20 minutes from lastLoginTimestamp
+  // - So the note applies when switching TO a slot that is NOT lastLoginSlot
   const otherSlotNeedsCooldown =
     lastLoginTimestamp != null && lastLoginSlot != null && lastLoginSlot !== otherSlot;
 
@@ -342,8 +343,6 @@ export function SettingsPanel({ onClose }: { onClose: () => void }) {
   }, [lastLoginTimestamp, otherSlotNeedsCooldown]);
 
   const switchCooldownActive = otherSlotNeedsCooldown && cooldownRemaining > 0;
-
-  const formatCooldown = formatCountdown;
 
   const updateCharacterField = (slot: 0 | 1, field: 'name' | 'password', value: string) => {
     const updated = [...autoLoginCharacters] as [
@@ -433,25 +432,34 @@ export function SettingsPanel({ onClose }: { onClose: () => void }) {
             );
           })}
 
-          {/* Switch & reconnect */}
+          {/* Switch active character — always available, online or off */}
           {otherCharacter?.name && (
             <div className="mt-2">
               <button
                 onClick={onSwitchCharacter}
-                disabled={connected || switchCooldownActive || !autoLoginEnabled}
-                className={cn(
-                  'w-full text-[10px] font-mono py-1.5 px-3 rounded border transition-all duration-200',
-                  connected || switchCooldownActive || !autoLoginEnabled
-                    ? 'text-text-dim border-border-dim opacity-40 cursor-default'
-                    : 'text-[#56b6c2] border-[#56b6c2]/30 bg-[#56b6c2]/5 hover:bg-[#56b6c2]/10 hover:border-[#56b6c2]/50 cursor-pointer'
-                )}
+                title={
+                  connected
+                    ? `Disconnect and reconnect as ${otherCharacter.name}`
+                    : `Make ${otherCharacter.name} the active character`
+                }
+                className="w-full text-[10px] font-mono py-1.5 px-3 rounded border transition-all duration-200 text-[#56b6c2] border-[#56b6c2]/30 bg-[#56b6c2]/5 hover:bg-[#56b6c2]/10 hover:border-[#56b6c2]/50 cursor-pointer"
               >
                 {connected
-                  ? 'Disconnect first'
-                  : switchCooldownActive
-                    ? `Switch to ${otherCharacter.name} (${formatCooldown(cooldownRemaining)})`
-                    : `Switch to ${otherCharacter.name}`}
+                  ? `Switch to ${otherCharacter.name} and reconnect`
+                  : `Switch to ${otherCharacter.name}`}
               </button>
+              {switchCooldownActive && (
+                <div className="mt-1 text-[9px] font-mono text-amber/80 leading-relaxed">
+                  Heads up: 20 minutes between characters is the usual gap.{' '}
+                  {formatCountdown(cooldownRemaining)} left before {otherCharacter.name} is clear.
+                  Switching still works.
+                </div>
+              )}
+              <div className="mt-1 text-[9px] text-text-dim font-mono leading-relaxed">
+                {connected
+                  ? 'Switching drops the connection and logs back in as the other character.'
+                  : 'Switching offline just repoints counters, timers, skills, notes, and the map at the other character.'}
+              </div>
             </div>
           )}
 

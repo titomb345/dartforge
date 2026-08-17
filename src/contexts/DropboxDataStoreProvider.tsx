@@ -159,7 +159,9 @@ export function DropboxDataStoreProvider({ children }: { children: ReactNode }) 
             pending.push(filename);
             localStorage.setItem(PENDING_UPLOADS_KEY, JSON.stringify(pending));
           }
-        } catch { /* noop */ }
+        } catch {
+          /* noop */
+        }
       }
     }, DROPBOX_DEBOUNCE_MS);
 

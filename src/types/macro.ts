@@ -77,12 +77,12 @@ export function hotkeyFromEvent(e: KeyboardEvent): HotkeyCombo | null {
 
 /** Reserved combos that cannot be bound */
 const RESERVED = new Set([
-  'ctrl+c',         // copy
-  'ctrl+f',         // search
-  'ctrl+shift+s',   // screenshot
-  'ctrl+equal',     // zoom in
-  'ctrl+minus',     // zoom out
-  'ctrl+digit0',    // zoom reset
+  'ctrl+c', // copy
+  'ctrl+f', // search
+  'ctrl+shift+s', // screenshot
+  'ctrl+equal', // zoom in
+  'ctrl+minus', // zoom out
+  'ctrl+digit0', // zoom reset
   'tab',
   'escape',
   'enter',

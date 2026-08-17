@@ -479,7 +479,10 @@ export function NotesPanel({ mode = 'slideout' }: NotesPanelProps) {
       )}
 
       {/* Text area */}
-      <div className="panel-content flex-1 overflow-hidden p-1" style={{ fontSize: panelFontSize + 'px' }}>
+      <div
+        className="panel-content flex-1 overflow-hidden p-1"
+        style={{ fontSize: panelFontSize + 'px' }}
+      >
         {activeCharacter ? (
           <textarea
             value={content}

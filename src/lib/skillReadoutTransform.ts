@@ -80,11 +80,7 @@ const SHOW_SKILLS_RE = /^([\w'\-# ]+):\s+([A-Za-z ]+)\.$/;
 /** Max display length of full tier names — "A Grand Master" at 14 chars. */
 const MAX_SHOW_TIER_LEN = 14;
 
-function transformShowSkills(
-  stripped: string,
-  raw: string,
-  skills: SkillLookup,
-): string | null {
+function transformShowSkills(stripped: string, raw: string, skills: SkillLookup): string | null {
   const m = SHOW_SKILLS_RE.exec(stripped);
   if (!m) return null;
 
@@ -115,22 +111,49 @@ function transformShowSkills(
  * Includes both the display form (articles stripped) and abbreviations.
  */
 const QUICK_TIER_NAMES = [
-  'consummate', 'proficient', 'not very good', 'below average', 'above average',
-  'grand master', 'high master', 'unskilled', 'legendary', 'excellent',
-  'very good', 'no skill', 'virtuoso', 'renowned', 'beginner', 'eminent',
-  'average', 'mythic', 'master', 'superb', 'expert', 'adroit', 'adept',
-  'novice', 'leggy', 'tyro', 'prof', 'good', 'fair', 'able', 'poor',
-  'nvg', 'hm', 'gm', 'vg', 'ba', 'aa',
+  'consummate',
+  'proficient',
+  'not very good',
+  'below average',
+  'above average',
+  'grand master',
+  'high master',
+  'unskilled',
+  'legendary',
+  'excellent',
+  'very good',
+  'no skill',
+  'virtuoso',
+  'renowned',
+  'beginner',
+  'eminent',
+  'average',
+  'mythic',
+  'master',
+  'superb',
+  'expert',
+  'adroit',
+  'adept',
+  'novice',
+  'leggy',
+  'tyro',
+  'prof',
+  'good',
+  'fair',
+  'able',
+  'poor',
+  'nvg',
+  'hm',
+  'gm',
+  'vg',
+  'ba',
+  'aa',
 ].sort((a, b) => b.length - a.length);
 
 /** Set of known tier names for fast lookup after regex match. */
 const QUICK_TIER_SET = new Set(QUICK_TIER_NAMES);
 
-const QUICK_TIER_RE = new RegExp(
-  `\\s{2,}(${QUICK_TIER_NAMES.join('|')})(?=\\s{2,}|\\s*$)`,
-  'gi',
-);
-
+const QUICK_TIER_RE = new RegExp(`\\s{2,}(${QUICK_TIER_NAMES.join('|')})(?=\\s{2,}|\\s*$)`, 'gi');
 
 /**
  * Quick-skills lines use bright white (\x1b[1;37m) and/or bright cyan
@@ -141,11 +164,7 @@ function hasQuickSkillColors(raw: string): boolean {
   return raw.includes('\x1b[1;37m') || raw.includes('\x1b[1;36m');
 }
 
-function transformQuickSkills(
-  _stripped: string,
-  raw: string,
-  skills: SkillLookup,
-): string | null {
+function transformQuickSkills(_stripped: string, raw: string, skills: SkillLookup): string | null {
   if (!hasQuickSkillColors(raw)) return null;
 
   // Re-strip ANSI from raw so character positions are perfectly aligned.
@@ -182,7 +201,10 @@ function transformQuickSkills(
   if (injections.length === 0) return null;
 
   // Map aligned-text offsets to raw-string offsets
-  const insertions = mapStrippedOffsetsToRaw(raw, injections.map((i) => i.offset));
+  const insertions = mapStrippedOffsetsToRaw(
+    raw,
+    injections.map((i) => i.offset)
+  );
 
   // Insert from right to left so offsets don't shift.
   // Fixed-width injection keeps column 2 aligned.
@@ -191,7 +213,10 @@ function transformQuickSkills(
   for (let i = injections.length - 1; i >= 0; i--) {
     const rawOffset = insertions[i];
     if (rawOffset < 0) continue;
-    result = result.substring(0, rawOffset) + countTag(injections[i].count, w) + result.substring(rawOffset);
+    result =
+      result.substring(0, rawOffset) +
+      countTag(injections[i].count, w) +
+      result.substring(rawOffset);
   }
   return result;
 }
@@ -249,8 +274,7 @@ function mapStrippedOffsetsToRaw(raw: string, offsets: number[]): number[] {
 export function transformSkillReadout(
   stripped: string,
   raw: string,
-  skills: SkillLookup,
+  skills: SkillLookup
 ): string | null {
-  return transformShowSkills(stripped, raw, skills)
-    ?? transformQuickSkills(stripped, raw, skills);
+  return transformShowSkills(stripped, raw, skills) ?? transformQuickSkills(stripped, raw, skills);
 }

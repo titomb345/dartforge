@@ -903,7 +903,7 @@ function AppMain() {
   }, [skillDataRef, movementModeRef, writeToTerm]);
 
   // Improve counter hook
-  const improveCounters = useImproveCounters();
+  const improveCounters = useImproveCounters(activeCharacter);
   const { handleCounterMatch } = improveCounters;
 
   // In-game clock (also pushed to the Mobile Companion header)
@@ -2317,13 +2317,28 @@ function AppMain() {
     ]
   );
 
-  // Character switch: swap active slot, disconnect, reconnect
+  // Character switch: swap the active slot and repoint every per-character
+  // store (counters, timers, skills, notes, map, …) at the new character. The
+  // connection is only bounced when one exists — switching while offline just
+  // changes who you are, it does not drag you online.
   const switchCharacter = useCallback(() => {
     const newSlot = (autoLoginActiveSlot === 0 ? 1 : 0) as 0 | 1;
     appSettings.updateAutoLoginActiveSlot(newSlot);
-    disconnect();
-    setTimeout(() => reconnect(), 300);
-  }, [autoLoginActiveSlot, appSettings.updateAutoLoginActiveSlot, disconnect, reconnect]);
+    const target = autoLoginCharacters[newSlot];
+    if (target?.name) void setActiveCharacter(target.name);
+    if (connected) {
+      disconnect();
+      setTimeout(() => reconnect(), 300);
+    }
+  }, [
+    autoLoginActiveSlot,
+    autoLoginCharacters,
+    appSettings.updateAutoLoginActiveSlot,
+    setActiveCharacter,
+    connected,
+    disconnect,
+    reconnect,
+  ]);
 
   // Memoized toolbar callbacks to avoid re-renders
   const handleReconnect = useCallback(() => {

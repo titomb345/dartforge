@@ -44,7 +44,16 @@ export function FontSizeControl({
           className="w-[18px] h-[18px] flex items-center justify-center rounded text-text-dim hover:text-cyan hover:bg-bg-secondary/60 cursor-pointer transition-colors ml-0.5"
           title="Reset to global panel font size"
         >
-          <svg width="10" height="10" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+          <svg
+            width="10"
+            height="10"
+            viewBox="0 0 16 16"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="1.5"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          >
             <path d="M14 3H6.5L1 8l5.5 5H14a1 1 0 0 0 1-1V4a1 1 0 0 0-1-1z" />
             <line x1="11" y1="6" x2="8" y2="10" />
             <line x1="8" y1="6" x2="11" y2="10" />

@@ -136,7 +136,14 @@ export function ChatPanel({ mode = 'slideout' }: PinnablePanelProps) {
     deleteOutgoingMessage,
   } = useChatContext();
   const { sortedMappings, createMapping } = useSignatureContext();
-  const { panelFontSize, chatFontSize, updateChatFontSize, timestampFormat, updateTimestampFormat, gaggedNpcs } = useAppSettingsContext();
+  const {
+    panelFontSize,
+    chatFontSize,
+    updateChatFontSize,
+    timestampFormat,
+    updateTimestampFormat,
+    gaggedNpcs,
+  } = useAppSettingsContext();
   const effectiveChatFontSize = chatFontSize ?? panelFontSize;
   const scrollRef = useRef<HTMLDivElement | null>(null);
   const isNearEdgeRef = useRef(true);
@@ -167,8 +174,7 @@ export function ChatPanel({ mode = 'slideout' }: PinnablePanelProps) {
       const senderLower = msg.sender.toLowerCase();
       if (mutedSenders.some((s) => s.toLowerCase() === senderLower)) return false;
       if (gaggedNpcs.some((s) => s.toLowerCase() === senderLower)) return false;
-      if (q && !msg.message.toLowerCase().includes(q) && !senderLower.includes(q))
-        return false;
+      if (q && !msg.message.toLowerCase().includes(q) && !senderLower.includes(q)) return false;
       return true;
     });
     return newestFirst ? [...filtered].reverse() : filtered;
@@ -339,7 +345,9 @@ export function ChatPanel({ mode = 'slideout' }: PinnablePanelProps) {
         <div className="w-px h-3 bg-border-subtle mx-0.5" />
 
         <div className="flex items-center gap-0.5" title="Timestamp format">
-          <span className="text-text-dim mr-0.5"><ClockIcon size={9} /></span>
+          <span className="text-text-dim mr-0.5">
+            <ClockIcon size={9} />
+          </span>
           {(['12h', '24h'] as const).map((fmt) => (
             <button
               key={fmt}
@@ -382,7 +390,11 @@ export function ChatPanel({ mode = 'slideout' }: PinnablePanelProps) {
           <>
             <button
               onClick={toggleHideOwnMessages}
-              title={hideOwnMessages ? 'Own messages hidden (click to show)' : 'Own messages shown (click to hide)'}
+              title={
+                hideOwnMessages
+                  ? 'Own messages hidden (click to show)'
+                  : 'Own messages shown (click to hide)'
+              }
               className={`text-[10px] font-mono px-1.5 py-0.5 rounded border cursor-pointer transition-colors duration-150 whitespace-nowrap ${
                 !hideOwnMessages
                   ? 'bg-green/15 border-green/30 text-green'
@@ -425,12 +437,14 @@ export function ChatPanel({ mode = 'slideout' }: PinnablePanelProps) {
               onKeyDown={(e) => {
                 if (e.key === 'Escape') toggleSearch();
               }}
-              placeholder={activeTab === 'incoming' ? 'Search messages...' : 'Search sent commands...'}
+              placeholder={
+                activeTab === 'incoming' ? 'Search messages...' : 'Search sent commands...'
+              }
               className="flex-1 min-w-0 bg-transparent text-[11px] font-mono text-text-primary placeholder:text-text-dim outline-none"
             />
             {searchQuery && (
               <span className="text-[9px] font-mono text-text-dim whitespace-nowrap">
-                {(activeTab === 'incoming' ? visibleMessages.length : visibleOutgoing.length)} found
+                {activeTab === 'incoming' ? visibleMessages.length : visibleOutgoing.length} found
               </span>
             )}
           </div>
@@ -441,12 +455,14 @@ export function ChatPanel({ mode = 'slideout' }: PinnablePanelProps) {
             onClick={toggleSearch}
             title={searchOpen ? 'Close search' : 'Search messages'}
             className={`flex items-center justify-center w-5 h-5 rounded-[3px] cursor-pointer transition-colors duration-150 ${
-              searchOpen
-                ? 'text-pink'
-                : 'text-text-dim hover:text-text-label'
+              searchOpen ? 'text-pink' : 'text-text-dim hover:text-text-label'
             }`}
           >
-            {searchOpen ? <span className="text-[13px] leading-none">×</span> : <SearchIcon size={10} />}
+            {searchOpen ? (
+              <span className="text-[13px] leading-none">×</span>
+            ) : (
+              <SearchIcon size={10} />
+            )}
           </button>
         </div>
       </div>
@@ -499,7 +515,12 @@ export function ChatPanel({ mode = 'slideout' }: PinnablePanelProps) {
       )}
 
       {/* Message list */}
-      <div ref={scrollRef} onScroll={handleScroll} className="panel-content flex-1 overflow-y-auto py-1" style={{ fontSize: effectiveChatFontSize + 'px' }}>
+      <div
+        ref={scrollRef}
+        onScroll={handleScroll}
+        className="panel-content flex-1 overflow-y-auto py-1"
+        style={{ fontSize: effectiveChatFontSize + 'px' }}
+      >
         {activeTab === 'incoming' ? (
           /* ---- INCOMING TAB ---- */
           newestFirst ? (
@@ -518,7 +539,15 @@ export function ChatPanel({ mode = 'slideout' }: PinnablePanelProps) {
                   </div>
                 ) : (
                   todayMessages.map((msg) => (
-                    <ChatMessageRow key={msg.id} msg={msg} now={now} fontSize={effectiveChatFontSize} onMute={muteSender} onIdentify={handleIdentify} onDelete={deleteMessage} />
+                    <ChatMessageRow
+                      key={msg.id}
+                      msg={msg}
+                      now={now}
+                      fontSize={effectiveChatFontSize}
+                      onMute={muteSender}
+                      onIdentify={handleIdentify}
+                      onDelete={deleteMessage}
+                    />
                   ))
                 )}
               </div>
@@ -529,12 +558,23 @@ export function ChatPanel({ mode = 'slideout' }: PinnablePanelProps) {
                   const dayKey = getDayKey(msg.timestamp);
                   if (dayKey !== lastDayKey) {
                     elements.push(
-                      <DaySeparator key={`sep-${dayKey}`} label={formatDaySeparator(msg.timestamp, now)} />,
+                      <DaySeparator
+                        key={`sep-${dayKey}`}
+                        label={formatDaySeparator(msg.timestamp, now)}
+                      />
                     );
                     lastDayKey = dayKey;
                   }
                   elements.push(
-                    <ChatMessageRow key={msg.id} msg={msg} now={now} fontSize={effectiveChatFontSize} onMute={muteSender} onIdentify={handleIdentify} onDelete={deleteMessage} />,
+                    <ChatMessageRow
+                      key={msg.id}
+                      msg={msg}
+                      now={now}
+                      fontSize={effectiveChatFontSize}
+                      onMute={muteSender}
+                      onIdentify={handleIdentify}
+                      onDelete={deleteMessage}
+                    />
                   );
                 }
                 return elements;
@@ -549,12 +589,23 @@ export function ChatPanel({ mode = 'slideout' }: PinnablePanelProps) {
                   const dayKey = getDayKey(msg.timestamp);
                   if (dayKey !== lastDayKey) {
                     elements.push(
-                      <DaySeparator key={`sep-${dayKey}`} label={formatDaySeparator(msg.timestamp, now)} />,
+                      <DaySeparator
+                        key={`sep-${dayKey}`}
+                        label={formatDaySeparator(msg.timestamp, now)}
+                      />
                     );
                     lastDayKey = dayKey;
                   }
                   elements.push(
-                    <ChatMessageRow key={msg.id} msg={msg} now={now} fontSize={effectiveChatFontSize} onMute={muteSender} onIdentify={handleIdentify} onDelete={deleteMessage} />,
+                    <ChatMessageRow
+                      key={msg.id}
+                      msg={msg}
+                      now={now}
+                      fontSize={effectiveChatFontSize}
+                      onMute={muteSender}
+                      onIdentify={handleIdentify}
+                      onDelete={deleteMessage}
+                    />
                   );
                 }
                 return elements;
@@ -573,87 +624,123 @@ export function ChatPanel({ mode = 'slideout' }: PinnablePanelProps) {
                   </div>
                 ) : (
                   todayMessages.map((msg) => (
-                    <ChatMessageRow key={msg.id} msg={msg} now={now} fontSize={effectiveChatFontSize} onMute={muteSender} onIdentify={handleIdentify} onDelete={deleteMessage} />
+                    <ChatMessageRow
+                      key={msg.id}
+                      msg={msg}
+                      now={now}
+                      fontSize={effectiveChatFontSize}
+                      onMute={muteSender}
+                      onIdentify={handleIdentify}
+                      onDelete={deleteMessage}
+                    />
                   ))
                 )}
               </div>
             </>
           )
+        ) : /* ---- OUTGOING TAB ---- */
+        newestFirst ? (
+          <>
+            <div className="min-h-full flex flex-col">
+              <DaySeparator label="Today" />
+              {todayOutgoing.length === 0 ? (
+                <div className="flex-1 flex items-center justify-center px-3">
+                  <span className="text-xs text-text-dim">
+                    {visibleOutgoing.length === 0
+                      ? 'No sent commands yet. Say, tell, shout, OOC, and SZ commands will appear here.'
+                      : 'No commands sent today — scroll down for earlier.'}
+                  </span>
+                </div>
+              ) : (
+                todayOutgoing.map((msg) => (
+                  <OutgoingMessageRow
+                    key={msg.id}
+                    msg={msg}
+                    now={now}
+                    fontSize={effectiveChatFontSize}
+                    onDelete={deleteOutgoingMessage}
+                  />
+                ))
+              )}
+            </div>
+            {(() => {
+              const elements: React.ReactNode[] = [];
+              let lastDayKey: string | null = null;
+              for (const msg of olderOutgoing) {
+                const dayKey = getDayKey(msg.timestamp);
+                if (dayKey !== lastDayKey) {
+                  elements.push(
+                    <DaySeparator
+                      key={`sep-${dayKey}`}
+                      label={formatDaySeparator(msg.timestamp, now)}
+                    />
+                  );
+                  lastDayKey = dayKey;
+                }
+                elements.push(
+                  <OutgoingMessageRow
+                    key={msg.id}
+                    msg={msg}
+                    now={now}
+                    fontSize={effectiveChatFontSize}
+                    onDelete={deleteOutgoingMessage}
+                  />
+                );
+              }
+              return elements;
+            })()}
+          </>
         ) : (
-          /* ---- OUTGOING TAB ---- */
-          newestFirst ? (
-            <>
-              <div className="min-h-full flex flex-col">
-                <DaySeparator label="Today" />
-                {todayOutgoing.length === 0 ? (
-                  <div className="flex-1 flex items-center justify-center px-3">
-                    <span className="text-xs text-text-dim">
-                      {visibleOutgoing.length === 0
-                        ? 'No sent commands yet. Say, tell, shout, OOC, and SZ commands will appear here.'
-                        : 'No commands sent today — scroll down for earlier.'}
-                    </span>
-                  </div>
-                ) : (
-                  todayOutgoing.map((msg) => (
-                    <OutgoingMessageRow key={msg.id} msg={msg} now={now} fontSize={effectiveChatFontSize} onDelete={deleteOutgoingMessage} />
-                  ))
-                )}
-              </div>
-              {(() => {
-                const elements: React.ReactNode[] = [];
-                let lastDayKey: string | null = null;
-                for (const msg of olderOutgoing) {
-                  const dayKey = getDayKey(msg.timestamp);
-                  if (dayKey !== lastDayKey) {
-                    elements.push(
-                      <DaySeparator key={`sep-${dayKey}`} label={formatDaySeparator(msg.timestamp, now)} />,
-                    );
-                    lastDayKey = dayKey;
-                  }
+          <>
+            {(() => {
+              const elements: React.ReactNode[] = [];
+              let lastDayKey: string | null = null;
+              for (const msg of olderOutgoing) {
+                const dayKey = getDayKey(msg.timestamp);
+                if (dayKey !== lastDayKey) {
                   elements.push(
-                    <OutgoingMessageRow key={msg.id} msg={msg} now={now} fontSize={effectiveChatFontSize} onDelete={deleteOutgoingMessage} />,
+                    <DaySeparator
+                      key={`sep-${dayKey}`}
+                      label={formatDaySeparator(msg.timestamp, now)}
+                    />
                   );
+                  lastDayKey = dayKey;
                 }
-                return elements;
-              })()}
-            </>
-          ) : (
-            <>
-              {(() => {
-                const elements: React.ReactNode[] = [];
-                let lastDayKey: string | null = null;
-                for (const msg of olderOutgoing) {
-                  const dayKey = getDayKey(msg.timestamp);
-                  if (dayKey !== lastDayKey) {
-                    elements.push(
-                      <DaySeparator key={`sep-${dayKey}`} label={formatDaySeparator(msg.timestamp, now)} />,
-                    );
-                    lastDayKey = dayKey;
-                  }
-                  elements.push(
-                    <OutgoingMessageRow key={msg.id} msg={msg} now={now} fontSize={effectiveChatFontSize} onDelete={deleteOutgoingMessage} />,
-                  );
-                }
-                return elements;
-              })()}
-              <div className="min-h-full flex flex-col">
-                <DaySeparator label="Today" />
-                {todayOutgoing.length === 0 ? (
-                  <div className="flex-1 flex items-center justify-center px-3">
-                    <span className="text-xs text-text-dim">
-                      {visibleOutgoing.length === 0
-                        ? 'No sent commands yet. Say, tell, shout, OOC, and SZ commands will appear here.'
-                        : 'No commands sent today — scroll up for earlier.'}
-                    </span>
-                  </div>
-                ) : (
-                  todayOutgoing.map((msg) => (
-                    <OutgoingMessageRow key={msg.id} msg={msg} now={now} fontSize={effectiveChatFontSize} onDelete={deleteOutgoingMessage} />
-                  ))
-                )}
-              </div>
-            </>
-          )
+                elements.push(
+                  <OutgoingMessageRow
+                    key={msg.id}
+                    msg={msg}
+                    now={now}
+                    fontSize={effectiveChatFontSize}
+                    onDelete={deleteOutgoingMessage}
+                  />
+                );
+              }
+              return elements;
+            })()}
+            <div className="min-h-full flex flex-col">
+              <DaySeparator label="Today" />
+              {todayOutgoing.length === 0 ? (
+                <div className="flex-1 flex items-center justify-center px-3">
+                  <span className="text-xs text-text-dim">
+                    {visibleOutgoing.length === 0
+                      ? 'No sent commands yet. Say, tell, shout, OOC, and SZ commands will appear here.'
+                      : 'No commands sent today — scroll up for earlier.'}
+                  </span>
+                </div>
+              ) : (
+                todayOutgoing.map((msg) => (
+                  <OutgoingMessageRow
+                    key={msg.id}
+                    msg={msg}
+                    now={now}
+                    fontSize={effectiveChatFontSize}
+                    onDelete={deleteOutgoingMessage}
+                  />
+                ))
+              )}
+            </div>
+          </>
         )}
       </div>
     </div>

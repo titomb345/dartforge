@@ -168,8 +168,11 @@ export interface CommandRunner {
   disableTimerGroup: (group: string) => void;
   getGameTime: () => { hour: number; timeOfDay: string; date: string; holiday: string | null };
   getCounter: (name: string) => {
-    status: string; totalImps: number; elapsedMs: number;
-    perMinute: number; perHour: number;
+    status: string;
+    totalImps: number;
+    elapsedMs: number;
+    perMinute: number;
+    perHour: number;
     skills: { skill: string; count: number }[];
   } | null;
   getMovementMode: () => string;

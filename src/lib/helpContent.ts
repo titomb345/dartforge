@@ -107,7 +107,7 @@ export const HELP_CATEGORIES: HelpCategory[] = [
       {
         title: 'Counters Panel',
         description:
-          'Track improve rates with named counters. Start, pause, resume, or stop. Shows rates per minute, per period, and per hour.',
+          'Track improve rates with named counters. Start, pause, resume, or stop. Shows rates per minute, per period, and per hour. Counters belong to the active character, so each one keeps its own set.',
         helpId: 'toolbar-counters',
       },
       {
@@ -154,7 +154,7 @@ export const HELP_CATEGORIES: HelpCategory[] = [
       {
         title: 'Timers Panel',
         description:
-          'Create repeating timers that execute commands at set intervals. Supports text mode (command separator, /delay, /echo, /spam, /var) or JavaScript script mode. Toggle "Show countdown in status bar" per timer to control which countdowns appear next to the command input. Character-scoped or Global.',
+          'Create repeating timers that execute commands at set intervals. Supports text mode (command separator, /delay, /echo, /spam, /var) or JavaScript script mode. Toggle "Show countdown in status bar" per timer to control which countdowns appear next to the command input. Timers are Character-scoped by default; switch the scope to Global for the ones that should run for every character.',
         helpId: 'toolbar-timers',
       },
       {
@@ -219,7 +219,7 @@ export const HELP_CATEGORIES: HelpCategory[] = [
       {
         title: 'Quick Character Switch',
         description:
-          'In Settings > Characters, click "Switch to [name]" to disconnect and immediately reconnect as your other character. A 20-minute cooldown applies between different characters (DartMUD server rule).',
+          'In Settings > Characters, click "Switch to [name]" to make your other character the active one. While connected it disconnects and logs straight back in as them; while offline it just repoints your per-character data (counters, timers, skills, notes, map, aliases) so you can review or edit it without connecting. A note appears if you are inside the usual 20-minute gap between characters, but the switch is never blocked.',
         interaction: 'click',
       },
       {
@@ -629,7 +629,7 @@ export const HELP_CATEGORIES: HelpCategory[] = [
       {
         title: 'Improve Counters',
         description:
-          'Create named counters to track improve rates over time. Shows per-minute, per-period, and per-hour rates. Use Numpad * to quick-toggle. Drag counter pills to reorder them. Archive old counters to keep their stats for later review.',
+          'Create named counters to track improve rates over time. Shows per-minute, per-period, and per-hour rates. Use Numpad * to quick-toggle. Drag counter pills to reorder them. Archive old counters to keep their stats for later review. Each character has its own counters, and the panel header shows which character you are looking at.',
         helpId: 'toolbar-counters',
       },
       {

@@ -161,9 +161,7 @@ export function MacroEditor({ macro, existingHotkeys, onSave, onCancel }: MacroE
             </MudButton>
           )}
         </div>
-        {hotkeyError && (
-          <div className="text-[9px] text-red mt-0.5">{hotkeyError}</div>
-        )}
+        {hotkeyError && <div className="text-[9px] text-red mt-0.5">{hotkeyError}</div>}
       </div>
 
       {/* Body */}

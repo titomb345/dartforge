@@ -112,15 +112,11 @@ export function useSoundLibrary(
       const newNames: string[] = ['chime1', 'chime2'];
 
       // Load built-in chimes (with optional custom replacements)
-      const c1 = customChime1
-        ? await loadSound(invoke, 'chime1', defaultChime1)
-        : defaultChime1;
+      const c1 = customChime1 ? await loadSound(invoke, 'chime1', defaultChime1) : defaultChime1;
       if (cancelled) return;
       newMap.set('chime1', c1 ?? defaultChime1);
 
-      const c2 = customChime2
-        ? await loadSound(invoke, 'chime2', defaultChime2)
-        : defaultChime2;
+      const c2 = customChime2 ? await loadSound(invoke, 'chime2', defaultChime2) : defaultChime2;
       if (cancelled) return;
       newMap.set('chime2', c2 ?? defaultChime2);
 

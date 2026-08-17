@@ -49,6 +49,9 @@ dartforge/
 ## Commands
 - `npm run tauri dev` — Run in development mode
 - `npm run tauri build` — Build release binary
+- `npm run format` — Format TS/TSX/CSS with Prettier
+- `npm run format:check` — Verify formatting (enforced by CI)
+- `npm run lint` — Lint the frontend with ESLint
 - `cargo check` — Check Rust code (from src-tauri/)
 - `cargo clippy` — Lint Rust code
 - `cargo fmt` — Format Rust code
@@ -57,7 +60,7 @@ dartforge/
 - **Fix ALL build errors and warnings immediately when seen.** Never dismiss them as "pre-existing" or defer them. If `tsc`, `cargo check`, or `cargo clippy` reports an issue, fix it right then and there — no exceptions.
 
 ## Code Style
-- **TypeScript**: Prettier — single quotes, semicolons, 100-char width
+- **TypeScript**: Prettier — single quotes, semicolons, 100-char width. `src/` is fully formatted and CI fails on drift, so run `npm run format` before committing
 - **Rust**: `cargo fmt` defaults
 
 ## Key Patterns

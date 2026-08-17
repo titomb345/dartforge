@@ -181,31 +181,28 @@ export function useAliases(dataStore: DataStore, activeCharacter: string | null)
   }, []);
 
   /** Enable or disable every alias in a group at once. */
-  const setGroupEnabled = useCallback(
-    (group: string, enabled: boolean, scope: AliasScope) => {
-      const now = new Date().toISOString();
-      const updater = (prev: Record<AliasId, Alias>) => {
-        let changed = false;
-        const next: Record<AliasId, Alias> = {};
-        for (const [id, a] of Object.entries(prev)) {
-          if (a.group === group && a.enabled !== enabled) {
-            next[id] = { ...a, enabled, updatedAt: now };
-            changed = true;
-          } else {
-            next[id] = a;
-          }
+  const setGroupEnabled = useCallback((group: string, enabled: boolean, scope: AliasScope) => {
+    const now = new Date().toISOString();
+    const updater = (prev: Record<AliasId, Alias>) => {
+      let changed = false;
+      const next: Record<AliasId, Alias> = {};
+      for (const [id, a] of Object.entries(prev)) {
+        if (a.group === group && a.enabled !== enabled) {
+          next[id] = { ...a, enabled, updatedAt: now };
+          changed = true;
+        } else {
+          next[id] = a;
         }
-        return changed ? next : prev;
-      };
-
-      if (scope === 'character') {
-        setCharacterAliases(updater);
-      } else {
-        setGlobalAliases(updater);
       }
-    },
-    []
-  );
+      return changed ? next : prev;
+    };
+
+    if (scope === 'character') {
+      setCharacterAliases(updater);
+    } else {
+      setGlobalAliases(updater);
+    }
+  }, []);
 
   const duplicateAlias = useCallback(
     (id: AliasId, scope: AliasScope): AliasId | null => {

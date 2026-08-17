@@ -413,23 +413,20 @@ export function useAllocations(
     });
   }, []);
 
-  const setAllLimbsSlotDelta = useCallback(
-    (profileId: string, slot: AllocSlot, delta: number) => {
-      setData((prev) => ({
-        ...prev,
-        profiles: prev.profiles.map((p) => {
-          if (p.id !== profileId) return p;
-          const updatedLimbs = { ...p.limbs };
-          for (const limb of Object.keys(updatedLimbs)) {
-            const limbAlloc = updatedLimbs[limb];
-            updatedLimbs[limb] = updateSlot(limbAlloc, slot, limbAlloc[slot] + delta);
-          }
-          return { ...p, limbs: updatedLimbs };
-        }),
-      }));
-    },
-    []
-  );
+  const setAllLimbsSlotDelta = useCallback((profileId: string, slot: AllocSlot, delta: number) => {
+    setData((prev) => ({
+      ...prev,
+      profiles: prev.profiles.map((p) => {
+        if (p.id !== profileId) return p;
+        const updatedLimbs = { ...p.limbs };
+        for (const limb of Object.keys(updatedLimbs)) {
+          const limbAlloc = updatedLimbs[limb];
+          updatedLimbs[limb] = updateSlot(limbAlloc, slot, limbAlloc[slot] + delta);
+        }
+        return { ...p, limbs: updatedLimbs };
+      }),
+    }));
+  }, []);
 
   const setProfileActive = useCallback((id: string, active: boolean) => {
     setData((prev) => ({
@@ -815,6 +812,15 @@ export function useAllocations(
       loadMagicProfileToLive,
     }),
     // eslint-disable-next-line react-hooks/exhaustive-deps -- callbacks are stable (useCallback); only state/derived values trigger recomputation
-    [activeCharacter, data, view, allocTab, currentProfile, magicData, magicView, currentMagicProfile]
+    [
+      activeCharacter,
+      data,
+      view,
+      allocTab,
+      currentProfile,
+      magicData,
+      magicView,
+      currentMagicProfile,
+    ]
   );
 }

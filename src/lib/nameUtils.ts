@@ -1,6 +1,10 @@
 /** Normalize a spell/skill name for fuzzy comparison: lowercase, strip punctuation, underscores → spaces. */
 export function normalizeName(s: string): string {
-  return s.toLowerCase().replace(/[^a-z0-9 ]/g, '').replace(/_/g, ' ').trim();
+  return s
+    .toLowerCase()
+    .replace(/[^a-z0-9 ]/g, '')
+    .replace(/_/g, ' ')
+    .trim();
 }
 
 /** Find the first key in `data` whose normalized form matches the normalized `input`. */
