@@ -89,7 +89,6 @@ interface HexCell {
 /** Terrain characters that can appear inside hex cells */
 const TERRAIN_CHARS = new Set(Object.keys(TERRAIN_CHAR_MAP));
 
-
 /** Border pattern: 5 consecutive '-', '*', 'c' (cliff), or 'x' (cliff/wasteland edge) characters */
 const BORDER_RE = /[-*cx]{5}/g;
 
@@ -167,9 +166,13 @@ export function isHexArtLine(line: string): boolean {
   // chars can extend past the last structural char
   if (/^[/\\*=cx]/.test(trimmed) && /[/\\*=cx]/.test(trimmed)) {
     const lastStruct = Math.max(
-      trimmed.lastIndexOf('/'), trimmed.lastIndexOf('\\'),
-      trimmed.lastIndexOf('*'), trimmed.lastIndexOf('='),
-      trimmed.lastIndexOf('c'), trimmed.lastIndexOf('x'));
+      trimmed.lastIndexOf('/'),
+      trimmed.lastIndexOf('\\'),
+      trimmed.lastIndexOf('*'),
+      trimmed.lastIndexOf('='),
+      trimmed.lastIndexOf('c'),
+      trimmed.lastIndexOf('x')
+    );
     const trailing = trimmed.slice(lastStruct + 1);
     if (trailing.length <= 8 && /^[.^~"whsx\-* =cx]*$/.test(trailing)) return true;
   }
@@ -213,7 +216,9 @@ function findBorders(lines: string[]): Border[] {
       let match;
       while ((match = RELAXED_BORDER_RE.exec(line)) !== null) {
         // Only add if we don't already have a border at this line+col
-        const exists = borders.some(b => b.line === lineIdx && Math.abs(b.col - match!.index) <= 1);
+        const exists = borders.some(
+          (b) => b.line === lineIdx && Math.abs(b.col - match!.index) <= 1
+        );
         if (!exists) {
           borders.push({ line: lineIdx, col: match.index });
         }
@@ -268,10 +273,7 @@ function rRange(q: number, ringCount: number): { min: number; max: number } {
 /**
  * Map display columns to axial q values and assign r coordinates to hex cells.
  */
-function assignCoordinates(
-  columnGroups: Map<number, number[]>,
-  ringCount: number
-): HexCell[] {
+function assignCoordinates(columnGroups: Map<number, number[]>, ringCount: number): HexCell[] {
   // Sort columns by position (left to right)
   const sortedCols = [...columnGroups.entries()].sort((a, b) => a[0] - b[0]);
 
@@ -375,9 +377,7 @@ function extractCellData(
 // ---------------------------------------------------------------------------
 
 /** Parse landmark legend from the right side of hex art lines */
-function parseLandmarks(
-  lines: string[]
-): { label: string; description: string }[] {
+function parseLandmarks(lines: string[]): { label: string; description: string }[] {
   const landmarks: { label: string; description: string }[] = [];
   // Landmarks appear as "X) description" on the right side of art lines.
   // Labels can be digits, letters, or symbols — even terrain chars (^ ~ !).
@@ -470,11 +470,7 @@ function detectRiverEdges(
       else if (isConnector(lineIdx, spec.col + i)) connHits++;
     }
     if (starHits + connHits < 4) continue;
-    if (
-      starHits >= 1 ||
-      starNearby(lineIdx, spec.col) ||
-      starNearby(lineIdx, spec.col + 4)
-    ) {
+    if (starHits >= 1 || starNearby(lineIdx, spec.col) || starNearby(lineIdx, spec.col + 4)) {
       edges.push(dir);
     }
   }
@@ -847,10 +843,7 @@ function parseHexArtSearch(artLines: string[]): ParsedHexArt | null {
  * @param startIndex - Index of the "You gaze at your surroundings." line
  * @returns The hex art lines, or null if no valid art found
  */
-export function extractHexArtLines(
-  lines: string[],
-  startIndex: number
-): string[] | null {
+export function extractHexArtLines(lines: string[], startIndex: number): string[] | null {
   let i = startIndex + 1;
 
   // Skip blank lines and weather/status messages before hex art starts
@@ -858,7 +851,10 @@ export function extractHexArtLines(
   let skipped = 0;
   while (i < lines.length && skipped < 4) {
     const stripped = lines[i].replace(/\r$/, '').trim();
-    if (stripped === '' || (!isHexArtLine(lines[i]) && stripped.length < 40 && !stripped.includes('-----'))) {
+    if (
+      stripped === '' ||
+      (!isHexArtLine(lines[i]) && stripped.length < 40 && !stripped.includes('-----'))
+    ) {
       i++;
       skipped++;
     } else {
@@ -873,7 +869,11 @@ export function extractHexArtLines(
       // Store lines with \r stripped for consistent downstream processing
       artLines.push(line.replace(/\r$/, ''));
       i++;
-    } else if (line.replace(/\r$/, '').trim() === '' && artLines.length > 0 && artLines.length < 3) {
+    } else if (
+      line.replace(/\r$/, '').trim() === '' &&
+      artLines.length > 0 &&
+      artLines.length < 3
+    ) {
       artLines.push(line.replace(/\r$/, ''));
       i++;
     } else {
@@ -903,9 +903,7 @@ export function generateFingerprint(parsed: ParsedHexArt): string {
     [-1, 1],
     [-1, 0],
   ];
-  const ring1 = ring1Coords
-    .map(([q, r]) => parsed.hexes.get(`${q},${r}`) || '?')
-    .join(',');
+  const ring1 = ring1Coords.map(([q, r]) => parsed.hexes.get(`${q},${r}`) || '?').join(',');
 
   if (parsed.rings === 1) return `${center}:${ring1}`;
 
@@ -924,9 +922,7 @@ export function generateFingerprint(parsed: ParsedHexArt): string {
     [-2, 0],
     [-1, -1],
   ];
-  const ring2 = ring2Coords
-    .map(([q, r]) => parsed.hexes.get(`${q},${r}`) || '?')
-    .join(',');
+  const ring2 = ring2Coords.map(([q, r]) => parsed.hexes.get(`${q},${r}`) || '?').join(',');
 
   return `${center}:${ring1}:${ring2}`;
 }

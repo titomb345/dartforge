@@ -171,8 +171,7 @@ export function ChatMessageRow({
           >
             to you
           </span>
-        )}
-        {' '}
+        )}{' '}
         {msg.message}
       </div>
 

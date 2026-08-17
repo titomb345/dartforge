@@ -50,13 +50,7 @@ export function ResizeHandle({
           )}
           title="Collapse to icons"
         >
-          <svg
-            width="8"
-            height="12"
-            viewBox="0 0 8 12"
-            fill="none"
-            className="text-text-secondary"
-          >
+          <svg width="8" height="12" viewBox="0 0 8 12" fill="none" className="text-text-secondary">
             <path
               d={side === 'left' ? 'M6 1L1 6L6 11' : 'M2 1L7 6L2 11'}
               stroke="currentColor"

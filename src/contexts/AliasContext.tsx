@@ -8,7 +8,13 @@ export interface AliasState {
   enableSpeedwalk: boolean;
   setEnableSpeedwalk: (value: boolean) => void;
   createAlias: (
-    partial: { pattern: string; matchMode: AliasMatchMode; body: string; group: string; bodyMode?: AliasBodyMode },
+    partial: {
+      pattern: string;
+      matchMode: AliasMatchMode;
+      body: string;
+      group: string;
+      bodyMode?: AliasBodyMode;
+    },
     scope: AliasScope
   ) => AliasId;
   updateAlias: (

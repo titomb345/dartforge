@@ -4,7 +4,9 @@ import { getPlatform } from '../lib/platform';
 
 let invoke: ((cmd: string, args?: Record<string, unknown>) => Promise<unknown>) | null = null;
 if (getPlatform() === 'tauri') {
-  import('@tauri-apps/api/core').then((m) => { invoke = m.invoke; });
+  import('@tauri-apps/api/core').then((m) => {
+    invoke = m.invoke;
+  });
 }
 
 interface CompanionInfo {
@@ -54,7 +56,8 @@ export function CompanionQRDialog({ onClose }: { onClose: () => void }) {
           <div className="text-[12px] font-mono text-[#6272a4] py-4">Loading...</div>
         ) : !info?.running ? (
           <div className="text-[12px] font-mono text-[#6272a4] py-4 text-center leading-relaxed">
-            Companion server is not running.<br />
+            Companion server is not running.
+            <br />
             Enable it in Settings &gt; Mobile Companion.
           </div>
         ) : (
@@ -67,12 +70,8 @@ export function CompanionQRDialog({ onClose }: { onClose: () => void }) {
             >
               {info.url}
             </a>
-            {info.qr_svg && (
-              <div dangerouslySetInnerHTML={{ __html: info.qr_svg }} />
-            )}
-            <div className="text-[10px] font-mono text-[#6272a4]">
-              Scan with your phone camera
-            </div>
+            {info.qr_svg && <div dangerouslySetInnerHTML={{ __html: info.qr_svg }} />}
+            <div className="text-[10px] font-mono text-[#6272a4]">Scan with your phone camera</div>
           </>
         )}
 

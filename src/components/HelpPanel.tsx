@@ -256,7 +256,10 @@ export function HelpPanel({ onClose }: { onClose: () => void }) {
       <PanelHeader icon={<HelpIcon size={12} />} title="Guide" onClose={onClose} />
 
       {/* Scrollable body */}
-      <div className="panel-content flex-1 overflow-y-auto p-3 space-y-2" style={{ fontSize: panelFontSize + 'px' }}>
+      <div
+        className="panel-content flex-1 overflow-y-auto p-3 space-y-2"
+        style={{ fontSize: panelFontSize + 'px' }}
+      >
         {!hasSeenGuide && <WelcomeBanner />}
 
         {HELP_CATEGORIES.map((cat) => (

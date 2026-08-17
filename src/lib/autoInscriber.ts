@@ -14,11 +14,7 @@
 
 import { matchConcentrationLine } from './concentrationPatterns';
 
-export type InscriberPhase =
-  | 'idle'
-  | 'waiting-bebt'
-  | 'inscribing'
-  | 'invoking';
+export type InscriberPhase = 'idle' | 'waiting-bebt' | 'inscribing' | 'invoking';
 
 export interface AutoInscriberState {
   active: boolean;

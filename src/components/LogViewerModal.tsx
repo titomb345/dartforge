@@ -225,18 +225,12 @@ export function LogViewerModal({ onClose }: LogViewerModalProps) {
     [sessions, selected]
   );
 
-  const commandCount = useMemo(
-    () => lines.filter((l) => isCommandLine(l)).length,
-    [lines]
-  );
+  const commandCount = useMemo(() => lines.filter((l) => isCommandLine(l)).length, [lines]);
 
   return (
     <div className="fixed inset-0 z-[9000] flex items-center justify-center">
       {/* Backdrop */}
-      <div
-        className="absolute inset-0 bg-[#030305]/90 backdrop-blur-sm"
-        onClick={onClose}
-      />
+      <div className="absolute inset-0 bg-[#030305]/90 backdrop-blur-sm" onClick={onClose} />
 
       {/* Modal container */}
       <div
@@ -389,7 +383,17 @@ export function LogViewerModal({ onClose }: LogViewerModalProps) {
               className="ml-2 flex items-center justify-center w-6 h-6 rounded cursor-pointer text-[#44445a] hover:text-[#9090a8] hover:bg-[#141420] transition-colors duration-150"
               title="Close (Esc)"
             >
-              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><path d="M18 6L6 18M6 6l12 12"/></svg>
+              <svg
+                width="12"
+                height="12"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2.5"
+                strokeLinecap="round"
+              >
+                <path d="M18 6L6 18M6 6l12 12" />
+              </svg>
             </button>
           </div>
 
@@ -456,9 +460,7 @@ export function LogViewerModal({ onClose }: LogViewerModalProps) {
               <div className="flex flex-col items-center justify-center h-full text-[#2a2a3e] gap-3">
                 <LogIcon size={28} />
                 <span className="text-[11px]">Select a session to view</span>
-                <span className="text-[9px] text-[#1e1e30]">
-                  or search across all logs
-                </span>
+                <span className="text-[9px] text-[#1e1e30]">or search across all logs</span>
               </div>
             )}
           </div>
@@ -564,15 +566,7 @@ function MatchCard({
 
 /* ── Text Highlight ─────────────────────────────────────────── */
 
-function Highlight({
-  line,
-  query,
-  isRegex,
-}: {
-  line: string;
-  query: string;
-  isRegex: boolean;
-}) {
+function Highlight({ line, query, isRegex }: { line: string; query: string; isRegex: boolean }) {
   if (!query) return <>{line}</>;
   try {
     const pat = isRegex ? query : query.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');

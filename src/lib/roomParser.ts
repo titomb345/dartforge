@@ -85,8 +85,7 @@ const MOVE_FAIL_SOFT_RE =
   /^(?:> )*(?:The .{1,40} is closed\.|You can't see to move!|You'll have to dismount first\.|You cannot ride (?:indoors|a hitched mount)|Invalid direction to lead to\.|You are not allowed back there|The portcullis is lowered!|[^'"]{1,60} (?:moves to block your (?:way|path)|steps out of the back room and blocks your way)|You have no free hands with which to climb\.|You (?:have to stand|'ll have to get) up first|You are too (?:exhausted|tired)|You're too injured to move\.|You're unconscious!)/;
 
 /** Forced movement: a group leader moves the player */
-const FORCED_MOVE_RE =
-  /^(?:> )*\w+ leads you (north(?:east|west)?|south(?:east|west)?)\b/;
+const FORCED_MOVE_RE = /^(?:> )*\w+ leads you (north(?:east|west)?|south(?:east|west)?)\b/;
 
 /** Exits line — printed by town/dungeon rooms, never by wilderness hexes */
 const EXITS_LINE_RE =
@@ -347,8 +346,7 @@ export class RoomParser {
   }
 
   private emitSurvey(): void {
-    const art =
-      this.artLines.length >= 5 ? parseHexArt(this.artLines, this.artAnsiLines) : null;
+    const art = this.artLines.length >= 5 ? parseHexArt(this.artLines, this.artAnsiLines) : null;
     const description = this.descLines.join(' ');
     this.onEvent({ type: 'survey', art, description });
     this.reset();

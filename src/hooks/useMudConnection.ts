@@ -112,7 +112,7 @@ export function useMudConnection(
   outputFilterRef?: React.RefObject<OutputFilter | null>,
   onLogin?: () => void,
   autoLoginRef?: React.RefObject<AutoLoginConfig | null>,
-  onFilteredOutput?: (data: string) => void,
+  onFilteredOutput?: (data: string) => void
 ) {
   const [connected, setConnected] = useState(false);
   const [statusMessage, setStatusMessage] = useState('Connecting...');
@@ -207,9 +207,7 @@ export function useMudConnection(
           const processData = (data: string) => {
             detectPrompts(data);
             onOutputChunkRef.current?.(data);
-            const filtered = outputFilterRef?.current
-              ? outputFilterRef.current.filter(data)
-              : data;
+            const filtered = outputFilterRef?.current ? outputFilterRef.current.filter(data) : data;
             if (filtered) {
               // Broadcast post-gag output to companion clients
               onFilteredOutputRef.current?.(filtered);

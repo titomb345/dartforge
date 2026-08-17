@@ -5,10 +5,7 @@ interface HasId {
   id: string;
 }
 
-export function usePersistedCRUD<T extends HasId>(
-  dataStore: DataStore,
-  storeKey: string
-) {
+export function usePersistedCRUD<T extends HasId>(dataStore: DataStore, storeKey: string) {
   const [items, setItems] = useState<T[]>([]);
   const loadedRef = useRef(false);
 

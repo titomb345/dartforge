@@ -303,14 +303,10 @@ function ProfileSelector({
               }}
               className={cn(
                 'flex items-center w-full px-2 py-1 text-[10px] text-left cursor-pointer transition-colors truncate',
-                idx === currentIndex
-                  ? 'font-semibold'
-                  : 'text-text-label hover:bg-bg-secondary/60'
+                idx === currentIndex ? 'font-semibold' : 'text-text-label hover:bg-bg-secondary/60'
               )}
               style={
-                idx === currentIndex
-                  ? { color: accent, background: `${accent}10` }
-                  : undefined
+                idx === currentIndex ? { color: accent, background: `${accent}10` } : undefined
               }
             >
               <span className="truncate">{p.name || 'unnamed'}</span>
@@ -1100,8 +1096,7 @@ function MagicProfileView() {
 
 export function AllocPanel({ mode = 'slideout' }: AllocPanelProps) {
   const isPinned = mode === 'pinned';
-  const { view, setView, allocTab, setAllocTab, magicView, setMagicView } =
-    useAllocContext();
+  const { view, setView, allocTab, setAllocTab, magicView, setMagicView } = useAllocContext();
   const { panelFontSize, allocFontSize, updateAllocFontSize } = useAppSettingsContext();
   const effectiveAllocFontSize = allocFontSize ?? panelFontSize;
 

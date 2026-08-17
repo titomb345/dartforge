@@ -268,7 +268,10 @@ export function BabelPanel({ mode = 'slideout' }: PinnablePanelProps) {
       <PanelHeader icon={<BabelIcon size={12} />} title="Babel" panel="babel" mode={mode} />
 
       {/* Single scrollable region — no nested scrolls */}
-      <div className="panel-content flex-1 overflow-y-auto" style={{ fontSize: panelFontSize + 'px' }}>
+      <div
+        className="panel-content flex-1 overflow-y-auto"
+        style={{ fontSize: panelFontSize + 'px' }}
+      >
         {/* Controls */}
         <div className="px-3 py-2.5 space-y-2.5 border-b border-border-subtle">
           {/* Language + Interval on one row */}

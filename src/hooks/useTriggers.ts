@@ -189,31 +189,28 @@ export function useTriggers(dataStore: DataStore, activeCharacter: string | null
   }, []);
 
   /** Enable or disable every trigger in a group at once. */
-  const setGroupEnabled = useCallback(
-    (group: string, enabled: boolean, scope: TriggerScope) => {
-      const now = new Date().toISOString();
-      const updater = (prev: Record<TriggerId, Trigger>) => {
-        let changed = false;
-        const next: Record<TriggerId, Trigger> = {};
-        for (const [id, t] of Object.entries(prev)) {
-          if (t.group === group && t.enabled !== enabled) {
-            next[id] = { ...t, enabled, updatedAt: now };
-            changed = true;
-          } else {
-            next[id] = t;
-          }
+  const setGroupEnabled = useCallback((group: string, enabled: boolean, scope: TriggerScope) => {
+    const now = new Date().toISOString();
+    const updater = (prev: Record<TriggerId, Trigger>) => {
+      let changed = false;
+      const next: Record<TriggerId, Trigger> = {};
+      for (const [id, t] of Object.entries(prev)) {
+        if (t.group === group && t.enabled !== enabled) {
+          next[id] = { ...t, enabled, updatedAt: now };
+          changed = true;
+        } else {
+          next[id] = t;
         }
-        return changed ? next : prev;
-      };
-
-      if (scope === 'character') {
-        setCharacterTriggers(updater);
-      } else {
-        setGlobalTriggers(updater);
       }
-    },
-    []
-  );
+      return changed ? next : prev;
+    };
+
+    if (scope === 'character') {
+      setCharacterTriggers(updater);
+    } else {
+      setGlobalTriggers(updater);
+    }
+  }, []);
 
   const duplicateTrigger = useCallback(
     (id: TriggerId, scope: TriggerScope): TriggerId | null => {

@@ -164,25 +164,41 @@ const CITIZEN_PATTERNS: RegExp[] = [
   /^(Lulpox|Torcas) (stares|nudges|grins|chuckles|whispers|points)/,
 
   // Dynamic name groups (emotes + speaks combined)
-  citizenRe('Agnesina|Agneta|Agostino|Ai|Aiko|Alardus|Aldgislo|Alberea|Alegreza|Alesia|Alfgard|Alfsuind|Almaricus|Aluysio|Andrea|Andream|Anechino|Arizzo|Arnulphus|Ascelina|Auburgis|Ava|Avelina|Aya'),
-  citizenRe('Banager|Barbo|Barbus|Bartolomeo|Baudemundus|Benevenuta|Benghi|Bertucio|Blancha|Boio|Bolezino|Borbrator|Brother|Bucello'),
+  citizenRe(
+    'Agnesina|Agneta|Agostino|Ai|Aiko|Alardus|Aldgislo|Alberea|Alegreza|Alesia|Alfgard|Alfsuind|Almaricus|Aluysio|Andrea|Andream|Anechino|Arizzo|Arnulphus|Ascelina|Auburgis|Ava|Avelina|Aya'
+  ),
+  citizenRe(
+    'Banager|Barbo|Barbus|Bartolomeo|Baudemundus|Benevenuta|Benghi|Bertucio|Blancha|Boio|Bolezino|Borbrator|Brother|Bucello'
+  ),
   citizenRe('Catarina|Caterucia|Claricia|Colette|Colleta'),
   citizenRe('Dai|Daigoro|Danieli|Dyonisius'),
   citizenRe('Edelina|Engris|Erlewino|Ermengardis|Ernulfi|Erradi|Eswar|Eustachius|Evrardus'),
-  citizenRe('Federico|Felle|Fiora|Flaminio|Florentia|Flos|Fokka|Folcbaldo|Francescino|Francesco|Fresbertus'),
-  citizenRe('Gelmarus|Gerita|Gerolimo|Giacomo|Girardus|Girout|Godile|Goduuara|Gregorio|Guiburgis|Guillelmus|Gundrada'),
-  citizenRe('Hakji|Hathaburch|Hayato|Hecelina|Heio|Helena|Heleuuit|Helloysis|Heloysis|Helyoudis|Hersendis|Hildemunde|Hodeardis'),
+  citizenRe(
+    'Federico|Felle|Fiora|Flaminio|Florentia|Flos|Fokka|Folcbaldo|Francescino|Francesco|Fresbertus'
+  ),
+  citizenRe(
+    'Gelmarus|Gerita|Gerolimo|Giacomo|Girardus|Girout|Godile|Goduuara|Gregorio|Guiburgis|Guillelmus|Gundrada'
+  ),
+  citizenRe(
+    'Hakji|Hathaburch|Hayato|Hecelina|Heio|Helena|Heleuuit|Helloysis|Heloysis|Helyoudis|Hersendis|Hildemunde|Hodeardis'
+  ),
   citizenRe('Ienobu|Itkkitk|Ivo'),
   citizenRe('Jacobus'),
   citizenRe('Kasumi|Kentaro|Kirika'),
-  citizenRe('Lambertus|Lancelinus|Lebewinus|Leduualdus|Leonardo|Leonius|Liuduuih|Lorenzo|Luca|Lucha|Lucia|Luciana'),
-  citizenRe('Manteti|Maria|Martino|Matio|Meddin|Meginhild|Meginsuind|Michaleto|Micola|Mirabae|Moonoolool|Multormuh'),
+  citizenRe(
+    'Lambertus|Lancelinus|Lebewinus|Leduualdus|Leonardo|Leonius|Liuduuih|Lorenzo|Luca|Lucha|Lucia|Luciana'
+  ),
+  citizenRe(
+    'Manteti|Maria|Martino|Matio|Meddin|Meginhild|Meginsuind|Michaleto|Micola|Mirabae|Moonoolool|Multormuh'
+  ),
   citizenRe('Nami|Nasih|Nicoleto|Nodelend'),
   citizenRe('Odwinus|Oliverio|Ooll|Othilhildis'),
   citizenRe('Paolo|Pasqualina|Pencina|Pero|Petronilla|Piruza'),
   citizenRe('Raingerus|Rambaldo|Renodus|Richa|Righi|Rigi|Rikuuard|Romano|Rogerus|Ryuji'),
   citizenRe('Scabor|Scalortormut|Sedilia|Segecin|Seimei|Shinobu|Shun|Simon|Staji'),
-  citizenRe('Tadhild|Tarvixio|Tetmarus|Tetsu|Thadeo|Thalia|Thiadmar|Thiadulf|Thiatgif|Thomas|Thomisina|Tirna|Tor|Tsukasa|Tuscus'),
+  citizenRe(
+    'Tadhild|Tarvixio|Tetmarus|Tetsu|Thadeo|Thalia|Thiadmar|Thiadulf|Thiatgif|Thomas|Thomisina|Tirna|Tor|Tsukasa|Tuscus'
+  ),
   citizenRe('Uguccio|Un|Uuiduco'),
   citizenRe('Vitaliano|Vualdbrehitus|Vuendelgrimi|Vulfiardis'),
   citizenRe('Wakil|Wendelburgis|Weldelburgis|Wersuent|Wicswint|Wigmanni'),
@@ -258,10 +274,7 @@ const SPARRING_PATTERNS: RegExp[] = [
 // Failed channelling messages (2 patterns)
 // ---------------------------------------------------------------------------
 
-const CHANNEL_PATTERNS: RegExp[] = [
-  /^None of the power/,
-  /^A gossamer strand/,
-];
+const CHANNEL_PATTERNS: RegExp[] = [/^None of the power/, /^A gossamer strand/];
 
 // ---------------------------------------------------------------------------
 // Quest narrative text (7 patterns)
@@ -339,7 +352,8 @@ const NPC_SPEECH_VERBS = 'says|asks|exclaims';
  * is still caught even when the stricter speech pattern doesn't match.
  */
 const NPC_EMOTE_VERBS =
-  NPC_SPEECH_VERBS + '|' +
+  NPC_SPEECH_VERBS +
+  '|' +
   'barks|blinks|bows|cackles|chuckles|coughs|cries|dozes|fixes|flees|frowns|giggles|' +
   'glares|grins|growls|grunts|hums|inhales|kicks|laughs|looks|messes|nods|' +
   'nudges|peers|picks|points|pokes|ponders|rocks|screams|scowls|shakes|sighs|' +
@@ -443,7 +457,7 @@ export function shouldGagLine(
   stripped: string,
   enabled: GagGroupSettings,
   npcTracker?: NpcGagTracker,
-  gaggedNpcs?: string[],
+  gaggedNpcs?: string[]
 ): boolean {
   const cleaned = stripped.replace(PROMPT_PREFIX_RE, '');
   if (!cleaned) return false;

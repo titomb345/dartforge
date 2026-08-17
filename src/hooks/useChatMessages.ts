@@ -33,9 +33,7 @@ function serializeMessages(
 }
 
 /** Deserialize stored messages back to ChatMessage[] (ISO string → Date). */
-function deserializeMessages(
-  raw: Array<Record<string, unknown>> | null
-): ChatMessage[] {
+function deserializeMessages(raw: Array<Record<string, unknown>> | null): ChatMessage[] {
   if (!raw || !Array.isArray(raw)) return [];
   return raw
     .map((r) => {
@@ -54,9 +52,7 @@ function serializeOutgoing(
   return msgs.map((m) => ({ ...m, timestamp: m.timestamp.toISOString() }));
 }
 
-function deserializeOutgoing(
-  raw: Array<Record<string, unknown>> | null
-): OutgoingMessage[] {
+function deserializeOutgoing(raw: Array<Record<string, unknown>> | null): OutgoingMessage[] {
   if (!raw || !Array.isArray(raw)) return [];
   return raw
     .map((r) => {
@@ -71,7 +67,7 @@ export function useChatMessages(
   maxMessages = MAX_MESSAGES,
   notificationsRef?: React.RefObject<ChatFilters | null>,
   soundLibraryRef?: React.RefObject<SoundLibrary>,
-  gaggedNpcsRef?: React.RefObject<string[]>,
+  gaggedNpcsRef?: React.RefObject<string[]>
 ) {
   const dataStore = useDataStore();
   const [messages, setMessages] = useState<ChatMessage[]>([]);
@@ -125,8 +121,7 @@ export function useChatMessages(
         const restored = deserializeMessages(raw);
         if (restored.length > 0) {
           // Trim to current max
-          const trimmed =
-            restored.length > maxMessages ? restored.slice(-maxMessages) : restored;
+          const trimmed = restored.length > maxMessages ? restored.slice(-maxMessages) : restored;
           // Set ID counter past the highest restored ID
           const maxId = trimmed.reduce((max, m) => Math.max(max, m.id), 0);
           setChatIdCounter(maxId + 1);
@@ -145,8 +140,7 @@ export function useChatMessages(
         );
         const restored = deserializeOutgoing(rawOut);
         if (restored.length > 0) {
-          const trimmed =
-            restored.length > maxMessages ? restored.slice(-maxMessages) : restored;
+          const trimmed = restored.length > maxMessages ? restored.slice(-maxMessages) : restored;
           const maxId = trimmed.reduce((max, m) => Math.max(max, m.id), 0);
           outgoingIdCounter = maxId + 1;
           setOutgoingMessages(trimmed);
@@ -204,9 +198,8 @@ export function useChatMessages(
     const senderLower = msg.sender.toLowerCase();
     const m = mutedSendersRef.current;
     const isMuted = m.some((name) => name.toLowerCase() === senderLower);
-    const isGaggedNpc = gaggedNpcsRef?.current?.some(
-      (name) => name.toLowerCase() === senderLower
-    ) ?? false;
+    const isGaggedNpc =
+      gaggedNpcsRef?.current?.some((name) => name.toLowerCase() === senderLower) ?? false;
 
     // Sound alert
     const s = soundAlertsRef.current;

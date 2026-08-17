@@ -34,11 +34,7 @@ export function ScriptPanel({ script, onSave, onClose }: ScriptPanelProps) {
 
   return (
     <div className="w-[500px] h-full bg-bg-primary border-l border-border-subtle flex flex-col overflow-hidden">
-      <PanelHeader
-        icon={<CodeIcon size={12} />}
-        title="Global Script"
-        onClose={onClose}
-      >
+      <PanelHeader icon={<CodeIcon size={12} />} title="Global Script" onClose={onClose}>
         <button
           onClick={handleSave}
           disabled={!dirty}

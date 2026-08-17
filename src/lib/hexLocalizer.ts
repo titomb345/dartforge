@@ -285,7 +285,8 @@ export class HexLocalizer {
     }
 
     const tolerance = (known: number) => (known >= 6 ? 1 : 0);
-    const isGood = (c: Candidate) => c.known >= MIN_EVIDENCE && c.known - c.match <= tolerance(c.known);
+    const isGood = (c: Candidate) =>
+      c.known >= MIN_EVIDENCE && c.known - c.match <= tolerance(c.known);
 
     const expectedCand = candidates.find(
       (c) => c.coord.q === expected.q && c.coord.r === expected.r
@@ -314,7 +315,10 @@ export class HexLocalizer {
     } else {
       // Multiple positions fit (uniform terrain) — prefer the chain
       const identity = good.find((c) => c.dir === null);
-      accepted = good.find((c) => c.coord.q === expected.q && c.coord.r === expected.r) ?? identity ?? good[0];
+      accepted =
+        good.find((c) => c.coord.q === expected.q && c.coord.r === expected.r) ??
+        identity ??
+        good[0];
       kind = 'ambiguous';
     }
 
@@ -358,7 +362,13 @@ export class HexLocalizer {
     // While on a secondary island, probe for a merge with the rest of the map
     const merged = this.tryMergeProbe(patch, now);
 
-    return { kind, pos: this.map.pos, moved: accepted.dir, conflicts, ...(merged ? { merged } : {}) };
+    return {
+      kind,
+      pos: this.map.pos,
+      moved: accepted.dir,
+      conflicts,
+      ...(merged ? { merged } : {}),
+    };
   }
 
   // -------------------------------------------------------------------------
@@ -590,9 +600,27 @@ export class HexLocalizer {
     // Replace whatever the art previews guessed — wrong art marks disappear
     // the moment the hex is actually visited.
     if (confident && description) {
-      this.map.setVisitedEdges('river', pos.island, pos.q, pos.r, parseRiverDirections(description));
-      this.map.setVisitedEdges('cliff', pos.island, pos.q, pos.r, parseCliffDirections(description));
-      this.map.setVisitedEdges('bridge', pos.island, pos.q, pos.r, parseBridgeDirections(description));
+      this.map.setVisitedEdges(
+        'river',
+        pos.island,
+        pos.q,
+        pos.r,
+        parseRiverDirections(description)
+      );
+      this.map.setVisitedEdges(
+        'cliff',
+        pos.island,
+        pos.q,
+        pos.r,
+        parseCliffDirections(description)
+      );
+      this.map.setVisitedEdges(
+        'bridge',
+        pos.island,
+        pos.q,
+        pos.r,
+        parseBridgeDirections(description)
+      );
     }
 
     if (confident) {

@@ -97,7 +97,11 @@ const TIMER_HELP_ROWS: HelpRow[] = [
     desc: 'User-defined variable (set via /var)',
     example: '/var target goblin  \u2192  $target = goblin',
   },
-  { token: ';; (default)', desc: 'Command separator \u2014 sends multiple commands (configurable in Settings)', example: 'hp;;score' },
+  {
+    token: ';; (default)',
+    desc: 'Command separator \u2014 sends multiple commands (configurable in Settings)',
+    example: 'hp;;score',
+  },
   { token: '\\;;', desc: 'Literal separator (escaped with \\)' },
   {
     token: '/delay <ms>',
@@ -194,7 +198,8 @@ function TimerEditor({
     if (bodyMode === 'script' || !body.trim()) return null;
     try {
       const result = expandInput(body, [], { activeCharacter, separator: commandSeparator });
-      const expand = (input: string) => expandInput(input, [], { activeCharacter, separator: commandSeparator }).commands;
+      const expand = (input: string) =>
+        expandInput(input, [], { activeCharacter, separator: commandSeparator }).commands;
       const text = formatCommandPreview(result.commands, expand).join('\n');
       return text || '(no commands)';
     } catch {
@@ -557,7 +562,10 @@ export function TimerPanel({ onClose }: TimerPanelProps) {
       )}
 
       {/* Timer list */}
-      <div className="panel-content flex-1 overflow-y-auto px-1 py-2" style={{ fontSize: panelFontSize + 'px' }}>
+      <div
+        className="panel-content flex-1 overflow-y-auto px-1 py-2"
+        style={{ fontSize: panelFontSize + 'px' }}
+      >
         {timerList.length === 0 && !creating && (
           <div className="px-2 text-xs text-text-dim">
             {scope === 'character' && !activeCharacter

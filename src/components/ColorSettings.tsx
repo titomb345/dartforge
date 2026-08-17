@@ -193,9 +193,7 @@ export function ColorSettings({
           title="Show ANSI color names in terminal output"
           className={cn(
             'flex items-center justify-center w-5 h-5 rounded-[3px] cursor-pointer transition-colors duration-150 text-[11px] font-mono leading-none',
-            debugMode
-              ? 'text-amber'
-              : 'text-text-dim hover:text-text-label'
+            debugMode ? 'text-amber' : 'text-text-dim hover:text-text-label'
           )}
         >
           {'</>'}
@@ -335,7 +333,13 @@ export function ColorSettings({
             <div
               className="w-6 h-6 rounded border border-[#444] shrink-0 cursor-pointer"
               style={{ background: display.promptColor }}
-              onClick={() => setExpandedKey((prev) => (prev === ('promptColor' as ThemeColorKey) ? null : ('promptColor' as ThemeColorKey)))}
+              onClick={() =>
+                setExpandedKey((prev) =>
+                  prev === ('promptColor' as ThemeColorKey)
+                    ? null
+                    : ('promptColor' as ThemeColorKey)
+                )
+              }
             />
           </div>
           <div

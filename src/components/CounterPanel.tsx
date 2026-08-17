@@ -214,16 +214,10 @@ export function CounterPanel({ mode = 'slideout' }: CounterPanelProps) {
 
   // Split counters into active vs archived, sort active by order
   const activeCounters = useMemo(
-    () =>
-      counters
-        .filter((c) => !c.archived)
-        .sort((a, b) => (a.order ?? 0) - (b.order ?? 0)),
+    () => counters.filter((c) => !c.archived).sort((a, b) => (a.order ?? 0) - (b.order ?? 0)),
     [counters]
   );
-  const archivedCounters = useMemo(
-    () => counters.filter((c) => c.archived),
-    [counters]
-  );
+  const archivedCounters = useMemo(() => counters.filter((c) => c.archived), [counters]);
 
   const activeCounter = counters.find((c) => c.id === activeCounterId) ?? null;
 
@@ -347,11 +341,7 @@ export function CounterPanel({ mode = 'slideout' }: CounterPanelProps) {
               >
                 <UnarchiveIcon size={8} />
               </button>
-              <ConfirmDeleteButton
-                onDelete={() => deleteCounter(c.id)}
-                size={8}
-                variant="fixed"
-              />
+              <ConfirmDeleteButton onDelete={() => deleteCounter(c.id)} size={8} variant="fixed" />
             </div>
           ))}
         </div>
@@ -467,7 +457,10 @@ export function CounterPanel({ mode = 'slideout' }: CounterPanelProps) {
           </div>
 
           {/* Scrollable: stats + skills together */}
-          <div className="panel-content flex-1 overflow-y-auto" style={{ fontSize: panelFontSize + 'px' }}>
+          <div
+            className="panel-content flex-1 overflow-y-auto"
+            style={{ fontSize: panelFontSize + 'px' }}
+          >
             {/* Stats */}
             <div className="px-2 py-1.5 border-b border-border-subtle">
               <CounterStats
@@ -508,7 +501,10 @@ export function CounterPanel({ mode = 'slideout' }: CounterPanelProps) {
               Restore
             </button>
           </div>
-          <div className="panel-content flex-1 overflow-y-auto" style={{ fontSize: panelFontSize + 'px' }}>
+          <div
+            className="panel-content flex-1 overflow-y-auto"
+            style={{ fontSize: panelFontSize + 'px' }}
+          >
             <div className="px-2 py-1.5 border-b border-border-subtle">
               <CounterStats
                 counter={activeCounter}

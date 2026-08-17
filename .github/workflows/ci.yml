@@ -41,6 +41,9 @@ jobs:
 
       - run: npm ci
 
+      - name: Prettier check
+        run: npm run format:check
+
       - name: TypeScript check
         run: npx tsc --noEmit
 

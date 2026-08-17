@@ -427,7 +427,14 @@ export function SkillPanel({ mode = 'slideout' }: SkillPanelProps) {
       {/* Category filter */}
       {hasAnySkills && (
         <div className="flex items-center gap-1 px-2 py-2 border-b border-border-subtle flex-wrap shrink-0">
-          <FilterPill label="All" active={filter === 'all'} onClick={() => { setFilter('all'); setSearchText(''); }} />
+          <FilterPill
+            label="All"
+            active={filter === 'all'}
+            onClick={() => {
+              setFilter('all');
+              setSearchText('');
+            }}
+          />
           {CATEGORY_ORDER.map((cat) =>
             categorizedSkills[cat].length > 0 ? (
               <FilterPill
@@ -510,7 +517,10 @@ export function SkillPanel({ mode = 'slideout' }: SkillPanelProps) {
       )}
 
       {/* Skills list */}
-      <div className="panel-content flex-1 overflow-y-auto px-1 py-3" style={{ fontSize: panelFontSize + 'px' }}>
+      <div
+        className="panel-content flex-1 overflow-y-auto px-1 py-3"
+        style={{ fontSize: panelFontSize + 'px' }}
+      >
         {!activeCharacter && (
           <div className="px-2 text-xs text-text-dim">Log in to track skills.</div>
         )}
@@ -559,7 +569,6 @@ export function SkillPanel({ mode = 'slideout' }: SkillPanelProps) {
             );
           })
         )}
-
       </div>
 
       {/* Totals — always visible at bottom */}

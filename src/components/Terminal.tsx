@@ -536,12 +536,42 @@ export function Terminal({
             copyBufferLines(terminalRef.current, false);
             setCtxMenu(null);
           }}
-          onAddToTrigger={onAddToTrigger ? (text) => { onAddToTrigger(text); setCtxMenu(null); } : undefined}
-          onGagLine={onGagLine ? (text) => { onGagLine(text); setCtxMenu(null); } : undefined}
-          onOpenInNotes={onOpenInNotes ? (text) => { onOpenInNotes(text); setCtxMenu(null); } : undefined}
-          onScrollToBottom={() => { terminalRef.current?.scrollToBottom(); setCtxMenu(null); }}
-          onClearTerminal={() => { terminalRef.current?.clear(); setCtxMenu(null); }}
-          onSearch={() => { setCtxMenu(null); setSearchOpen(true); }}
+          onAddToTrigger={
+            onAddToTrigger
+              ? (text) => {
+                  onAddToTrigger(text);
+                  setCtxMenu(null);
+                }
+              : undefined
+          }
+          onGagLine={
+            onGagLine
+              ? (text) => {
+                  onGagLine(text);
+                  setCtxMenu(null);
+                }
+              : undefined
+          }
+          onOpenInNotes={
+            onOpenInNotes
+              ? (text) => {
+                  onOpenInNotes(text);
+                  setCtxMenu(null);
+                }
+              : undefined
+          }
+          onScrollToBottom={() => {
+            terminalRef.current?.scrollToBottom();
+            setCtxMenu(null);
+          }}
+          onClearTerminal={() => {
+            terminalRef.current?.clear();
+            setCtxMenu(null);
+          }}
+          onSearch={() => {
+            setCtxMenu(null);
+            setSearchOpen(true);
+          }}
           fontSize={display.fontSize}
           onFontSize={(delta) => {
             const term = terminalRef.current;

@@ -23,11 +23,7 @@
 
 import { matchConcentrationLine } from './concentrationPatterns';
 
-export type CasterPhase =
-  | 'idle'
-  | 'checking-conc'
-  | 'waiting-bebt'
-  | 'casting';
+export type CasterPhase = 'idle' | 'checking-conc' | 'waiting-bebt' | 'casting';
 
 export interface AutoCasterState {
   active: boolean;
@@ -282,9 +278,7 @@ export class AutoCaster {
 
       // Put back carried weight before stopping
       if (wasWeightMode && carried > 0 && this._weightItem) {
-        this._sendFn?.(
-          this._weightCmd('put', carried)
-        );
+        this._sendFn?.(this._weightCmd('put', carried));
       }
 
       this._cleanup();
@@ -375,26 +369,19 @@ export class AutoCaster {
     if (this._weightMode) {
       // Weight mode success — take more weight (harder)
       this._carriedWeight += this._weightAdjustUp;
-      this._sendFn?.(
-        this._weightCmd('take', this._weightAdjustUp)
-      );
+      this._sendFn?.(this._weightCmd('take', this._weightAdjustUp));
       this._echoFn?.(
         `[Autocast: success — take ${this._weightAdjustUp} ${this._weightItem} (carrying ${this._carriedWeight})]`
       );
     } else {
       // Power mode success — decrease power (harder)
-      const newPower = Math.max(
-        (this._power ?? MIN_POWER) - this._adjustDown,
-        MIN_POWER
-      );
+      const newPower = Math.max((this._power ?? MIN_POWER) - this._adjustDown, MIN_POWER);
 
       if (newPower === MIN_POWER && this._power === MIN_POWER && this._weightItem) {
         // Power already at floor and weight configured — enter weight mode
         this._weightMode = true;
         this._carriedWeight = this._weightAdjustUp;
-        this._sendFn?.(
-          this._weightCmd('take', this._weightAdjustUp)
-        );
+        this._sendFn?.(this._weightCmd('take', this._weightAdjustUp));
         this._echoFn?.(
           `[Autocast: success — entering weight mode, take ${this._weightAdjustUp} ${this._weightItem} (carrying ${this._carriedWeight})]`
         );
@@ -418,9 +405,7 @@ export class AutoCaster {
       this._carriedWeight -= actualDrop;
 
       if (actualDrop > 0) {
-        this._sendFn?.(
-          this._weightCmd('put', actualDrop)
-        );
+        this._sendFn?.(this._weightCmd('put', actualDrop));
       }
 
       if (this._carriedWeight <= 0) {

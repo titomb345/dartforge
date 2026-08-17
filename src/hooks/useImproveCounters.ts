@@ -430,7 +430,8 @@ export function useImproveCounters(activeCharacter: string | null) {
       prev.map((c) => {
         if (c.id !== id) return c;
         if (c.status === 'stopped') return c;
-        const elapsed = c.status === 'running' && c.lastResumedAt ? awakeMs(c.lastResumedAt, now) : 0;
+        const elapsed =
+          c.status === 'running' && c.lastResumedAt ? awakeMs(c.lastResumedAt, now) : 0;
         return {
           ...c,
           status: 'stopped' as CounterStatus,
@@ -467,7 +468,8 @@ export function useImproveCounters(activeCharacter: string | null) {
       setCounters((prev) =>
         prev.map((c) => {
           if (c.id !== id) return c;
-          const elapsed = c.status === 'running' && c.lastResumedAt ? awakeMs(c.lastResumedAt, now) : 0;
+          const elapsed =
+            c.status === 'running' && c.lastResumedAt ? awakeMs(c.lastResumedAt, now) : 0;
           return {
             ...c,
             archived: true,
@@ -490,9 +492,7 @@ export function useImproveCounters(activeCharacter: string | null) {
   );
 
   const unarchiveCounter = useCallback((id: string) => {
-    setCounters((prev) =>
-      prev.map((c) => (c.id === id ? { ...c, archived: false } : c))
-    );
+    setCounters((prev) => prev.map((c) => (c.id === id ? { ...c, archived: false } : c)));
     setActiveCounterId(id);
   }, []);
 

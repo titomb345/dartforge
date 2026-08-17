@@ -24,7 +24,7 @@ export function useSkillTracker(
   processorRef: React.RefObject<OutputProcessor | null>,
   terminalRef: React.RefObject<XTerm | null>,
   dataStore: DataStore,
-  writeToTermRef?: React.RefObject<(text: string) => void>,
+  writeToTermRef?: React.RefObject<(text: string) => void>
 ) {
   const echoLine = (line: string) => {
     if (writeToTermRef?.current) writeToTermRef.current(line);

@@ -89,12 +89,18 @@ export function expandSkillFunctions(
     const key = name.trim().toLowerCase();
     const count = getSkillCount(key);
     switch (fn.toLowerCase()) {
-      case 'count': return String(count);
-      case 'level': return getTierForCount(count).name;
-      case 'tier': return String(getTierForCount(count).level);
-      case 'next': return String(getImprovesToNextTier(count));
-      case 'group': return getSkillCategory(key)[0];
-      default: return full;
+      case 'count':
+        return String(count);
+      case 'level':
+        return getTierForCount(count).name;
+      case 'tier':
+        return String(getTierForCount(count).level);
+      case 'next':
+        return String(getImprovesToNextTier(count));
+      case 'group':
+        return getSkillCategory(key)[0];
+      default:
+        return full;
     }
   });
 }

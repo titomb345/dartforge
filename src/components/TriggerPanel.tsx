@@ -256,8 +256,10 @@ function ScriptSyntaxHelp() {
       footer={
         <>
           <span className="text-text-label">Script mode:</span> Body is JavaScript with{' '}
-          <span className="font-mono" style={{ color: SCRIPT_ACCENT }}>await</span> support. Global
-          script functions are available. Errors are printed to the terminal in red.
+          <span className="font-mono" style={{ color: SCRIPT_ACCENT }}>
+            await
+          </span>{' '}
+          support. Global script functions are available. Errors are printed to the terminal in red.
         </>
       }
     />
@@ -526,8 +528,8 @@ function TriggerEditor({
           <div className="text-[9px] text-text-dim bg-bg-primary rounded border border-border-dim px-2 py-1.5 leading-relaxed">
             <span className="text-[#bd93f9]">Multi-line mode:</span> Pattern above is the{' '}
             <strong>start</strong> pattern. Lines are buffered until the{' '}
-            <strong>end pattern</strong> (regex) matches. The joined text is then matched
-            against the start pattern for captures ($0, $1, etc.). Max 10 lines.
+            <strong>end pattern</strong> (regex) matches. The joined text is then matched against
+            the start pattern for captures ($0, $1, etc.). Max 10 lines.
           </div>
         )}
 
@@ -847,8 +849,8 @@ function TriggerEditor({
             className="w-full"
           />
           <div className="text-[9px] text-text-dim mt-0.5 leading-snug">
-            Replaces the matched line in the terminal. Supports $0, $1–$9, $line, $me.
-            Combines with Highlight; ignored if Gag is on.
+            Replaces the matched line in the terminal. Supports $0, $1–$9, $line, $me. Combines with
+            Highlight; ignored if Gag is on.
           </div>
         </div>
 
@@ -897,7 +899,8 @@ export function TriggerPanel({ onClose }: TriggerPanelProps) {
     setTriggerPrefill,
   } = useTriggerContext();
   const { activeCharacter } = useSkillTrackerContext();
-  const { gagGroups, updateGagGroups, gaggedNpcs, updateGaggedNpcs, panelFontSize } = useAppSettingsContext();
+  const { gagGroups, updateGagGroups, gaggedNpcs, updateGaggedNpcs, panelFontSize } =
+    useAppSettingsContext();
 
   const [scope, setScope] = useState<TriggerScope>('global');
   const [gagsExpanded, setGagsExpanded] = useState(false);
@@ -1037,30 +1040,27 @@ export function TriggerPanel({ onClose }: TriggerPanelProps) {
                   <div className="flex items-center gap-2">
                     <ToggleSwitch
                       checked={enabled}
-                      onChange={() =>
-                        updateGagGroups({ ...gagGroups, [group.id]: !enabled })
-                      }
+                      onChange={() => updateGagGroups({ ...gagGroups, [group.id]: !enabled })}
                       accent="#ff79c6"
                     />
                     <button
-                      onClick={() =>
-                        updateGagGroups({ ...gagGroups, [group.id]: !enabled })
-                      }
+                      onClick={() => updateGagGroups({ ...gagGroups, [group.id]: !enabled })}
                       className="text-[11px] text-text-label font-medium w-[60px] shrink-0 text-left cursor-pointer hover:text-[#ff79c6] transition-colors duration-150"
                     >
                       {group.label}
                     </button>
                     <button
-                      onClick={() =>
-                        setExpandedGagGroup(isExpanded ? null : group.id)
-                      }
+                      onClick={() => setExpandedGagGroup(isExpanded ? null : group.id)}
                       className="text-[10px] text-text-dim truncate flex-1 text-left cursor-pointer hover:text-text-label transition-colors duration-150 flex items-center gap-1"
                     >
                       <span className="truncate">{group.description}</span>
                       <span className="text-[9px] font-mono text-text-dim shrink-0">
                         ({group.patterns.length})
                       </span>
-                      <span className="shrink-0 transition-transform duration-200" style={{ transform: isExpanded ? 'rotate(180deg)' : 'rotate(0deg)' }}>
+                      <span
+                        className="shrink-0 transition-transform duration-200"
+                        style={{ transform: isExpanded ? 'rotate(180deg)' : 'rotate(0deg)' }}
+                      >
                         <ChevronDownIcon size={7} />
                       </span>
                     </button>
@@ -1098,7 +1098,10 @@ export function TriggerPanel({ onClose }: TriggerPanelProps) {
                 className="text-[9px] text-text-dim mb-1.5 flex items-center gap-1 cursor-pointer hover:text-text-label transition-colors duration-150"
               >
                 <span>Matched patterns ({NPC_GAG_DISPLAY_PATTERNS.length})</span>
-                <span className="transition-transform duration-200" style={{ transform: npcPatternsExpanded ? 'rotate(180deg)' : 'rotate(0deg)' }}>
+                <span
+                  className="transition-transform duration-200"
+                  style={{ transform: npcPatternsExpanded ? 'rotate(180deg)' : 'rotate(0deg)' }}
+                >
                   <ChevronDownIcon size={7} />
                 </span>
               </button>
@@ -1109,7 +1112,9 @@ export function TriggerPanel({ onClose }: TriggerPanelProps) {
                 <div className="overflow-hidden">
                   <div className="mb-1.5 px-1.5 py-1 rounded bg-bg-input border border-border-dim break-all leading-relaxed space-y-0.5">
                     {NPC_GAG_DISPLAY_PATTERNS.map((p, i) => (
-                      <div key={i} className="text-[9px] font-mono text-text-dim">{p}</div>
+                      <div key={i} className="text-[9px] font-mono text-text-dim">
+                        {p}
+                      </div>
                     ))}
                   </div>
                 </div>
@@ -1119,7 +1124,9 @@ export function TriggerPanel({ onClose }: TriggerPanelProps) {
                   type="text"
                   value={npcGagInput}
                   onChange={(e) => setNpcGagInput(e.target.value)}
-                  onKeyDown={(e) => { if (e.key === 'Enter') addNpcGag(); }}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') addNpcGag();
+                  }}
                   placeholder="NPC name..."
                   className="flex-1 min-w-0 text-[11px] font-mono bg-bg-input border border-border-dim rounded px-1.5 py-0.5 text-text-primary placeholder:text-text-dim outline-none focus:border-pink/50"
                 />
@@ -1218,7 +1225,10 @@ export function TriggerPanel({ onClose }: TriggerPanelProps) {
       )}
 
       {/* Trigger list */}
-      <div className="panel-content flex-1 overflow-y-auto px-1 py-2" style={{ fontSize: panelFontSize + 'px' }}>
+      <div
+        className="panel-content flex-1 overflow-y-auto px-1 py-2"
+        style={{ fontSize: panelFontSize + 'px' }}
+      >
         {triggerList.length === 0 && !creating && (
           <div className="px-2 text-xs text-text-dim">
             {scope === 'character' && !activeCharacter
@@ -1262,7 +1272,9 @@ export function TriggerPanel({ onClose }: TriggerPanelProps) {
                       e.stopPropagation();
                       setGroupEnabled(groupName, !allEnabled, scope);
                     }}
-                    title={allEnabled ? `Disable all in "${groupName}"` : `Enable all in "${groupName}"`}
+                    title={
+                      allEnabled ? `Disable all in "${groupName}"` : `Enable all in "${groupName}"`
+                    }
                     className={`text-[8px] font-mono px-1.5 py-px rounded border cursor-pointer transition-colors duration-150 shrink-0 ${
                       allEnabled
                         ? 'text-green border-green/40 bg-green/10'

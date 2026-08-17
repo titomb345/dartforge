@@ -183,8 +183,10 @@ function ScriptSyntaxHelp() {
       footer={
         <>
           <span className="text-text-label">Script mode:</span> Body is JavaScript with{' '}
-          <span className="font-mono" style={{ color: SCRIPT_ACCENT }}>await</span> support. Global
-          script functions are available. Errors are printed to the terminal in red.
+          <span className="font-mono" style={{ color: SCRIPT_ACCENT }}>
+            await
+          </span>{' '}
+          support. Global script functions are available. Errors are printed to the terminal in red.
         </>
       }
     />
@@ -204,7 +206,14 @@ function AliasEditor({
   scope: AliasScope;
   activeCharacter: string | null;
   onSave: (
-    data: { name?: string; pattern: string; matchMode: AliasMatchMode; body: string; group: string; bodyMode?: AliasBodyMode },
+    data: {
+      name?: string;
+      pattern: string;
+      matchMode: AliasMatchMode;
+      body: string;
+      group: string;
+      bodyMode?: AliasBodyMode;
+    },
     scope: AliasScope,
     existingId?: AliasId
   ) => void;
@@ -256,7 +265,14 @@ function AliasEditor({
     if (e.key === 'Enter' && canSave) {
       e.preventDefault();
       onSave(
-        { name: name.trim() || undefined, pattern: pattern.trim(), matchMode, body, group: group.trim() || 'General', bodyMode },
+        {
+          name: name.trim() || undefined,
+          pattern: pattern.trim(),
+          matchMode,
+          body,
+          group: group.trim() || 'General',
+          bodyMode,
+        },
         scope,
         alias?.id
       );
@@ -280,7 +296,14 @@ function AliasEditor({
             onClick={() => {
               if (canSave)
                 onSave(
-                  { name: name.trim() || undefined, pattern: pattern.trim(), matchMode, body, group: group.trim() || 'General', bodyMode },
+                  {
+                    name: name.trim() || undefined,
+                    pattern: pattern.trim(),
+                    matchMode,
+                    body,
+                    group: group.trim() || 'General',
+                    bodyMode,
+                  },
                   scope,
                   alias?.id
                 );
@@ -453,7 +476,9 @@ function AliasEditor({
             />
             {preview && (
               <div className="mt-1 px-2 py-1 rounded bg-bg-primary border border-border-dim">
-                <pre className="text-[10px] font-mono text-green whitespace-pre-wrap">{preview}</pre>
+                <pre className="text-[10px] font-mono text-green whitespace-pre-wrap">
+                  {preview}
+                </pre>
               </div>
             )}
           </div>
@@ -483,7 +508,8 @@ export function AliasPanel({ onClose }: AliasPanelProps) {
   const [searchText, setSearchText] = useState('');
   const [editingId, setEditingId] = useState<AliasId | null>(null);
   const [creating, setCreating] = useState(false);
-  const { collapsedAliasGroups, updateCollapsedAliasGroups, panelFontSize } = useAppSettingsContext();
+  const { collapsedAliasGroups, updateCollapsedAliasGroups, panelFontSize } =
+    useAppSettingsContext();
   const collapsedGroups = useMemo(() => new Set(collapsedAliasGroups), [collapsedAliasGroups]);
 
   const aliases = scope === 'character' ? characterAliases : globalAliases;
@@ -495,7 +521,14 @@ export function AliasPanel({ onClose }: AliasPanelProps) {
 
   const handleSave = useCallback(
     (
-      data: { name?: string; pattern: string; matchMode: AliasMatchMode; body: string; group: string; bodyMode?: AliasBodyMode },
+      data: {
+        name?: string;
+        pattern: string;
+        matchMode: AliasMatchMode;
+        body: string;
+        group: string;
+        bodyMode?: AliasBodyMode;
+      },
       saveScope: AliasScope,
       existingId?: AliasId
     ) => {
@@ -625,7 +658,10 @@ export function AliasPanel({ onClose }: AliasPanelProps) {
       )}
 
       {/* Alias list */}
-      <div className="panel-content flex-1 overflow-y-auto px-1 py-2" style={{ fontSize: panelFontSize + 'px' }}>
+      <div
+        className="panel-content flex-1 overflow-y-auto px-1 py-2"
+        style={{ fontSize: panelFontSize + 'px' }}
+      >
         {aliasList.length === 0 && !creating && (
           <div className="px-2 text-xs text-text-dim">
             {scope === 'character' && !activeCharacter
@@ -669,7 +705,9 @@ export function AliasPanel({ onClose }: AliasPanelProps) {
                       e.stopPropagation();
                       setGroupEnabled(groupName, !allEnabled, scope);
                     }}
-                    title={allEnabled ? `Disable all in "${groupName}"` : `Enable all in "${groupName}"`}
+                    title={
+                      allEnabled ? `Disable all in "${groupName}"` : `Enable all in "${groupName}"`
+                    }
                     className={`text-[8px] font-mono px-1.5 py-px rounded border cursor-pointer transition-colors duration-150 shrink-0 ${
                       allEnabled
                         ? 'text-green border-green/40 bg-green/10'
