@@ -98,10 +98,12 @@ async fn disconnect(
             message: "Disconnected".to_string(),
         },
     );
-    let _ = companion_state.broadcast_tx.send(companion::CompanionMessage::ConnectionStatus {
-        connected: false,
-        message: "Disconnected".to_string(),
-    });
+    let _ = companion_state
+        .broadcast_tx
+        .send(companion::CompanionMessage::ConnectionStatus {
+            connected: false,
+            message: "Disconnected".to_string(),
+        });
     *companion_state.last_status.lock().await = Some((false, "Disconnected".to_string()));
     Ok(())
 }
@@ -121,8 +123,7 @@ async fn get_connection_status(
 
 #[tauri::command]
 fn read_system_file(path: String) -> Result<String, String> {
-    std::fs::read_to_string(&path)
-        .map_err(|e| format!("Failed to read {path}: {e}"))
+    std::fs::read_to_string(&path).map_err(|e| format!("Failed to read {path}: {e}"))
 }
 
 #[tauri::command]
@@ -132,8 +133,7 @@ fn write_system_file(path: String, content: String) -> Result<(), String> {
         std::fs::create_dir_all(parent)
             .map_err(|e| format!("Failed to create directory for {path}: {e}"))?;
     }
-    std::fs::write(&path, &content)
-        .map_err(|e| format!("Failed to write {path}: {e}"))
+    std::fs::write(&path, &content).map_err(|e| format!("Failed to write {path}: {e}"))
 }
 
 const KEYRING_SERVICE: &str = "dartforge";
@@ -142,7 +142,8 @@ const KEYRING_SERVICE: &str = "dartforge";
 fn store_credential(account: String, password: String) -> Result<(), String> {
     let entry = keyring::Entry::new(KEYRING_SERVICE, &account)
         .map_err(|e| format!("Keyring error: {e}"))?;
-    entry.set_password(&password)
+    entry
+        .set_password(&password)
         .map_err(|e| format!("Failed to store credential: {e}"))?;
     Ok(())
 }
@@ -195,6 +196,7 @@ pub fn run() {
             companion::start_companion,
             companion::stop_companion,
             companion::get_companion_info,
+            companion::get_companion_clients,
             companion::broadcast_companion_output,
             companion::broadcast_companion_history,
             companion::broadcast_companion_vitals,
@@ -230,7 +232,9 @@ pub fn run() {
         ])
         .setup(|app| {
             // Initialize storage state with default app data dir
-            let data_dir = app.path().app_data_dir()
+            let data_dir = app
+                .path()
+                .app_data_dir()
                 .map_err(|e| format!("Failed to get app data dir: {e}"))?;
             if let Err(e) = std::fs::create_dir_all(&data_dir) {
                 log::warn!("Failed to create data dir {}: {e}", data_dir.display());

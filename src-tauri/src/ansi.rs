@@ -28,8 +28,7 @@ pub struct ProcessedOutput {
 /// Returns any trailing partial IAC sequence as `remainder` for reassembly.
 /// Convert display bytes to String, using fast path for valid UTF-8
 fn display_string(bytes: Vec<u8>) -> String {
-    String::from_utf8(bytes)
-        .unwrap_or_else(|e| String::from_utf8_lossy(e.as_bytes()).into_owned())
+    String::from_utf8(bytes).unwrap_or_else(|e| String::from_utf8_lossy(e.as_bytes()).into_owned())
 }
 
 pub fn process_output(raw: &[u8]) -> ProcessedOutput {

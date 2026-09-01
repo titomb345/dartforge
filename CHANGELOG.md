@@ -12,6 +12,11 @@ The `[Unreleased]` header controls automatic version bumping on merge:
 
 ## [Unreleased-minor]
 
+### Added
+
+- Mobile Companion: the phone now keeps its screen awake while connected, buzzes on taps, shows the same status chips as the desktop input row (autocast, blocked, timers, and the rest), masks the password prompt, and says Live, Reconnecting, Desktop offline, or Companion off next to the status dot. A bell button in the sub-bar turns on tell notifications (a buzz, and a system notification when the page is in the background), and a clear button empties the output. Android can install it to the home screen like iOS already could
+- Mobile Companion: the desktop toolbar shows a small phone icon with a count while a phone is connected, and the server pings each phone so dead connections are noticed and dropped instead of lingering
+
 ### Changed
 
 - Chat history is now kept per character instead of being shared by everyone. Each character has its own incoming and outgoing log, the panel header names the character you are looking at, and switching characters swaps the log with it. Your existing history is handed to whichever character was last played. Filters, sound alerts, muted senders, and the sort/hide preferences stay shared, since those are preferences rather than a log
@@ -30,6 +35,8 @@ The `[Unreleased]` header controls automatic version bumping on merge:
 
 ### Fixed
 
+- Mobile Companion no longer stacks duplicate scrollback every time the phone reconnects. It reconnects right away when the phone wakes, regains network, or the connection goes quiet, instead of waiting for a close that never comes. Commands typed while disconnected stay in the input with a shake and a warning instead of vanishing. The Send button no longer closes the iOS keyboard, pinch zoom works again, stray terminal control codes no longer print as garbage, fallback colors follow your desktop theme, and a password typed on the phone is no longer saved into command history
+- Mobile Companion on the desktop side: a phone that fell behind a busy stream used to go silent while still showing a green dot; it now catches up. Turning the companion off or changing its port now actually disconnects phones, and a fast port change no longer reports a false "port in use" error
 - Refreshing the window (Ctrl+R) no longer strands the client in a disconnected state while the game session is still alive underneath. The connection lives in the app's backend and survives the refresh, but the screen came back assuming it was offline, so nothing could be sent until you hit Reconnect and started a whole new login. The screen now asks the backend what is actually live on startup, picks the session back up, re-runs the login sync commands, and prints a note that it did so
 - `/autocast` no longer forgets the power steps. Every new `/autocast <spell> @<power>` (and every stop) reset them to the +20/-10 defaults, so a `/autocast adjust power` had to be repeated each time
 

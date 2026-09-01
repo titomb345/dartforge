@@ -87,6 +87,7 @@ import { AutoInscriber } from './lib/autoInscriber';
 import { AutoCaster } from './lib/autoCaster';
 import { useAutoCasterConfig } from './hooks/useAutoCasterConfig';
 import { panelForKeyEvent } from './lib/panelShortcuts';
+import { CHIP_ACCENT } from './lib/accents';
 import type { CounterAutoToggle } from './hooks/useImproveCounters';
 import { AutoConc } from './lib/autoConc';
 import { useEngineRef } from './hooks/useEngineRef';
@@ -578,7 +579,16 @@ function AppMain() {
       onEncumbrance: (match) => updateEncumbranceRef.current(match),
       onMovement: (match) => updateMovementRef.current(match),
       onAlignment: (match) => updateAlignmentRef.current(match),
-      onChat: (msg) => handleChatMessageRef.current?.(msg),
+      onChat: (msg) => {
+        handleChatMessageRef.current?.(msg);
+        // The phone can buzz or notify for a tell aimed at you
+        if (msg.type === 'tell' && !msg.isOwn) {
+          tauriInvoke?.('broadcast_companion_state', {
+            key: 'tell',
+            data: { from: msg.sender, text: msg.message, at: Date.now() },
+          });
+        }
+      },
       onWho: (snapshot) => updateWhoSnapshotRef.current(snapshot),
       // Automapper feed — untrimmed lines (hex art needs its leading whitespace);
       // the raw line carries ANSI colors for river detection
@@ -1743,6 +1753,27 @@ function AppMain() {
     return () => window.removeEventListener('keydown', handler);
   }, [closePanel]);
 
+  // How many phones are on the Mobile Companion right now
+  const [companionClients, setCompanionClients] = useState(0);
+  useEffect(() => {
+    if (!tauriListen) return;
+    let unlisten: (() => void) | null = null;
+    tauriListen('companion:clients', (e: { payload: unknown }) => {
+      const count = (e.payload as { count?: number })?.count;
+      setCompanionClients(typeof count === 'number' ? count : 0);
+    }).then((fn) => {
+      unlisten = fn;
+    });
+    tauriInvoke?.('get_companion_clients')
+      .then((n) => {
+        if (typeof n === 'number') setCompanionClients(n);
+      })
+      .catch(() => {});
+    return () => {
+      unlisten?.();
+    };
+  }, []);
+
   // Ctrl+Q — toggle companion QR code dialog
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
@@ -1759,6 +1790,7 @@ function AppMain() {
   const handleSendRef = useLatestRef(handleSend);
   const commandHistoryRef = useLatestRef(commandHistory);
   const handleHistoryChangeRef = useLatestRef(handleHistoryChange);
+  const companionSkipHistoryRef = useLatestRef(passwordMode || skipHistory);
   useEffect(() => {
     if (!tauriListen) return;
     let unlisten: (() => void) | null = null;
@@ -1766,9 +1798,10 @@ function AppMain() {
       const payload = e.payload as { command?: string };
       if (payload?.command != null) {
         handleSendRef.current(payload.command);
-        // Add companion commands to client history
+        // Add companion commands to client history, except at the name and
+        // password prompts (the same rule the desktop input follows)
         const cmd = payload.command.trim();
-        if (cmd) {
+        if (cmd && !companionSkipHistoryRef.current) {
           const current = commandHistoryRef.current;
           handleHistoryChangeRef.current([cmd, ...current.filter((h) => h !== cmd)].slice(0, 500));
         }
@@ -2028,6 +2061,166 @@ function AppMain() {
       });
     tauriInvoke?.('broadcast_companion_vitals', { readouts });
   }, [readoutConfigs, statusBarOrder, theme]);
+
+  // The phone masks its input and keeps the password out of history
+  useEffect(() => {
+    tauriInvoke?.('broadcast_companion_state', { key: 'input', data: { passwordMode } });
+  }, [passwordMode]);
+
+  // Mirror the status chips beside the command input (autocast, blocked,
+  // timers, ...) so the phone shows the same things the desktop does. Only
+  // resent when the set actually changes, not on every countdown tick.
+  const companionChips = useMemo(() => {
+    type Chip = {
+      id: string;
+      label: string;
+      color: string;
+      kind: 'running' | 'scheduled';
+      detail: string | null;
+    };
+    const chips: Chip[] = [];
+    const count = (n: number) => (n > 0 ? `x${n}` : null);
+    if (blockerState.blocked) {
+      chips.push({
+        id: 'blocked',
+        label: blockerState.blockLabel ?? 'Blocked',
+        color: CHIP_ACCENT.blocked,
+        kind: 'running',
+        detail: blockerState.queueLength > 0 ? `+${blockerState.queueLength}` : null,
+      });
+    }
+    if (movementMode !== 'normal') {
+      chips.push({
+        id: 'movement',
+        label: movementMode.charAt(0).toUpperCase() + movementMode.slice(1),
+        color: CHIP_ACCENT.movement,
+        kind: 'running',
+        detail: null,
+      });
+    }
+    if (appSettings.babelEnabled && appSettings.babelLanguage) {
+      chips.push({
+        id: 'babel',
+        label: 'Babel',
+        color: CHIP_ACCENT.babel,
+        kind: 'running',
+        detail: appSettings.babelLanguage,
+      });
+    }
+    if (inscriberState.active) {
+      chips.push({
+        id: 'inscriber',
+        label: 'Autoinscribe',
+        color: CHIP_ACCENT.inscriber,
+        kind: 'running',
+        detail: count(inscriberState.cycleCount),
+      });
+    }
+    if (casterState.active) {
+      chips.push({
+        id: 'caster',
+        label: casterState.weightMode ? 'Autocast+Wt' : 'Autocast',
+        color: casterState.weightMode ? CHIP_ACCENT.casterWeight : CHIP_ACCENT.caster,
+        kind: 'running',
+        detail: count(casterState.cycleCount),
+      });
+    }
+    if (concState.active) {
+      chips.push({
+        id: 'conc',
+        label: 'Autoconc',
+        color: CHIP_ACCENT.conc,
+        kind: 'running',
+        detail: count(concState.cycleCount),
+      });
+    }
+    if (appSettings.announceMode !== 'off') {
+      chips.push({
+        id: 'announce',
+        label: `Announce ${appSettings.announceMode}`,
+        color: CHIP_ACCENT.announce,
+        kind: 'running',
+        detail: null,
+      });
+    }
+    if (alignmentTrackingEnabled) {
+      chips.push({
+        id: 'alignment',
+        label: 'align',
+        color: CHIP_ACCENT.alignment,
+        kind: 'scheduled',
+        detail: `${alignmentTrackingMinutes}m`,
+      });
+    }
+    if (appSettings.whoAutoRefreshEnabled) {
+      chips.push({
+        id: 'who',
+        label: 'who',
+        color: CHIP_ACCENT.who,
+        kind: 'scheduled',
+        detail: `${appSettings.whoRefreshMinutes}m`,
+      });
+    }
+    if (appSettings.equipAutoRefreshEnabled) {
+      chips.push({
+        id: 'equip',
+        label: 'equip',
+        color: CHIP_ACCENT.equip,
+        kind: 'scheduled',
+        detail: `${appSettings.equipRefreshMinutes}m`,
+      });
+    }
+    if (antiIdleEnabled && !alignmentTrackingEnabled) {
+      chips.push({
+        id: 'idle',
+        label: 'idle',
+        color: CHIP_ACCENT.antiIdle,
+        kind: 'scheduled',
+        detail: `${antiIdleMinutes}m`,
+      });
+    }
+    for (const t of activeTimerBadges) {
+      chips.push({
+        id: `timer:${t.id}`,
+        label: t.name,
+        color: CHIP_ACCENT.timer,
+        kind: 'scheduled',
+        detail: null,
+      });
+    }
+    return chips;
+  }, [
+    blockerState.blocked,
+    blockerState.blockLabel,
+    blockerState.queueLength,
+    movementMode,
+    appSettings.babelEnabled,
+    appSettings.babelLanguage,
+    appSettings.announceMode,
+    appSettings.whoAutoRefreshEnabled,
+    appSettings.whoRefreshMinutes,
+    appSettings.equipAutoRefreshEnabled,
+    appSettings.equipRefreshMinutes,
+    inscriberState.active,
+    inscriberState.cycleCount,
+    casterState.active,
+    casterState.weightMode,
+    casterState.cycleCount,
+    concState.active,
+    concState.cycleCount,
+    alignmentTrackingEnabled,
+    alignmentTrackingMinutes,
+    antiIdleEnabled,
+    antiIdleMinutes,
+    activeTimerBadges,
+  ]);
+  const lastChipsJsonRef = useRef('');
+  useEffect(() => {
+    const json = JSON.stringify(companionChips);
+    if (json === lastChipsJsonRef.current) return;
+    lastChipsJsonRef.current = json;
+    tauriInvoke?.('broadcast_companion_state', { key: 'chips', data: companionChips });
+  }, [companionChips]);
 
   // Mirror the user's customizable numpad mappings and terminal color theme to
   // companion clients so the companion's keypad movement and output/who colors
@@ -2446,6 +2639,7 @@ function AppMain() {
                                         <div className="flex flex-col h-dvh bg-bg-canvas text-text-primary relative p-1 gap-1 overflow-hidden">
                                           <Toolbar
                                             connected={connected}
+                                            companionClients={companionClients}
                                             onReconnect={handleReconnect}
                                             onDisconnect={handleDisconnect}
                                             onScreenshot={handleScreenshot}

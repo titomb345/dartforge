@@ -2,10 +2,11 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, interactive-widget=resizes-content">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, interactive-widget=resizes-content">
 <meta name="theme-color" content="#000000">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<link rel="manifest" href="/manifest.webmanifest">
 <title>DartForge</title>
 <style>
   :root {
@@ -117,6 +118,7 @@
   #status-pill {
     display: flex;
     align-items: center;
+    gap: 5px;
     font-size: 11px;
     color: var(--fg-dim);
     white-space: nowrap;
@@ -128,10 +130,23 @@
     border-radius: 50%;
     background: var(--red);
     transition: background 0.3s;
+    flex-shrink: 0;
   }
 
   #status-dot.connected { background: var(--green); }
   #status-dot.ws-only { background: var(--orange); }
+
+  /* Connection state word beside the dot: Live / Reconnecting / Desktop
+     offline / Companion off. Colored to match the dot. */
+  #status-text {
+    font-size: 10px;
+    font-weight: bold;
+    letter-spacing: 0.03em;
+    text-transform: uppercase;
+    color: var(--red);
+  }
+  #status-text.connected { color: var(--green); }
+  #status-text.ws-only { color: var(--orange); }
 
   /* ── Power button ────────────────────────────────── */
   #power-btn {
@@ -314,6 +329,56 @@
   .qbtn:active { opacity: 0.7; }
   .qbtn.disabled { opacity: 0.4; pointer-events: none; }
 
+  /* ── Timer / counter chips row ───────────────────── */
+  /* Display-only mirror of the desktop's running timers and scheduled
+     items. Running chips are filled (translucent) with a glowing dot;
+     scheduled chips are outlined and dimmer. Colors come from the desktop
+     as-is via inline style. */
+  #chips {
+    display: none;
+    align-items: center;
+    gap: 6px;
+    padding: 5px 10px;
+    background: var(--bg-chrome);
+    border-top: 1px solid var(--border);
+    overflow-x: auto;
+    overflow-y: hidden;
+    white-space: nowrap;
+    flex-shrink: 0;
+    scrollbar-width: none;
+  }
+  #chips.populated { display: flex; }
+  #chips::-webkit-scrollbar { display: none; }
+  .chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    flex-shrink: 0;
+    height: 22px;
+    padding: 0 9px;
+    border-radius: 999px;
+    border: 1px solid currentColor;
+    font-size: 10px;
+    font-weight: bold;
+    line-height: 1;
+    letter-spacing: 0.02em;
+  }
+  .chip-dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: currentColor;
+    box-shadow: 0 0 6px currentColor;
+    flex-shrink: 0;
+    animation: chip-glow 1.6s ease-in-out infinite;
+  }
+  @keyframes chip-glow {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.45; }
+  }
+  .chip.scheduled { opacity: 0.55; border-style: dashed; }
+  .chip-detail { font-weight: normal; opacity: 0.8; }
+
   /* ── Reconnect banner ────────────────────────────── */
   #reconnect-banner {
     display: none;
@@ -327,6 +392,21 @@
     -webkit-tap-highlight-color: transparent;
   }
   #reconnect-banner.visible { display: block; }
+  /* Companion switched off on the desktop: no auto-retry, tap to retry. */
+  #reconnect-banner.off { background: var(--orange); }
+
+  /* Brief shake when a command is refused because nothing is connected. */
+  @keyframes input-shake {
+    0%, 100% { transform: translateX(0); }
+    20% { transform: translateX(-5px); }
+    40% { transform: translateX(5px); }
+    60% { transform: translateX(-4px); }
+    80% { transform: translateX(4px); }
+  }
+  #cmd-input.shake {
+    animation: input-shake 0.35s ease-in-out;
+    border-color: var(--red);
+  }
 
   /* ── Output ──────────────────────────────────────── */
   #output-wrap {
@@ -623,6 +703,7 @@
       <span class="brand-name">DartForge</span>
       <div id="status-pill">
         <div id="status-dot"></div>
+        <span id="status-text">Reconnecting</span>
       </div>
     </div>
     <button id="power-btn" class="disconnected">
@@ -639,11 +720,21 @@
     <button class="subbar-btn" id="ctr-btn">Counters</button>
     <button class="subbar-btn icon-only" id="font-dec" title="Smaller text">A&#x2212;</button>
     <button class="subbar-btn icon-only" id="font-inc" title="Larger text">A+</button>
+    <button class="subbar-btn icon-only" id="notif-btn" title="Tell notifications">
+      <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/>
+      </svg>
+    </button>
+    <button class="subbar-btn icon-only" id="clear-btn" title="Clear output">
+      <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M20 20H7L3 16l10-10 8 8-6 6"/><line x1="6" y1="11" x2="13" y2="18"/>
+      </svg>
+    </button>
   </div>
   <div class="aux-panel" id="who-panel"></div>
   <div class="aux-panel" id="counters-panel"></div>
 
-  <div id="reconnect-banner">Connection lost — tap to reconnect</div>
+  <div id="reconnect-banner">Connection lost. Tap to reconnect.</div>
 
   <div id="output-wrap">
     <div id="output">
@@ -675,6 +766,8 @@
       <button class="quick-btn" data-cmd="u">Up</button>
     </div>
   </div>
+
+  <div id="chips"></div>
 
   <div id="quickbtns"></div>
 
@@ -810,10 +903,17 @@
       }
     }
 
-    var parts = text.split(/(\x1b\[[0-9;]*m)/);
+    // Split on every escape sequence, not just SGR: any CSI (ESC [ params
+    // intermediates final), OSC (ESC ] ... BEL or ESC \), charset / two-byte
+    // ESC sequences (ESC ( B, ESC =, ESC 7). Only SGR "m" sequences change
+    // state; every other escape is consumed and dropped so ESC[K, ESC[2J and
+    // cursor moves never print as garbage.
+    var parts = text.split(ESC_SPLIT_RE);
     for (var i = 0; i < parts.length; i++) {
       var part = parts[i];
+      if (!part) continue;
       var match = part.match(/^\x1b\[([0-9;]*)m$/);
+      if (!match && part.charCodeAt(0) === 0x1b) continue;
       if (match) {
         // An empty parameter list (ESC[m) means reset.
         var codes = match[1] === ''
@@ -853,14 +953,24 @@
           }
         }
         reopenSpan();
-      } else if (part) {
-        result += part.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+      } else {
+        // A stray ESC that didn't form a sequence (chunk split mid-escape)
+        // is dropped rather than rendered.
+        result += part.replace(/\x1b/g, '')
+          .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
       }
     }
 
     if (spanOpen) result += '</span>';
     return result;
   }
+
+  // CSI: ESC [ then parameter bytes 0x30-0x3F, intermediates 0x20-0x2F, one
+  // final byte 0x40-0x7E. OSC: ESC ] up to BEL or ESC \ (terminator optional
+  // so an unterminated title string at the end of a chunk still vanishes).
+  // Then ESC + intermediates + final (ESC ( B), and bare two-byte ESC x
+  // sequences excluding [ and ] which the first two branches own.
+  var ESC_SPLIT_RE = /(\x1b\[[0-?]*[ -\/]*[@-~]|\x1b\][^\x07\x1b]*(?:\x07|\x1b\\)?|\x1b[ -\/]+[0-~]|\x1b[0-Z\\^-~])/;
 
   // ── Terminal theme (mirrors desktop DEFAULT_THEME; overridden live) ──
   // Kept in sync with the desktop's customizable palette via the 'config'
@@ -872,6 +982,13 @@
     brightBlue: '#0000ff', brightMagenta: '#ff00ff', brightCyan: '#00ffff', brightWhite: '#ffffff'
   };
   var currentTheme = DEFAULT_ANSI_THEME;
+
+  /** Resolve a theme slot from the broadcast theme, falling back to the
+      desktop default for that same slot (never a substitute palette). */
+  function themeColor(key) {
+    var v = currentTheme && currentTheme[key];
+    return (typeof v === 'string' && v) ? v : DEFAULT_ANSI_THEME[key];
+  }
 
   var THEME_CSS_VARS = {
     '--out-fg': 'foreground', '--ansi-black': 'black', '--ansi-red': 'red',
@@ -891,8 +1008,11 @@
       var val = t[THEME_CSS_VARS[cssVar]];
       if (typeof val === 'string' && val) root.style.setProperty(cssVar, val);
     }
-    // Guild tags are inline-styled from the theme, so re-render the who list.
+    // Guild tags, vitals and quick buttons are inline-styled from the theme,
+    // so re-render anything whose fallback color resolves through it.
     if (lastWhoData) renderWho(lastWhoData);
+    if (lastReadouts.length) renderVitals(lastReadouts);
+    if (lastQuickButtons) renderQuickButtons(lastQuickButtons);
   }
 
   // Guild tag styles — mirror the desktop Who panel's GUILD_STYLES. Values are
@@ -910,10 +1030,12 @@
   function guildTagHtml(guild) {
     var style = GUILD_STYLES[guild];
     if (!style) {
-      return '<span class="who-guild-tag" style="color:#999">[' + esc(guild) + ']</span>';
+      // Unknown guild: the theme's dim (bright black) slot, not a fixed grey.
+      return '<span class="who-guild-tag" style="color:' + themeColor('brightBlack') + '">[' +
+        esc(guild) + ']</span>';
     }
-    var color = currentTheme[style.color] || '#c0c0c0';
-    var bracket = currentTheme[style.bracketColor || style.color] || color;
+    var color = themeColor(style.color);
+    var bracket = themeColor(style.bracketColor || style.color);
     var wrap = '';
     if (style.bg) {
       var bg = currentTheme[style.bg];
@@ -942,6 +1064,10 @@
   var cmdInput = document.getElementById('cmd-input');
   var sendBtn = document.getElementById('send-btn');
   var statusDot = document.getElementById('status-dot');
+  var statusText = document.getElementById('status-text');
+  var chipsRow = document.getElementById('chips');
+  var notifBtn = document.getElementById('notif-btn');
+  var clearBtn = document.getElementById('clear-btn');
   var reconnectBanner = document.getElementById('reconnect-banner');
   var scrollNotice = document.getElementById('scroll-notice');
   var emptyState = document.getElementById('empty-state');
@@ -968,12 +1094,20 @@
   // ── State ─────────────────────────────────────────────────────
   var ws = null;
   var mudConnected = false;
+  var companionOff = false;   // desktop reported the companion was switched off
+  var passwordMode = false;   // desktop is prompting for a password
   var autoScroll = true;
   var hasOutput = false;
   var MAX_OUTPUT_LINES = 2000;
   var commandHistory = [];
   var historyIndex = -1;
   var searchPrefix = '';
+  var lastQuickButtons = null;
+
+  /** Short tap feedback where the device supports it (no-op on iOS). */
+  function haptic(ms) {
+    try { if (navigator.vibrate) navigator.vibrate(ms || 10); } catch (e) {}
+  }
 
   // ── Vitals rendering ──────────────────────────────────────────
   // Each readout is collapsed (icon-only) or expanded (icon + label),
@@ -1001,7 +1135,7 @@
     for (var i = 0; i < lastReadouts.length; i++) {
       var r = lastReadouts[i];
       var icon = VITAL_ICONS[r.key] || '';
-      var color = (r.color || '#f8f8f2').replace(/"/g, '');
+      var color = (r.color || themeColor('foreground')).replace(/"/g, '');
       var label = String(r.label == null ? '' : r.label)
         .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
       var expanded = !isCollapsed(r.key);
@@ -1039,6 +1173,112 @@
     else if (key === 'who') renderWho(data);
     else if (key === 'counters') renderCounters(data);
     else if (key === 'quickbuttons') renderQuickButtons(data);
+    else if (key === 'chips') renderChips(data);
+    else if (key === 'input') setPasswordMode(!!(data && data.passwordMode));
+    else if (key === 'tell') handleTell(data);
+  }
+
+  // ── Password mode ─────────────────────────────────────────────
+  // While the desktop is at a password prompt the field is masked, the
+  // command is kept out of local history and never re-shown after send.
+  // Prefer -webkit-text-security (keeps type="text", so iOS doesn't pop its
+  // password autofill bar); fall back to type="password" where unsupported.
+  var TEXT_SECURITY_OK = false;
+  try {
+    TEXT_SECURITY_OK = !!(window.CSS && CSS.supports && CSS.supports('-webkit-text-security', 'disc'));
+  } catch (e) {}
+
+  function setPasswordMode(on) {
+    on = !!on;
+    if (on === passwordMode) return;
+    passwordMode = on;
+    if (TEXT_SECURITY_OK) {
+      cmdInput.style.webkitTextSecurity = on ? 'disc' : '';
+    } else {
+      cmdInput.type = on ? 'password' : 'text';
+    }
+    cmdInput.placeholder = on ? 'Password' : 'Enter command...';
+    if (on) { historyIndex = -1; searchPrefix = ''; }
+  }
+
+  // ── Timer / counter chips (display only) ──────────────────────
+  var lastChips = null;
+
+  function renderChips(list) {
+    lastChips = Array.isArray(list) ? list : [];
+    if (lastChips.length === 0) {
+      chipsRow.classList.remove('populated');
+      chipsRow.innerHTML = '';
+      return;
+    }
+    var html = '';
+    for (var i = 0; i < lastChips.length; i++) {
+      var c = lastChips[i];
+      if (!c) continue;
+      var running = c.kind !== 'scheduled';
+      // Desktop-provided color, used as-is (sanitized only against quote
+      // injection since it lands in a style attribute).
+      var color = String(c.color || themeColor('cyan')).replace(/["'<>;]/g, '');
+      var detail = c.detail == null ? '' : String(c.detail);
+      html += '<span class="chip ' + (running ? 'running' : 'scheduled') +
+        '" data-chip="' + esc(c.id) + '" style="color:' + color + '"' +
+        (detail ? ' title="' + esc(detail) + '"' : '') + '>' +
+        (running ? '<span class="chip-dot"></span>' : '') +
+        esc(c.label) +
+        (detail ? ' <span class="chip-detail">' + esc(detail) + '</span>' : '') +
+        '</span>';
+    }
+    chipsRow.innerHTML = html;
+    chipsRow.classList.add('populated');
+  }
+
+  // ── Tell notifications (bell toggle, persisted) ───────────────
+  var notifEnabled = false;
+  try { notifEnabled = localStorage.getItem('df-notify') === '1'; } catch (e) {}
+
+  function renderNotifBtn() {
+    notifBtn.classList.toggle('active', notifEnabled);
+    notifBtn.title = notifEnabled ? 'Tell notifications on' : 'Tell notifications off';
+  }
+  renderNotifBtn();
+
+  function setNotifEnabled(on) {
+    notifEnabled = !!on;
+    try { localStorage.setItem('df-notify', notifEnabled ? '1' : '0'); } catch (e) {}
+    renderNotifBtn();
+    if (notifEnabled) {
+      haptic(15);
+      try {
+        if (window.Notification && Notification.permission === 'default' &&
+            typeof Notification.requestPermission === 'function') {
+          var p = Notification.requestPermission();
+          if (p && typeof p.catch === 'function') p.catch(function() {});
+        }
+      } catch (e) {}
+    }
+  }
+  notifBtn.addEventListener('click', function() { setNotifEnabled(!notifEnabled); });
+
+  function handleTell(t) {
+    if (!notifEnabled || !t || typeof t !== 'object') return;
+    // Replayed state on reconnect carries old tells; only react to fresh ones.
+    var at = Number(t.at);
+    if (!isNaN(at) && at > 0) {
+      if (at < 1e12) at *= 1000; // seconds -> ms
+      if (Date.now() - at > 10000) return;
+    }
+    try { if (navigator.vibrate) navigator.vibrate([60, 40, 60]); } catch (e) {}
+    if (!document.hidden) return;
+    try {
+      if (window.Notification && Notification.permission === 'granted') {
+        var n = new Notification(String(t.from || 'Tell'), {
+          body: String(t.text || ''),
+          tag: 'df-tell',
+          silent: false
+        });
+        n.onclick = function() { try { window.focus(); n.close(); } catch (e) {} };
+      }
+    } catch (e) {}
   }
 
   function fmtHour(h) {
@@ -1082,7 +1322,7 @@
     var sub = [];
     if (d.totalEstimated) sub.push('~' + d.totalEstimated + ' on');
     if (d.activeToday) sub.push(d.activeToday + ' today');
-    var html = '<div class="aux-title">Online' + (sub.length ? ' — ' + sub.join(' · ') : '') + '</div>';
+    var html = '<div class="aux-title">Online' + (sub.length ? ' · ' + sub.join(' · ') : '') + '</div>';
     for (var i = 0; i < players.length; i++) {
       var p = players[i];
       if (p.isTitle) {
@@ -1122,6 +1362,7 @@
   }
 
   function renderQuickButtons(d) {
+    lastQuickButtons = Array.isArray(d) ? d : null;
     if (!Array.isArray(d) || d.length === 0) {
       quickBtns.classList.remove('populated');
       quickBtns.innerHTML = '';
@@ -1130,7 +1371,7 @@
     var html = '';
     for (var i = 0; i < d.length; i++) {
       var b = d[i];
-      var color = (b.color || '#8be9fd').replace(/"/g, '');
+      var color = (b.color || themeColor('cyan')).replace(/"/g, '');
       html += '<button class="qbtn' + (b.enabled ? '' : ' disabled') +
         '" data-qb="' + esc(b.id) + '" style="color:' + color + '">' +
         esc(b.label) + '</button>';
@@ -1143,9 +1384,16 @@
     var b = e.target.closest('.qbtn');
     if (!b) return;
     var id = b.getAttribute('data-qb');
-    if (id && ws && ws.readyState === WebSocket.OPEN) {
-      ws.send(JSON.stringify({ type: 'quickbutton', id: id }));
-    }
+    if (!id) return;
+    if (!canSend()) { rejectSend(); return; }
+    haptic();
+    ws.send(JSON.stringify({ type: 'quickbutton', id: id }));
+  });
+
+  // Clear the phone's output locally (the desktop scrollback is untouched).
+  clearBtn.addEventListener('click', function() {
+    haptic();
+    clearOutput();
   });
 
   // Who / Counters collapsible toggles (only one open at a time).
@@ -1241,34 +1489,186 @@
     }
   }
 
+  /** Empty the output pane and restore the empty-state placeholder. */
+  function clearOutput() {
+    output.innerHTML = '';
+    output.appendChild(emptyState);
+    emptyState.classList.remove('hidden');
+    hasOutput = false;
+    autoScroll = true;
+    scrollNotice.classList.remove('visible');
+  }
+
+  // ── Connection status (dot + word) ────────────────────────────
+  function wsOpen() {
+    return !!ws && ws.readyState === WebSocket.OPEN;
+  }
+
+  function updateStatus() {
+    var cls, word;
+    if (companionOff) { cls = ''; word = 'Companion off'; }
+    else if (!wsOpen()) { cls = ''; word = 'Reconnecting'; }
+    else if (mudConnected) { cls = 'connected'; word = 'Live'; }
+    else { cls = 'ws-only'; word = 'Desktop offline'; }
+    statusDot.className = cls;
+    statusText.className = cls;
+    statusText.textContent = word;
+    sendBtn.disabled = !wsOpen();
+    updatePowerBtn();
+  }
+
+  // ── Banner (connection lost / companion off / not-connected flash) ──
+  var BANNER_TEXT = {
+    lost: 'Connection lost. Tap to reconnect.',
+    off: 'Companion turned off on the desktop. Tap to retry.',
+    flash: 'Not connected'
+  };
+  var bannerMode = null;
+  var bannerFlashTimer = null;
+
+  function setBanner(mode) {
+    if (bannerFlashTimer) { clearTimeout(bannerFlashTimer); bannerFlashTimer = null; }
+    bannerMode = mode;
+    reconnectBanner.classList.toggle('off', mode === 'off');
+    if (!mode) { reconnectBanner.classList.remove('visible'); return; }
+    reconnectBanner.textContent = BANNER_TEXT[mode];
+    reconnectBanner.classList.add('visible');
+  }
+
+  /** Briefly show "Not connected" when the socket is up but the desktop
+      isn't attached to the MUD; a persistent banner is left as-is. */
+  function flashBanner() {
+    if (bannerMode === 'lost' || bannerMode === 'off') return;
+    setBanner('flash');
+    bannerFlashTimer = setTimeout(function() {
+      bannerFlashTimer = null;
+      if (bannerMode === 'flash') setBanner(null);
+    }, 1200);
+  }
+
+  // ── Screen wake lock ──────────────────────────────────────────
+  // Held while the socket is open and the page is visible so the phone
+  // doesn't dim mid-session. Silently skipped where unsupported.
+  var wakeLock = null;
+  var wakeLockPending = false;
+
+  function requestWakeLock() {
+    if (!navigator.wakeLock || wakeLock || wakeLockPending) return;
+    if (document.visibilityState !== 'visible' || !wsOpen()) return;
+    wakeLockPending = true;
+    try {
+      navigator.wakeLock.request('screen').then(function(lock) {
+        wakeLockPending = false;
+        wakeLock = lock;
+        lock.addEventListener('release', function() { if (wakeLock === lock) wakeLock = null; });
+        // The socket may have closed while the request was in flight.
+        if (!wsOpen()) releaseWakeLock();
+      }, function() { wakeLockPending = false; });
+    } catch (e) { wakeLockPending = false; }
+  }
+
+  function releaseWakeLock() {
+    if (!wakeLock) return;
+    var lock = wakeLock;
+    wakeLock = null;
+    try {
+      var p = lock.release();
+      if (p && typeof p.catch === 'function') p.catch(function() {});
+    } catch (e) {}
+  }
+
   // ── WebSocket ─────────────────────────────────────────────────
   var reconnectTimer = null;
   var reconnectDelay = 1000;
+  var lastMsgAt = 0;
+  var wsStartedAt = 0;
+  var SILENCE_LIMIT_MS = 45000;   // server pings every 20s
+  var CONNECT_LIMIT_MS = 15000;   // a CONNECTING socket older than this is stuck
+
+  function clearReconnectTimer() {
+    if (reconnectTimer) { clearTimeout(reconnectTimer); reconnectTimer = null; }
+  }
+
+  function scheduleReconnect() {
+    clearReconnectTimer();
+    if (companionOff) return;
+    reconnectTimer = setTimeout(function() {
+      reconnectTimer = null;
+      reconnectDelay = Math.min(reconnectDelay * 1.5, 10000);
+      connect();
+    }, reconnectDelay);
+  }
+
+  /** Drop whatever socket exists (without letting its close handler
+      schedule another retry) and open a fresh one right away. */
+  function forceReconnect() {
+    clearReconnectTimer();
+    reconnectDelay = 1000;
+    if (ws) {
+      var old = ws;
+      ws = null;
+      old.onopen = old.onmessage = old.onclose = old.onerror = null;
+      try { old.close(); } catch (e) {}
+    }
+    connect();
+  }
 
   function connect() {
+    if (ws && (ws.readyState === WebSocket.CONNECTING || ws.readyState === WebSocket.OPEN)) return;
+    clearReconnectTimer();
+
     var proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
     var wsUrl = proto + '//' + location.host + '/ws';
 
-    ws = new WebSocket(wsUrl);
+    var sock;
+    try {
+      sock = new WebSocket(wsUrl);
+    } catch (e) {
+      ws = null;
+      updateStatus();
+      setBanner('lost');
+      scheduleReconnect();
+      return;
+    }
+    ws = sock;
+    wsStartedAt = Date.now();
+    lastMsgAt = wsStartedAt;
+    updateStatus();
 
-    ws.onopen = function() {
-      statusDot.className = mudConnected ? 'connected' : 'ws-only';
-      reconnectBanner.classList.remove('visible');
-      sendBtn.disabled = false;
+    sock.onopen = function() {
+      if (sock !== ws) return;
+      lastMsgAt = Date.now();
       reconnectDelay = 1000;
+      companionOff = false;
+      setBanner(null);
+      updateStatus();
+      requestWakeLock();
     };
 
-    ws.onmessage = function(e) {
+    sock.onmessage = function(e) {
+      if (sock !== ws) return;
+      lastMsgAt = Date.now();
       try {
         var msg = JSON.parse(e.data);
         if (msg.type === 'output') {
           appendOutput(ansiToHtml(msg.data));
-        } else if (msg.type === 'status') {
-          mudConnected = msg.connected;
-          if (ws && ws.readyState === WebSocket.OPEN) {
-            statusDot.className = mudConnected ? 'connected' : 'ws-only';
+        } else if (msg.type === 'ping') {
+          sock.send(JSON.stringify({ type: 'pong' }));
+        } else if (msg.type === 'replay') {
+          // Fresh scrollback is about to arrive (or just did): start from an
+          // empty pane so a reconnect never stacks duplicate history.
+          if (msg.phase === 'start') clearOutput();
+          else if (msg.phase === 'end') pinToBottom();
+        } else if (msg.type === 'server') {
+          if (msg.event === 'stopping') {
+            companionOff = true;
+            clearReconnectTimer();
+            setBanner('off');
+            updateStatus();
           }
-          updatePowerBtn();
+        } else if (msg.type === 'status') {
+          mudConnected = !!msg.connected;
+          updateStatus();
         } else if (msg.type === 'history') {
           if (Array.isArray(msg.history)) {
             commandHistory = msg.history;
@@ -1294,46 +1694,95 @@
       }
     };
 
-    ws.onclose = function() {
-      statusDot.className = '';
-      sendBtn.disabled = true;
-      reconnectBanner.classList.add('visible');
-
-      reconnectTimer = setTimeout(function() {
-        reconnectDelay = Math.min(reconnectDelay * 1.5, 10000);
-        connect();
-      }, reconnectDelay);
+    sock.onclose = function() {
+      if (sock !== ws) return;
+      releaseWakeLock();
+      updateStatus();
+      if (companionOff) {
+        setBanner('off');
+        return;
+      }
+      setBanner('lost');
+      scheduleReconnect();
     };
 
-    ws.onerror = function() {
-      ws.close();
+    sock.onerror = function() {
+      if (sock !== ws) return;
+      try { sock.close(); } catch (e) {}
     };
   }
 
   reconnectBanner.addEventListener('click', function() {
-    if (reconnectTimer) clearTimeout(reconnectTimer);
-    reconnectDelay = 1000;
-    connect();
+    haptic();
+    if (bannerMode === 'flash') { setBanner(null); return; }
+    companionOff = false;
+    forceReconnect();
   });
 
+  // ── Liveness: wake-ups, network changes and a silence watchdog ─
+  // Reconnects used to fire only from onclose, which mobile browsers often
+  // never deliver after the tab was frozen. Any of these wake-ups now checks
+  // the socket and reconnects immediately with the backoff reset.
+  function checkConnection() {
+    if (companionOff) return;
+    if (wsOpen()) { requestWakeLock(); return; }
+    // A socket that only just started connecting is left to finish.
+    if (ws && ws.readyState === WebSocket.CONNECTING &&
+        Date.now() - wsStartedAt < CONNECT_LIMIT_MS) return;
+    forceReconnect();
+  }
+
+  document.addEventListener('visibilitychange', function() {
+    if (document.visibilityState === 'visible') checkConnection();
+    else releaseWakeLock();
+  });
+  window.addEventListener('pageshow', checkConnection);
+  window.addEventListener('online', checkConnection);
+  window.addEventListener('focus', checkConnection);
+
+  // No message of any kind (server pings every 20s) for 45s while the socket
+  // still looks open means the connection is dead underneath us.
+  setInterval(function() {
+    if (companionOff || !ws) return;
+    var quiet = Date.now() - lastMsgAt;
+    if (ws.readyState === WebSocket.OPEN && quiet > SILENCE_LIMIT_MS) forceReconnect();
+    else if (ws.readyState === WebSocket.CONNECTING && Date.now() - wsStartedAt > CONNECT_LIMIT_MS) forceReconnect();
+  }, 5000);
+
   // ── Send command ──────────────────────────────────────────────
+  /** True only when the socket is open AND the desktop is on the MUD. */
+  function canSend() {
+    return wsOpen() && mudConnected;
+  }
+
+  /** A command was refused: keep the text, flash the banner, shake, buzz. */
+  function rejectSend() {
+    if (!wsOpen()) setBanner(companionOff ? 'off' : 'lost');
+    else flashBanner();
+    cmdInput.classList.remove('shake');
+    void cmdInput.offsetWidth; // restart the animation
+    cmdInput.classList.add('shake');
+    setTimeout(function() { cmdInput.classList.remove('shake'); }, 400);
+    try { if (navigator.vibrate) navigator.vibrate([40, 30, 40]); } catch (e) {}
+  }
+
   function sendCommand(cmd) {
-    if (cmd === undefined) cmd = cmdInput.value;
-    if (ws && ws.readyState === WebSocket.OPEN) {
-      ws.send(cmd);
-      if (cmd.trim()) {
-        if (commandHistory.length === 0 || commandHistory[0] !== cmd) {
-          commandHistory.unshift(cmd);
-          if (commandHistory.length > 100) commandHistory.pop();
-        }
+    var fromInput = cmd === undefined;
+    if (fromInput) cmd = cmdInput.value;
+    if (!canSend()) { rejectSend(); return; }
+    ws.send(cmd);
+    if (cmd.trim() && !passwordMode) {
+      if (commandHistory.length === 0 || commandHistory[0] !== cmd) {
+        commandHistory.unshift(cmd);
+        if (commandHistory.length > 100) commandHistory.pop();
       }
-      historyIndex = -1;
-      searchPrefix = '';
-      if (cmd === cmdInput.value) cmdInput.value = '';
-      // Sending is intent to watch what happens next, so snap back to the
-      // newest output even if the view was scrolled up.
-      pinToBottom();
     }
+    historyIndex = -1;
+    searchPrefix = '';
+    if (fromInput || cmd === cmdInput.value || passwordMode) cmdInput.value = '';
+    // Sending is intent to watch what happens next, so snap back to the
+    // newest output even if the view was scrolled up.
+    pinToBottom();
   }
 
   // ── History navigation (prefix-matching) ────────────────────
@@ -1375,7 +1824,19 @@
     }
   }
 
-  sendBtn.addEventListener('click', function() { sendCommand(); });
+  // Keep focus in the input (and the keyboard up on iOS): swallow the
+  // press like the history buttons do, sending from touchstart on touch
+  // devices and from click for mouse users.
+  sendBtn.addEventListener('mousedown', function(e) { e.preventDefault(); });
+  sendBtn.addEventListener('touchstart', function(e) {
+    e.preventDefault();
+    haptic();
+    sendCommand();
+  });
+  sendBtn.addEventListener('click', function() {
+    haptic();
+    sendCommand();
+  });
 
   histUp.addEventListener('touchstart', function(e) {
     e.preventDefault();
@@ -1434,15 +1895,18 @@
     // Capture-phase stop so the input's own keydown (e.g. NumLock-off
     // numpad keys reported as arrows) doesn't also fire history nav.
     e.stopPropagation();
+    haptic();
     sendCommand(mv);
   }, true);
 
-  // ── Quick command buttons ─────────────────────────────────────
+  // ── Quick command buttons (d-pad) ─────────────────────────────
   quickBar.addEventListener('click', function(e) {
     var btn = e.target.closest('.quick-btn');
     if (!btn) return;
     var cmd = btn.getAttribute('data-cmd');
-    if (cmd) sendCommand(cmd);
+    if (!cmd) return;
+    haptic();
+    sendCommand(cmd);
   });
 
   // ── Power button (toggle connect/disconnect) ─────────────────
@@ -1512,6 +1976,7 @@
   });
 
   // ── Start ─────────────────────────────────────────────────────
+  updateStatus();
   connect();
   cmdInput.focus();
 })();

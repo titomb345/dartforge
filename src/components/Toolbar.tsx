@@ -24,6 +24,7 @@ import {
   LogIcon,
   MacroIcon,
   LoadoutIcon,
+  SmartphoneIcon,
 } from './icons';
 import { getPlatform } from '../lib/platform';
 import type { Panel, PinnablePanel } from '../types';
@@ -35,6 +36,8 @@ import { StorageModeButton } from './StorageModeButton';
 
 interface ToolbarProps {
   connected: boolean;
+  /** Phones currently on the Mobile Companion. */
+  companionClients?: number;
   onReconnect: () => void;
   onDisconnect: () => void;
   onScreenshot: () => void;
@@ -66,7 +69,13 @@ function ToolbarRule() {
   return <div className="toolbar-rule w-px h-6 bg-border-dim mx-1.5 shrink-0" />;
 }
 
-export function Toolbar({ connected, onReconnect, onDisconnect, onScreenshot }: ToolbarProps) {
+export function Toolbar({
+  connected,
+  companionClients = 0,
+  onReconnect,
+  onDisconnect,
+  onScreenshot,
+}: ToolbarProps) {
   const { activePanel, togglePanel, isPinned } = usePanelContext();
 
   /** Pinnable game panel: toggles open, shows pinned state. */
@@ -129,6 +138,15 @@ export function Toolbar({ connected, onReconnect, onDisconnect, onScreenshot }: 
         <PowerIcon />
         <span className="toolbar-label">{connected ? 'Online' : 'Offline'}</span>
       </button>
+      {companionClients > 0 && (
+        <span
+          className="ml-2 flex items-center gap-1 self-center text-[10px] font-mono text-text-muted select-none"
+          title={`${companionClients} phone${companionClients === 1 ? '' : 's'} on the Mobile Companion`}
+        >
+          <SmartphoneIcon size={12} />
+          <span>{companionClients}</span>
+        </span>
+      )}
 
       <div className="flex-1" />
 
