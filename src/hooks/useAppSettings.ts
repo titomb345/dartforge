@@ -159,12 +159,6 @@ export function useAppSettings() {
   const [announceMode, setAnnounceMode] = useState<AnnounceMode>('off');
   const [announcePetMode, setAnnouncePetMode] = useState<AnnounceMode>('off');
 
-  // Auto-caster weight mode
-  const [casterWeightItem, setCasterWeightItem] = useState('tallow');
-  const [casterWeightContainer, setCasterWeightContainer] = useState('bin');
-  const [casterWeightAdjustUp, setCasterWeightAdjustUp] = useState(10);
-  const [casterWeightAdjustDown, setCasterWeightAdjustDown] = useState(5);
-
   // Auto-conc
   const [autoConcAction, setAutoConcAction] = useState('');
 
@@ -281,8 +275,6 @@ export function useAppSettings() {
       await load('autoConcAction', setAutoConcAction);
       await load('babelLanguage', setBabelLanguage);
       await load('postSyncCommands', setPostSyncCommands);
-      await load('casterWeightItem', setCasterWeightItem);
-      await load('casterWeightContainer', setCasterWeightContainer);
       await load('announceMode', setAnnounceMode);
       await load('announcePetMode', setAnnouncePetMode);
       await load('commandSeparator', setCommandSeparator, (v) => v.length > 0);
@@ -303,8 +295,6 @@ export function useAppSettings() {
       await loadNullable('chatFontSize', setChatFontSize);
       await loadNullable('allocFontSize', setAllocFontSize);
       await load('babelIntervalSeconds', setBabelIntervalSeconds, (v) => v >= 10);
-      await load('casterWeightAdjustUp', setCasterWeightAdjustUp, (v) => v >= 1);
-      await load('casterWeightAdjustDown', setCasterWeightAdjustDown, (v) => v >= 1);
 
       // Object / array settings
       await loadObject('numpadMappings', setNumpadMappings);
@@ -446,11 +436,6 @@ export function useAppSettings() {
       updateAutoLoginActiveSlot: make<0 | 1>(setAutoLoginActiveSlot, 'autoLoginActiveSlot'),
       updateLastLoginTimestamp: make(setLastLoginTimestamp, 'lastLoginTimestamp'),
       updateLastLoginSlot: make<0 | 1 | null>(setLastLoginSlot, 'lastLoginSlot'),
-      // Auto-caster weight mode
-      updateCasterWeightItem: make<string>(setCasterWeightItem, 'casterWeightItem'),
-      updateCasterWeightContainer: make(setCasterWeightContainer, 'casterWeightContainer'),
-      updateCasterWeightAdjustUp: make(setCasterWeightAdjustUp, 'casterWeightAdjustUp'),
-      updateCasterWeightAdjustDown: make(setCasterWeightAdjustDown, 'casterWeightAdjustDown'),
       // Auto-conc
       updateAutoConcAction: make(setAutoConcAction, 'autoConcAction'),
       // Command separator
@@ -644,11 +629,6 @@ export function useAppSettings() {
       autoLoginCharacters,
       lastLoginTimestamp,
       lastLoginSlot,
-      // Auto-caster weight mode
-      casterWeightItem,
-      casterWeightContainer,
-      casterWeightAdjustUp,
-      casterWeightAdjustDown,
       // Auto-conc
       autoConcAction,
       // Command separator
@@ -728,10 +708,6 @@ export function useAppSettings() {
       autoLoginCharacters,
       lastLoginTimestamp,
       lastLoginSlot,
-      casterWeightItem,
-      casterWeightContainer,
-      casterWeightAdjustUp,
-      casterWeightAdjustDown,
       autoConcAction,
       commandSeparator,
       selectOnSend,

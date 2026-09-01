@@ -1,3 +1,4 @@
+import type { ReactNode } from 'react';
 import { IconButton } from './IconButton';
 import { DropboxButton } from './DropboxButton';
 import {
@@ -25,6 +26,9 @@ import {
   LoadoutIcon,
 } from './icons';
 import { getPlatform } from '../lib/platform';
+import type { Panel, PinnablePanel } from '../types';
+import { shortcutFor, shortcutLabel } from '../lib/panelShortcuts';
+import { PANEL_ACCENT, ACTION_ACCENT } from '../lib/accents';
 import { cn } from '../lib/cn';
 import { usePanelContext } from '../contexts/PanelLayoutContext';
 import { StorageModeButton } from './StorageModeButton';
@@ -36,18 +40,82 @@ interface ToolbarProps {
   onScreenshot: () => void;
 }
 
+/**
+ * A run of related buttons with its name set in small rotated caps at the
+ * left edge, like the label strip on a rack of instruments. The name tells
+ * you what kind of thing you are looking at before you read the buttons.
+ */
+function ToolbarGroup({ name, children }: { name: string; children: ReactNode }) {
+  return (
+    <div className="flex items-center gap-1">
+      <span className="toolbar-group-name" aria-hidden="true">
+        {name}
+      </span>
+      {children}
+    </div>
+  );
+}
+
+/** "Chat (Ctrl+2)" for tooltips. */
+function withShortcut(title: string, id: Panel): string {
+  const sc = shortcutLabel(id);
+  return sc ? `${title} (${sc})` : title;
+}
+
+function ToolbarRule() {
+  return <div className="toolbar-rule w-px h-6 bg-border-dim mx-1.5 shrink-0" />;
+}
+
 export function Toolbar({ connected, onReconnect, onDisconnect, onScreenshot }: ToolbarProps) {
   const { activePanel, togglePanel, isPinned } = usePanelContext();
 
+  /** Pinnable game panel: toggles open, shows pinned state. */
+  const panel = (
+    id: PinnablePanel,
+    label: string,
+    title: string,
+    icon: ReactNode,
+    helpId: string
+  ) => (
+    <IconButton
+      icon={icon}
+      label={label}
+      hint={shortcutFor(id)?.key}
+      title={withShortcut(title, id)}
+      accent={PANEL_ACCENT[id]}
+      helpId={helpId}
+      panelId={id}
+      toggled={activePanel === id}
+      pinned={isPinned(id)}
+      onClick={() => togglePanel(id)}
+    />
+  );
+
+  /** Slide-out tool: toggles open, never pinned. */
+  const tool = (id: Panel, label: string, title: string, icon: ReactNode, helpId?: string) => (
+    <IconButton
+      icon={icon}
+      label={label}
+      hint={shortcutFor(id)?.key}
+      title={withShortcut(title, id)}
+      accent={PANEL_ACCENT[id]}
+      helpId={helpId}
+      panelId={id}
+      toggled={activePanel === id}
+      onClick={() => togglePanel(id)}
+    />
+  );
+
   return (
-    <div className="flex items-center px-2.5 py-1 bg-bg-primary rounded-lg shrink-0">
+    <div className="toolbar flex items-center px-2.5 py-1 bg-bg-primary rounded-lg shrink-0">
       <button
         onClick={connected ? onDisconnect : onReconnect}
         title={connected ? 'Disconnect' : 'Reconnect'}
         data-help-id="toolbar-power"
         className={cn(
-          'flex items-center justify-center w-[30px] h-[30px] p-0 rounded-[6px]',
-          'select-none leading-none transition-all duration-300 ease-in-out border cursor-pointer',
+          'icon-btn-labeled flex flex-col items-center justify-center h-10 min-w-10 px-1.5 gap-[3px] rounded-[6px]',
+          'select-none leading-none transition-all duration-300 ease-in-out motion-reduce:transition-none border cursor-pointer',
+          'focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-current',
           connected
             ? 'text-connected border-connected/25 bg-connected/8'
             : 'text-disconnected border-disconnected/25 bg-disconnected/8'
@@ -59,215 +127,62 @@ export function Toolbar({ connected, onReconnect, onDisconnect, onScreenshot }: 
         }}
       >
         <PowerIcon />
+        <span className="toolbar-label">{connected ? 'Online' : 'Offline'}</span>
       </button>
 
       <div className="flex-1" />
 
-      <div className="flex items-center gap-1">
+      <div className="flex items-center">
         {getPlatform() === 'web' && (
-          <>
+          <div className="flex items-center gap-1 mr-1.5">
             <DropboxButton />
             <StorageModeButton />
-          </>
+          </div>
         )}
-        <IconButton
-          icon={<WhoIcon />}
-          title="Who"
-          accent="#61afef"
-          helpId="toolbar-who"
-          panelId="who"
-          toggled={activePanel === 'who'}
-          pinned={isPinned('who')}
-          onClick={() => togglePanel('who')}
-        />
-        <IconButton
-          icon={<ChatIcon />}
-          title="Chat"
-          accent="#8be9fd"
-          helpId="toolbar-chat"
-          panelId="chat"
-          toggled={activePanel === 'chat'}
-          pinned={isPinned('chat')}
-          onClick={() => togglePanel('chat')}
-        />
-        <IconButton
-          icon={<CounterIcon />}
-          title="Counters"
-          accent="#f59e0b"
-          helpId="toolbar-counters"
-          panelId="counter"
-          toggled={activePanel === 'counter'}
-          pinned={isPinned('counter')}
-          onClick={() => togglePanel('counter')}
-        />
-        <IconButton
-          icon={<TrendingUpIcon />}
-          title="Skills"
-          accent="#50fa7b"
-          helpId="toolbar-skills"
-          panelId="skills"
-          toggled={activePanel === 'skills'}
-          pinned={isPinned('skills')}
-          onClick={() => togglePanel('skills')}
-        />
-        <IconButton
-          icon={<NotesIcon />}
-          title="Notes"
-          accent="#fbbf24"
-          helpId="toolbar-notes"
-          panelId="notes"
-          toggled={activePanel === 'notes'}
-          pinned={isPinned('notes')}
-          onClick={() => togglePanel('notes')}
-        />
-        <IconButton
-          icon={<MapIcon />}
-          title="Map"
-          accent="#e8a849"
-          helpId="toolbar-map"
-          panelId="map"
-          toggled={activePanel === 'map'}
-          pinned={isPinned('map')}
-          onClick={() => togglePanel('map')}
-        />
-        <IconButton
-          icon={<AllocIcon />}
-          title="Allocations"
-          accent="#e06c75"
-          helpId="toolbar-alloc"
-          panelId="alloc"
-          toggled={activePanel === 'alloc'}
-          pinned={isPinned('alloc')}
-          onClick={() => togglePanel('alloc')}
-        />
-        <IconButton
-          icon={<LoadoutIcon />}
-          title="Loadout"
-          accent="#bd93f9"
-          helpId="toolbar-loadout"
-          panelId="loadout"
-          toggled={activePanel === 'loadout'}
-          pinned={isPinned('loadout')}
-          onClick={() => togglePanel('loadout')}
-        />
-        <IconButton
-          icon={<CoinIcon />}
-          title="Currency Converter"
-          accent="#cd7f32"
-          helpId="toolbar-currency"
-          panelId="currency"
-          toggled={activePanel === 'currency'}
-          pinned={isPinned('currency')}
-          onClick={() => togglePanel('currency')}
-        />
-        <IconButton
-          icon={<BabelIcon />}
-          title="Babel"
-          accent="#e879f9"
-          helpId="toolbar-babel"
-          panelId="babel"
-          toggled={activePanel === 'babel'}
-          pinned={isPinned('babel')}
-          onClick={() => togglePanel('babel')}
-        />
-        <div className="w-px h-[18px] bg-border-dim mx-1.5" />
-        <IconButton
-          icon={<AliasIcon />}
-          title="Aliases"
-          accent="#a78bfa"
-          helpId="toolbar-aliases"
-          panelId="aliases"
-          toggled={activePanel === 'aliases'}
-          onClick={() => togglePanel('aliases')}
-        />
-        <IconButton
-          icon={<TriggerIcon />}
-          title="Triggers"
-          accent="#ff79c6"
-          helpId="toolbar-triggers"
-          panelId="triggers"
-          toggled={activePanel === 'triggers'}
-          onClick={() => togglePanel('triggers')}
-        />
-        <IconButton
-          icon={<TimerIcon />}
-          title="Timers"
-          accent="#f97316"
-          helpId="toolbar-timers"
-          panelId="timers"
-          toggled={activePanel === 'timers'}
-          onClick={() => togglePanel('timers')}
-        />
-        <IconButton
-          icon={<VariableIcon />}
-          title="Variables"
-          accent="#4ade80"
-          helpId="toolbar-variables"
-          panelId="variables"
-          toggled={activePanel === 'variables'}
-          onClick={() => togglePanel('variables')}
-        />
-        <IconButton
-          icon={<MacroIcon />}
-          title="Macros"
-          accent="#e8a849"
-          helpId="toolbar-macros"
-          panelId="macros"
-          toggled={activePanel === 'macros'}
-          onClick={() => togglePanel('macros')}
-        />
-        <IconButton
-          icon={<CodeIcon />}
-          title="Scripts"
-          accent="#8be9fd"
-          helpId="toolbar-scripts"
-          panelId="scripts"
-          toggled={activePanel === 'scripts'}
-          onClick={() => togglePanel('scripts')}
-        />
-        <IconButton
-          icon={<LogIcon />}
-          title="Session Logs"
-          accent="#94a3b8"
-          helpId="toolbar-logs"
-          panelId="logs"
-          toggled={activePanel === 'logs'}
-          onClick={() => togglePanel('logs')}
-        />
-        <div className="w-px h-[18px] bg-border-dim mx-1.5" />
-        <IconButton
-          icon={<PaletteIcon />}
-          title="Appearance"
-          accent="#8be9fd"
-          panelId="appearance"
-          toggled={activePanel === 'appearance'}
-          onClick={() => togglePanel('appearance')}
-        />
-        <IconButton
-          icon={<GearIcon />}
-          title="Settings"
-          accent="#bd93f9"
-          panelId="settings"
-          toggled={activePanel === 'settings'}
-          onClick={() => togglePanel('settings')}
-        />
-        <IconButton
-          icon={<CameraIcon />}
-          title="Screenshot"
-          accent="#f472b6"
-          helpId="toolbar-screenshot"
-          onClick={onScreenshot}
-        />
-        <div className="w-px h-[18px] bg-border-dim mx-1.5" />
-        <IconButton
-          icon={<HelpIcon />}
-          title="Guide"
-          accent="#d9af50"
-          helpId="toolbar-help"
-          panelId="help"
-          toggled={activePanel === 'help'}
-          onClick={() => togglePanel('help')}
-        />
+
+        <ToolbarGroup name="Panels">
+          {panel('who', 'Who', 'Who', <WhoIcon />, 'toolbar-who')}
+          {panel('chat', 'Chat', 'Chat', <ChatIcon />, 'toolbar-chat')}
+          {panel('counter', 'Counters', 'Counters', <CounterIcon />, 'toolbar-counters')}
+          {panel('skills', 'Skills', 'Skills', <TrendingUpIcon />, 'toolbar-skills')}
+          {panel('notes', 'Notes', 'Notes', <NotesIcon />, 'toolbar-notes')}
+          {panel('map', 'Map', 'Map', <MapIcon />, 'toolbar-map')}
+          {panel('alloc', 'Alloc', 'Allocations', <AllocIcon />, 'toolbar-alloc')}
+          {panel('loadout', 'Loadout', 'Loadout', <LoadoutIcon />, 'toolbar-loadout')}
+          {panel('currency', 'Currency', 'Currency Converter', <CoinIcon />, 'toolbar-currency')}
+          {panel('babel', 'Babel', 'Babel', <BabelIcon />, 'toolbar-babel')}
+        </ToolbarGroup>
+
+        <ToolbarRule />
+
+        <ToolbarGroup name="Tools">
+          {tool('aliases', 'Aliases', 'Aliases', <AliasIcon />, 'toolbar-aliases')}
+          {tool('triggers', 'Triggers', 'Triggers', <TriggerIcon />, 'toolbar-triggers')}
+          {tool('timers', 'Timers', 'Timers', <TimerIcon />, 'toolbar-timers')}
+          {tool('variables', 'Variables', 'Variables', <VariableIcon />, 'toolbar-variables')}
+          {tool('macros', 'Macros', 'Macros', <MacroIcon />, 'toolbar-macros')}
+          {tool('scripts', 'Scripts', 'Scripts', <CodeIcon />, 'toolbar-scripts')}
+          {tool('logs', 'Logs', 'Session Logs', <LogIcon />, 'toolbar-logs')}
+        </ToolbarGroup>
+
+        <ToolbarRule />
+
+        <ToolbarGroup name="App">
+          {tool('appearance', 'Appearance', 'Appearance', <PaletteIcon />, 'toolbar-appearance')}
+          {tool('settings', 'Settings', 'Settings', <GearIcon />, 'toolbar-settings')}
+          <IconButton
+            icon={<CameraIcon />}
+            label="Screenshot"
+            title="Screenshot"
+            accent={ACTION_ACCENT.screenshot}
+            helpId="toolbar-screenshot"
+            onClick={onScreenshot}
+          />
+        </ToolbarGroup>
+
+        <ToolbarRule />
+
+        {tool('help', 'Guide', 'Guide', <HelpIcon />, 'toolbar-help')}
       </div>
     </div>
   );

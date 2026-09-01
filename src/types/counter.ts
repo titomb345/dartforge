@@ -23,6 +23,12 @@ export interface ImproveCounter {
   periodStartActiveMs: number | null;
   /** Imps counted since the current period began */
   impsInCurrentPeriod: number;
+  /**
+   * Paused by a disconnect (or by loading while logged out) rather than by
+   * hand. Such a counter picks itself back up on the next login; a counter
+   * you paused yourself stays paused.
+   */
+  autoPaused?: boolean;
   /** Whether the counter is archived (hidden from main view) */
   archived?: boolean;
   /** Display order for drag-and-drop reordering (lower = first) */

@@ -14,4 +14,9 @@ export interface MudTransport {
   reconnect(): Promise<void>;
   /** Disconnect from the MUD server. */
   disconnect(): Promise<void>;
+  /**
+   * The transport's current status, for a frontend that has just (re)loaded
+   * and needs to know whether a session is already live underneath it.
+   */
+  getStatus(): Promise<ConnectionStatusPayload>;
 }

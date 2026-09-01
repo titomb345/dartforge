@@ -106,6 +106,19 @@ async fn disconnect(
     Ok(())
 }
 
+/// The backend's last known connection status. The TCP session lives in
+/// this process, so it survives a webview reload; the frontend asks for this
+/// on startup to pick the live session back up instead of assuming it's
+/// disconnected.
+#[tauri::command]
+async fn get_connection_status(
+    companion_state: tauri::State<'_, CompanionState>,
+) -> Result<crate::events::ConnectionStatusPayload, String> {
+    let status = companion_state.last_status.lock().await.clone();
+    let (connected, message) = status.unwrap_or((false, "Connecting...".to_string()));
+    Ok(crate::events::ConnectionStatusPayload { connected, message })
+}
+
 #[tauri::command]
 fn read_system_file(path: String) -> Result<String, String> {
     std::fs::read_to_string(&path)
@@ -178,6 +191,7 @@ pub fn run() {
             send_command,
             reconnect,
             disconnect,
+            get_connection_status,
             companion::start_companion,
             companion::stop_companion,
             companion::get_companion_info,

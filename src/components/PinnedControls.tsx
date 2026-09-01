@@ -47,7 +47,7 @@ export function HeaderBtn({
     <button
       onClick={onClick}
       title={title}
-      className="flex items-center justify-center w-5 h-5 rounded-[3px] cursor-pointer text-text-dim hover:text-text-label transition-colors duration-150"
+      className="flex items-center justify-center w-6 h-6 rounded-[4px] cursor-pointer text-text-dim hover:text-text-label hover:bg-bg-secondary transition-colors duration-150"
     >
       {children}
     </button>

@@ -63,7 +63,7 @@ export const HELP_CATEGORIES: HelpCategory[] = [
       {
         title: 'Opening Panels',
         description:
-          'Click any panel button in the toolbar to open it as a slide-out overlay on the right side. Click again or click outside to close.',
+          'Click any panel button in the toolbar to open it as a slide-out overlay on the right side. Click again or click outside to close. Every toolbar button carries its name under the icon and is grouped by kind: Panels (game information you can pin), Tools (aliases, triggers, timers, and the rest), and App. If the window is too narrow for the names, the bar falls back to icons only.',
         helpId: 'toolbar-chat',
       },
       {
@@ -101,13 +101,13 @@ export const HELP_CATEGORIES: HelpCategory[] = [
       {
         title: 'Chat Panel',
         description:
-          'Filtered chat with color-coded message types (Say, Shout, OOC, Tell, SZ). Mute senders, identify anonymous tells, toggle sound alerts, and search through message history.',
+          'Filtered chat with color-coded message types (Say, Shout, OOC, Tell, SZ). Mute senders, identify anonymous tells, toggle sound alerts, and search through message history. The log belongs to the active character, so each one keeps its own conversations; filters, sound alerts, and muted senders are shared.',
         helpId: 'toolbar-chat',
       },
       {
         title: 'Counters Panel',
         description:
-          'Track improve rates with named counters. Start, pause, resume, or stop. Shows rates per minute, per period, and per hour. Counters belong to the active character, so each one keeps its own set.',
+          'Track improve rates with named counters. Start, pause, resume, or stop. Shows rates per minute, per period, and per hour. Counters belong to the active character, so each one keeps its own set. A running counter pauses itself when you disconnect and picks back up when you log in again, so time spent offline is never counted; one you paused by hand stays paused.',
         helpId: 'toolbar-counters',
       },
       {
@@ -181,6 +181,20 @@ export const HELP_CATEGORIES: HelpCategory[] = [
     title: 'Hidden Powers',
     iconName: 'sparkle',
     items: [
+      {
+        title: 'Search Settings',
+        description:
+          'Type in the search box at the top of Settings to jump straight to any option. Matching sections open automatically, Escape clears the search, and clicking a section header while searching takes you to that section.',
+        interaction: 'click',
+        helpId: 'toolbar-settings',
+      },
+      {
+        title: 'Status Bar Menu',
+        description:
+          'Right-click any vital in the status bar for a menu to hide its lines from the output or shrink it to an icon, drag readouts to reorder them, and use the small gear at the end of the bar to show all hidden lines or compact everything at once.',
+        interaction: 'right-click',
+        helpId: 'status-bar-gear',
+      },
       {
         title: 'Walk Anywhere on the Map',
         description:
@@ -292,7 +306,7 @@ export const HELP_CATEGORIES: HelpCategory[] = [
       {
         title: 'Stop a Timer',
         description:
-          'Double-click any timer countdown badge next to the command input to disable that timer. In the overflow dropdown, click the stop button.',
+          'Every chip next to the command input that can be stopped carries a small ×. Click it to stop that timer, refresher, or automation. Filled chips with a glowing dot are things you started; outlined chips are refreshers and timers on a clock. The +N button opens a menu for any timers that do not fit.',
         helpId: 'command-input',
         interaction: 'double-click',
       },
@@ -336,6 +350,27 @@ export const HELP_CATEGORIES: HelpCategory[] = [
     iconName: 'keyboard',
     items: [
       {
+        title: 'Open a Panel',
+        description:
+          'Ctrl plus a digit opens (or closes) the Panels group in toolbar order: 1 Who, 2 Chat, 3 Counters, 4 Skills, 5 Notes, 6 Map, 7 Allocations, 8 Loadout, 9 Currency. The key is printed in the corner of each toolbar button. A pinned panel is already on screen, so its key does nothing.',
+        kbd: ['Ctrl', '1-9'],
+        helpId: 'toolbar-chat',
+      },
+      {
+        title: 'Open a Tool',
+        description:
+          'Alt plus a letter opens the Tools and App panels: A Aliases, T Triggers, I Timers, V Variables, M Macros, C Scripts, L Logs, B Babel, P Appearance, S Settings, G Guide. Press it again to close.',
+        kbd: ['Alt', 'A'],
+        helpId: 'toolbar-aliases',
+      },
+      {
+        title: 'Close the Open Panel',
+        description:
+          'Escape closes whichever slide-out is open, from anywhere, and puts the cursor back in the command input. With no panel open, Escape clears the input.',
+        kbd: ['Esc'],
+        helpId: 'command-input',
+      },
+      {
         title: 'Numpad Movement',
         description:
           'Use the numpad for instant directional movement without typing. Numpad 0 = Up, Numpad + = Back.',
@@ -362,7 +397,7 @@ export const HELP_CATEGORIES: HelpCategory[] = [
       {
         title: 'Command History',
         description:
-          'Navigate previous commands. If you type first, history filters to matching prefixes only.',
+          'Navigate previous commands. If you type first, history filters to matching prefixes only. History belongs to the active character, so each one recalls only what it typed.',
         kbd: ['\u2191', '\u2193'],
         helpId: 'command-input',
       },
@@ -480,7 +515,7 @@ export const HELP_CATEGORIES: HelpCategory[] = [
       {
         title: '/autocast',
         description:
-          'Automated spell practice loop with power auto-adjustment and weight mode. "/autocast <spell> @<power> [args]" starts the cycle. Power adjusts dynamically: fail = power up (easier), success = power down (harder). When power hits the floor (50) and a weight item is configured, enters weight mode — takes weight from a container on success, puts it back on fail. "/autocast adjust power @<n>" sets power directly. "/autocast adjust power <up> <down>" sets power adjustment steps. "/autocast adjust weight <n>" force-sets carried weight. "/autocast adjust weight <up> <down>" sets weight take/put steps. "/autocast set item <item>" sets the weight item (default: tallow). "/autocast set container <name>" sets the container (default: bin). "/autocast clear container" removes the container (use ground). "/autocast off" stops (returns all weight). "/autocast status" shows current state. Green badge when active; amber badge in weight mode.',
+          'Automated spell practice loop with power auto-adjustment and weight mode. "/autocast <spell> @<power> [args]" starts the cycle. Power adjusts dynamically: fail = power up (easier), success = power down (harder). When power hits the floor (50) and a weight item is configured, enters weight mode — takes weight from a container on success, puts it back on fail. "/autocast adjust power @<n>" sets power directly. "/autocast adjust power <up> <down>" sets power adjustment steps. "/autocast adjust weight <n>" force-sets carried weight. "/autocast adjust weight <up> <down>" sets weight take/put steps. "/autocast set item <item>" sets the weight item (default: tallow). "/autocast set container <name>" sets the container (default: bin). "/autocast clear container" removes the container (use ground). "/autocast off" stops (returns all weight). "/autocast status" shows current state. The power steps, weight item, container, and weight steps are remembered per character and carry over to the next /autocast and the next session. Green badge when active; amber badge in weight mode.',
       },
       {
         title: '/autoconc',

@@ -65,7 +65,7 @@ dartforge/
 
 ## Key Patterns
 - **Tauri IPC events**: `mud:output` (server → frontend), `mud:connection-status` (status updates)
-- **Tauri commands**: `send_command` (frontend → server)
+- **Tauri commands**: `send_command` (frontend → server), `get_connection_status` (last known status; read on startup so a webview reload picks the live session back up)
 - **State**: `Mutex<Option<mpsc::Sender<String>>>` for command channel
 
 ## Settings & Migrations

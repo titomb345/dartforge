@@ -44,6 +44,30 @@ export interface AutoCasterState {
   carriedWeight: number;
 }
 
+/**
+ * Tuning that belongs to a character rather than to a single run: the power
+ * steps and the weight item/container/steps. Strength and aptitude decide
+ * these, so they survive stop/start and app restarts and are persisted per
+ * character by useAutoCasterConfig.
+ */
+export interface AutoCasterConfig {
+  adjustUp: number;
+  adjustDown: number;
+  weightItem: string;
+  weightContainer: string | null;
+  weightAdjustUp: number;
+  weightAdjustDown: number;
+}
+
+export const DEFAULT_CASTER_CONFIG: AutoCasterConfig = {
+  adjustUp: 20,
+  adjustDown: 10,
+  weightItem: 'tallow',
+  weightContainer: 'bin',
+  weightAdjustUp: 10,
+  weightAdjustDown: 5,
+};
+
 /** MUD line that always appears when a practice cast finishes. */
 const PRACTICE_DONE = 'You finish practicing';
 /** MUD line that follows PRACTICE_DONE only on a successful outcome. */
@@ -66,8 +90,9 @@ export class AutoCaster {
   private _args: string | null = null;
   private _phase: CasterPhase = 'idle';
   private _cycleCount = 0;
-  private _adjustUp = 20;
-  private _adjustDown = 10;
+  // Per-character config (see AutoCasterConfig) — survives stop/cleanup
+  private _adjustUp = DEFAULT_CASTER_CONFIG.adjustUp;
+  private _adjustDown = DEFAULT_CASTER_CONFIG.adjustDown;
   private _successCount = 0;
   private _failCount = 0;
   private _isCasting = false;
@@ -89,14 +114,16 @@ export class AutoCaster {
   private _weightMode = false;
   private _carriedWeight = 0;
 
-  // Weight mode — persistent config (survives stop/cleanup)
-  private _weightItem: string = 'tallow';
-  private _weightContainer: string | null = 'bin';
-  private _weightAdjustUp = 10;
-  private _weightAdjustDown = 5;
+  // Weight mode — per-character config (survives stop/cleanup)
+  private _weightItem: string = DEFAULT_CASTER_CONFIG.weightItem;
+  private _weightContainer: string | null = DEFAULT_CASTER_CONFIG.weightContainer;
+  private _weightAdjustUp = DEFAULT_CASTER_CONFIG.weightAdjustUp;
+  private _weightAdjustDown = DEFAULT_CASTER_CONFIG.weightAdjustDown;
 
   /** Callback invoked whenever state changes — wire to React setState. */
   onChange: (() => void) | null = null;
+  /** Callback invoked when the per-character config is edited — wire to persistence. */
+  onConfigChange: ((config: AutoCasterConfig) => void) | null = null;
 
   get active(): boolean {
     return this._active;
@@ -135,17 +162,30 @@ export class AutoCaster {
     };
   }
 
-  /** Configure weight settings silently (for loading from persisted settings). */
-  configureWeight(
-    item: string,
-    container: string | null,
-    adjustUp: number,
-    adjustDown: number
-  ): void {
-    this._weightItem = item;
-    this._weightContainer = container && container !== 'null' ? container : null;
-    this._weightAdjustUp = Math.max(1, adjustUp);
-    this._weightAdjustDown = Math.max(1, adjustDown);
+  getConfig(): AutoCasterConfig {
+    return {
+      adjustUp: this._adjustUp,
+      adjustDown: this._adjustDown,
+      weightItem: this._weightItem,
+      weightContainer: this._weightContainer,
+      weightAdjustUp: this._weightAdjustUp,
+      weightAdjustDown: this._weightAdjustDown,
+    };
+  }
+
+  /**
+   * Apply a character's config silently (loading from disk / swapping
+   * characters). Does not fire onConfigChange.
+   */
+  configure(config: AutoCasterConfig): void {
+    this._adjustUp = Math.max(1, config.adjustUp);
+    this._adjustDown = Math.max(1, config.adjustDown);
+    this._weightItem = config.weightItem;
+    const c = config.weightContainer;
+    this._weightContainer = c && c !== 'null' ? c : null;
+    this._weightAdjustUp = Math.max(1, config.weightAdjustUp);
+    this._weightAdjustDown = Math.max(1, config.weightAdjustDown);
+    this._onChange();
   }
 
   /** Start the auto-cast loop. */
@@ -224,23 +264,23 @@ export class AutoCaster {
 
   /** Set power adjustment amounts. */
   setAdjust(up: number, down: number, echo: (msg: string) => void): void {
-    this._adjustUp = up;
-    this._adjustDown = down;
-    this._onChange();
-    echo(`[Autocast: power adjust up=${up}, down=${down}]`);
+    this._adjustUp = Math.max(1, up);
+    this._adjustDown = Math.max(1, down);
+    this._onConfigChange();
+    echo(`[Autocast: power adjust up=${this._adjustUp}, down=${this._adjustDown}]`);
   }
 
   /** Set weight item name. */
   setWeightItem(item: string, echo: (msg: string) => void): void {
     this._weightItem = item;
-    this._onChange();
+    this._onConfigChange();
     echo(`[Autocast: weight item set to "${item}"]`);
   }
 
   /** Set weight container name (null = ground, no container). */
   setWeightContainer(container: string | null, echo: (msg: string) => void): void {
     this._weightContainer = container;
-    this._onChange();
+    this._onConfigChange();
     echo(
       container
         ? `[Autocast: weight container set to "${container}"]`
@@ -259,7 +299,7 @@ export class AutoCaster {
   setWeightAdjust(up: number, down: number, echo: (msg: string) => void): void {
     this._weightAdjustUp = Math.max(1, up);
     this._weightAdjustDown = Math.max(1, down);
-    this._onChange();
+    this._onConfigChange();
     echo(`[Autocast: weight adjust take=${this._weightAdjustUp}, put=${this._weightAdjustDown}]`);
   }
 
@@ -467,10 +507,9 @@ export class AutoCaster {
     this._successCount = 0;
     this._failCount = 0;
     this._isCasting = false;
-    this._adjustUp = 20;
-    this._adjustDown = 10;
-    // Weight runtime state resets; config (_weightItem, _weightContainer,
-    // _weightAdjustUp, _weightAdjustDown) persists across start/stop cycles.
+    // Only run state resets. The per-character config (power steps, weight
+    // item/container/steps) is deliberately left alone so a fresh /autocast
+    // picks up where the last one left off.
     this._weightMode = false;
     this._carriedWeight = 0;
     this._sendFn = null;
@@ -481,5 +520,10 @@ export class AutoCaster {
 
   private _onChange(): void {
     this.onChange?.();
+  }
+
+  private _onConfigChange(): void {
+    this._onChange();
+    this.onConfigChange?.(this.getConfig());
   }
 }

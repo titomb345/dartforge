@@ -100,10 +100,13 @@ function migrateCounter(c: ImproveCounter & Record<string, unknown>): ImproveCou
     lastResumedAt,
     periodStartActiveMs,
     impsInCurrentPeriod: c.impsInCurrentPeriod,
+    autoPaused: c.autoPaused === true,
     archived: c.archived ?? false,
     order: c.order,
   };
 }
+
+export type CounterAutoToggle = (names: string[], action: 'paused' | 'resumed') => void;
 
 export interface SkillTally {
   skill: string;
@@ -123,7 +126,18 @@ export interface PeriodProgress {
   active: boolean;
 }
 
-export function useImproveCounters(activeCharacter: string | null) {
+/**
+ * @param loggedIn Whether a character is logged in. Running counters pause
+ *   themselves when this goes false (a disconnect) and resume when it comes
+ *   back, so time spent offline is never counted.
+ * @param onAutoToggle Called with the names of counters paused/resumed by a
+ *   login state change, for a terminal notice.
+ */
+export function useImproveCounters(
+  activeCharacter: string | null,
+  loggedIn: boolean,
+  onAutoToggle?: CounterAutoToggle
+) {
   const dataStore = useDataStore();
   const [counters, setCounters] = useState<ImproveCounter[]>([]);
   const [activeCounterId, setActiveCounterId] = useState<string | null>(null);
@@ -136,6 +150,10 @@ export function useImproveCounters(activeCharacter: string | null) {
   const lastImproveRef = useRef<{ skill: string } | null>(null);
   const dataStoreRef = useRef(dataStore);
   dataStoreRef.current = dataStore;
+  const loggedInRef = useRef(loggedIn);
+  loggedInRef.current = loggedIn;
+  const onAutoToggleRef = useRef(onAutoToggle);
+  onAutoToggleRef.current = onAutoToggle;
 
   const charKey = activeCharacter ? activeCharacter.toLowerCase() : null;
 
@@ -231,17 +249,25 @@ export function useImproveCounters(activeCharacter: string | null) {
         if (cancelled) return;
 
         const now = Date.now();
-        // Migrate old format + resume running counters. The period window is
+        // Migrate old format + settle running counters. The period window is
         // active-time based, so the offline gap counts as neither active time
-        // nor period progress — just resume timing from now without touching
-        // the period (it picks up exactly where it left off).
+        // nor period progress. A counter that was running (or that a
+        // disconnect paused) resumes from now if a character is logged in;
+        // otherwise it waits, auto-paused, for the next login.
         const resumed = (savedCounters ?? []).map((raw) => {
           const c = migrateCounter(raw as ImproveCounter & Record<string, unknown>);
-          if (c.status === 'running' && c.lastResumedAt) {
-            // Don't add offline gap — only count time while app is open
-            return { ...c, lastResumedAt: now };
+          const wasRunning = c.status === 'running' && c.lastResumedAt != null;
+          const heldByDisconnect = c.status === 'paused' && c.autoPaused === true;
+          if (!wasRunning && !heldByDisconnect) return c;
+          if (loggedInRef.current) {
+            return {
+              ...c,
+              status: 'running' as CounterStatus,
+              lastResumedAt: now,
+              autoPaused: false,
+            };
           }
-          return c;
+          return { ...c, status: 'paused' as CounterStatus, lastResumedAt: null, autoPaused: true };
         });
 
         setCounters(resumed);
@@ -260,6 +286,40 @@ export function useImproveCounters(activeCharacter: string | null) {
       cancelled = true;
     };
   }, [dataStore.ready, charKey, saveCounters]);
+
+  // Disconnect pauses every running counter; the next login resumes the ones
+  // the disconnect paused (never one you paused yourself). Only a change in
+  // login state does this, so starting a counter by hand while offline is
+  // still allowed.
+  const prevLoggedInRef = useRef(loggedIn);
+  useEffect(() => {
+    const was = prevLoggedInRef.current;
+    prevLoggedInRef.current = loggedIn;
+    if (was === loggedIn || !loaded.current) return;
+
+    const now = Date.now();
+    const names: string[] = [];
+    const next = countersRef.current.map((c) => {
+      if (!loggedIn) {
+        if (c.status !== 'running') return c;
+        names.push(c.name);
+        const elapsed = c.lastResumedAt ? awakeMs(c.lastResumedAt, now) : 0;
+        return {
+          ...c,
+          status: 'paused' as CounterStatus,
+          accumulatedMs: c.accumulatedMs + elapsed,
+          lastResumedAt: null,
+          autoPaused: true,
+        };
+      }
+      if (c.status !== 'paused' || !c.autoPaused) return c;
+      names.push(c.name);
+      return { ...c, status: 'running' as CounterStatus, lastResumedAt: now, autoPaused: false };
+    });
+    if (names.length === 0) return;
+    setCounters(next);
+    onAutoToggleRef.current?.(names, loggedIn ? 'resumed' : 'paused');
+  }, [loggedIn]);
 
   // Persist on change
   useEffect(() => {
@@ -388,6 +448,7 @@ export function useImproveCounters(activeCharacter: string | null) {
         return {
           ...c,
           status: 'running' as CounterStatus,
+          autoPaused: false,
           startedAt: c.startedAt ?? new Date(now).toISOString(),
           lastResumedAt: now,
           // Start a period at the current active mark if one isn't already
@@ -407,6 +468,7 @@ export function useImproveCounters(activeCharacter: string | null) {
         return {
           ...c,
           status: 'paused' as CounterStatus,
+          autoPaused: false,
           accumulatedMs: c.accumulatedMs + elapsed,
           lastResumedAt: null,
         };
@@ -419,7 +481,7 @@ export function useImproveCounters(activeCharacter: string | null) {
     setCounters((prev) =>
       prev.map((c) => {
         if (c.id !== id || c.status !== 'paused') return c;
-        return { ...c, status: 'running' as CounterStatus, lastResumedAt: now };
+        return { ...c, status: 'running' as CounterStatus, lastResumedAt: now, autoPaused: false };
       })
     );
   }, []);
@@ -435,6 +497,7 @@ export function useImproveCounters(activeCharacter: string | null) {
         return {
           ...c,
           status: 'stopped' as CounterStatus,
+          autoPaused: false,
           accumulatedMs: c.accumulatedMs + elapsed,
           lastResumedAt: null,
         };
@@ -449,6 +512,7 @@ export function useImproveCounters(activeCharacter: string | null) {
         return {
           ...c,
           status: 'stopped' as CounterStatus,
+          autoPaused: false,
           skills: {},
           totalImps: 0,
           startedAt: null,

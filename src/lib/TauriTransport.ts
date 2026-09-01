@@ -29,4 +29,8 @@ export class TauriTransport implements MudTransport {
   async disconnect(): Promise<void> {
     await invoke('disconnect');
   }
+
+  async getStatus(): Promise<ConnectionStatusPayload> {
+    return invoke<ConnectionStatusPayload>('get_connection_status');
+  }
 }
