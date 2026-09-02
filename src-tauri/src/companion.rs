@@ -283,8 +283,29 @@ pub struct CompanionInfo {
     pub running: bool,
     pub port: u16,
     pub local_ip: String,
+    /// Numeric address link. Always works on the same WiFi but changes
+    /// whenever the router hands this machine a new address.
     pub url: String,
+    /// Name-based link (`http://<computer-name>.local:<port>`), resolved by
+    /// the phone over mDNS so it survives address changes. None when the
+    /// machine's name is unknown or not usable as a hostname.
+    pub name_url: Option<String>,
     pub qr_svg: String,
+}
+
+/// This machine's name as a usable mDNS hostname (lowercase, letters,
+/// digits and dashes only), read at runtime so it is never baked in.
+fn mdns_host_name() -> Option<String> {
+    let raw = std::env::var("COMPUTERNAME")
+        .or_else(|_| std::env::var("HOSTNAME"))
+        .ok()?;
+    let name = raw.trim().trim_end_matches(".local").to_lowercase();
+    let valid = !name.is_empty()
+        && name.len() <= 63
+        && name.chars().all(|c| c.is_ascii_alphanumeric() || c == '-')
+        && !name.starts_with('-')
+        && !name.ends_with('-');
+    valid.then_some(name)
 }
 
 /// Called by the frontend to broadcast post-gag output to companion clients.
@@ -404,7 +425,8 @@ pub async fn start_companion(
         .unwrap_or_else(|_| "127.0.0.1".to_string());
 
     let url = format!("http://{local_ip}:{port}");
-    let qr_svg = generate_qr_svg(&url);
+    let name_url = mdns_host_name().map(|h| format!("http://{h}.local:{port}"));
+    let qr_svg = generate_qr_svg(name_url.as_deref().unwrap_or(&url));
 
     let axum_state = Arc::new(AxumState {
         broadcast_tx: state.broadcast_tx.clone(),
@@ -448,6 +470,7 @@ pub async fn start_companion(
         port,
         local_ip,
         url,
+        name_url,
         qr_svg,
     })
 }
@@ -477,8 +500,16 @@ pub async fn get_companion_info(
         String::new()
     };
 
+    let name_url = if running {
+        mdns_host_name().map(|h| format!("http://{h}.local:{port_val}"))
+    } else {
+        None
+    };
+
+    // The QR points at the name so the phone's saved link keeps working
+    // after an address change; the numeric link is shown as the fallback.
     let qr_svg = if running {
-        generate_qr_svg(&url)
+        generate_qr_svg(name_url.as_deref().unwrap_or(&url))
     } else {
         String::new()
     };
@@ -488,6 +519,7 @@ pub async fn get_companion_info(
         port: port_val,
         local_ip,
         url,
+        name_url,
         qr_svg,
     })
 }

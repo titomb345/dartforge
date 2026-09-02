@@ -349,6 +349,11 @@
   }
   #chips.populated { display: flex; }
   #chips::-webkit-scrollbar { display: none; }
+  /* Phones are short on vertical room: the chips row only shows on the
+     wider laptop/tablet layout. */
+  @media (max-width: 759px) {
+    #chips.populated { display: none; }
+  }
   .chip {
     display: inline-flex;
     align-items: center;

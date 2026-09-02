@@ -14,7 +14,8 @@ The `[Unreleased]` header controls automatic version bumping on merge:
 
 ### Added
 
-- Mobile Companion: the phone now keeps its screen awake while connected, buzzes on taps, shows the same status chips as the desktop input row (autocast, blocked, timers, and the rest), masks the password prompt, and says Live, Reconnecting, Desktop offline, or Companion off next to the status dot. A bell button in the sub-bar turns on tell notifications (a buzz, and a system notification when the page is in the background), and a clear button empties the output. Android can install it to the home screen like iOS already could
+- Mobile Companion: the phone now keeps its screen awake while connected, buzzes on taps, shows the same status chips as the desktop input row (autocast, blocked, timers, and the rest) on the wider laptop and tablet layout (phones keep that vertical room for output), masks the password prompt, and says Live, Reconnecting, Desktop offline, or Companion off next to the status dot. A bell button in the sub-bar turns on tell notifications (a buzz, and a system notification when the page is in the background), and a clear button empties the output. Android can install it to the home screen like iOS already could
+- Mobile Companion: the QR code and link now use your computer's name (for example `http://my-pc.local:3333`) instead of the numeric address, so the link saved on your phone keeps working when your router hands the computer a new address. The numeric address is still shown underneath as a fallback for phones that cannot resolve names. The name is read from the machine at runtime, never stored
 - Mobile Companion: the desktop toolbar shows a small phone icon with a count while a phone is connected, and the server pings each phone so dead connections are noticed and dropped instead of lingering
 
 ### Changed

@@ -1926,6 +1926,7 @@ function CompanionSection({ open, onToggle }: { open: boolean; onToggle: () => v
   const [companionInfo, setCompanionInfo] = useState<{
     running: boolean;
     url: string;
+    name_url: string | null;
     qr_svg: string;
     local_ip: string;
   } | null>(null);
@@ -1943,6 +1944,7 @@ function CompanionSection({ open, onToggle }: { open: boolean; onToggle: () => v
           const info = (await invoke!('start_companion', { port: companionPort })) as {
             running: boolean;
             url: string;
+            name_url: string | null;
             qr_svg: string;
             local_ip: string;
           };
@@ -2001,12 +2003,12 @@ function CompanionSection({ open, onToggle }: { open: boolean; onToggle: () => v
       {companionInfo?.running && (
         <div className="mt-2 flex flex-col items-center gap-2">
           <a
-            href={companionInfo.url}
+            href={companionInfo.name_url ?? companionInfo.url}
             target="_blank"
             rel="noopener noreferrer"
             className="text-[12px] font-mono text-[#8be9fd] underline"
           >
-            {companionInfo.url}
+            {companionInfo.name_url ?? companionInfo.url}
           </a>
           {companionInfo.qr_svg && (
             <div className="mt-1" dangerouslySetInnerHTML={{ __html: companionInfo.qr_svg }} />
@@ -2014,6 +2016,20 @@ function CompanionSection({ open, onToggle }: { open: boolean; onToggle: () => v
           <div className="text-[9px] text-text-dim font-mono">
             Scan with your phone camera to connect
           </div>
+          {companionInfo.name_url && (
+            <div className="text-[9px] text-text-dim font-mono text-center leading-relaxed">
+              The link uses your computer's name, so it keeps working when your address changes. If
+              your phone cannot open it, use{' '}
+              <a
+                href={companionInfo.url}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-[#8be9fd] underline"
+              >
+                {companionInfo.url}
+              </a>
+            </div>
+          )}
         </div>
       )}
     </SettingsSection>
