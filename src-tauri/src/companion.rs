@@ -426,7 +426,10 @@ pub async fn start_companion(
 
     let url = format!("http://{local_ip}:{port}");
     let name_url = mdns_host_name().map(|h| format!("http://{h}.local:{port}"));
-    let qr_svg = generate_qr_svg(name_url.as_deref().unwrap_or(&url));
+    // The QR always carries the numeric address: it works in every phone
+    // browser. The name link is offered alongside for browsers that can
+    // resolve it (Chrome on Android, Safari on iPhone; not Firefox).
+    let qr_svg = generate_qr_svg(&url);
 
     let axum_state = Arc::new(AxumState {
         broadcast_tx: state.broadcast_tx.clone(),
@@ -506,10 +509,10 @@ pub async fn get_companion_info(
         None
     };
 
-    // The QR points at the name so the phone's saved link keeps working
-    // after an address change; the numeric link is shown as the fallback.
+    // Numeric address in the QR (works everywhere); the name link is shown
+    // beside it for browsers that can resolve it.
     let qr_svg = if running {
-        generate_qr_svg(name_url.as_deref().unwrap_or(&url))
+        generate_qr_svg(&url)
     } else {
         String::new()
     };

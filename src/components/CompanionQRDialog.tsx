@@ -64,28 +64,27 @@ export function CompanionQRDialog({ onClose }: { onClose: () => void }) {
         ) : (
           <>
             <a
-              href={info.name_url ?? info.url}
+              href={info.url}
               target="_blank"
               rel="noopener noreferrer"
               className="text-[14px] font-mono text-[#8be9fd] underline"
             >
-              {info.name_url ?? info.url}
+              {info.url}
             </a>
             {info.qr_svg && <div dangerouslySetInnerHTML={{ __html: info.qr_svg }} />}
             <div className="text-[10px] font-mono text-[#6272a4]">Scan with your phone camera</div>
             {info.name_url && (
               <div className="text-[10px] font-mono text-[#6272a4] text-center leading-relaxed">
-                Uses your computer's name, so it keeps working if your address changes.
-                <br />
-                If it does not open, use{' '}
+                Chrome on Android and Safari on iPhone can also use{' '}
                 <a
-                  href={info.url}
+                  href={info.name_url}
                   target="_blank"
                   rel="noopener noreferrer"
                   className="text-[#8be9fd] underline"
                 >
-                  {info.url}
+                  {info.name_url}
                 </a>
+                , which keeps working when your address changes. Firefox cannot open it.
               </div>
             )}
           </>
