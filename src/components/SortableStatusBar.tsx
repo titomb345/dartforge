@@ -304,28 +304,24 @@ function SortableReadout({
             </div>
             {filterKey && (
               <MenuItem
-                checked={filtered}
+                checked={!filtered}
                 onClick={() => {
                   toggleFilter(filterKey);
                   closeMenu();
                 }}
               >
-                {filtered ? `Show ${vital} lines in output` : `Hide ${vital} lines in output`}
+                {`Show ${vital} lines in output`}
               </MenuItem>
             )}
             <MenuItem
-              checked={userCompact}
+              checked={compact}
               disabled={autoCompact}
               onClick={() => {
                 toggleCompactReadout(vital);
                 closeMenu();
               }}
             >
-              {autoCompact
-                ? 'Compact (automatic while the bar is narrow)'
-                : userCompact
-                  ? 'Expand (show label)'
-                  : 'Compact (icon only)'}
+              {autoCompact ? 'Compact (automatic while the bar is narrow)' : 'Compact (icon only)'}
             </MenuItem>
             <div className="h-px bg-border-dim mx-1.5 my-0.5" />
             <div className={MENU_HINT_CLASS}>Drag to reorder</div>

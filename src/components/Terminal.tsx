@@ -435,7 +435,7 @@ export function Terminal({
   const handleClick = () => {
     const sel = window.getSelection();
     if (sel && sel.toString().length > 0) return;
-    inputRef.current?.focus();
+    inputRef.current?.focus({ preventScroll: true });
   };
 
   return (

@@ -57,9 +57,9 @@ export function StatusBadge({
       title={title}
       onClick={handleClick}
       className={cn(
-        'status-chip flex items-center gap-1 pl-1.5 py-[3px] rounded border text-[10px] font-mono',
+        'status-chip flex items-center gap-1 pl-1.5 py-[2px] rounded border text-[9px] font-mono',
         'self-center shrink-0 ml-1 select-none whitespace-nowrap',
-        onStop ? 'pr-1' : 'pr-1.5',
+        onStop ? 'pr-0.5' : 'pr-1.5',
         onClick && 'cursor-pointer',
         running ? 'status-chip-running' : 'status-chip-scheduled'
       )}

@@ -192,9 +192,14 @@ export const CommandInput = forwardRef<HTMLTextAreaElement, CommandInputProps>(
     // Timer overflow dropdown state
     const [timerMenu, setTimerMenu] = useState<{ x: number; y: number } | null>(null);
 
+    // Focus on mount (instead of autoFocus, which can scroll the layout)
+    useEffect(() => {
+      internalRef.current?.focus({ preventScroll: true });
+    }, []);
+
     // Re-focus when window regains focus
     useEffect(() => {
-      const handleFocus = () => internalRef.current?.focus();
+      const handleFocus = () => internalRef.current?.focus({ preventScroll: true });
       window.addEventListener('focus', handleFocus);
       return () => window.removeEventListener('focus', handleFocus);
     }, []);
@@ -398,7 +403,6 @@ export const CommandInput = forwardRef<HTMLTextAreaElement, CommandInputProps>(
           onChange={(e) => setValue(e.target.value)}
           onKeyDown={handleKeyDown}
           readOnly={disabled}
-          autoFocus
           rows={1}
           placeholder={disabled ? 'disconnected' : ''}
           spellCheck={false}
@@ -605,7 +609,7 @@ export const CommandInput = forwardRef<HTMLTextAreaElement, CommandInputProps>(
                         setTimerMenu(timerMenu ? null : { x: e.clientX, y: e.clientY })
                       }
                       title={`${overflow.length} more timer${overflow.length === 1 ? '' : 's'}`}
-                      className="self-center shrink-0 ml-1 px-1.5 py-[3px] rounded border text-[10px] font-mono cursor-pointer transition-colors duration-150 hover:bg-[color-mix(in_srgb,currentColor_15%,transparent)]"
+                      className="self-center shrink-0 ml-1 px-1.5 py-[2px] rounded border text-[9px] font-mono cursor-pointer transition-colors duration-150 hover:bg-[color-mix(in_srgb,currentColor_15%,transparent)]"
                       style={{ color: CHIP_ACCENT.timer, borderColor: `${CHIP_ACCENT.timer}4d` }}
                     >
                       +{overflow.length}

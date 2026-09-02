@@ -10,6 +10,20 @@ The `[Unreleased]` header controls automatic version bumping on merge:
 - `[Unreleased-minor]` → 0.1.0 → 0.2.0
 - `[Unreleased-major]` → 0.1.0 → 1.0.0
 
+## [Unreleased-patch]
+
+### Fixed
+
+- On launch the client came up scrolled sideways: the terminal's left edge was cut off and the Guide and other closed panels appeared "open" along the right until you clicked into the client. The Settings panel's search box was grabbing keyboard focus on startup while its panel was parked off the right edge, and the browser scrolled the whole layout over to show it. The search box now only takes focus when Settings is actually open, closed slide-outs can no longer take focus at all, and the layout row can no longer be scrolled
+- Toolbar: the Timers icon was drawn smaller than the rest, so its icon and label sat higher than every other button. All toolbar icons now sit in the same fixed box, and every labeled button shares one minimum width so most buttons come out the same size
+
+### Changed
+
+- Toolbar: removed the vertical "Panels", "Tools", and "App" group labels
+- Status bar right-click menu: the checkmark now means "this is on". "Show (vital) lines in output" is checked when the lines are shown, and "Compact (icon only)" is checked when the readout is compact
+- Status bar: removed the slashed-eye badge and dimming on a filtered readout. The dashed left border is the filtered cue again
+- Status chips beside the input (announce, autocast, timers, refreshers) are back to their smaller pre-1.17 size
+
 ## [1.17.1] - 2026-09-02
 
 ### Fixed

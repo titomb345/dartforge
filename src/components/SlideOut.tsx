@@ -10,7 +10,8 @@ interface SlideOutProps {
 
 /**
  * Wrapper for slide-out panels. Handles the absolute positioning, show/hide
- * transition, and auto-hiding when the panel is pinned.
+ * transition, and auto-hiding when the panel is pinned. A closed panel is
+ * inert so nothing inside it can take focus while it is parked off screen.
  */
 export function SlideOut({ panel, pinnable, children }: SlideOutProps) {
   const { activePanel, isPinned } = usePanelContext();
@@ -21,6 +22,7 @@ export function SlideOut({ panel, pinnable, children }: SlideOutProps) {
 
   return (
     <div
+      inert={!isOpen}
       className={cn(
         'absolute top-0 right-0 bottom-0 z-[100] transition-transform duration-300 ease-in-out',
         isOpen ? 'translate-x-0' : 'translate-x-full'
