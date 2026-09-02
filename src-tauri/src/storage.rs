@@ -20,7 +20,10 @@ impl StorageState {
     }
 
     pub fn get_dir(&self) -> PathBuf {
-        self.data_dir.lock().unwrap_or_else(|e| e.into_inner()).clone()
+        self.data_dir
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .clone()
     }
 
     pub fn set_dir(&self, dir: PathBuf) {
@@ -116,7 +119,10 @@ pub fn resolve_data_dir(
         }
     };
     if let Err(e) = fs::create_dir_all(&default_dir) {
-        log::warn!("Failed to create default data dir {}: {e}", default_dir.display());
+        log::warn!(
+            "Failed to create default data dir {}: {e}",
+            default_dir.display()
+        );
     }
     state.set_dir(default_dir.clone());
     log::info!(
@@ -156,17 +162,15 @@ pub fn write_data_file(
     // Atomic write: write to temp file then rename
     let tmp_path = path.with_extension("json.tmp");
     let json = serde_json::to_string_pretty(&data).map_err(|e| e.to_string())?;
-    fs::write(&tmp_path, json.as_bytes()).map_err(|e| format!("Failed to write {filename}: {e}"))?;
+    fs::write(&tmp_path, json.as_bytes())
+        .map_err(|e| format!("Failed to write {filename}: {e}"))?;
     fs::rename(&tmp_path, &path).map_err(|e| format!("Failed to rename {filename}: {e}"))?;
 
     Ok(())
 }
 
 #[tauri::command]
-pub fn read_text_file(
-    filename: String,
-    state: tauri::State<'_, StorageState>,
-) -> Option<String> {
+pub fn read_text_file(filename: String, state: tauri::State<'_, StorageState>) -> Option<String> {
     validate_filename(&filename).ok()?;
     let path = state.get_dir().join(&filename);
     fs::read_to_string(&path).ok()
@@ -247,18 +251,14 @@ fn parse_backup_filename(filename: &str) -> Option<(String, String)> {
 }
 
 #[tauri::command]
-pub fn create_backup(
-    tag: String,
-    state: tauri::State<'_, StorageState>,
-) -> Result<String, String> {
+pub fn create_backup(tag: String, state: tauri::State<'_, StorageState>) -> Result<String, String> {
     let tag = sanitize_tag(&tag);
     if tag.is_empty() {
         return Err("Backup tag must contain at least one alphanumeric character".to_string());
     }
     let data_dir = state.get_dir();
     let backup_dir = data_dir.join("backups");
-    fs::create_dir_all(&backup_dir)
-        .map_err(|e| format!("Failed to create backup dir: {e}"))?;
+    fs::create_dir_all(&backup_dir).map_err(|e| format!("Failed to create backup dir: {e}"))?;
 
     let files = list_data_files(&data_dir);
     if files.is_empty() {
@@ -270,8 +270,8 @@ pub fn create_backup(
     let zip_path = backup_dir.join(&zip_name);
     let tmp_path = zip_path.with_extension("zip.tmp");
 
-    let zip_file = fs::File::create(&tmp_path)
-        .map_err(|e| format!("Failed to create backup zip: {e}"))?;
+    let zip_file =
+        fs::File::create(&tmp_path).map_err(|e| format!("Failed to create backup zip: {e}"))?;
     let mut zip_writer = zip::ZipWriter::new(zip_file);
     let options = zip::write::SimpleFileOptions::default()
         .compression_method(zip::CompressionMethod::Deflated);
@@ -281,8 +281,7 @@ pub fn create_backup(
             .file_name()
             .ok_or("Invalid filename")?
             .to_string_lossy();
-        let contents = fs::read(file)
-            .map_err(|e| format!("Failed to read {name}: {e}"))?;
+        let contents = fs::read(file).map_err(|e| format!("Failed to read {name}: {e}"))?;
         zip_writer
             .start_file(name.as_ref(), options)
             .map_err(|e| format!("Failed to add {name} to zip: {e}"))?;
@@ -295,8 +294,7 @@ pub fn create_backup(
         .finish()
         .map_err(|e| format!("Failed to finalize zip: {e}"))?;
 
-    fs::rename(&tmp_path, &zip_path)
-        .map_err(|e| format!("Failed to rename backup zip: {e}"))?;
+    fs::rename(&tmp_path, &zip_path).map_err(|e| format!("Failed to rename backup zip: {e}"))?;
 
     Ok(zip_name)
 }
@@ -310,12 +308,7 @@ pub fn list_backups(state: tauri::State<'_, StorageState>) -> Vec<BackupEntry> {
 
     let mut backups: Vec<BackupEntry> = entries
         .filter_map(|e| e.ok())
-        .filter(|e| {
-            e.path().is_file()
-                && e.path()
-                    .extension()
-                    .is_some_and(|ext| ext == "zip")
-        })
+        .filter(|e| e.path().is_file() && e.path().extension().is_some_and(|ext| ext == "zip"))
         .filter_map(|e| {
             let path = e.path();
             let filename = path.file_name()?.to_string_lossy().to_string();
@@ -326,11 +319,7 @@ pub fn list_backups(state: tauri::State<'_, StorageState>) -> Vec<BackupEntry> {
             let zip_file = fs::File::open(&path).ok()?;
             let archive = zip::ZipArchive::new(zip_file).ok()?;
             let files: Vec<String> = (0..archive.len())
-                .filter_map(|i| {
-                    archive
-                        .name_for_index(i)
-                        .map(|name| name.to_string())
-                })
+                .filter_map(|i| archive.name_for_index(i).map(|name| name.to_string()))
                 .collect();
 
             Some(BackupEntry {
@@ -376,8 +365,7 @@ pub fn restore_backup(
 
     // Extract zip contents to data dir
     let data_dir = state.get_dir();
-    let zip_file =
-        fs::File::open(&backup).map_err(|e| format!("Failed to open backup: {e}"))?;
+    let zip_file = fs::File::open(&backup).map_err(|e| format!("Failed to open backup: {e}"))?;
     let mut archive =
         zip::ZipArchive::new(zip_file).map_err(|e| format!("Invalid backup zip: {e}"))?;
 
@@ -395,8 +383,7 @@ pub fn restore_backup(
         entry
             .read_to_end(&mut contents)
             .map_err(|e| format!("Failed to read {name} from zip: {e}"))?;
-        fs::write(&dest, &contents)
-            .map_err(|e| format!("Failed to restore {name}: {e}"))?;
+        fs::write(&dest, &contents).map_err(|e| format!("Failed to restore {name}: {e}"))?;
     }
 
     Ok(())
@@ -411,7 +398,12 @@ pub fn append_to_log(
 ) -> Result<(), String> {
     validate_filename(&filename)?;
     // Validate subdir: only allow simple directory names
-    if subdir.contains("..") || subdir.contains('/') || subdir.contains('\\') || subdir.contains('\0') || subdir.is_empty() {
+    if subdir.contains("..")
+        || subdir.contains('/')
+        || subdir.contains('\\')
+        || subdir.contains('\0')
+        || subdir.is_empty()
+    {
         return Err(format!("Invalid subdirectory: {subdir}"));
     }
 
@@ -497,18 +489,15 @@ pub fn import_sound_file(
     }
 
     let sounds_dir = state.get_dir().join("sounds");
-    fs::create_dir_all(&sounds_dir)
-        .map_err(|e| format!("Failed to create sounds dir: {e}"))?;
+    fs::create_dir_all(&sounds_dir).map_err(|e| format!("Failed to create sounds dir: {e}"))?;
 
     let dest_name = format!("custom-{sound_id}.{ext}");
     let dest = sounds_dir.join(&dest_name);
 
     // Atomic write: copy to temp file then rename (before deleting old)
     let tmp_dest = dest.with_extension(format!("{ext}.tmp"));
-    fs::copy(&source, &tmp_dest)
-        .map_err(|e| format!("Failed to copy sound file: {e}"))?;
-    fs::rename(&tmp_dest, &dest)
-        .map_err(|e| format!("Failed to finalize sound file: {e}"))?;
+    fs::copy(&source, &tmp_dest).map_err(|e| format!("Failed to copy sound file: {e}"))?;
+    fs::rename(&tmp_dest, &dest).map_err(|e| format!("Failed to finalize sound file: {e}"))?;
 
     // Remove old custom sound only after new one is safely in place
     // (it may have a different extension, e.g. old .mp3 replaced by new .wav)
@@ -522,10 +511,7 @@ pub fn import_sound_file(
 }
 
 #[tauri::command]
-pub fn get_sound_base64(
-    sound_id: String,
-    state: tauri::State<'_, StorageState>,
-) -> Option<String> {
+pub fn get_sound_base64(sound_id: String, state: tauri::State<'_, StorageState>) -> Option<String> {
     validate_sound_id(&sound_id).ok()?;
 
     let sounds_dir = state.get_dir().join("sounds");
@@ -533,10 +519,7 @@ pub fn get_sound_base64(
     let bytes = fs::read(&path).ok()?;
     let b64 = base64::engine::general_purpose::STANDARD.encode(&bytes);
 
-    let ext = path
-        .extension()
-        .and_then(|e| e.to_str())
-        .unwrap_or("wav");
+    let ext = path.extension().and_then(|e| e.to_str()).unwrap_or("wav");
     let mime = match ext {
         "mp3" => "audio/mpeg",
         "ogg" => "audio/ogg",
@@ -556,16 +539,13 @@ pub fn remove_custom_sound(
 
     let sounds_dir = state.get_dir().join("sounds");
     if let Some(path) = find_custom_sound(&sounds_dir, &sound_id) {
-        fs::remove_file(&path)
-            .map_err(|e| format!("Failed to remove custom sound: {e}"))?;
+        fs::remove_file(&path).map_err(|e| format!("Failed to remove custom sound: {e}"))?;
     }
     Ok(())
 }
 
 #[tauri::command]
-pub fn list_custom_sounds(
-    state: tauri::State<'_, StorageState>,
-) -> Vec<String> {
+pub fn list_custom_sounds(state: tauri::State<'_, StorageState>) -> Vec<String> {
     let sounds_dir = state.get_dir().join("sounds");
     let mut ids: Vec<String> = Vec::new();
     let entries = match fs::read_dir(&sounds_dir) {
@@ -663,8 +643,7 @@ pub fn read_session_log(
 ) -> Result<SessionLogPage, String> {
     validate_filename(&filename)?;
     let path = state.get_dir().join("sessions").join(&filename);
-    let content =
-        fs::read_to_string(&path).map_err(|e| format!("Failed to read log: {e}"))?;
+    let content = fs::read_to_string(&path).map_err(|e| format!("Failed to read log: {e}"))?;
     let all_lines: Vec<&str> = content.lines().collect();
     let total = all_lines.len();
     let clamped = limit.min(5000);

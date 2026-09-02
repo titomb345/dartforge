@@ -13,6 +13,30 @@ const SGR_FG_NAMES = ['black', 'red', 'green', 'yellow', 'blue', 'magenta', 'cya
 /** Pre-compiled regex for matching ANSI SGR sequences. */
 const ANSI_SGR_RE = /\x1b\[[0-9;]*m/g;
 
+/**
+ * sessionStorage flag: a character is logged in on the live connection.
+ * sessionStorage outlives a webview reload but not the app, which is exactly
+ * the lifetime of the backend's TCP session.
+ */
+const SESSION_LOGGED_IN_KEY = 'dartforge:loggedIn';
+
+function readSessionLoggedIn(): boolean {
+  try {
+    return sessionStorage.getItem(SESSION_LOGGED_IN_KEY) === '1';
+  } catch {
+    return false;
+  }
+}
+
+function writeSessionLoggedIn(loggedIn: boolean): void {
+  try {
+    if (loggedIn) sessionStorage.setItem(SESSION_LOGGED_IN_KEY, '1');
+    else sessionStorage.removeItem(SESSION_LOGGED_IN_KEY);
+  } catch {
+    // Storage unavailable — a reload will just land at the login prompt state
+  }
+}
+
 /** End marker for the DartMUD ASCII banner */
 const BANNER_END_MARKER = 'Ferdarchi';
 /** Max bytes to buffer before giving up on banner detection */
@@ -110,7 +134,8 @@ export function useMudConnection(
   onOutputChunk?: (data: string) => void,
   onCharacterName?: (name: string) => void,
   outputFilterRef?: React.RefObject<OutputFilter | null>,
-  onLogin?: () => void,
+  /** Fired when a login is detected, or (restored = true) when a reload finds a session already logged in. */
+  onLogin?: (restored: boolean) => void,
   autoLoginRef?: React.RefObject<AutoLoginConfig | null>,
   onFilteredOutput?: (data: string) => void
 ) {
@@ -194,12 +219,13 @@ export function useMudConnection(
               (/Running under version/i.test(data) || /reconnecting to old object/i.test(data))
             ) {
               loginFiredRef.current = true;
+              writeSessionLoggedIn(true);
               // Activate the character name only after login succeeds
               if (pendingNameRef.current) {
                 onCharacterNameRef.current?.(pendingNameRef.current);
                 pendingNameRef.current = null;
               }
-              onLoginRef.current?.();
+              onLoginRef.current?.(false);
             }
           };
 
@@ -276,6 +302,7 @@ export function useMudConnection(
             smartWrite(term, getDisconnectSplash(term.cols));
           }
 
+          if (!payload.connected) writeSessionLoggedIn(false);
           wasConnectedRef.current = payload.connected;
           setConnected(payload.connected);
           setStatusMessage(payload.message);
@@ -283,6 +310,35 @@ export function useMudConnection(
       });
 
       unlistenRefs.current = [cleanup];
+
+      // A webview reload (Ctrl+R) restarts this hook but not the backend's
+      // TCP session. Ask what's actually live rather than assuming we're
+      // disconnected, so commands keep flowing without a reconnect (which
+      // would start a whole new login).
+      try {
+        const status = await transportRef.current.getStatus();
+        if (cancelled) return;
+        if (status.connected && !wasConnectedRef.current) {
+          wasConnectedRef.current = true;
+          setConnected(true);
+          setStatusMessage(status.message);
+          if (readSessionLoggedIn()) {
+            loginFiredRef.current = true;
+            const term = terminalRef.current;
+            if (term) {
+              smartWrite(
+                term,
+                '\x1b[36m[Reloaded — still connected, picking up the live session]\x1b[0m\r\n'
+              );
+            }
+            onLoginRef.current?.(true);
+          }
+        } else if (!status.connected) {
+          writeSessionLoggedIn(false);
+        }
+      } catch (e) {
+        console.error('Failed to read connection status:', e);
+      }
     }
 
     setup();

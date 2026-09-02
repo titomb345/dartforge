@@ -8,6 +8,11 @@ import type { SoundLibrary } from './useSoundLibrary';
 const SETTINGS_FILE = 'settings.json';
 const CHAT_HISTORY_FILE = 'chat-history.json';
 const MAX_MESSAGES = 500;
+/** Pre-1.16 keys — chat history used to be shared by every character. */
+const LEGACY_MESSAGES_KEY = 'messages';
+const LEGACY_OUTGOING_KEY = 'outgoing';
+const messagesKey = (char: string) => `messages:${char}`;
+const outgoingKey = (char: string) => `outgoing:${char}`;
 
 const DEFAULT_FILTERS: ChatFilters = {
   say: false,
@@ -64,6 +69,7 @@ function deserializeOutgoing(raw: Array<Record<string, unknown>> | null): Outgoi
 }
 
 export function useChatMessages(
+  activeCharacter: string | null,
   maxMessages = MAX_MESSAGES,
   notificationsRef?: React.RefObject<ChatFilters | null>,
   soundLibraryRef?: React.RefObject<SoundLibrary>,
@@ -80,6 +86,14 @@ export function useChatMessages(
   const loaded = useRef(false);
   const historyLoaded = useRef(false);
   const outgoingLoaded = useRef(false);
+  /** Character key the in-memory history belongs to. */
+  const historyCharRef = useRef<string | null>(null);
+  const dataStoreRef = useRef(dataStore);
+  dataStoreRef.current = dataStore;
+  const maxMessagesRef = useRef(maxMessages);
+  maxMessagesRef.current = maxMessages;
+
+  const charKey = activeCharacter ? activeCharacter.toLowerCase() : null;
 
   // Refs for current values (used in handleChatMessage callback)
   const mutedSendersRef = useRef(mutedSenders);
@@ -109,62 +123,103 @@ export function useChatMessages(
     })();
   }, [dataStore.ready]);
 
-  // Load persisted chat history
+  // Load the active character's chat history, swapping logs when the character
+  // changes. Nothing is persisted until a character is known, so the handful of
+  // lines seen at the login prompt never land in someone else's log.
   useEffect(() => {
     if (!dataStore.ready) return;
+    const ds = dataStoreRef.current;
+    const max = maxMessagesRef.current;
+
+    historyLoaded.current = false;
+    outgoingLoaded.current = false;
+    historyCharRef.current = charKey;
+
+    if (!charKey) return;
+
+    let cancelled = false;
     (async () => {
       try {
-        const raw = await dataStore.get<Array<Record<string, unknown>>>(
+        let raw = await ds.get<Array<Record<string, unknown>>>(
           CHAT_HISTORY_FILE,
-          'messages'
+          messagesKey(charKey)
         );
-        const restored = deserializeMessages(raw);
-        if (restored.length > 0) {
-          // Trim to current max
-          const trimmed = restored.length > maxMessages ? restored.slice(-maxMessages) : restored;
-          // Set ID counter past the highest restored ID
-          const maxId = trimmed.reduce((max, m) => Math.max(max, m.id), 0);
-          setChatIdCounter(maxId + 1);
-          setMessages(trimmed);
+        let rawOut = await ds.get<Array<Record<string, unknown>>>(
+          CHAT_HISTORY_FILE,
+          outgoingKey(charKey)
+        );
+
+        // Chat history used to be shared by every character. The first
+        // character to load after upgrading adopts it (that's whoever was last
+        // played) and the shared keys are retired.
+        if (raw == null && rawOut == null) {
+          const legacyIn = await ds.get<Array<Record<string, unknown>>>(
+            CHAT_HISTORY_FILE,
+            LEGACY_MESSAGES_KEY
+          );
+          const legacyOut = await ds.get<Array<Record<string, unknown>>>(
+            CHAT_HISTORY_FILE,
+            LEGACY_OUTGOING_KEY
+          );
+          if (legacyIn != null || legacyOut != null) {
+            raw = legacyIn;
+            rawOut = legacyOut;
+            await ds.set(CHAT_HISTORY_FILE, messagesKey(charKey), legacyIn ?? []);
+            await ds.set(CHAT_HISTORY_FILE, outgoingKey(charKey), legacyOut ?? []);
+            await ds.delete(CHAT_HISTORY_FILE, LEGACY_MESSAGES_KEY);
+            await ds.delete(CHAT_HISTORY_FILE, LEGACY_OUTGOING_KEY);
+            await ds.save(CHAT_HISTORY_FILE);
+          }
         }
+
+        if (cancelled) return;
+
+        // Trim to current max, then set the ID counters past the highest
+        // restored ID so new messages can't collide with the loaded log.
+        const restored = deserializeMessages(raw);
+        const trimmed = restored.length > max ? restored.slice(-max) : restored;
+        setChatIdCounter(trimmed.reduce((m, msg) => Math.max(m, msg.id), 0) + 1);
+        setMessages(trimmed);
+
+        const restoredOut = deserializeOutgoing(rawOut);
+        const trimmedOut = restoredOut.length > max ? restoredOut.slice(-max) : restoredOut;
+        outgoingIdCounter = trimmedOut.reduce((m, msg) => Math.max(m, msg.id), 0) + 1;
+        setOutgoingMessages(trimmedOut);
       } catch (e) {
         console.error('Failed to load chat history:', e);
-      }
-      historyLoaded.current = true;
-
-      // Load outgoing messages
-      try {
-        const rawOut = await dataStore.get<Array<Record<string, unknown>>>(
-          CHAT_HISTORY_FILE,
-          'outgoing'
-        );
-        const restored = deserializeOutgoing(rawOut);
-        if (restored.length > 0) {
-          const trimmed = restored.length > maxMessages ? restored.slice(-maxMessages) : restored;
-          const maxId = trimmed.reduce((max, m) => Math.max(max, m.id), 0);
-          outgoingIdCounter = maxId + 1;
-          setOutgoingMessages(trimmed);
+        if (!cancelled) {
+          setMessages([]);
+          setOutgoingMessages([]);
         }
-      } catch (e) {
-        console.error('Failed to load outgoing history:', e);
       }
-      outgoingLoaded.current = true;
+      if (!cancelled) {
+        historyLoaded.current = true;
+        outgoingLoaded.current = true;
+      }
     })();
-  }, [dataStore.ready]);
+
+    return () => {
+      cancelled = true;
+    };
+  }, [dataStore.ready, charKey]);
 
   // Persist chat history when messages change
   useEffect(() => {
     if (!historyLoaded.current) return;
-    dataStore
-      .set(CHAT_HISTORY_FILE, 'messages', serializeMessages(messages))
+    const char = historyCharRef.current;
+    if (!char) return;
+    dataStoreRef.current
+      .set(CHAT_HISTORY_FILE, messagesKey(char), serializeMessages(messages))
       .catch((e) => console.error('Failed to persist chat history:', e));
   }, [messages]);
 
   // Persist outgoing messages when they change
   useEffect(() => {
     if (!outgoingLoaded.current) return;
-    dataStore
-      .set(CHAT_HISTORY_FILE, 'outgoing', serializeOutgoing(outgoingMessages))
+    const char = historyCharRef.current;
+    if (!char) return;
+    dataStoreRef.current
+      .set(CHAT_HISTORY_FILE, outgoingKey(char), serializeOutgoing(outgoingMessages))
       .catch((e) => console.error('Failed to persist outgoing history:', e));
   }, [outgoingMessages]);
 

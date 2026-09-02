@@ -1,5 +1,16 @@
-import { useState, useEffect, useRef, type ReactNode } from 'react';
 import {
+  useState,
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useMemo,
+  useCallback,
+  createContext,
+  useContext,
+  type ReactNode,
+} from 'react';
+import {
+  SearchIcon,
   TimerIcon,
   FolderIcon,
   TrashIcon,
@@ -56,6 +67,48 @@ if (getPlatform() === 'tauri') {
 
 const LOCAL_CONFIG_FILE = 'local-config.json';
 const DATA_DIRS_KEY = 'dataDirs';
+/** Character switch advisory window. A heads-up only, never a block. */
+const SWITCH_COOLDOWN_MS = 20 * 60 * 1000;
+
+/* ── Settings Search ──────────────────────────────────────── */
+
+interface SettingsSearchState {
+  /** Lower-cased, whitespace-split query words. Empty when not searching. */
+  tokens: string[];
+  /** Sections report whether they match the current query (null = unmounted). */
+  reportHit: (id: string, hit: boolean | null) => void;
+}
+
+const SettingsSearchContext = createContext<SettingsSearchState>({
+  tokens: [],
+  reportHit: () => {},
+});
+
+/** Every query word must appear somewhere in the text. */
+function matchesTokens(text: string, tokens: string[]): boolean {
+  return tokens.every((t) => text.includes(t));
+}
+
+function escapeRegExp(s: string): string {
+  return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+/** Wraps each query word found in `text` with a highlight span. */
+function highlightText(text: string, tokens: string[]): ReactNode {
+  if (tokens.length === 0) return text;
+  const re = new RegExp(`(${tokens.map(escapeRegExp).join('|')})`, 'gi');
+  const parts = text.split(re);
+  if (parts.length === 1) return text;
+  return parts.map((part, i) =>
+    i % 2 === 1 ? (
+      <span key={i} className="text-cyan bg-cyan/15 rounded-[2px]">
+        {part}
+      </span>
+    ) : (
+      part
+    )
+  );
+}
 
 /* ── Collapsible Section ──────────────────────────────────── */
 
@@ -65,6 +118,7 @@ function SettingsSection({
   accent = '#bd93f9',
   open,
   onToggle,
+  keywords,
   children,
 }: {
   icon: ReactNode;
@@ -72,13 +126,57 @@ function SettingsSection({
   accent?: string;
   open?: boolean;
   onToggle?: () => void;
+  /** Extra search terms (synonyms) not present in the rendered text. */
+  keywords?: string;
   children: ReactNode;
 }) {
   const [internalOpen, setInternalOpen] = useState(false);
-  const isOpen = open ?? internalOpen;
-  const handleToggle = onToggle ?? (() => setInternalOpen((v) => !v));
+  const { tokens, reportHit } = useContext(SettingsSearchContext);
+  const searching = tokens.length > 0;
+  const [hit, setHit] = useState(true);
+  const rootRef = useRef<HTMLDivElement>(null);
+  const contentRef = useRef<HTMLDivElement>(null);
+
+  // Match against the section title, its keyword list, and everything rendered inside it
+  // (labels, descriptions, sub-headings). Content stays mounted while collapsed, so the
+  // text is always available.
+  useLayoutEffect(() => {
+    if (!searching) {
+      setHit(true);
+      reportHit(title, null);
+      return;
+    }
+    const text =
+      `${title} ${keywords ?? ''} ${contentRef.current?.textContent ?? ''}`.toLowerCase();
+    const matched = matchesTokens(text, tokens);
+    setHit(matched);
+    reportHit(title, matched);
+  }, [searching, tokens, title, keywords, reportHit]);
+
+  useEffect(() => () => reportHit(title, null), [title, reportHit]);
+
+  // While searching, every matching section is forced open.
+  const isOpen = searching ? hit : (open ?? internalOpen);
+  const handleToggle = () => {
+    if (onToggle) onToggle();
+    else setInternalOpen((v) => !v);
+    // The parent clears the search when a header is clicked mid-search; once the other
+    // sections reappear, keep this one in view.
+    if (searching) {
+      requestAnimationFrame(() => {
+        rootRef.current?.scrollIntoView({ block: 'start', behavior: 'smooth' });
+      });
+    }
+  };
+
   return (
-    <div className="border border-border-dim rounded overflow-hidden">
+    <div
+      ref={rootRef}
+      className={cn(
+        'border border-border-dim rounded overflow-hidden',
+        searching && !hit && 'hidden'
+      )}
+    >
       <button
         onClick={handleToggle}
         className={cn(
@@ -91,7 +189,7 @@ function SettingsSection({
           {icon}
         </span>
         <span className="text-[11px] font-mono font-semibold uppercase tracking-[0.06em] text-text-label flex-1 text-left">
-          {title}
+          {highlightText(title, tokens)}
         </span>
         <span
           className="text-text-dim transition-transform duration-200"
@@ -105,7 +203,9 @@ function SettingsSection({
         style={{ gridTemplateRows: isOpen ? '1fr' : '0fr' }}
       >
         <div className="overflow-hidden">
-          <div className="px-3 py-3 space-y-3">{children}</div>
+          <div ref={contentRef} className="px-3 py-3 space-y-3">
+            {children}
+          </div>
         </div>
       </div>
     </div>
@@ -123,10 +223,11 @@ function FieldRow({
   children: ReactNode;
   dimmed?: boolean;
 }) {
+  const { tokens } = useContext(SettingsSearchContext);
   return (
     <div className={cn('flex items-center gap-2', dimmed && 'opacity-40 pointer-events-none')}>
       <span className="text-[10px] font-mono text-text-dim uppercase tracking-wide flex-1">
-        {label}
+        {highlightText(label, tokens)}
       </span>
       {children}
     </div>
@@ -229,7 +330,35 @@ interface BackupEntry {
 
 export function SettingsPanel({ onClose }: { onClose: () => void }) {
   const [openSection, setOpenSection] = useState<string | null>(null);
-  const toggle = (key: string) => setOpenSection((prev) => (prev === key ? null : key));
+
+  // Search: filters sections by their labels/descriptions and forces matches open.
+  const [query, setQuery] = useState('');
+  const tokens = useMemo(() => query.toLowerCase().split(/\s+/).filter(Boolean), [query]);
+  const searching = tokens.length > 0;
+  const [hits, setHits] = useState<Record<string, boolean>>({});
+  const reportHit = useCallback((id: string, hit: boolean | null) => {
+    setHits((prev) => {
+      if (hit === null) {
+        if (!(id in prev)) return prev;
+        const next = { ...prev };
+        delete next[id];
+        return next;
+      }
+      return prev[id] === hit ? prev : { ...prev, [id]: hit };
+    });
+  }, []);
+  const searchState = useMemo(() => ({ tokens, reportHit }), [tokens, reportHit]);
+  const matchCount = Object.values(hits).filter(Boolean).length;
+
+  // Clicking a section header mid-search clears the search and lands on that section.
+  const toggle = (key: string) => {
+    if (searching) {
+      setQuery('');
+      setOpenSection(key);
+      return;
+    }
+    setOpenSection((prev) => (prev === key ? null : key));
+  };
 
   const settings = useAppSettingsContext();
   const {
@@ -315,7 +444,6 @@ export function SettingsPanel({ onClose }: { onClose: () => void }) {
 
   // Character switch advisory (20 minutes). This is a heads-up, never a block:
   // switching the active character is always allowed.
-  const SWITCH_COOLDOWN_MS = 20 * 60 * 1000;
   const [cooldownRemaining, setCooldownRemaining] = useState<number>(0);
   const otherSlot = (autoLoginActiveSlot === 0 ? 1 : 0) as 0 | 1;
   const otherCharacter = autoLoginCharacters[otherSlot];
@@ -358,621 +486,672 @@ export function SettingsPanel({ onClose }: { onClose: () => void }) {
     <div className="w-[360px] h-full bg-bg-primary border-l border-border-subtle flex flex-col overflow-hidden">
       <PanelHeader icon={<GearIcon size={12} />} title="Settings" onClose={onClose} />
 
-      {/* Scrollable sections */}
-      <div className="flex-1 overflow-y-auto px-2 py-2 space-y-2">
-        {/* Characters */}
-        <SettingsSection
-          icon={<UserIcon size={13} />}
-          title="Characters"
-          accent="#56b6c2"
-          open={openSection === 'characters'}
-          onToggle={() => toggle('characters')}
-        >
-          <ToggleRow
-            label="Auto-login"
-            checked={autoLoginEnabled}
-            onChange={updateAutoLoginEnabled}
-            accent="#56b6c2"
+      {/* Search */}
+      <div className="px-2 pt-2 shrink-0">
+        <div className="relative">
+          <span className="absolute left-2 top-1/2 -translate-y-1/2 text-text-dim pointer-events-none">
+            <SearchIcon size={10} />
+          </span>
+          <MudInput
+            accent="cyan"
+            size="md"
+            autoFocus
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Escape' && query) {
+                e.stopPropagation();
+                setQuery('');
+              }
+            }}
+            placeholder="Search settings..."
+            aria-label="Search settings"
+            className="w-full pl-6 pr-6"
           />
-
-          {([0, 1] as const).map((slot) => {
-            const char1Set = !!(autoLoginCharacters[0]?.name && autoLoginCharacters[0]?.password);
-            const isDisabled = slot === 1 && !char1Set;
-            return (
-              <div key={slot} className={slot === 0 ? 'mt-2' : 'mt-3'}>
-                <div className="flex items-center gap-2 mb-1.5">
-                  <span className="text-[10px] font-semibold text-text-muted tracking-wide uppercase">
-                    Character {slot + 1}
-                  </span>
-                  {autoLoginActiveSlot === slot ? (
-                    <span className="text-[8px] font-mono px-1.5 py-0.5 rounded border bg-[#56b6c2]/10 text-[#56b6c2] border-[#56b6c2]/20">
-                      active
-                    </span>
-                  ) : isDisabled ? (
-                    <span className="text-[8px] font-mono text-text-dim">
-                      Set Character 1 first
-                    </span>
-                  ) : null}
-                </div>
-                {/* Use <form> with autocomplete hints so password managers can detect and fill */}
-                <form
-                  className="space-y-1.5"
-                  onSubmit={(e) => e.preventDefault()}
-                  autoComplete="on"
-                >
-                  <FieldRow label="Name">
-                    <MudInput
-                      accent="cyan"
-                      size="sm"
-                      name={`dartmud-char${slot}-username`}
-                      autoComplete={`section-char${slot} username`}
-                      value={autoLoginCharacters[slot]?.name ?? ''}
-                      onChange={(e) => updateCharacterField(slot, 'name', e.target.value)}
-                      placeholder="Character name"
-                      className="w-[140px] text-right"
-                      disabled={isDisabled}
-                    />
-                  </FieldRow>
-                  <FieldRow label="Password">
-                    <MudInput
-                      type="password"
-                      accent="cyan"
-                      size="sm"
-                      name={`dartmud-char${slot}-password`}
-                      autoComplete={`section-char${slot} current-password`}
-                      value={autoLoginCharacters[slot]?.password ?? ''}
-                      onChange={(e) => updateCharacterField(slot, 'password', e.target.value)}
-                      placeholder="Password"
-                      className="w-[140px] text-right"
-                      disabled={isDisabled}
-                    />
-                  </FieldRow>
-                </form>
-              </div>
-            );
-          })}
-
-          {/* Switch active character — always available, online or off */}
-          {otherCharacter?.name && (
-            <div className="mt-2">
-              <button
-                onClick={onSwitchCharacter}
-                title={
-                  connected
-                    ? `Disconnect and reconnect as ${otherCharacter.name}`
-                    : `Make ${otherCharacter.name} the active character`
-                }
-                className="w-full text-[10px] font-mono py-1.5 px-3 rounded border transition-all duration-200 text-[#56b6c2] border-[#56b6c2]/30 bg-[#56b6c2]/5 hover:bg-[#56b6c2]/10 hover:border-[#56b6c2]/50 cursor-pointer"
-              >
-                {connected
-                  ? `Switch to ${otherCharacter.name} and reconnect`
-                  : `Switch to ${otherCharacter.name}`}
-              </button>
-              {switchCooldownActive && (
-                <div className="mt-1 text-[9px] font-mono text-amber/80 leading-relaxed">
-                  Heads up: 20 minutes between characters is the usual gap.{' '}
-                  {formatCountdown(cooldownRemaining)} left before {otherCharacter.name} is clear.
-                  Switching still works.
-                </div>
-              )}
-              <div className="mt-1 text-[9px] text-text-dim font-mono leading-relaxed">
-                {connected
-                  ? 'Switching drops the connection and logs back in as the other character.'
-                  : 'Switching offline just repoints counters, timers, skills, notes, and the map at the other character.'}
-              </div>
-            </div>
+          {query && (
+            <button
+              onClick={() => setQuery('')}
+              title="Clear search"
+              className="absolute right-1.5 top-1/2 -translate-y-1/2 w-4 h-4 flex items-center justify-center rounded-[3px] text-text-dim hover:text-text-label cursor-pointer"
+            >
+              <span className="text-[13px] leading-none">×</span>
+            </button>
           )}
-
-          <div className="text-[9px] text-text-dim font-mono leading-relaxed mt-2">
-            {isTauri
-              ? "Passwords are stored securely in your operating system's credential manager. When enabled, name and password are sent automatically on connect."
-              : "Your browser's password manager can save these credentials. Passwords are not stored by DartForge on web — they are held in memory for this session only."}
-          </div>
-        </SettingsSection>
-
-        {/* Timers */}
-        <SettingsSection
-          icon={<TimerIcon size={13} />}
-          title="Timers"
-          accent="#f97316"
-          open={openSection === 'timers'}
-          onToggle={() => toggle('timers')}
-        >
-          {/* Alignment tracking */}
-          <div className="text-[10px] font-semibold text-text-muted tracking-wide uppercase mb-1">
-            Alignment Tracking
-          </div>
-          <ToggleRow
-            label="Enabled"
-            checked={alignmentTrackingEnabled}
-            onChange={updateAlignmentTrackingEnabled}
-            accent="#80e080"
-          />
-          <NumberRow
-            label="Interval"
-            value={alignmentTrackingMinutes}
-            onChange={updateAlignmentTrackingMinutes}
-            accent="green"
-            min={1}
-            max={14}
-            unit="min"
-            dimmed={!alignmentTrackingEnabled}
-          />
-          <div className="text-[9px] text-text-dim font-mono leading-relaxed mt-1 mb-3">
-            Polls alignment at the configured interval. Also prevents idle disconnect.
-          </div>
-
-          {/* Who list refresh */}
-          <div className="text-[10px] font-semibold text-text-muted tracking-wide uppercase mb-1">
-            Who List
-          </div>
-          <ToggleRow
-            label="Auto-refresh"
-            checked={whoAutoRefreshEnabled}
-            onChange={updateWhoAutoRefreshEnabled}
-            accent="#61afef"
-          />
-          <NumberRow
-            label="Interval"
-            value={whoRefreshMinutes}
-            onChange={updateWhoRefreshMinutes}
-            accent="cyan"
-            min={1}
-            max={30}
-            unit="min"
-            dimmed={!whoAutoRefreshEnabled}
-          />
-          <div className="text-[9px] text-text-dim font-mono leading-relaxed mt-1 mb-3">
-            Silently refreshes the who list in the background.
-          </div>
-
-          {/* Loadout held-equipment refresh */}
-          <div className="text-[10px] font-semibold text-text-muted tracking-wide uppercase mb-1">
-            Held Equipment
-          </div>
-          <ToggleRow
-            label="Auto-refresh"
-            checked={equipAutoRefreshEnabled}
-            onChange={updateEquipAutoRefreshEnabled}
-            accent="#bd93f9"
-          />
-          <NumberRow
-            label="Interval"
-            value={equipRefreshMinutes}
-            onChange={updateEquipRefreshMinutes}
-            accent="purple"
-            min={1}
-            max={30}
-            unit="min"
-            dimmed={!equipAutoRefreshEnabled}
-          />
-          <div className="text-[9px] text-text-dim font-mono leading-relaxed mt-1 mb-3">
-            Silently re-syncs the Loadout panel's hands ("equip held") in the background.
-          </div>
-
-          {/* Anti-idle */}
-          <div className="text-[10px] font-semibold text-text-muted tracking-wide uppercase mb-1">
-            Anti-Idle
-          </div>
-          {alignmentTrackingEnabled && (
-            <div className="text-[9px] text-[#80e080] font-mono leading-relaxed mb-1">
-              Disabled — alignment tracking is active.
-            </div>
-          )}
-          <ToggleRow
-            label="Enabled"
-            checked={antiIdleEnabled}
-            onChange={onAntiIdleEnabledChange}
-            accent="#bd93f9"
-            dimmed={alignmentTrackingEnabled}
-            disabled={alignmentTrackingEnabled}
-          />
-          <FieldRow label="Command" dimmed={!antiIdleEnabled || alignmentTrackingEnabled}>
-            <MudInput
-              accent="purple"
-              size="sm"
-              value={antiIdleCommand}
-              onChange={(e) => onAntiIdleCommandChange(e.target.value)}
-              placeholder="hp"
-              className="w-[120px] text-right"
-            />
-          </FieldRow>
-          <NumberRow
-            label="Interval"
-            value={antiIdleMinutes}
-            onChange={onAntiIdleMinutesChange}
-            accent="purple"
-            min={1}
-            max={14}
-            unit="min"
-            dimmed={!antiIdleEnabled || alignmentTrackingEnabled}
-          />
-          <div className="text-[9px] text-text-dim font-mono leading-relaxed mt-1 mb-3">
-            Sends the command at the configured interval to prevent idle disconnect.
-          </div>
-
-          {/* Action Blocking */}
-          <div className="text-[10px] font-semibold text-text-muted tracking-wide uppercase mb-1">
-            Action Blocking
-          </div>
-          <ToggleRow
-            label="Enabled"
-            checked={actionBlockingEnabled}
-            onChange={updateActionBlockingEnabled}
-            accent="#f59e0b"
-          />
-          <div className="text-[9px] text-text-dim font-mono leading-relaxed mt-1 mb-3">
-            Queues commands during channeled actions (cast, study, hunt, etc.) to prevent
-            interruption. Use /block and /unblock for manual control.
-          </div>
-
-          {/* Display */}
-          <div className="text-[10px] font-semibold text-text-muted tracking-wide uppercase mb-1">
-            Display
-          </div>
-          <ToggleRow
-            label="Timer countdowns"
-            checked={showTimerBadges}
-            onChange={updateShowTimerBadges}
-            accent="#f97316"
-          />
-          <div className="text-[9px] text-text-dim font-mono leading-relaxed mt-1">
-            Show timer countdowns (anti-idle, alignment, and custom timers) next to the command
-            input.
-          </div>
-        </SettingsSection>
-
-        {/* Login Commands */}
-        <SettingsSection
-          icon={<PlayIcon size={13} />}
-          title="Login Commands"
-          accent="#ff79c6"
-          open={openSection === 'post-sync'}
-          onToggle={() => toggle('post-sync')}
-        >
-          <ToggleRow
-            label="Enabled"
-            checked={postSyncEnabled}
-            onChange={updatePostSyncEnabled}
-            accent="#ff79c6"
-          />
-          <FieldRow label="Commands" dimmed={!postSyncEnabled}>
-            <div className="w-full" />
-          </FieldRow>
-          <div className={cn(!postSyncEnabled && 'opacity-40 pointer-events-none')}>
-            <MudTextarea
-              accent="pink"
-              size="sm"
-              value={postSyncCommands}
-              onChange={(e) => updatePostSyncCommands(e.target.value)}
-              placeholder="inventory;;who;;/echo Ready!"
-              rows={5}
-              className="w-full"
-            />
-          </div>
-          <div className="text-[9px] text-text-dim font-mono leading-relaxed mt-1">
-            Sent automatically after logging in. Supports the command separator, aliases, /delay,
-            /echo, /spam, /var.
-          </div>
-        </SettingsSection>
-
-        {/* Doors */}
-        <SettingsSection
-          icon={<HouseIcon size={13} />}
-          title="Doors"
-          accent="#e8a849"
-          open={openSection === 'doors'}
-          onToggle={() => toggle('doors')}
-        >
-          <NumberRow
-            label="Keyring slots"
-            value={doorKeys}
-            onChange={updateDoorKeys}
-            accent="orange"
-            min={1}
-            max={10}
-            unit="keys"
-          />
-          <div className="text-[9px] text-text-dim font-mono leading-relaxed mt-1">
-            /door &lt;dir&gt; unlocks with key, key 2 … key N, opens, steps through, then closes and
-            locks behind you. The town map's auto-walk runs the same sequence when a route crosses a
-            known door.
-          </div>
-        </SettingsSection>
-
-        {/* Map */}
-        <SettingsSection
-          icon={<MapIcon size={13} />}
-          title="Map"
-          accent="#e8a849"
-          open={openSection === 'map'}
-          onToggle={() => toggle('map')}
-        >
-          <ToggleRow
-            label="Town mapper"
-            checked={townMapperEnabled}
-            onChange={updateTownMapperEnabled}
-            accent="#e8a849"
-          />
-          <div className="text-[9px] text-text-dim font-mono leading-relaxed mt-1">
-            Maps towns and buildings room by room. Turn off if it misbehaves — the Map panel shows
-            only the hex map with an IN TOWN badge while indoors. Mapped town data is kept, and
-            mapping picks back up when re-enabled.
-          </div>
-        </SettingsSection>
-
-        {/* Output transformations */}
-        <SettingsSection
-          icon={<FilterIcon size={13} />}
-          title="Output"
-          accent="#50fa7b"
-          open={openSection === 'output'}
-          onToggle={() => toggle('output')}
-        >
-          <ToggleRow
-            label="Convert board dates"
-            checked={boardDatesEnabled}
-            onChange={onBoardDatesEnabledChange}
-            accent="#50fa7b"
-          />
-          <div className="text-[9px] text-text-dim font-mono leading-relaxed mt-1">
-            Replace in-game bulletin board dates with real-world dates.
-          </div>
-          <ToggleRow
-            label="Strip prompts"
-            checked={stripPromptsEnabled}
-            onChange={onStripPromptsEnabledChange}
-            accent="#50fa7b"
-          />
-          <div className="text-[9px] text-text-dim font-mono leading-relaxed mt-1">
-            Remove the server prompt (&gt;) from terminal output.
-          </div>
-          <ToggleRow
-            label="Command echo"
-            checked={commandEchoEnabled}
-            onChange={updateCommandEchoEnabled}
-            accent="#50fa7b"
-          />
-          <div className="text-[9px] text-text-dim font-mono leading-relaxed mt-1">
-            Show your sent commands as dimmed lines in the terminal.
-          </div>
-          <ToggleRow
-            label="Select on send"
-            checked={selectOnSend}
-            onChange={updateSelectOnSend}
-            accent="#50fa7b"
-          />
-          <div className="text-[9px] text-text-dim font-mono leading-relaxed mt-1">
-            After sending a command, keep it selected in the input instead of clearing. Type to
-            replace, or press Enter to resend.
-          </div>
-          <FieldRow label="Command separator">
-            <MudInput
-              accent="green"
-              value={commandSeparator}
-              onChange={(e) => {
-                const v = e.target.value;
-                if (v.length > 0) updateCommandSeparator(v);
-              }}
-              className="w-[60px] text-center font-mono"
-            />
-          </FieldRow>
-          <div className="text-[9px] text-text-dim font-mono leading-relaxed mt-1">
-            Character(s) used to chain multiple commands (e.g. &quot;kill rat{commandSeparator}loot
-            corpse&quot;). Prefix with \ to use literally. If you change this, update existing
-            alias/trigger bodies to match.
-          </div>
-          <ToggleRow
-            label="Anti-spam"
-            checked={antiSpamEnabled}
-            onChange={updateAntiSpamEnabled}
-            accent="#50fa7b"
-          />
-          <div className="text-[9px] text-text-dim font-mono leading-relaxed mt-1">
-            Collapse consecutive identical lines with a repeat count.
-          </div>
-          <NumberRow
-            label="Collapse after"
-            value={antiSpamThreshold}
-            onChange={updateAntiSpamThreshold}
-            accent="green"
-            min={2}
-            max={99}
-            unit="repeats"
-            dimmed={!antiSpamEnabled}
-          />
-          <div className="text-[9px] text-text-dim font-mono leading-relaxed mt-1">
-            How many identical lines before they collapse. Up to this many show in full — a few
-            repeats are usually legitimate — then further copies fold into the count.
-          </div>
-          <ToggleRow
-            label="Show skill counts"
-            checked={showSkillCounts}
-            onChange={updateShowSkillCounts}
-            accent="#50fa7b"
-          />
-          <div className="text-[9px] text-text-dim font-mono leading-relaxed mt-1">
-            Append tracked improve counts to &quot;show skills&quot; and &quot;show quick
-            skills&quot; readouts.
-          </div>
-        </SettingsSection>
-
-        {/* Counters */}
-        <SettingsSection
-          icon={<CounterIcon size={13} />}
-          title="Counters"
-          accent="#f59e0b"
-          open={openSection === 'counters'}
-          onToggle={() => toggle('counters')}
-        >
-          <NumberRow
-            label="Hot threshold"
-            value={counterHotThreshold}
-            onChange={updateCounterHotThreshold}
-            accent="purple"
-            min={0}
-            max={99}
-            step={0.5}
-            parse={parseFloat}
-            unit="/pd"
-            width="w-[56px]"
-          />
-          <div className="text-[9px] text-text-dim font-mono leading-relaxed mt-1">
-            Skills at or above this rate glow warm. Set to 0 to disable.
-          </div>
-          <NumberRow
-            label="Cold threshold"
-            value={counterColdThreshold}
-            onChange={updateCounterColdThreshold}
-            accent="cyan"
-            min={0}
-            max={99}
-            step={0.5}
-            parse={parseFloat}
-            unit="/pd"
-            width="w-[56px]"
-          />
-          <div className="text-[9px] text-text-dim font-mono leading-relaxed mt-1">
-            Skills at or below this rate (but &gt; 0) glow cool. Set to 0 to disable.
-          </div>
-        </SettingsSection>
-
-        {/* Buffers */}
-        <SettingsSection
-          icon={<GearIcon size={13} />}
-          title="Buffers"
-          accent="#8be9fd"
-          open={openSection === 'buffers'}
-          onToggle={() => toggle('buffers')}
-        >
-          <NumberRow
-            label="Scrollback"
-            value={terminalScrollback}
-            onChange={updateTerminalScrollback}
-            accent="cyan"
-            min={1000}
-            max={100000}
-            unit="lines"
-            width="w-[72px]"
-          />
-          <div className="text-[9px] text-text-dim font-mono leading-relaxed mt-1">
-            Terminal scrollback history. Takes effect on next session.
-          </div>
-          <NumberRow
-            label="Command history"
-            value={commandHistorySize}
-            onChange={updateCommandHistorySize}
-            accent="cyan"
-            min={50}
-            max={5000}
-            unit="cmds"
-            width="w-[72px]"
-          />
-          <NumberRow
-            label="Chat history"
-            value={chatHistorySize}
-            onChange={updateChatHistorySize}
-            accent="cyan"
-            min={50}
-            max={5000}
-            unit="msgs"
-            width="w-[72px]"
-          />
-        </SettingsSection>
-
-        {/* Session Logging */}
-        <SettingsSection
-          icon={<NotesIcon size={13} />}
-          title="Session Logging"
-          accent="#f1fa8c"
-          open={openSection === 'logging'}
-          onToggle={() => toggle('logging')}
-        >
-          <ToggleRow
-            label="Enable logging"
-            checked={sessionLoggingEnabled}
-            onChange={updateSessionLoggingEnabled}
-            accent="#f1fa8c"
-          />
-          <div className="text-[9px] text-text-dim font-mono leading-relaxed mt-1">
-            Logs session output (ANSI stripped) and your commands to the sessions/ folder in your
-            data directory.
-          </div>
-        </SettingsSection>
-
-        {/* Numpad Mappings */}
-        <NumpadSection
-          mappings={numpadMappings}
-          onChange={updateNumpadMappings}
-          open={openSection === 'numpad'}
-          onToggle={() => toggle('numpad')}
-        />
-
-        {/* Custom Sounds — Tauri only */}
-        {isTauri && (
-          <CustomSoundsSection
-            customChime1={customChime1}
-            customChime2={customChime2}
-            customSounds={customSounds}
-            updateCustomChime1={updateCustomChime1}
-            updateCustomChime2={updateCustomChime2}
-            updateCustomSounds={updateCustomSounds}
-            open={openSection === 'sounds'}
-            onToggle={() => toggle('sounds')}
-          />
-        )}
-
-        {/* Notifications */}
-        <SettingsSection
-          icon={<Volume2Icon size={13} />}
-          title="Notifications"
-          accent="#ffb86c"
-          open={openSection === 'notifications'}
-          onToggle={() => toggle('notifications')}
-        >
-          {(['say', 'shout', 'ooc', 'tell', 'sz'] as const).map((type) => (
-            <ToggleRow
-              key={type}
-              label={type.toUpperCase()}
-              checked={chatNotifications[type]}
-              onChange={() => toggleChatNotification(type)}
-              accent="#ffb86c"
-            />
-          ))}
-          <div className="text-[9px] text-text-dim font-mono leading-relaxed mt-1">
-            Flashes the taskbar icon when a message arrives while DartForge is unfocused.
-          </div>
-        </SettingsSection>
-
-        {/* Mobile Companion — Tauri only */}
-        {isTauri && (
-          <CompanionSection
-            open={openSection === 'companion'}
-            onToggle={() => toggle('companion')}
-          />
-        )}
-
-        {/* Data Location — Tauri only */}
-        {isTauri && (
-          <DataLocationSection
-            open={openSection === 'data-location'}
-            onToggle={() => toggle('data-location')}
-          />
-        )}
-
-        {/* Data Storage — Web only */}
-        {!isTauri && (
-          <WebStorageSection
-            open={openSection === 'web-storage'}
-            onToggle={() => toggle('web-storage')}
-          />
-        )}
-
-        {/* Backups — Tauri only */}
-        {isTauri && (
-          <BackupsSection open={openSection === 'backups'} onToggle={() => toggle('backups')} />
-        )}
+        </div>
       </div>
+
+      {/* Scrollable sections */}
+      <SettingsSearchContext.Provider value={searchState}>
+        <div className="flex-1 overflow-y-auto px-2 py-2 space-y-2">
+          {searching && matchCount === 0 && (
+            <div className="text-[10px] text-text-dim italic font-mono px-1 py-2">
+              No settings match &quot;{query.trim()}&quot;.
+            </div>
+          )}
+          {/* Characters */}
+          <SettingsSection
+            icon={<UserIcon size={13} />}
+            title="Characters"
+            accent="#56b6c2"
+            open={openSection === 'characters'}
+            onToggle={() => toggle('characters')}
+            keywords="login password account user name switch"
+          >
+            <ToggleRow
+              label="Auto-login"
+              checked={autoLoginEnabled}
+              onChange={updateAutoLoginEnabled}
+              accent="#56b6c2"
+            />
+
+            {([0, 1] as const).map((slot) => {
+              const char1Set = !!(autoLoginCharacters[0]?.name && autoLoginCharacters[0]?.password);
+              const isDisabled = slot === 1 && !char1Set;
+              return (
+                <div key={slot} className={slot === 0 ? 'mt-2' : 'mt-3'}>
+                  <div className="flex items-center gap-2 mb-1.5">
+                    <span className="text-[10px] font-semibold text-text-muted tracking-wide uppercase">
+                      Character {slot + 1}
+                    </span>
+                    {autoLoginActiveSlot === slot ? (
+                      <span className="text-[8px] font-mono px-1.5 py-0.5 rounded border bg-[#56b6c2]/10 text-[#56b6c2] border-[#56b6c2]/20">
+                        active
+                      </span>
+                    ) : isDisabled ? (
+                      <span className="text-[8px] font-mono text-text-dim">
+                        Set Character 1 first
+                      </span>
+                    ) : null}
+                  </div>
+                  {/* Use <form> with autocomplete hints so password managers can detect and fill */}
+                  <form
+                    className="space-y-1.5"
+                    onSubmit={(e) => e.preventDefault()}
+                    autoComplete="on"
+                  >
+                    <FieldRow label="Name">
+                      <MudInput
+                        accent="cyan"
+                        size="sm"
+                        name={`dartmud-char${slot}-username`}
+                        autoComplete={`section-char${slot} username`}
+                        value={autoLoginCharacters[slot]?.name ?? ''}
+                        onChange={(e) => updateCharacterField(slot, 'name', e.target.value)}
+                        placeholder="Character name"
+                        className="w-[140px] text-right"
+                        disabled={isDisabled}
+                      />
+                    </FieldRow>
+                    <FieldRow label="Password">
+                      <MudInput
+                        type="password"
+                        accent="cyan"
+                        size="sm"
+                        name={`dartmud-char${slot}-password`}
+                        autoComplete={`section-char${slot} current-password`}
+                        value={autoLoginCharacters[slot]?.password ?? ''}
+                        onChange={(e) => updateCharacterField(slot, 'password', e.target.value)}
+                        placeholder="Password"
+                        className="w-[140px] text-right"
+                        disabled={isDisabled}
+                      />
+                    </FieldRow>
+                  </form>
+                </div>
+              );
+            })}
+
+            {/* Switch active character — always available, online or off */}
+            {otherCharacter?.name && (
+              <div className="mt-2">
+                <button
+                  onClick={onSwitchCharacter}
+                  title={
+                    connected
+                      ? `Disconnect and reconnect as ${otherCharacter.name}`
+                      : `Make ${otherCharacter.name} the active character`
+                  }
+                  className="w-full text-[10px] font-mono py-1.5 px-3 rounded border transition-all duration-200 text-[#56b6c2] border-[#56b6c2]/30 bg-[#56b6c2]/5 hover:bg-[#56b6c2]/10 hover:border-[#56b6c2]/50 cursor-pointer"
+                >
+                  {connected
+                    ? `Switch to ${otherCharacter.name} and reconnect`
+                    : `Switch to ${otherCharacter.name}`}
+                </button>
+                {switchCooldownActive && (
+                  <div className="mt-1 text-[9px] font-mono text-amber/80 leading-relaxed">
+                    Heads up: 20 minutes between characters is the usual gap.{' '}
+                    {formatCountdown(cooldownRemaining)} left before {otherCharacter.name} is clear.
+                    Switching still works.
+                  </div>
+                )}
+                <div className="mt-1 text-[9px] text-text-dim font-mono leading-relaxed">
+                  {connected
+                    ? 'Switching drops the connection and logs back in as the other character.'
+                    : 'Switching offline just repoints counters, timers, skills, notes, and the map at the other character.'}
+                </div>
+              </div>
+            )}
+
+            <div className="text-[9px] text-text-dim font-mono leading-relaxed mt-2">
+              {isTauri
+                ? "Passwords are stored securely in your operating system's credential manager. When enabled, name and password are sent automatically on connect."
+                : "Your browser's password manager can save these credentials. Passwords are not stored by DartForge on web — they are held in memory for this session only."}
+            </div>
+          </SettingsSection>
+
+          {/* Timers */}
+          <SettingsSection
+            icon={<TimerIcon size={13} />}
+            title="Timers"
+            accent="#f97316"
+            open={openSection === 'timers'}
+            onToggle={() => toggle('timers')}
+            keywords="anti-idle idle alignment who list equip loadout action blocking queue countdown badges refresh interval"
+          >
+            {/* Alignment tracking */}
+            <div className="text-[10px] font-semibold text-text-muted tracking-wide uppercase mb-1">
+              Alignment Tracking
+            </div>
+            <ToggleRow
+              label="Enabled"
+              checked={alignmentTrackingEnabled}
+              onChange={updateAlignmentTrackingEnabled}
+              accent="#80e080"
+            />
+            <NumberRow
+              label="Interval"
+              value={alignmentTrackingMinutes}
+              onChange={updateAlignmentTrackingMinutes}
+              accent="green"
+              min={1}
+              max={14}
+              unit="min"
+              dimmed={!alignmentTrackingEnabled}
+            />
+            <div className="text-[9px] text-text-dim font-mono leading-relaxed mt-1 mb-3">
+              Polls alignment at the configured interval. Also prevents idle disconnect.
+            </div>
+
+            {/* Who list refresh */}
+            <div className="text-[10px] font-semibold text-text-muted tracking-wide uppercase mb-1">
+              Who List
+            </div>
+            <ToggleRow
+              label="Auto-refresh"
+              checked={whoAutoRefreshEnabled}
+              onChange={updateWhoAutoRefreshEnabled}
+              accent="#61afef"
+            />
+            <NumberRow
+              label="Interval"
+              value={whoRefreshMinutes}
+              onChange={updateWhoRefreshMinutes}
+              accent="cyan"
+              min={1}
+              max={30}
+              unit="min"
+              dimmed={!whoAutoRefreshEnabled}
+            />
+            <div className="text-[9px] text-text-dim font-mono leading-relaxed mt-1 mb-3">
+              Silently refreshes the who list in the background.
+            </div>
+
+            {/* Loadout held-equipment refresh */}
+            <div className="text-[10px] font-semibold text-text-muted tracking-wide uppercase mb-1">
+              Held Equipment
+            </div>
+            <ToggleRow
+              label="Auto-refresh"
+              checked={equipAutoRefreshEnabled}
+              onChange={updateEquipAutoRefreshEnabled}
+              accent="#bd93f9"
+            />
+            <NumberRow
+              label="Interval"
+              value={equipRefreshMinutes}
+              onChange={updateEquipRefreshMinutes}
+              accent="purple"
+              min={1}
+              max={30}
+              unit="min"
+              dimmed={!equipAutoRefreshEnabled}
+            />
+            <div className="text-[9px] text-text-dim font-mono leading-relaxed mt-1 mb-3">
+              Silently re-syncs the Loadout panel's hands ("equip held") in the background.
+            </div>
+
+            {/* Anti-idle */}
+            <div className="text-[10px] font-semibold text-text-muted tracking-wide uppercase mb-1">
+              Anti-Idle
+            </div>
+            {alignmentTrackingEnabled && (
+              <div className="text-[9px] text-[#80e080] font-mono leading-relaxed mb-1">
+                Disabled — alignment tracking is active.
+              </div>
+            )}
+            <ToggleRow
+              label="Enabled"
+              checked={antiIdleEnabled}
+              onChange={onAntiIdleEnabledChange}
+              accent="#bd93f9"
+              dimmed={alignmentTrackingEnabled}
+              disabled={alignmentTrackingEnabled}
+            />
+            <FieldRow label="Command" dimmed={!antiIdleEnabled || alignmentTrackingEnabled}>
+              <MudInput
+                accent="purple"
+                size="sm"
+                value={antiIdleCommand}
+                onChange={(e) => onAntiIdleCommandChange(e.target.value)}
+                placeholder="hp"
+                className="w-[120px] text-right"
+              />
+            </FieldRow>
+            <NumberRow
+              label="Interval"
+              value={antiIdleMinutes}
+              onChange={onAntiIdleMinutesChange}
+              accent="purple"
+              min={1}
+              max={14}
+              unit="min"
+              dimmed={!antiIdleEnabled || alignmentTrackingEnabled}
+            />
+            <div className="text-[9px] text-text-dim font-mono leading-relaxed mt-1 mb-3">
+              Sends the command at the configured interval to prevent idle disconnect.
+            </div>
+
+            {/* Action Blocking */}
+            <div className="text-[10px] font-semibold text-text-muted tracking-wide uppercase mb-1">
+              Action Blocking
+            </div>
+            <ToggleRow
+              label="Enabled"
+              checked={actionBlockingEnabled}
+              onChange={updateActionBlockingEnabled}
+              accent="#f59e0b"
+            />
+            <div className="text-[9px] text-text-dim font-mono leading-relaxed mt-1 mb-3">
+              Queues commands during channeled actions (cast, study, hunt, etc.) to prevent
+              interruption. Use /block and /unblock for manual control.
+            </div>
+
+            {/* Display */}
+            <div className="text-[10px] font-semibold text-text-muted tracking-wide uppercase mb-1">
+              Display
+            </div>
+            <ToggleRow
+              label="Timer countdowns"
+              checked={showTimerBadges}
+              onChange={updateShowTimerBadges}
+              accent="#f97316"
+            />
+            <div className="text-[9px] text-text-dim font-mono leading-relaxed mt-1">
+              Show timer countdowns (anti-idle, alignment, and custom timers) next to the command
+              input.
+            </div>
+          </SettingsSection>
+
+          {/* Login Commands */}
+          <SettingsSection
+            icon={<PlayIcon size={13} />}
+            title="Login Commands"
+            accent="#ff79c6"
+            open={openSection === 'post-sync'}
+            onToggle={() => toggle('post-sync')}
+            keywords="post-sync startup connect on login autorun script"
+          >
+            <ToggleRow
+              label="Enabled"
+              checked={postSyncEnabled}
+              onChange={updatePostSyncEnabled}
+              accent="#ff79c6"
+            />
+            <FieldRow label="Commands" dimmed={!postSyncEnabled}>
+              <div className="w-full" />
+            </FieldRow>
+            <div className={cn(!postSyncEnabled && 'opacity-40 pointer-events-none')}>
+              <MudTextarea
+                accent="pink"
+                size="sm"
+                value={postSyncCommands}
+                onChange={(e) => updatePostSyncCommands(e.target.value)}
+                placeholder="inventory;;who;;/echo Ready!"
+                rows={5}
+                className="w-full"
+              />
+            </div>
+            <div className="text-[9px] text-text-dim font-mono leading-relaxed mt-1">
+              Sent automatically after logging in. Supports the command separator, aliases, /delay,
+              /echo, /spam, /var.
+            </div>
+          </SettingsSection>
+
+          {/* Doors */}
+          <SettingsSection
+            icon={<HouseIcon size={13} />}
+            title="Doors"
+            accent="#e8a849"
+            open={openSection === 'doors'}
+            onToggle={() => toggle('doors')}
+            keywords="keys keyring lock unlock door"
+          >
+            <NumberRow
+              label="Keyring slots"
+              value={doorKeys}
+              onChange={updateDoorKeys}
+              accent="orange"
+              min={1}
+              max={10}
+              unit="keys"
+            />
+            <div className="text-[9px] text-text-dim font-mono leading-relaxed mt-1">
+              /door &lt;dir&gt; unlocks with key, key 2 … key N, opens, steps through, then closes
+              and locks behind you. The town map's auto-walk runs the same sequence when a route
+              crosses a known door.
+            </div>
+          </SettingsSection>
+
+          {/* Map */}
+          <SettingsSection
+            icon={<MapIcon size={13} />}
+            title="Map"
+            accent="#e8a849"
+            open={openSection === 'map'}
+            onToggle={() => toggle('map')}
+            keywords="town mapper hex automap indoors rooms"
+          >
+            <ToggleRow
+              label="Town mapper"
+              checked={townMapperEnabled}
+              onChange={updateTownMapperEnabled}
+              accent="#e8a849"
+            />
+            <div className="text-[9px] text-text-dim font-mono leading-relaxed mt-1">
+              Maps towns and buildings room by room. Turn off if it misbehaves — the Map panel shows
+              only the hex map with an IN TOWN badge while indoors. Mapped town data is kept, and
+              mapping picks back up when re-enabled.
+            </div>
+          </SettingsSection>
+
+          {/* Output transformations */}
+          <SettingsSection
+            icon={<FilterIcon size={13} />}
+            title="Output"
+            accent="#50fa7b"
+            open={openSection === 'output'}
+            onToggle={() => toggle('output')}
+            keywords="terminal echo separator anti-spam spam prompt board dates skill counts select on send duplicate lines"
+          >
+            <ToggleRow
+              label="Convert board dates"
+              checked={boardDatesEnabled}
+              onChange={onBoardDatesEnabledChange}
+              accent="#50fa7b"
+            />
+            <div className="text-[9px] text-text-dim font-mono leading-relaxed mt-1">
+              Replace in-game bulletin board dates with real-world dates.
+            </div>
+            <ToggleRow
+              label="Strip prompts"
+              checked={stripPromptsEnabled}
+              onChange={onStripPromptsEnabledChange}
+              accent="#50fa7b"
+            />
+            <div className="text-[9px] text-text-dim font-mono leading-relaxed mt-1">
+              Remove the server prompt (&gt;) from terminal output.
+            </div>
+            <ToggleRow
+              label="Command echo"
+              checked={commandEchoEnabled}
+              onChange={updateCommandEchoEnabled}
+              accent="#50fa7b"
+            />
+            <div className="text-[9px] text-text-dim font-mono leading-relaxed mt-1">
+              Show your sent commands as dimmed lines in the terminal.
+            </div>
+            <ToggleRow
+              label="Select on send"
+              checked={selectOnSend}
+              onChange={updateSelectOnSend}
+              accent="#50fa7b"
+            />
+            <div className="text-[9px] text-text-dim font-mono leading-relaxed mt-1">
+              After sending a command, keep it selected in the input instead of clearing. Type to
+              replace, or press Enter to resend.
+            </div>
+            <FieldRow label="Command separator">
+              <MudInput
+                accent="green"
+                value={commandSeparator}
+                onChange={(e) => {
+                  const v = e.target.value;
+                  if (v.length > 0) updateCommandSeparator(v);
+                }}
+                className="w-[60px] text-center font-mono"
+              />
+            </FieldRow>
+            <div className="text-[9px] text-text-dim font-mono leading-relaxed mt-1">
+              Character(s) used to chain multiple commands (e.g. &quot;kill rat{commandSeparator}
+              loot corpse&quot;). Prefix with \ to use literally. If you change this, update
+              existing alias/trigger bodies to match.
+            </div>
+            <ToggleRow
+              label="Anti-spam"
+              checked={antiSpamEnabled}
+              onChange={updateAntiSpamEnabled}
+              accent="#50fa7b"
+            />
+            <div className="text-[9px] text-text-dim font-mono leading-relaxed mt-1">
+              Collapse consecutive identical lines with a repeat count.
+            </div>
+            <NumberRow
+              label="Collapse after"
+              value={antiSpamThreshold}
+              onChange={updateAntiSpamThreshold}
+              accent="green"
+              min={2}
+              max={99}
+              unit="repeats"
+              dimmed={!antiSpamEnabled}
+            />
+            <div className="text-[9px] text-text-dim font-mono leading-relaxed mt-1">
+              How many identical lines before they collapse. Up to this many show in full — a few
+              repeats are usually legitimate — then further copies fold into the count.
+            </div>
+            <ToggleRow
+              label="Show skill counts"
+              checked={showSkillCounts}
+              onChange={updateShowSkillCounts}
+              accent="#50fa7b"
+            />
+            <div className="text-[9px] text-text-dim font-mono leading-relaxed mt-1">
+              Append tracked improve counts to &quot;show skills&quot; and &quot;show quick
+              skills&quot; readouts.
+            </div>
+          </SettingsSection>
+
+          {/* Counters */}
+          <SettingsSection
+            icon={<CounterIcon size={13} />}
+            title="Counters"
+            accent="#f59e0b"
+            open={openSection === 'counters'}
+            onToggle={() => toggle('counters')}
+            keywords="hot cold threshold skill rate improves glow per day"
+          >
+            <NumberRow
+              label="Hot threshold"
+              value={counterHotThreshold}
+              onChange={updateCounterHotThreshold}
+              accent="purple"
+              min={0}
+              max={99}
+              step={0.5}
+              parse={parseFloat}
+              unit="/pd"
+              width="w-[56px]"
+            />
+            <div className="text-[9px] text-text-dim font-mono leading-relaxed mt-1">
+              Skills at or above this rate glow warm. Set to 0 to disable.
+            </div>
+            <NumberRow
+              label="Cold threshold"
+              value={counterColdThreshold}
+              onChange={updateCounterColdThreshold}
+              accent="cyan"
+              min={0}
+              max={99}
+              step={0.5}
+              parse={parseFloat}
+              unit="/pd"
+              width="w-[56px]"
+            />
+            <div className="text-[9px] text-text-dim font-mono leading-relaxed mt-1">
+              Skills at or below this rate (but &gt; 0) glow cool. Set to 0 to disable.
+            </div>
+          </SettingsSection>
+
+          {/* Buffers */}
+          <SettingsSection
+            icon={<GearIcon size={13} />}
+            title="Buffers"
+            accent="#8be9fd"
+            open={openSection === 'buffers'}
+            onToggle={() => toggle('buffers')}
+            keywords="scrollback history lines terminal command chat size limit memory"
+          >
+            <NumberRow
+              label="Scrollback"
+              value={terminalScrollback}
+              onChange={updateTerminalScrollback}
+              accent="cyan"
+              min={1000}
+              max={100000}
+              unit="lines"
+              width="w-[72px]"
+            />
+            <div className="text-[9px] text-text-dim font-mono leading-relaxed mt-1">
+              Terminal scrollback history. Takes effect on next session.
+            </div>
+            <NumberRow
+              label="Command history"
+              value={commandHistorySize}
+              onChange={updateCommandHistorySize}
+              accent="cyan"
+              min={50}
+              max={5000}
+              unit="cmds"
+              width="w-[72px]"
+            />
+            <NumberRow
+              label="Chat history"
+              value={chatHistorySize}
+              onChange={updateChatHistorySize}
+              accent="cyan"
+              min={50}
+              max={5000}
+              unit="msgs"
+              width="w-[72px]"
+            />
+          </SettingsSection>
+
+          {/* Session Logging */}
+          <SettingsSection
+            icon={<NotesIcon size={13} />}
+            title="Session Logging"
+            accent="#f1fa8c"
+            open={openSection === 'logging'}
+            onToggle={() => toggle('logging')}
+            keywords="log file record transcript sessions folder"
+          >
+            <ToggleRow
+              label="Enable logging"
+              checked={sessionLoggingEnabled}
+              onChange={updateSessionLoggingEnabled}
+              accent="#f1fa8c"
+            />
+            <div className="text-[9px] text-text-dim font-mono leading-relaxed mt-1">
+              Logs session output (ANSI stripped) and your commands to the sessions/ folder in your
+              data directory.
+            </div>
+          </SettingsSection>
+
+          {/* Numpad Mappings */}
+          <NumpadSection
+            mappings={numpadMappings}
+            onChange={updateNumpadMappings}
+            open={openSection === 'numpad'}
+            onToggle={() => toggle('numpad')}
+          />
+
+          {/* Custom Sounds — Tauri only */}
+          {isTauri && (
+            <CustomSoundsSection
+              customChime1={customChime1}
+              customChime2={customChime2}
+              customSounds={customSounds}
+              updateCustomChime1={updateCustomChime1}
+              updateCustomChime2={updateCustomChime2}
+              updateCustomSounds={updateCustomSounds}
+              open={openSection === 'sounds'}
+              onToggle={() => toggle('sounds')}
+            />
+          )}
+
+          {/* Notifications */}
+          <SettingsSection
+            icon={<Volume2Icon size={13} />}
+            title="Notifications"
+            accent="#ffb86c"
+            open={openSection === 'notifications'}
+            onToggle={() => toggle('notifications')}
+            keywords="taskbar flash alert chat tells say shout ooc sz unfocused"
+          >
+            {(['say', 'shout', 'ooc', 'tell', 'sz'] as const).map((type) => (
+              <ToggleRow
+                key={type}
+                label={type.toUpperCase()}
+                checked={chatNotifications[type]}
+                onChange={() => toggleChatNotification(type)}
+                accent="#ffb86c"
+              />
+            ))}
+            <div className="text-[9px] text-text-dim font-mono leading-relaxed mt-1">
+              Flashes the taskbar icon when a message arrives while DartForge is unfocused.
+            </div>
+          </SettingsSection>
+
+          {/* Mobile Companion — Tauri only */}
+          {isTauri && (
+            <CompanionSection
+              open={openSection === 'companion'}
+              onToggle={() => toggle('companion')}
+            />
+          )}
+
+          {/* Data Location — Tauri only */}
+          {isTauri && (
+            <DataLocationSection
+              open={openSection === 'data-location'}
+              onToggle={() => toggle('data-location')}
+            />
+          )}
+
+          {/* Data Storage — Web only */}
+          {!isTauri && (
+            <WebStorageSection
+              open={openSection === 'web-storage'}
+              onToggle={() => toggle('web-storage')}
+            />
+          )}
+
+          {/* Backups — Tauri only */}
+          {isTauri && (
+            <BackupsSection open={openSection === 'backups'} onToggle={() => toggle('backups')} />
+          )}
+        </div>
+      </SettingsSearchContext.Provider>
     </div>
   );
 }
@@ -1038,6 +1217,7 @@ function NumpadSection({
       icon={<GearIcon size={13} />}
       title="Numpad Mappings"
       accent="#6272a4"
+      keywords="keypad keys numpad directions movement hotkeys bindings reset defaults"
     >
       <div className="grid grid-cols-3 gap-1">
         {NUMPAD_GRID.flat().map(({ key, label }) => (
@@ -1345,6 +1525,7 @@ function CustomSoundsSection({
       icon={<Volume2Icon size={13} />}
       title="Sound Library"
       accent="#50fa7b"
+      keywords="sounds audio chime chime1 chime2 wav mp3 ogg playSound custom alert"
     >
       {/* Built-in chime replacements */}
       <ChimePicker
@@ -1421,6 +1602,7 @@ function WebStorageSection({ open, onToggle }: { open: boolean; onToggle: () => 
       icon={<FolderIcon size={13} />}
       title="Data Storage"
       accent="#8be9fd"
+      keywords="dropbox local storage mode sync browser"
     >
       <FieldRow label="Current mode">
         <span className="text-[10px] font-mono text-text-label">
@@ -1521,6 +1703,7 @@ function DataLocationSection({ open, onToggle }: { open: boolean; onToggle: () =
       icon={<FolderIcon size={13} />}
       title="Data Location"
       accent="#8be9fd"
+      keywords="directory folder path storage data dir sync dropbox onedrive"
     >
       {status && <div className="text-[10px] text-cyan font-mono mb-1">{status}</div>}
 
@@ -1661,6 +1844,7 @@ function BackupsSection({ open, onToggle }: { open: boolean; onToggle: () => voi
       icon={<ClockIcon size={13} />}
       title="Backups"
       accent="#f59e0b"
+      keywords="backup restore auto-backup snapshot hourly"
     >
       <ToggleRow
         label="Auto-backup"
@@ -1742,6 +1926,7 @@ function CompanionSection({ open, onToggle }: { open: boolean; onToggle: () => v
   const [companionInfo, setCompanionInfo] = useState<{
     running: boolean;
     url: string;
+    name_url: string | null;
     qr_svg: string;
     local_ip: string;
   } | null>(null);
@@ -1759,6 +1944,7 @@ function CompanionSection({ open, onToggle }: { open: boolean; onToggle: () => v
           const info = (await invoke!('start_companion', { port: companionPort })) as {
             running: boolean;
             url: string;
+            name_url: string | null;
             qr_svg: string;
             local_ip: string;
           };
@@ -1788,6 +1974,7 @@ function CompanionSection({ open, onToggle }: { open: boolean; onToggle: () => v
       accent="#8be9fd"
       open={open}
       onToggle={onToggle}
+      keywords="phone tablet qr code web server port wifi network remote"
     >
       <ToggleRow
         label="Enable companion server"
@@ -1816,12 +2003,12 @@ function CompanionSection({ open, onToggle }: { open: boolean; onToggle: () => v
       {companionInfo?.running && (
         <div className="mt-2 flex flex-col items-center gap-2">
           <a
-            href={companionInfo.url}
+            href={companionInfo.name_url ?? companionInfo.url}
             target="_blank"
             rel="noopener noreferrer"
             className="text-[12px] font-mono text-[#8be9fd] underline"
           >
-            {companionInfo.url}
+            {companionInfo.name_url ?? companionInfo.url}
           </a>
           {companionInfo.qr_svg && (
             <div className="mt-1" dangerouslySetInnerHTML={{ __html: companionInfo.qr_svg }} />
@@ -1829,6 +2016,20 @@ function CompanionSection({ open, onToggle }: { open: boolean; onToggle: () => v
           <div className="text-[9px] text-text-dim font-mono">
             Scan with your phone camera to connect
           </div>
+          {companionInfo.name_url && (
+            <div className="text-[9px] text-text-dim font-mono text-center leading-relaxed">
+              The link uses your computer's name, so it keeps working when your address changes. If
+              your phone cannot open it, use{' '}
+              <a
+                href={companionInfo.url}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-[#8be9fd] underline"
+              >
+                {companionInfo.url}
+              </a>
+            </div>
+          )}
         </div>
       )}
     </SettingsSection>

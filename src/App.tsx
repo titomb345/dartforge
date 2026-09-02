@@ -85,6 +85,10 @@ import { captureTerminalScreenshot } from './lib/screenshotCapture';
 import { ActionBlocker } from './lib/actionBlocker';
 import { AutoInscriber } from './lib/autoInscriber';
 import { AutoCaster } from './lib/autoCaster';
+import { useAutoCasterConfig } from './hooks/useAutoCasterConfig';
+import { panelForKeyEvent } from './lib/panelShortcuts';
+import { CHIP_ACCENT } from './lib/accents';
+import type { CounterAutoToggle } from './hooks/useImproveCounters';
 import { AutoConc } from './lib/autoConc';
 import { useEngineRef } from './hooks/useEngineRef';
 import {
@@ -117,6 +121,7 @@ import { WhoProvider } from './contexts/WhoContext';
 import { WhoTitleProvider } from './contexts/WhoTitleContext';
 import { useWhoTitleMappings } from './hooks/useWhoTitleMappings';
 import type { WhoSnapshot } from './lib/whoPatterns';
+import type { ChatMessage } from './types/chat';
 import { ResizeHandle } from './components/ResizeHandle';
 import { useResize } from './hooks/useResize';
 import { useViewportBudget, MIN_TERMINAL_WIDTH } from './hooks/useViewportBudget';
@@ -288,23 +293,6 @@ function AppMain() {
 
   const dataStore = useDataStore();
   const settingsLoadedRef = useRef(false);
-  const { commandHistory, handleHistoryChange: rawHistoryChange } = useCommandHistory(dataStore);
-  const handleHistoryChange = useCallback(
-    (history: string[]) => {
-      rawHistoryChange(history);
-      tauriInvoke?.('broadcast_companion_history', { history });
-    },
-    [rawHistoryChange]
-  );
-
-  // Broadcast command history to companion whenever it changes
-  useEffect(() => {
-    if (commandHistory.length === 0) return;
-    tauriReady.then(() => {
-      tauriInvoke?.('broadcast_companion_history', { history: commandHistory });
-    });
-  }, [commandHistory]);
-
   const quickButtonsCRUD = usePersistedCRUD<QuickButton>(dataStore, 'quickButtons');
   const macrosCRUD = usePersistedCRUD<Macro>(dataStore, 'macros');
 
@@ -544,39 +532,15 @@ function AppMain() {
     appSettings.customChime2,
     appSettings.customSounds
   );
-  // Chat messages hook
+  // Chat messages hook — the hook itself lives further down (it needs
+  // activeCharacter, which the skill tracker owns). These refs are declared here
+  // so the output filter below can be wired up before the hook runs.
   const chatNotificationsRef = useRef(appSettings.chatNotifications);
   chatNotificationsRef.current = appSettings.chatNotifications;
   const chatGaggedNpcsRef = useRef(appSettings.gaggedNpcs);
   chatGaggedNpcsRef.current = appSettings.gaggedNpcs;
-  const {
-    messages: chatMessages,
-    filters: chatFilters,
-    mutedSenders,
-    soundAlerts: chatSoundAlerts,
-    newestFirst: chatNewestFirst,
-    hideOwnMessages: chatHideOwnMessages,
-    handleChatMessage,
-    toggleFilter: toggleChatFilter,
-    setAllFilters: setAllChatFilters,
-    toggleSoundAlert: toggleChatSoundAlert,
-    toggleNewestFirst: toggleChatNewestFirst,
-    toggleHideOwnMessages: toggleChatHideOwnMessages,
-    muteSender,
-    unmuteSender,
-    updateSender,
-    outgoingMessages,
-    deleteMessage,
-    addOutgoingMessage,
-    deleteOutgoingMessage,
-  } = useChatMessages(
-    appSettings.chatHistorySize,
-    chatNotificationsRef,
-    soundLibraryRef,
-    chatGaggedNpcsRef
-  );
-  const addOutgoingMessageRef = useLatestRef(addOutgoingMessage);
-  const handleChatMessageRef = useLatestRef(handleChatMessage);
+  const addOutgoingMessageRef = useRef<((command: string) => void) | null>(null);
+  const handleChatMessageRef = useRef<((msg: ChatMessage) => void) | null>(null);
 
   // Status trackers
   const { concentration, updateConcentration } = useConcentration();
@@ -615,7 +579,16 @@ function AppMain() {
       onEncumbrance: (match) => updateEncumbranceRef.current(match),
       onMovement: (match) => updateMovementRef.current(match),
       onAlignment: (match) => updateAlignmentRef.current(match),
-      onChat: (msg) => handleChatMessageRef.current(msg),
+      onChat: (msg) => {
+        handleChatMessageRef.current?.(msg);
+        // The phone can buzz or notify for a tell aimed at you
+        if (msg.type === 'tell' && !msg.isOwn) {
+          tauriInvoke?.('broadcast_companion_state', {
+            key: 'tell',
+            data: { from: msg.sender, text: msg.message, at: Date.now() },
+          });
+        }
+      },
       onWho: (snapshot) => updateWhoSnapshotRef.current(snapshot),
       // Automapper feed — untrimmed lines (hex art needs its leading whitespace);
       // the raw line carries ANSI colors for river detection
@@ -847,21 +820,6 @@ function AppMain() {
   // Auto-caster — automated spell practice loop
   const [autoCasterRef, casterState] = useEngineRef(() => new AutoCaster());
 
-  // Sync persisted weight config to auto-caster when settings load
-  useEffect(() => {
-    autoCasterRef.current.configureWeight(
-      appSettings.casterWeightItem || 'tallow',
-      appSettings.casterWeightContainer || null,
-      appSettings.casterWeightAdjustUp,
-      appSettings.casterWeightAdjustDown
-    );
-  }, [
-    appSettings.casterWeightItem,
-    appSettings.casterWeightContainer,
-    appSettings.casterWeightAdjustUp,
-    appSettings.casterWeightAdjustDown,
-  ]);
-
   // Auto-conc — auto-execute on full concentration
   const [autoConcRef, concState] = useEngineRef(() => new AutoConc());
 
@@ -891,6 +849,65 @@ function AppMain() {
   } = useSkillTracker(sendCommandRef, processorRef, terminalRef, dataStore, writeToTermRef);
   const skillDataRef = useLatestRef(skillData);
 
+  // Chat messages — scoped to the active character (see refs declared above)
+  const {
+    messages: chatMessages,
+    filters: chatFilters,
+    mutedSenders,
+    soundAlerts: chatSoundAlerts,
+    newestFirst: chatNewestFirst,
+    hideOwnMessages: chatHideOwnMessages,
+    handleChatMessage,
+    toggleFilter: toggleChatFilter,
+    setAllFilters: setAllChatFilters,
+    toggleSoundAlert: toggleChatSoundAlert,
+    toggleNewestFirst: toggleChatNewestFirst,
+    toggleHideOwnMessages: toggleChatHideOwnMessages,
+    muteSender,
+    unmuteSender,
+    updateSender,
+    outgoingMessages,
+    deleteMessage,
+    addOutgoingMessage,
+    deleteOutgoingMessage,
+  } = useChatMessages(
+    activeCharacter,
+    appSettings.chatHistorySize,
+    chatNotificationsRef,
+    soundLibraryRef,
+    chatGaggedNpcsRef
+  );
+  addOutgoingMessageRef.current = addOutgoingMessage;
+  handleChatMessageRef.current = handleChatMessage;
+
+  // Auto-caster tuning (power steps, weight item/container/steps) — per character
+  useAutoCasterConfig(dataStore, activeCharacter, autoCasterRef.current);
+
+  // Command history — also scoped to the active character
+  const { commandHistory, handleHistoryChange: rawHistoryChange } = useCommandHistory(
+    dataStore,
+    activeCharacter
+  );
+  const handleHistoryChange = useCallback(
+    (history: string[]) => {
+      rawHistoryChange(history);
+      tauriInvoke?.('broadcast_companion_history', { history });
+    },
+    [rawHistoryChange]
+  );
+
+  // Broadcast command history to companion whenever it changes (including when
+  // it swaps to another character's)
+  useEffect(() => {
+    // Wait for a character before pushing anything — but once one is active,
+    // an empty history is worth sending, so the companion clears when you
+    // switch to a character who has none.
+    if (!activeCharacter) return;
+    tauriReady.then(() => {
+      tauriInvoke?.('broadcast_companion_history', { history: commandHistory });
+    });
+  }, [commandHistory, activeCharacter]);
+
   // Keep announce mode refs in sync with settings
   announceModeRef.current = appSettings.announceMode;
   announcePetModeRef.current = appSettings.announcePetMode;
@@ -903,7 +920,13 @@ function AppMain() {
   }, [skillDataRef, movementModeRef, writeToTerm]);
 
   // Improve counter hook
-  const improveCounters = useImproveCounters(activeCharacter);
+  const onCounterAutoToggle = useCallback<CounterAutoToggle>((names, action) => {
+    const what = action === 'paused' ? 'paused: disconnected' : 'resumed';
+    for (const name of names) {
+      writeToTermRef.current(`\x1b[36m[Counter "${name}" ${what}]\x1b[0m\r\n`);
+    }
+  }, []);
+  const improveCounters = useImproveCounters(activeCharacter, loggedIn, onCounterAutoToggle);
   const { handleCounterMatch } = improveCounters;
 
   // In-game clock (also pushed to the Mobile Companion header)
@@ -1146,12 +1169,15 @@ function AppMain() {
   );
 
   const autoLoginActiveSlotRef = useLatestRef(autoLoginActiveSlot);
-  const onLogin = useCallback(() => {
+  const onLogin = useCallback((restored: boolean) => {
     outputFilterRef.current?.startSync();
     for (const cmd of LOGIN_COMMANDS) {
       sendCommandRef.current?.(cmd);
     }
     setLoggedIn(true);
+    // A reload that picked the live session back up isn't a new login, so
+    // it doesn't move the character switch cooldown.
+    if (restored) return;
     // Record login timestamp for character switch cooldown
     appSettings.updateLastLoginTimestamp(Date.now());
     appSettings.updateLastLoginSlot(autoLoginActiveSlotRef.current);
@@ -1471,10 +1497,6 @@ function AppMain() {
       updateAnnounceMode: appSettings.updateAnnounceMode,
       updateAnnouncePetMode: appSettings.updateAnnouncePetMode,
       updateAutoConcAction: appSettings.updateAutoConcAction,
-      updateCasterWeightItem: appSettings.updateCasterWeightItem,
-      updateCasterWeightContainer: appSettings.updateCasterWeightContainer,
-      updateCasterWeightAdjustUp: appSettings.updateCasterWeightAdjustUp,
-      updateCasterWeightAdjustDown: appSettings.updateCasterWeightAdjustDown,
     },
     mergedVariables: () => mergedVariablesRef.current,
     setVar: (name, value, scope) => setVarRef.current(name, value, scope),
@@ -1697,6 +1719,61 @@ function AppMain() {
     [handleSend]
   );
 
+  // Panel shortcuts: Ctrl+digit for the Panels group, Alt+letter for the rest
+  // (see lib/panelShortcuts). A pinned panel has nothing to open, so its key
+  // does nothing. User macro hotkeys run in the capture phase and win.
+  const panelLayoutRef = useLatestRef(panelLayout);
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      if (e.repeat || e.defaultPrevented) return;
+      const panel = panelForKeyEvent(e);
+      if (!panel) return;
+      const layout = panelLayoutRef.current;
+      const docked = [...layout.left, ...layout.right] as string[];
+      if (docked.includes(panel)) return;
+      e.preventDefault();
+      togglePanel(panel);
+    };
+    window.addEventListener('keydown', handler);
+    return () => window.removeEventListener('keydown', handler);
+  }, [togglePanel]);
+
+  // Escape closes the open slide-out from anywhere and hands focus back to
+  // the command input. A popover menu that is open takes the Escape instead.
+  const activePanelRef = useLatestRef(activePanel);
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      if (e.key !== 'Escape' || e.defaultPrevented) return;
+      if (!activePanelRef.current) return;
+      if (document.querySelector('[data-popover-menu]')) return;
+      closePanel();
+      requestAnimationFrame(() => inputRef.current?.focus());
+    };
+    window.addEventListener('keydown', handler);
+    return () => window.removeEventListener('keydown', handler);
+  }, [closePanel]);
+
+  // How many phones are on the Mobile Companion right now
+  const [companionClients, setCompanionClients] = useState(0);
+  useEffect(() => {
+    if (!tauriListen) return;
+    let unlisten: (() => void) | null = null;
+    tauriListen('companion:clients', (e: { payload: unknown }) => {
+      const count = (e.payload as { count?: number })?.count;
+      setCompanionClients(typeof count === 'number' ? count : 0);
+    }).then((fn) => {
+      unlisten = fn;
+    });
+    tauriInvoke?.('get_companion_clients')
+      .then((n) => {
+        if (typeof n === 'number') setCompanionClients(n);
+      })
+      .catch(() => {});
+    return () => {
+      unlisten?.();
+    };
+  }, []);
+
   // Ctrl+Q — toggle companion QR code dialog
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
@@ -1713,6 +1790,7 @@ function AppMain() {
   const handleSendRef = useLatestRef(handleSend);
   const commandHistoryRef = useLatestRef(commandHistory);
   const handleHistoryChangeRef = useLatestRef(handleHistoryChange);
+  const companionSkipHistoryRef = useLatestRef(passwordMode || skipHistory);
   useEffect(() => {
     if (!tauriListen) return;
     let unlisten: (() => void) | null = null;
@@ -1720,9 +1798,10 @@ function AppMain() {
       const payload = e.payload as { command?: string };
       if (payload?.command != null) {
         handleSendRef.current(payload.command);
-        // Add companion commands to client history
+        // Add companion commands to client history, except at the name and
+        // password prompts (the same rule the desktop input follows)
         const cmd = payload.command.trim();
-        if (cmd) {
+        if (cmd && !companionSkipHistoryRef.current) {
           const current = commandHistoryRef.current;
           handleHistoryChangeRef.current([cmd, ...current.filter((h) => h !== cmd)].slice(0, 500));
         }
@@ -1982,6 +2061,166 @@ function AppMain() {
       });
     tauriInvoke?.('broadcast_companion_vitals', { readouts });
   }, [readoutConfigs, statusBarOrder, theme]);
+
+  // The phone masks its input and keeps the password out of history
+  useEffect(() => {
+    tauriInvoke?.('broadcast_companion_state', { key: 'input', data: { passwordMode } });
+  }, [passwordMode]);
+
+  // Mirror the status chips beside the command input (autocast, blocked,
+  // timers, ...) so the phone shows the same things the desktop does. Only
+  // resent when the set actually changes, not on every countdown tick.
+  const companionChips = useMemo(() => {
+    type Chip = {
+      id: string;
+      label: string;
+      color: string;
+      kind: 'running' | 'scheduled';
+      detail: string | null;
+    };
+    const chips: Chip[] = [];
+    const count = (n: number) => (n > 0 ? `x${n}` : null);
+    if (blockerState.blocked) {
+      chips.push({
+        id: 'blocked',
+        label: blockerState.blockLabel ?? 'Blocked',
+        color: CHIP_ACCENT.blocked,
+        kind: 'running',
+        detail: blockerState.queueLength > 0 ? `+${blockerState.queueLength}` : null,
+      });
+    }
+    if (movementMode !== 'normal') {
+      chips.push({
+        id: 'movement',
+        label: movementMode.charAt(0).toUpperCase() + movementMode.slice(1),
+        color: CHIP_ACCENT.movement,
+        kind: 'running',
+        detail: null,
+      });
+    }
+    if (appSettings.babelEnabled && appSettings.babelLanguage) {
+      chips.push({
+        id: 'babel',
+        label: 'Babel',
+        color: CHIP_ACCENT.babel,
+        kind: 'running',
+        detail: appSettings.babelLanguage,
+      });
+    }
+    if (inscriberState.active) {
+      chips.push({
+        id: 'inscriber',
+        label: 'Autoinscribe',
+        color: CHIP_ACCENT.inscriber,
+        kind: 'running',
+        detail: count(inscriberState.cycleCount),
+      });
+    }
+    if (casterState.active) {
+      chips.push({
+        id: 'caster',
+        label: casterState.weightMode ? 'Autocast+Wt' : 'Autocast',
+        color: casterState.weightMode ? CHIP_ACCENT.casterWeight : CHIP_ACCENT.caster,
+        kind: 'running',
+        detail: count(casterState.cycleCount),
+      });
+    }
+    if (concState.active) {
+      chips.push({
+        id: 'conc',
+        label: 'Autoconc',
+        color: CHIP_ACCENT.conc,
+        kind: 'running',
+        detail: count(concState.cycleCount),
+      });
+    }
+    if (appSettings.announceMode !== 'off') {
+      chips.push({
+        id: 'announce',
+        label: `Announce ${appSettings.announceMode}`,
+        color: CHIP_ACCENT.announce,
+        kind: 'running',
+        detail: null,
+      });
+    }
+    if (alignmentTrackingEnabled) {
+      chips.push({
+        id: 'alignment',
+        label: 'align',
+        color: CHIP_ACCENT.alignment,
+        kind: 'scheduled',
+        detail: `${alignmentTrackingMinutes}m`,
+      });
+    }
+    if (appSettings.whoAutoRefreshEnabled) {
+      chips.push({
+        id: 'who',
+        label: 'who',
+        color: CHIP_ACCENT.who,
+        kind: 'scheduled',
+        detail: `${appSettings.whoRefreshMinutes}m`,
+      });
+    }
+    if (appSettings.equipAutoRefreshEnabled) {
+      chips.push({
+        id: 'equip',
+        label: 'equip',
+        color: CHIP_ACCENT.equip,
+        kind: 'scheduled',
+        detail: `${appSettings.equipRefreshMinutes}m`,
+      });
+    }
+    if (antiIdleEnabled && !alignmentTrackingEnabled) {
+      chips.push({
+        id: 'idle',
+        label: 'idle',
+        color: CHIP_ACCENT.antiIdle,
+        kind: 'scheduled',
+        detail: `${antiIdleMinutes}m`,
+      });
+    }
+    for (const t of activeTimerBadges) {
+      chips.push({
+        id: `timer:${t.id}`,
+        label: t.name,
+        color: CHIP_ACCENT.timer,
+        kind: 'scheduled',
+        detail: null,
+      });
+    }
+    return chips;
+  }, [
+    blockerState.blocked,
+    blockerState.blockLabel,
+    blockerState.queueLength,
+    movementMode,
+    appSettings.babelEnabled,
+    appSettings.babelLanguage,
+    appSettings.announceMode,
+    appSettings.whoAutoRefreshEnabled,
+    appSettings.whoRefreshMinutes,
+    appSettings.equipAutoRefreshEnabled,
+    appSettings.equipRefreshMinutes,
+    inscriberState.active,
+    inscriberState.cycleCount,
+    casterState.active,
+    casterState.weightMode,
+    casterState.cycleCount,
+    concState.active,
+    concState.cycleCount,
+    alignmentTrackingEnabled,
+    alignmentTrackingMinutes,
+    antiIdleEnabled,
+    antiIdleMinutes,
+    activeTimerBadges,
+  ]);
+  const lastChipsJsonRef = useRef('');
+  useEffect(() => {
+    const json = JSON.stringify(companionChips);
+    if (json === lastChipsJsonRef.current) return;
+    lastChipsJsonRef.current = json;
+    tauriInvoke?.('broadcast_companion_state', { key: 'chips', data: companionChips });
+  }, [companionChips]);
 
   // Mirror the user's customizable numpad mappings and terminal color theme to
   // companion clients so the companion's keypad movement and output/who colors
@@ -2393,12 +2632,14 @@ function AppMain() {
                                       layout={panelLayout}
                                       activePanel={activePanel}
                                       togglePanel={togglePanel}
+                                      closePanel={closePanel}
                                       pinPanel={pinPanel}
                                     >
                                       <SpotlightProvider>
                                         <div className="flex flex-col h-dvh bg-bg-canvas text-text-primary relative p-1 gap-1 overflow-hidden">
                                           <Toolbar
                                             connected={connected}
+                                            companionClients={companionClients}
                                             onReconnect={handleReconnect}
                                             onDisconnect={handleDisconnect}
                                             onScreenshot={handleScreenshot}

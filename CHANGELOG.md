@@ -10,6 +10,37 @@ The `[Unreleased]` header controls automatic version bumping on merge:
 - `[Unreleased-minor]` → 0.1.0 → 0.2.0
 - `[Unreleased-major]` → 0.1.0 → 1.0.0
 
+## [Unreleased-minor]
+
+### Added
+
+- Mobile Companion: the phone now keeps its screen awake while connected, buzzes on taps, shows the same status chips as the desktop input row (autocast, blocked, timers, and the rest) on the wider laptop and tablet layout (phones keep that vertical room for output), masks the password prompt, and says Live, Reconnecting, Desktop offline, or Companion off next to the status dot. A bell button in the sub-bar turns on tell notifications (a buzz, and a system notification when the page is in the background), and a clear button empties the output. Android can install it to the home screen like iOS already could
+- Mobile Companion: the QR code and link now use your computer's name (for example `http://my-pc.local:3333`) instead of the numeric address, so the link saved on your phone keeps working when your router hands the computer a new address. The numeric address is still shown underneath as a fallback for phones that cannot resolve names. The name is read from the machine at runtime, never stored
+- Mobile Companion: the desktop toolbar shows a small phone icon with a count while a phone is connected, and the server pings each phone so dead connections are noticed and dropped instead of lingering
+
+### Changed
+
+- Chat history is now kept per character instead of being shared by everyone. Each character has its own incoming and outgoing log, the panel header names the character you are looking at, and switching characters swaps the log with it. Your existing history is handed to whichever character was last played. Filters, sound alerts, muted senders, and the sort/hide preferences stay shared, since those are preferences rather than a log
+- Command history is now kept per character instead of being shared by everyone, so arrow-key recall only offers what that character actually typed. It moved out of `settings.json` into its own `command-history.json`, and your existing history is handed to whichever character was last played. The Mobile Companion's history swaps along with it
+- `/autocast` tuning is now kept per character. The power steps (`/autocast adjust power <up> <down>`), the weight item, the container, and the weight steps are saved in `autocast.json` under the active character and carry over to the next `/autocast` and the next session. Strength and aptitude decide these, so they no longer live in the shared settings. A character with no saved tuning starts from the weight settings you had before
+
+- The status chips beside the command input are now readable at a glance and all stop the same way. Things you started (autocast, autoinscribe, autoconc, Babel, announce, a movement mode) are filled chips with a glowing dot; refreshers and timers (who, alignment, equipment, anti-idle, custom timers) are outlined and quieter, and every scheduled chip now says what it is ("who 3:00") instead of showing only an icon. Anything that can be stopped carries a small × and that is the one way to stop it, replacing the old mix of single-click and double-click. The "+N more timers" button opens a proper menu
+- Panels have keyboard shortcuts. Ctrl+1 through Ctrl+9 open the Panels group in toolbar order and Alt plus a letter opens the tools and app panels (A Aliases, T Triggers, I Timers, V Variables, M Macros, C Scripts, L Logs, B Babel, P Appearance, S Settings, G Guide). The key is printed in the corner of each toolbar button and in its tooltip
+- Escape now closes whichever slide-out is open, from anywhere, and puts the cursor back in the command input. With no panel open it still clears the input
+- The Settings panel now has a search box at the top that filters sections and highlights matching settings as you type, so you no longer have to open sections one at a time to find an option
+- Status bar readouts now have a right-click menu for hiding a vital's output lines, compacting to icon only, and a reminder that you can drag to reorder. Hidden vitals are dimmed with a slashed-eye badge, and a small gear at the end of the bar can show all vital lines or compact and expand every readout at once
+- Quick buttons: deleting from the right-click menu now asks for a second click to confirm, disabled buttons show a struck-through label and an "off" tag, the add button is always the same size, and each button's tooltip says "Right click to edit"
+- Panel headers: the pin and close controls are larger click targets with the same hover styling as toolbar buttons, and the header height is unchanged
+- The toolbar is now a labeled rack instead of a row of look-alike grey icons. Every button shows its name under the icon, buttons are grouped by kind with a small vertical group name at the left of each run (Panels, Tools, App, then the Guide on its own), and each button carries a touch of its own color at rest so the bar can be read by color as well as by word. The power button reads Online or Offline. If the window is too narrow for the names, the bar falls back to the old icon-only layout
+- Running improve counters now pause themselves when you disconnect and pick back up on the next login, so time spent offline is never counted. The same applies to a counter that was still running when the app was closed: it waits, paused, until you log in again. A counter you paused by hand stays paused. The terminal prints a line for each counter it pauses or resumes
+
+### Fixed
+
+- Mobile Companion no longer stacks duplicate scrollback every time the phone reconnects. It reconnects right away when the phone wakes, regains network, or the connection goes quiet, instead of waiting for a close that never comes. Commands typed while disconnected stay in the input with a shake and a warning instead of vanishing. The Send button no longer closes the iOS keyboard, pinch zoom works again, stray terminal control codes no longer print as garbage, fallback colors follow your desktop theme, and a password typed on the phone is no longer saved into command history
+- Mobile Companion on the desktop side: a phone that fell behind a busy stream used to go silent while still showing a green dot; it now catches up. Turning the companion off or changing its port now actually disconnects phones, and a fast port change no longer reports a false "port in use" error
+- Refreshing the window (Ctrl+R) no longer strands the client in a disconnected state while the game session is still alive underneath. The connection lives in the app's backend and survives the refresh, but the screen came back assuming it was offline, so nothing could be sent until you hit Reconnect and started a whole new login. The screen now asks the backend what is actually live on startup, picks the session back up, re-runs the login sync commands, and prints a note that it did so
+- `/autocast` no longer forgets the power steps. Every new `/autocast <spell> @<power>` (and every stop) reset them to the +20/-10 defaults, so a `/autocast adjust power` had to be repeated each time
+
 ## [1.16.0] - 2026-08-17
 
 ### Changed

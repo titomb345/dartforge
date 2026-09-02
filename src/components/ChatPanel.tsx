@@ -1,9 +1,10 @@
 import { useEffect, useRef, useState, useMemo, useCallback } from 'react';
 import { useChatContext } from '../contexts/ChatContext';
 import { useSignatureContext } from '../contexts/SignatureContext';
+import { useSkillTrackerContext } from '../contexts/SkillTrackerContext';
 import type { ChatType, ChatMessage, OutgoingMessage } from '../types/chat';
 import type { PinnablePanelProps } from '../types';
-import { panelRootClass } from '../lib/panelUtils';
+import { panelRootClass, charDisplayName } from '../lib/panelUtils';
 import { SortAscIcon, SortDescIcon, ChatIcon, ClockIcon, SearchIcon } from './icons';
 import { ConfirmDeleteButton } from './ConfirmDeleteButton';
 import { FilterPill } from './FilterPill';
@@ -136,6 +137,7 @@ export function ChatPanel({ mode = 'slideout' }: PinnablePanelProps) {
     deleteOutgoingMessage,
   } = useChatContext();
   const { sortedMappings, createMapping } = useSignatureContext();
+  const { activeCharacter } = useSkillTrackerContext();
   const {
     panelFontSize,
     chatFontSize,
@@ -323,7 +325,12 @@ export function ChatPanel({ mode = 'slideout' }: PinnablePanelProps) {
 
   return (
     <div className={panelRootClass(isPinned)}>
-      <PanelHeader icon={<ChatIcon size={12} />} title="Chat" panel="chat" mode={mode}>
+      <PanelHeader
+        icon={<ChatIcon size={12} />}
+        title={activeCharacter ? `Chat (${charDisplayName(activeCharacter)})` : 'Chat'}
+        panel="chat"
+        mode={mode}
+      >
         <FontSizeControl
           value={effectiveChatFontSize}
           onChange={updateChatFontSize}

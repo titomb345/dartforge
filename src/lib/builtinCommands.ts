@@ -30,10 +30,6 @@ export interface BuiltinContext {
     updateAnnounceMode: (m: AnnounceMode) => void;
     updateAnnouncePetMode: (m: AnnounceMode) => void;
     updateAutoConcAction: (a: string) => void;
-    updateCasterWeightItem: (v: string) => void;
-    updateCasterWeightContainer: (v: string) => void;
-    updateCasterWeightAdjustUp: (v: number) => void;
-    updateCasterWeightAdjustDown: (v: number) => void;
   };
   mergedVariables: () => Variable[];
   setVar: (name: string, value: string, scope: 'character' | 'global') => void;
@@ -242,8 +238,6 @@ const handleAutocast: Handler = async (trimmed, ctx) => {
           );
         } else {
           caster.setWeightAdjust(up, down, echoFn(ctx));
-          ctx.appSettings.updateCasterWeightAdjustUp(up);
-          ctx.appSettings.updateCasterWeightAdjustDown(down);
         }
       }
       return true;
@@ -266,7 +260,6 @@ const handleAutocast: Handler = async (trimmed, ctx) => {
         error(ctx, '[Autocast] Usage: /autocast set item <item>');
       } else {
         caster.setWeightItem(itemName, echoFn(ctx));
-        ctx.appSettings.updateCasterWeightItem(itemName);
       }
       return true;
     }
@@ -281,7 +274,6 @@ const handleAutocast: Handler = async (trimmed, ctx) => {
       } else {
         const val = /^(none|null|clear)$/i.test(containerName) ? null : containerName;
         caster.setWeightContainer(val, echoFn(ctx));
-        ctx.appSettings.updateCasterWeightContainer(val ?? '');
       }
       return true;
     }
@@ -295,7 +287,6 @@ const handleAutocast: Handler = async (trimmed, ctx) => {
 
   if (argsLower === 'clear container') {
     caster.setWeightContainer(null, echoFn(ctx));
-    ctx.appSettings.updateCasterWeightContainer('');
     return true;
   }
 

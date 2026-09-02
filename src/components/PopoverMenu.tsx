@@ -92,6 +92,7 @@ export function PopoverMenu({
       />
       <div
         ref={menuRef}
+        data-popover-menu=""
         className={`fixed z-[10002] ${className ?? ''}`}
         style={{ ...pos, ...style }}
       >

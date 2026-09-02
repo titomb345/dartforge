@@ -5,6 +5,8 @@ interface PanelContextValue {
   layout: PanelLayout;
   activePanel: Panel | null;
   togglePanel: (panel: Panel) => void;
+  /** Close whichever slide-out is open (Escape). */
+  closePanel: () => void;
   pinPanel: (panel: PinnablePanel, side: DockSide) => void;
   isPinned: (panel: PinnablePanel) => boolean;
 }
@@ -15,12 +17,14 @@ export function PanelProvider({
   layout,
   activePanel,
   togglePanel,
+  closePanel,
   pinPanel,
   children,
 }: {
   layout: PanelLayout;
   activePanel: Panel | null;
   togglePanel: (panel: Panel) => void;
+  closePanel: () => void;
   pinPanel: (panel: PinnablePanel, side: DockSide) => void;
   children: React.ReactNode;
 }) {
@@ -30,8 +34,8 @@ export function PanelProvider({
   );
 
   const value = useMemo(
-    () => ({ layout, activePanel, togglePanel, pinPanel, isPinned }),
-    [layout, activePanel, togglePanel, pinPanel, isPinned]
+    () => ({ layout, activePanel, togglePanel, closePanel, pinPanel, isPinned }),
+    [layout, activePanel, togglePanel, closePanel, pinPanel, isPinned]
   );
 
   return <PanelContext.Provider value={value}>{children}</PanelContext.Provider>;
@@ -41,9 +45,4 @@ export function usePanelContext(): PanelContextValue {
   const ctx = useContext(PanelContext);
   if (!ctx) throw new Error('usePanelContext must be used within PanelProvider');
   return ctx;
-}
-
-/** Convenience: just the layout (used by PinMenuButton) */
-export function usePanelLayout(): PanelLayout {
-  return usePanelContext().layout;
 }

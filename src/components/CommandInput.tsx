@@ -12,8 +12,11 @@ import { cn } from '../lib/cn';
 import { formatCountdown } from '../lib/panelUtils';
 import { TimerIcon, AlignmentIcon, WhoIcon, LoadoutIcon } from './icons';
 import { StatusBadge } from './StatusBadge';
+import { CHIP_ACCENT } from '../lib/accents';
+import { PopoverMenu } from './PopoverMenu';
 import { useAppSettingsContext } from '../contexts/AppSettingsContext';
 import { useCommandInputContext } from '../contexts/CommandInputContext';
+import { usePanelContext } from '../contexts/PanelLayoutContext';
 import { useSpotlight } from '../contexts/SpotlightContext';
 
 interface CommandInputProps {
@@ -135,6 +138,11 @@ export const CommandInput = forwardRef<HTMLTextAreaElement, CommandInputProps>(
     const { commandHistorySize, numpadMappings, showTimerBadges, selectOnSend } =
       useAppSettingsContext();
     const { active: spotlightActive } = useSpotlight();
+    const { activePanel, closePanel } = usePanelContext();
+    const activePanelRef = useRef(activePanel);
+    activePanelRef.current = activePanel;
+    const closePanelRef = useRef(closePanel);
+    closePanelRef.current = closePanel;
     const numpadRef = useRef(numpadMappings);
     numpadRef.current = numpadMappings;
     const onHistoryChangeRef = useRef(onHistoryChange);
@@ -182,7 +190,7 @@ export const CommandInput = forwardRef<HTMLTextAreaElement, CommandInputProps>(
     }, [antiIdleNextAt, alignmentNextAt, whoNextAt, equipNextAt, hasActiveTimers]);
 
     // Timer overflow dropdown state
-    const [timerOverflowOpen, setTimerOverflowOpen] = useState(false);
+    const [timerMenu, setTimerMenu] = useState<{ x: number; y: number } | null>(null);
 
     // Re-focus when window regains focus
     useEffect(() => {
@@ -317,6 +325,11 @@ export const CommandInput = forwardRef<HTMLTextAreaElement, CommandInputProps>(
           submit();
         } else if (e.key === 'Escape') {
           e.preventDefault();
+          // A slide-out that is open takes the Escape; the input keeps its text.
+          if (activePanelRef.current) {
+            closePanelRef.current();
+            return;
+          }
           setValue('');
           historyIndexRef.current = -1;
           searchPrefixRef.current = '';
@@ -397,22 +410,24 @@ export const CommandInput = forwardRef<HTMLTextAreaElement, CommandInputProps>(
           )}
         />
 
-        {/* Action blocking badge */}
+        {/* Status chips. Two families, one rule: anything you can stop has
+            the same × on it. Running (filled, glowing dot) = things you
+            started. Scheduled (outlined) = refreshers and timers on a clock. */}
+
         {actionBlocked && (
           <StatusBadge
-            color="#f59e0b"
-            title={`Blocked: ${actionBlockLabel ?? 'action'} — ${actionQueueLength} command(s) queued. /unblock to release`}
+            color={CHIP_ACCENT.blocked}
+            title={`Blocked: ${actionBlockLabel ?? 'action'}. ${actionQueueLength} command(s) queued. /unblock to release`}
           >
-            <span>{actionBlockLabel ?? 'BLOCKED'}</span>
-            {actionQueueLength > 0 && <span>({actionQueueLength})</span>}
+            <span>{actionBlockLabel ?? 'Blocked'}</span>
+            {actionQueueLength > 0 && <span className="opacity-70">+{actionQueueLength}</span>}
           </StatusBadge>
         )}
 
-        {/* Movement mode badge (only when not normal) */}
         {movementMode !== 'normal' && (
           <StatusBadge
-            color="#2dd4bf"
-            title={`Movement mode: ${movementMode} — Numpad / or /movemode to cycle`}
+            color={CHIP_ACCENT.movement}
+            title={`Movement mode: ${movementMode}. Click to cycle (Numpad / or /movemode)`}
             onClick={onToggleMovementMode}
             animate
           >
@@ -420,12 +435,12 @@ export const CommandInput = forwardRef<HTMLTextAreaElement, CommandInputProps>(
           </StatusBadge>
         )}
 
-        {/* Babel language trainer badge */}
         {babelEnabled && babelLanguage && (
           <StatusBadge
-            color="#e879f9"
-            title={`Babel: training ${babelLanguage} — click to stop`}
-            onClick={onToggleBabel}
+            color={CHIP_ACCENT.babel}
+            title={`Babel: training ${babelLanguage}`}
+            onStop={onToggleBabel}
+            stopTitle="Stop Babel"
             animate
           >
             <span>Babel</span>
@@ -435,12 +450,12 @@ export const CommandInput = forwardRef<HTMLTextAreaElement, CommandInputProps>(
           </StatusBadge>
         )}
 
-        {/* Auto-inscriber badge */}
         {inscriberActive && (
           <StatusBadge
-            color="#60a5fa"
-            title={`Autoinscribe: ${inscriberSpell ?? '?'} — click to stop`}
-            onClick={onStopInscriber}
+            color={CHIP_ACCENT.inscriber}
+            title={`Autoinscribe: ${inscriberSpell ?? '?'}`}
+            onStop={onStopInscriber}
+            stopTitle="Stop autoinscribe"
             animate
           >
             <span>Autoinscribe</span>
@@ -448,16 +463,16 @@ export const CommandInput = forwardRef<HTMLTextAreaElement, CommandInputProps>(
           </StatusBadge>
         )}
 
-        {/* Auto-caster badge */}
         {casterActive && (
           <StatusBadge
-            color={casterWeightMode ? '#fbbf24' : '#34d399'}
+            color={casterWeightMode ? CHIP_ACCENT.casterWeight : CHIP_ACCENT.caster}
             title={
               casterWeightMode
-                ? `Autocast: ${casterSpell ?? '?'} @${casterPower ?? '?'} — carrying ${casterCarriedWeight} ${casterWeightItem} — click to stop`
-                : `Autocast: ${casterSpell ?? '?'} @${casterPower ?? '?'} — click to stop`
+                ? `Autocast: ${casterSpell ?? '?'} @${casterPower ?? '?'}, carrying ${casterCarriedWeight} ${casterWeightItem}`
+                : `Autocast: ${casterSpell ?? '?'} @${casterPower ?? '?'}`
             }
-            onClick={onStopCaster}
+            onStop={onStopCaster}
+            stopTitle="Stop autocast"
             animate
           >
             <span>{casterWeightMode ? 'Autocast+Wt' : 'Autocast'}</span>
@@ -465,12 +480,12 @@ export const CommandInput = forwardRef<HTMLTextAreaElement, CommandInputProps>(
           </StatusBadge>
         )}
 
-        {/* Auto-conc badge */}
         {concActive && (
           <StatusBadge
-            color="#c084fc"
-            title={`Autoconc: ${concAction ?? '?'} — click to stop`}
-            onClick={onStopConc}
+            color={CHIP_ACCENT.conc}
+            title={`Autoconc: ${concAction ?? '?'}`}
+            onStop={onStopConc}
+            stopTitle="Stop autoconc"
             animate
           >
             <span>Autoconc</span>
@@ -478,26 +493,28 @@ export const CommandInput = forwardRef<HTMLTextAreaElement, CommandInputProps>(
           </StatusBadge>
         )}
 
-        {/* Announce badge */}
         {announceMode !== 'off' && (
           <StatusBadge
-            color="#fb923c"
-            title={`Announce: ${announceMode} — click to stop`}
-            onClick={onStopAnnounce}
+            color={CHIP_ACCENT.announce}
+            title={`Announcing: ${announceMode}`}
+            onStop={onStopAnnounce}
+            stopTitle="Stop announcing"
           >
-            <span>Announce: {announceMode}</span>
+            <span>Announce {announceMode}</span>
           </StatusBadge>
         )}
 
-        {/* Alignment tracking badge (only when active) */}
         {showTimerBadges && alignmentTrackingEnabled && (
           <StatusBadge
-            color="#80e080"
-            title={`Alignment tracking: every ${alignmentTrackingMinutes}m (double-click to stop)`}
-            onDoubleClick={onToggleAlignmentTracking}
+            kind="scheduled"
+            color={CHIP_ACCENT.alignment}
+            title={`Alignment check every ${alignmentTrackingMinutes}m`}
+            onStop={onToggleAlignmentTracking}
+            stopTitle="Stop alignment checks"
           >
             <AlignmentIcon size={9} />
-            <span>
+            <span>align</span>
+            <span className="opacity-80">
               {alignmentNextAt
                 ? formatCountdown(alignmentNextAt - Date.now())
                 : `${alignmentTrackingMinutes}m`}
@@ -505,43 +522,49 @@ export const CommandInput = forwardRef<HTMLTextAreaElement, CommandInputProps>(
           </StatusBadge>
         )}
 
-        {/* Who auto-refresh badge (only when active) */}
         {showTimerBadges && whoAutoRefreshEnabled && (
           <StatusBadge
-            color="#61afef"
-            title={`Who auto-refresh: every ${whoRefreshMinutes}m (double-click to stop)`}
-            onDoubleClick={onToggleWhoAutoRefresh}
+            kind="scheduled"
+            color={CHIP_ACCENT.who}
+            title={`Who list refresh every ${whoRefreshMinutes}m`}
+            onStop={onToggleWhoAutoRefresh}
+            stopTitle="Stop who refresh"
           >
             <WhoIcon size={9} />
-            <span>
+            <span>who</span>
+            <span className="opacity-80">
               {whoNextAt ? formatCountdown(whoNextAt - Date.now()) : `${whoRefreshMinutes}m`}
             </span>
           </StatusBadge>
         )}
 
-        {/* Held-equipment auto-refresh badge (only when active) */}
         {showTimerBadges && equipAutoRefreshEnabled && (
           <StatusBadge
-            color="#bd93f9"
-            title={`Held-equipment re-sync: every ${equipRefreshMinutes}m (double-click to stop)`}
-            onDoubleClick={onToggleEquipAutoRefresh}
+            kind="scheduled"
+            color={CHIP_ACCENT.equip}
+            title={`Held equipment re-sync every ${equipRefreshMinutes}m`}
+            onStop={onToggleEquipAutoRefresh}
+            stopTitle="Stop equipment re-sync"
           >
             <LoadoutIcon size={9} />
-            <span>
+            <span>equip</span>
+            <span className="opacity-80">
               {equipNextAt ? formatCountdown(equipNextAt - Date.now()) : `${equipRefreshMinutes}m`}
             </span>
           </StatusBadge>
         )}
 
-        {/* Anti-idle badge (only when active, hidden when alignment tracking supersedes) */}
         {showTimerBadges && antiIdleEnabled && !alignmentTrackingEnabled && (
           <StatusBadge
-            color="#bd93f9"
-            title={`Anti-idle: "${antiIdleCommand}" every ${antiIdleMinutes}m (double-click to stop)`}
-            onDoubleClick={onToggleAntiIdle}
+            kind="scheduled"
+            color={CHIP_ACCENT.antiIdle}
+            title={`Anti-idle: "${antiIdleCommand}" every ${antiIdleMinutes}m`}
+            onStop={onToggleAntiIdle}
+            stopTitle="Stop anti-idle"
           >
             <TimerIcon size={9} />
-            <span>
+            <span>idle</span>
+            <span className="opacity-80">
               {antiIdleNextAt
                 ? formatCountdown(antiIdleNextAt - Date.now())
                 : `${antiIdleMinutes}m`}
@@ -549,7 +572,7 @@ export const CommandInput = forwardRef<HTMLTextAreaElement, CommandInputProps>(
           </StatusBadge>
         )}
 
-        {/* Custom timer countdown badges (sorted soonest-first) */}
+        {/* Custom timer countdown chips (soonest first); the rest fold into +N */}
         {showTimerBadges &&
           activeTimers &&
           activeTimers.length > 0 &&
@@ -563,65 +586,79 @@ export const CommandInput = forwardRef<HTMLTextAreaElement, CommandInputProps>(
                 {visible.map((t) => (
                   <StatusBadge
                     key={t.id}
-                    color="#f97316"
-                    title={`Timer: ${t.name} (double-click to stop)`}
-                    onDoubleClick={() => onToggleTimer?.(t.id)}
+                    kind="scheduled"
+                    color={CHIP_ACCENT.timer}
+                    title={`Timer: ${t.name}`}
+                    onStop={() => onToggleTimer?.(t.id)}
+                    stopTitle={`Stop timer "${t.name}"`}
                   >
                     <TimerIcon size={8} />
-                    <span className="max-w-[50px] truncate">{t.name}</span>
-                    <span>{formatCountdown(t.nextAt - Date.now())}</span>
+                    <span className="max-w-[60px] truncate">{t.name}</span>
+                    <span className="opacity-80">{formatCountdown(t.nextAt - Date.now())}</span>
                   </StatusBadge>
                 ))}
                 {overflow.length > 0 && (
-                  <div className="relative self-center shrink-0 ml-1">
+                  <>
                     <button
-                      onClick={() => setTimerOverflowOpen((v) => !v)}
-                      onBlur={() => setTimeout(() => setTimerOverflowOpen(false), 150)}
-                      className="flex items-center gap-0.5 px-1.5 py-1 rounded border text-[9px] font-mono cursor-pointer text-[#f97316] border-[#f97316]/30 bg-[#f97316]/8 hover:bg-[#f97316]/15 transition-colors duration-150"
-                      style={{ filter: 'drop-shadow(0 0 3px rgba(249, 115, 22, 0.25))' }}
+                      type="button"
+                      onClick={(e: React.MouseEvent) =>
+                        setTimerMenu(timerMenu ? null : { x: e.clientX, y: e.clientY })
+                      }
+                      title={`${overflow.length} more timer${overflow.length === 1 ? '' : 's'}`}
+                      className="self-center shrink-0 ml-1 px-1.5 py-[3px] rounded border text-[10px] font-mono cursor-pointer transition-colors duration-150 hover:bg-[color-mix(in_srgb,currentColor_15%,transparent)]"
+                      style={{ color: CHIP_ACCENT.timer, borderColor: `${CHIP_ACCENT.timer}4d` }}
                     >
                       +{overflow.length}
                     </button>
-                    {timerOverflowOpen && (
-                      <div className="absolute bottom-full right-0 mb-1 bg-bg-primary border border-[#f97316]/30 rounded-lg shadow-lg py-1 min-w-[160px] z-50">
+                    {timerMenu && (
+                      <PopoverMenu
+                        x={timerMenu.x}
+                        y={timerMenu.y}
+                        onClose={() => setTimerMenu(null)}
+                        className="bg-bg-primary border rounded-lg shadow-lg py-1 min-w-[180px]"
+                        style={{ borderColor: `${CHIP_ACCENT.timer}4d` }}
+                      >
                         {overflow.map((t) => (
                           <div
                             key={t.id}
-                            className="flex items-center gap-1.5 px-2.5 py-1 text-[9px] font-mono text-[#f97316]"
+                            className="flex items-center gap-1.5 px-2.5 py-1 text-[10px] font-mono"
+                            style={{ color: CHIP_ACCENT.timer }}
                           >
                             <TimerIcon size={8} />
                             <span className="flex-1 truncate">{t.name}</span>
-                            <span className="shrink-0">
+                            <span className="shrink-0 opacity-80">
                               {formatCountdown(t.nextAt - Date.now())}
                             </span>
                             <button
+                              type="button"
                               onClick={() => onToggleTimer?.(t.id)}
-                              title="Stop timer"
-                              className="shrink-0 ml-1 px-1 py-0.5 rounded text-[8px] border border-[#f97316]/30 bg-[#f97316]/10 hover:bg-[#f97316]/25 transition-colors cursor-pointer"
+                              title={`Stop timer "${t.name}"`}
+                              aria-label={`Stop timer "${t.name}"`}
+                              className="chip-stop"
                             >
-                              stop
+                              ×
                             </button>
                           </div>
                         ))}
-                      </div>
+                      </PopoverMenu>
                     )}
-                  </div>
+                  </>
                 )}
               </>
             );
           })()}
 
-        {/* Demo timer badge when spotlight is active but no real badges are visible */}
+        {/* Demo chip when the guide spotlight is on the input but nothing real is running */}
         {spotlightActive?.helpId === 'command-input' &&
           (!showTimerBadges ||
             (!hasActiveTimers &&
               !antiIdleEnabled &&
               !alignmentTrackingEnabled &&
               !whoAutoRefreshEnabled)) && (
-            <StatusBadge color="#f97316" title="Demo timer badge">
+            <StatusBadge kind="scheduled" color={CHIP_ACCENT.timer} title="Example timer chip">
               <TimerIcon size={8} />
               <span>heal</span>
-              <span>0:25</span>
+              <span className="opacity-80">0:25</span>
             </StatusBadge>
           )}
       </div>

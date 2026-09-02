@@ -89,6 +89,123 @@ input[type='number'] {
   filter: drop-shadow(0 0 6px color-mix(in srgb, var(--qb-color) 30%, transparent));
 }
 
+/* Toolbar: a labeled rack. Each button carries its own name under the icon
+   and a little of its own color at rest, so the bar can be read by word and
+   by color instead of by hovering for tooltips. Group names run vertically
+   at the left edge of each group. */
+.toolbar {
+  container: toolbar / inline-size;
+}
+.toolbar-label {
+  font-size: 9px;
+  line-height: 1;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  white-space: nowrap;
+  color: inherit;
+  transition: color 200ms ease-in-out;
+}
+.icon-btn-rest {
+  color: color-mix(in srgb, var(--btn-accent) 55%, var(--color-text-dim));
+}
+.icon-btn-rest .toolbar-label {
+  color: var(--color-text-muted);
+}
+.icon-btn-rest:hover .toolbar-label {
+  color: inherit;
+}
+.icon-btn:disabled:not(.icon-btn-pinned) .toolbar-label {
+  color: var(--color-text-disabled);
+}
+.toolbar-group-name {
+  writing-mode: vertical-rl;
+  transform: rotate(180deg);
+  font-size: 8px;
+  line-height: 1;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--color-text-dim);
+  height: 40px;
+  display: flex;
+  align-items: center;
+  padding: 0 1px;
+  margin-right: 2px;
+  user-select: none;
+}
+.toolbar-hint {
+  position: absolute;
+  top: 2px;
+  right: 3px;
+  font-size: 7px;
+  line-height: 1;
+  color: var(--color-text-dim);
+  pointer-events: none;
+}
+/* Too narrow for words: fall back to the compact icon-only bar */
+@container toolbar (max-width: 1280px) {
+  .toolbar-label,
+  .toolbar-group-name,
+  .toolbar-hint {
+    display: none;
+  }
+  .icon-btn-labeled {
+    height: 30px;
+    min-width: 30px;
+    width: 30px;
+    padding: 0;
+    gap: 0;
+  }
+  .toolbar-rule {
+    height: 18px;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .toolbar-label {
+    transition: none;
+  }
+}
+
+/* Status chips beside the command input. Every chip that can be stopped
+   carries the same × so there is one way to stop anything. */
+.chip-dot {
+  width: 5px;
+  height: 5px;
+  border-radius: 9999px;
+  background: currentColor;
+  box-shadow: 0 0 4px currentColor;
+  flex-shrink: 0;
+}
+.chip-stop {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 13px;
+  height: 13px;
+  margin-left: 2px;
+  padding: 0;
+  border-radius: 3px;
+  border: 1px solid color-mix(in srgb, currentColor 40%, transparent);
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  font-size: 10px;
+  line-height: 1;
+  cursor: pointer;
+  opacity: 0.7;
+  transition:
+    opacity 150ms,
+    background-color 150ms;
+}
+.chip-stop:hover {
+  opacity: 1;
+  background: color-mix(in srgb, currentColor 22%, transparent);
+}
+.chip-stop:focus-visible {
+  outline: 1px solid currentColor;
+  outline-offset: 1px;
+  opacity: 1;
+}
+
 /* IconButton accent states via CSS custom property */
 .icon-btn:not(:disabled):not(.icon-btn-on):hover {
   background: color-mix(in srgb, var(--btn-accent) 7%, transparent);

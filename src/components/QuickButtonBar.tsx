@@ -19,6 +19,9 @@ import { CSS } from '@dnd-kit/utilities';
 import type { QuickButton } from '../types';
 import { QuickButtonEditor } from './QuickButtonEditor';
 import { PopoverMenu } from './PopoverMenu';
+import { PlusIcon } from './icons';
+
+const EDIT_HINT = 'Right click to edit';
 
 interface QuickButtonBarProps {
   buttons: QuickButton[];
@@ -67,10 +70,30 @@ function SortableQuickButton({
     cursor: isAnyDragging ? 'grabbing' : undefined,
   };
 
+  const enabled = btn.enabled;
+  const summary = enabled
+    ? isToggle
+      ? `Toggle: ${btn.toggle!.variable} (${isOn ? 'ON' : 'OFF'})`
+      : btn.body.split('\n')[0]
+    : `${displayLabel} (disabled)`;
+
+  // Enabled pills take their color inline; disabled pills fall back to
+  // theme tokens (dim text, faint dashed border) plus a strike-through
+  // label and an "off" tag so the state reads without relying on opacity.
+  const pillStyle: React.CSSProperties = enabled
+    ? ({
+        '--qb-color': displayColor,
+        borderColor: `color-mix(in srgb, ${displayColor} 40%, transparent)`,
+        color: displayColor,
+        background: `color-mix(in srgb, ${displayColor} 6%, transparent)`,
+      } as React.CSSProperties)
+    : ({ '--qb-color': 'var(--color-text-dim)' } as React.CSSProperties);
+
   return (
     <div ref={setNodeRef} style={style} {...attributes} {...listeners}>
       <button
         data-qb-id={btn.id}
+        aria-disabled={!enabled}
         onClick={() => {
           if (btn.enabled) {
             if (isToggle) {
@@ -81,29 +104,18 @@ function SortableQuickButton({
           }
         }}
         onContextMenu={(e) => onContextMenu(e, btn)}
-        className="qb-pill text-[11px] font-mono font-semibold px-2.5 py-0.5 rounded-full border cursor-pointer transition-all duration-150 active:scale-95"
-        style={
-          {
-            '--qb-color': displayColor,
-            borderColor: btn.enabled
-              ? `color-mix(in srgb, ${displayColor} 40%, transparent)`
-              : '#333',
-            color: btn.enabled ? displayColor : '#555',
-            background: btn.enabled
-              ? `color-mix(in srgb, ${displayColor} 6%, transparent)`
-              : 'transparent',
-            opacity: btn.enabled ? 1 : 0.4,
-          } as React.CSSProperties
-        }
-        title={
-          btn.enabled
-            ? isToggle
-              ? `Toggle: ${btn.toggle!.variable} (${isOn ? 'ON' : 'OFF'})`
-              : btn.body.split('\n')[0]
-            : `${displayLabel} (disabled)`
-        }
+        className={`qb-pill inline-flex items-center gap-1.5 text-[11px] font-mono font-semibold px-2.5 py-0.5 rounded-full border cursor-pointer transition-all duration-150 active:scale-95 ${
+          enabled ? '' : 'text-text-dim border-border-faint border-dashed bg-transparent'
+        }`}
+        style={pillStyle}
+        title={`${summary}\n${EDIT_HINT}`}
       >
-        {displayLabel}
+        <span className={enabled ? undefined : 'line-through decoration-1'}>{displayLabel}</span>
+        {!enabled && (
+          <span className="text-[8px] font-bold uppercase tracking-wider text-text-muted leading-none">
+            off
+          </span>
+        )}
       </button>
     </div>
   );
@@ -181,11 +193,7 @@ export function QuickButtonBar({
   const buttonIds = buttons.map((b) => b.id);
 
   return (
-    <div
-      className={`flex flex-wrap items-center shrink-0 ${
-        buttons.length > 0 ? 'gap-1 px-2 py-1' : 'px-2 py-px'
-      }`}
-    >
+    <div className="flex flex-wrap items-center shrink-0 gap-1 px-2 py-1">
       <DndContext
         sensors={sensors}
         collisionDetection={closestCenter}
@@ -206,16 +214,14 @@ export function QuickButtonBar({
         </SortableContext>
       </DndContext>
 
-      {/* Add button — compact when row is empty */}
+      {/* Add button — same size whether the row is empty or not */}
       <button
         ref={addBtnRef}
         onClick={openAdd}
-        className={`font-mono text-text-dim hover:text-cyan border border-border-dim hover:border-cyan/30 rounded-full flex items-center justify-center cursor-pointer transition-all duration-150 ${
-          buttons.length > 0 ? 'text-[11px] w-6 h-6' : 'text-[10px] w-4 h-4 leading-none'
-        }`}
+        className="w-6 h-6 text-text-dim hover:text-cyan border border-border-dim hover:border-cyan/30 rounded-full flex items-center justify-center cursor-pointer transition-all duration-150"
         title="Add quick button"
       >
-        +
+        <PlusIcon size={11} />
       </button>
 
       {/* Context menu */}
@@ -276,9 +282,14 @@ function ContextMenuOverlay({
   onDelete,
   onToggleEnabled,
 }: ContextMenuOverlayProps) {
+  // Two-step delete, mirroring ConfirmDeleteButton: first click arms the
+  // row as "Delete?", second click deletes. Closing the menu disarms it.
+  const [confirmingDelete, setConfirmingDelete] = useState(false);
+
   const itemClass = 'w-full px-3 py-1.5 text-[11px] text-left transition-colors cursor-pointer';
   const activeClass = `${itemClass} text-text-label hover:bg-bg-secondary/60`;
   const dangerClass = `${itemClass} text-red hover:bg-red/10`;
+  const confirmClass = `${itemClass} text-red bg-red/10 hover:bg-red/20 font-semibold`;
 
   return (
     <PopoverMenu
@@ -313,15 +324,22 @@ function ContextMenuOverlay({
         {button.enabled ? 'Disable' : 'Enable'}
       </button>
       <div className="h-px bg-border-dim mx-1.5 my-0.5" />
-      <button
-        onClick={() => {
-          onDelete(button.id);
-          onClose();
-        }}
-        className={dangerClass}
-      >
-        Delete
-      </button>
+      {confirmingDelete ? (
+        <button
+          onClick={() => {
+            onDelete(button.id);
+            onClose();
+          }}
+          className={confirmClass}
+          title="Click again to delete"
+        >
+          Delete?
+        </button>
+      ) : (
+        <button onClick={() => setConfirmingDelete(true)} className={dangerClass}>
+          Delete
+        </button>
+      )}
     </PopoverMenu>
   );
 }

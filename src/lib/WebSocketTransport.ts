@@ -1,4 +1,5 @@
 import type { MudTransport, TransportCallbacks } from './transport';
+import type { ConnectionStatusPayload } from '../types';
 
 const DEFAULT_PROXY_URL = 'wss://dartforge-proxy.billbergquist.workers.dev/ws';
 
@@ -85,5 +86,11 @@ export class WebSocketTransport implements MudTransport {
     if (this.ws?.readyState === WebSocket.OPEN) {
       this.ws.send(JSON.stringify({ type: 'disconnect' }));
     }
+  }
+
+  async getStatus(): Promise<ConnectionStatusPayload> {
+    // The socket is per page load, so nothing is live before the proxy's
+    // own status message arrives.
+    return { connected: false, message: 'Connecting...' };
   }
 }
