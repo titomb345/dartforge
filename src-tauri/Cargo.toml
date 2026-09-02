@@ -1,6 +1,6 @@
 [package]
 name = "dartforge"
-version = "1.17.0"
+version = "1.17.1"
 description = "DartForge — DartMUD Client"
 authors = ["you"]
 edition = "2021"
