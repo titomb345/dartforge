@@ -10,6 +10,12 @@ The `[Unreleased]` header controls automatic version bumping on merge:
 - `[Unreleased-minor]` → 0.1.0 → 0.2.0
 - `[Unreleased-major]` → 0.1.0 → 1.0.0
 
+## [Unreleased-patch]
+
+### Fixed
+
+- 1.17.2 made the whole window grow taller than the screen once the side panels filled up after connecting, leaving only the bottom edge visible. The main layout row had been switched to a clipping style that stops it from shrinking to fit the window. Put back the original style; the startup scroll fix is still covered by the other two changes from 1.17.2
+
 ## [1.17.2] - 2026-09-02
 
 ### Fixed
