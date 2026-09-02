@@ -47,7 +47,7 @@ export function IconButton({
         'icon-btn relative flex flex-col items-center justify-center rounded-[6px] border',
         'select-none leading-none transition-all duration-200 ease-in-out motion-reduce:transition-none',
         'focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--btn-accent)]',
-        label ? 'icon-btn-labeled h-10 min-w-10 px-1.5 gap-[3px]' : 'w-[30px] h-[30px] p-0',
+        label ? 'icon-btn-labeled h-10 px-1.5 gap-[3px]' : 'w-[30px] h-[30px] p-0',
         isPinned && 'icon-btn-pinned cursor-default',
         !isPinned && disabled && 'cursor-default text-text-disabled border-border-dim',
         !isPinned && !disabled && !on && 'icon-btn-rest cursor-pointer border-transparent',
@@ -55,7 +55,7 @@ export function IconButton({
       )}
       style={{ '--btn-accent': accent } as React.CSSProperties}
     >
-      {icon}
+      {label ? <span className="toolbar-icon">{icon}</span> : icon}
       {label && <span className="toolbar-label">{label}</span>}
       {hint && (
         <span className="toolbar-hint" aria-hidden="true">

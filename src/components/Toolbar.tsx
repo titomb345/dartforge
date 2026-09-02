@@ -43,20 +43,9 @@ interface ToolbarProps {
   onScreenshot: () => void;
 }
 
-/**
- * A run of related buttons with its name set in small rotated caps at the
- * left edge, like the label strip on a rack of instruments. The name tells
- * you what kind of thing you are looking at before you read the buttons.
- */
-function ToolbarGroup({ name, children }: { name: string; children: ReactNode }) {
-  return (
-    <div className="flex items-center gap-1">
-      <span className="toolbar-group-name" aria-hidden="true">
-        {name}
-      </span>
-      {children}
-    </div>
-  );
+/** A run of related buttons, separated from the next run by a ToolbarRule. */
+function ToolbarGroup({ children }: { children: ReactNode }) {
+  return <div className="flex items-center gap-1">{children}</div>;
 }
 
 /** "Chat (Ctrl+2)" for tooltips. */
@@ -122,7 +111,7 @@ export function Toolbar({
         title={connected ? 'Disconnect' : 'Reconnect'}
         data-help-id="toolbar-power"
         className={cn(
-          'icon-btn-labeled flex flex-col items-center justify-center h-10 min-w-10 px-1.5 gap-[3px] rounded-[6px]',
+          'icon-btn-labeled flex flex-col items-center justify-center h-10 px-1.5 gap-[3px] rounded-[6px]',
           'select-none leading-none transition-all duration-300 ease-in-out motion-reduce:transition-none border cursor-pointer',
           'focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-current',
           connected
@@ -135,7 +124,9 @@ export function Toolbar({
             : 'drop-shadow(0 0 4px rgba(239, 68, 68, 0.4))',
         }}
       >
-        <PowerIcon />
+        <span className="toolbar-icon">
+          <PowerIcon />
+        </span>
         <span className="toolbar-label">{connected ? 'Online' : 'Offline'}</span>
       </button>
       {companionClients > 0 && (
@@ -158,7 +149,7 @@ export function Toolbar({
           </div>
         )}
 
-        <ToolbarGroup name="Panels">
+        <ToolbarGroup>
           {panel('who', 'Who', 'Who', <WhoIcon />, 'toolbar-who')}
           {panel('chat', 'Chat', 'Chat', <ChatIcon />, 'toolbar-chat')}
           {panel('counter', 'Counters', 'Counters', <CounterIcon />, 'toolbar-counters')}
@@ -173,10 +164,10 @@ export function Toolbar({
 
         <ToolbarRule />
 
-        <ToolbarGroup name="Tools">
+        <ToolbarGroup>
           {tool('aliases', 'Aliases', 'Aliases', <AliasIcon />, 'toolbar-aliases')}
           {tool('triggers', 'Triggers', 'Triggers', <TriggerIcon />, 'toolbar-triggers')}
-          {tool('timers', 'Timers', 'Timers', <TimerIcon />, 'toolbar-timers')}
+          {tool('timers', 'Timers', 'Timers', <TimerIcon size={16} />, 'toolbar-timers')}
           {tool('variables', 'Variables', 'Variables', <VariableIcon />, 'toolbar-variables')}
           {tool('macros', 'Macros', 'Macros', <MacroIcon />, 'toolbar-macros')}
           {tool('scripts', 'Scripts', 'Scripts', <CodeIcon />, 'toolbar-scripts')}
@@ -185,7 +176,7 @@ export function Toolbar({
 
         <ToolbarRule />
 
-        <ToolbarGroup name="App">
+        <ToolbarGroup>
           {tool('appearance', 'Appearance', 'Appearance', <PaletteIcon />, 'toolbar-appearance')}
           {tool('settings', 'Settings', 'Settings', <GearIcon />, 'toolbar-settings')}
           <IconButton

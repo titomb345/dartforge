@@ -1,3 +1,4 @@
+import { usePanelContext } from '../contexts/PanelLayoutContext';
 import {
   useState,
   useEffect,
@@ -333,6 +334,16 @@ export function SettingsPanel({ onClose }: { onClose: () => void }) {
 
   // Search: filters sections by their labels/descriptions and forces matches open.
   const [query, setQuery] = useState('');
+  const { activePanel } = usePanelContext();
+  const searchRef = useRef<HTMLInputElement>(null);
+  // Focus the search box when the panel slides open. Never on mount: the
+  // panel is mounted (parked off the right edge) from launch, and autofocus
+  // there scrolled the whole layout row over to reveal it.
+  useEffect(() => {
+    if (activePanel !== 'settings') return;
+    const id = setTimeout(() => searchRef.current?.focus({ preventScroll: true }), 300);
+    return () => clearTimeout(id);
+  }, [activePanel]);
   const tokens = useMemo(() => query.toLowerCase().split(/\s+/).filter(Boolean), [query]);
   const searching = tokens.length > 0;
   const [hits, setHits] = useState<Record<string, boolean>>({});
@@ -493,9 +504,9 @@ export function SettingsPanel({ onClose }: { onClose: () => void }) {
             <SearchIcon size={10} />
           </span>
           <MudInput
+            ref={searchRef}
             accent="cyan"
             size="md"
-            autoFocus
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             onKeyDown={(e) => {

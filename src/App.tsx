@@ -2644,7 +2644,7 @@ function AppMain() {
                                             onDisconnect={handleDisconnect}
                                             onScreenshot={handleScreenshot}
                                           />
-                                          <div className="flex-1 overflow-hidden flex flex-row gap-1 relative">
+                                          <div className="flex-1 overflow-clip flex flex-row gap-1 relative">
                                             {/* Left pinned region — full, collapsed strip, or hidden */}
                                             {effectiveLeftWidth > 0 ? (
                                               <>

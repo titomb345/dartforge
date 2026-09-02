@@ -1,6 +1,5 @@
 import { useState } from 'react';
 import { cn } from '../lib/cn';
-import { EyeOffIcon } from './icons';
 
 interface StatusReadoutProps {
   icon: React.ReactNode;
@@ -11,11 +10,7 @@ interface StatusReadoutProps {
   compact?: boolean;
   /** When true, hover always expands even if user-compacted (overflow mode) */
   autoCompact?: boolean;
-  /**
-   * The readout's output lines are gagged from the terminal. Dims the whole
-   * readout and shows a slashed-eye badge next to the icon so the state is
-   * visible at a glance, even when compact.
-   */
+  /** The readout's output lines are gagged from the terminal (dashed border). */
   filtered?: boolean;
   danger?: boolean;
   /** Optional custom label rendering (e.g., rainbow text) — overrides plain label */
@@ -81,7 +76,6 @@ export function StatusReadout({
           borderLeftWidth: 2,
           borderLeftColor: color,
           borderLeftStyle: filtered ? 'dashed' : 'solid',
-          opacity: filtered ? 0.55 : 1,
         } as React.CSSProperties
       }
     >
@@ -94,15 +88,6 @@ export function StatusReadout({
       >
         {icon}
       </span>
-
-      {filtered && (
-        <span
-          className="flex items-center ml-1 text-text-muted"
-          aria-label="Lines hidden from output"
-        >
-          <EyeOffIcon size={9} />
-        </span>
-      )}
 
       <span
         className="text-[11px] leading-none tracking-wide uppercase overflow-hidden whitespace-nowrap transition-all duration-200"
