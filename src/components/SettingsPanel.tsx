@@ -2003,12 +2003,12 @@ function CompanionSection({ open, onToggle }: { open: boolean; onToggle: () => v
       {companionInfo?.running && (
         <div className="mt-2 flex flex-col items-center gap-2">
           <a
-            href={companionInfo.name_url ?? companionInfo.url}
+            href={companionInfo.url}
             target="_blank"
             rel="noopener noreferrer"
             className="text-[12px] font-mono text-[#8be9fd] underline"
           >
-            {companionInfo.name_url ?? companionInfo.url}
+            {companionInfo.url}
           </a>
           {companionInfo.qr_svg && (
             <div className="mt-1" dangerouslySetInnerHTML={{ __html: companionInfo.qr_svg }} />
@@ -2018,16 +2018,16 @@ function CompanionSection({ open, onToggle }: { open: boolean; onToggle: () => v
           </div>
           {companionInfo.name_url && (
             <div className="text-[9px] text-text-dim font-mono text-center leading-relaxed">
-              The link uses your computer's name, so it keeps working when your address changes. If
-              your phone cannot open it, use{' '}
+              Chrome on Android and Safari on iPhone can also use{' '}
               <a
-                href={companionInfo.url}
+                href={companionInfo.name_url}
                 target="_blank"
                 rel="noopener noreferrer"
                 className="text-[#8be9fd] underline"
               >
-                {companionInfo.url}
+                {companionInfo.name_url}
               </a>
+              , which keeps working when your address changes. Firefox cannot open it.
             </div>
           )}
         </div>
