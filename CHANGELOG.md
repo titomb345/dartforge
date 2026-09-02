@@ -10,6 +10,12 @@ The `[Unreleased]` header controls automatic version bumping on merge:
 - `[Unreleased-minor]` → 0.1.0 → 0.2.0
 - `[Unreleased-major]` → 0.1.0 → 1.0.0
 
+## [Unreleased-patch]
+
+### Fixed
+
+- The Mobile Companion QR code pointed at the computer's name (`something.local`), which Firefox on Android cannot look up, so scanning it led to an "address not found" page. The QR code and main link are back to the numeric address, which works in every phone browser. The name link is still offered beside it for Chrome on Android and Safari on iPhone, with a note that Firefox cannot open it
+
 ## [1.17.0] - 2026-09-02
 
 ### Added
