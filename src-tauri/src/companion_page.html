@@ -329,61 +329,6 @@
   .qbtn:active { opacity: 0.7; }
   .qbtn.disabled { opacity: 0.4; pointer-events: none; }
 
-  /* ── Timer / counter chips row ───────────────────── */
-  /* Display-only mirror of the desktop's running timers and scheduled
-     items. Running chips are filled (translucent) with a glowing dot;
-     scheduled chips are outlined and dimmer. Colors come from the desktop
-     as-is via inline style. */
-  #chips {
-    display: none;
-    align-items: center;
-    gap: 6px;
-    padding: 5px 10px;
-    background: var(--bg-chrome);
-    border-top: 1px solid var(--border);
-    overflow-x: auto;
-    overflow-y: hidden;
-    white-space: nowrap;
-    flex-shrink: 0;
-    scrollbar-width: none;
-  }
-  #chips.populated { display: flex; }
-  #chips::-webkit-scrollbar { display: none; }
-  /* Phones are short on vertical room: the chips row only shows on the
-     wider laptop/tablet layout. */
-  @media (max-width: 759px) {
-    #chips.populated { display: none; }
-  }
-  .chip {
-    display: inline-flex;
-    align-items: center;
-    gap: 5px;
-    flex-shrink: 0;
-    height: 22px;
-    padding: 0 9px;
-    border-radius: 999px;
-    border: 1px solid currentColor;
-    font-size: 10px;
-    font-weight: bold;
-    line-height: 1;
-    letter-spacing: 0.02em;
-  }
-  .chip-dot {
-    width: 6px;
-    height: 6px;
-    border-radius: 50%;
-    background: currentColor;
-    box-shadow: 0 0 6px currentColor;
-    flex-shrink: 0;
-    animation: chip-glow 1.6s ease-in-out infinite;
-  }
-  @keyframes chip-glow {
-    0%, 100% { opacity: 1; }
-    50% { opacity: 0.45; }
-  }
-  .chip.scheduled { opacity: 0.55; border-style: dashed; }
-  .chip-detail { font-weight: normal; opacity: 0.8; }
-
   /* ── Reconnect banner ────────────────────────────── */
   #reconnect-banner {
     display: none;
@@ -772,8 +717,6 @@
     </div>
   </div>
 
-  <div id="chips"></div>
-
   <div id="quickbtns"></div>
 
   <div id="vitals"></div>
@@ -1070,7 +1013,6 @@
   var sendBtn = document.getElementById('send-btn');
   var statusDot = document.getElementById('status-dot');
   var statusText = document.getElementById('status-text');
-  var chipsRow = document.getElementById('chips');
   var notifBtn = document.getElementById('notif-btn');
   var clearBtn = document.getElementById('clear-btn');
   var reconnectBanner = document.getElementById('reconnect-banner');
@@ -1178,7 +1120,6 @@
     else if (key === 'who') renderWho(data);
     else if (key === 'counters') renderCounters(data);
     else if (key === 'quickbuttons') renderQuickButtons(data);
-    else if (key === 'chips') renderChips(data);
     else if (key === 'input') setPasswordMode(!!(data && data.passwordMode));
     else if (key === 'tell') handleTell(data);
   }
@@ -1204,37 +1145,6 @@
     }
     cmdInput.placeholder = on ? 'Password' : 'Enter command...';
     if (on) { historyIndex = -1; searchPrefix = ''; }
-  }
-
-  // ── Timer / counter chips (display only) ──────────────────────
-  var lastChips = null;
-
-  function renderChips(list) {
-    lastChips = Array.isArray(list) ? list : [];
-    if (lastChips.length === 0) {
-      chipsRow.classList.remove('populated');
-      chipsRow.innerHTML = '';
-      return;
-    }
-    var html = '';
-    for (var i = 0; i < lastChips.length; i++) {
-      var c = lastChips[i];
-      if (!c) continue;
-      var running = c.kind !== 'scheduled';
-      // Desktop-provided color, used as-is (sanitized only against quote
-      // injection since it lands in a style attribute).
-      var color = String(c.color || themeColor('cyan')).replace(/["'<>;]/g, '');
-      var detail = c.detail == null ? '' : String(c.detail);
-      html += '<span class="chip ' + (running ? 'running' : 'scheduled') +
-        '" data-chip="' + esc(c.id) + '" style="color:' + color + '"' +
-        (detail ? ' title="' + esc(detail) + '"' : '') + '>' +
-        (running ? '<span class="chip-dot"></span>' : '') +
-        esc(c.label) +
-        (detail ? ' <span class="chip-detail">' + esc(detail) + '</span>' : '') +
-        '</span>';
-    }
-    chipsRow.innerHTML = html;
-    chipsRow.classList.add('populated');
   }
 
   // ── Tell notifications (bell toggle, persisted) ───────────────

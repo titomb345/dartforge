@@ -10,6 +10,12 @@ The `[Unreleased]` header controls automatic version bumping on merge:
 - `[Unreleased-minor]` → 0.1.0 → 0.2.0
 - `[Unreleased-major]` → 0.1.0 → 1.0.0
 
+## [Unreleased-patch]
+
+### Removed
+
+- The Mobile Companion no longer shows the row of timer and status chips (autocast, blocked, timers, refreshers) that mirrored the desktop input row. It only ever appeared on the wider tablet/laptop layout and was not useful there
+
 ## [1.17.3] - 2026-09-02
 
 ### Fixed
