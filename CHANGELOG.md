@@ -15,6 +15,7 @@ The `[Unreleased]` header controls automatic version bumping on merge:
 ### Removed
 
 - The Mobile Companion no longer shows the row of timer and status chips (autocast, blocked, timers, refreshers) that mirrored the desktop input row. It only ever appeared on the wider tablet/laptop layout and was not useful there
+- The Mobile Companion no longer shows the hint line under the command input on the wider layout explaining that the numpad moves you and the arrow keys cycle history
 
 ## [1.17.3] - 2026-09-02
 
