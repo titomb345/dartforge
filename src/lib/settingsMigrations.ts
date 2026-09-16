@@ -18,6 +18,9 @@ import type { DataStore } from '../contexts/DataStoreContext';
  */
 export const CURRENT_VERSION = 9;
 
+/** Character file version tracking */
+export const CHARACTER_FILE_VERSION = 1;
+
 /** Raw store contents — all keys are optional since older stores may lack them. */
 export type StoreData = Record<string, unknown>;
 
@@ -344,6 +347,7 @@ const MIGRATIONS: MigrationFn[] = [
 ];
 
 const SETTINGS_FILE = 'settings.json';
+const CHAR_FILE_VERSION_KEY = '_charFileVersion';
 
 /**
  * Read the settings `_version`, run any pending migrations sequentially,
@@ -380,4 +384,45 @@ export async function migrateSettings(dataStore: DataStore): Promise<void> {
 
   await dataStore.set(SETTINGS_FILE, '_version', CURRENT_VERSION);
   await dataStore.save(SETTINGS_FILE);
+}
+
+/**
+ * Migrate character skill files (skills-*.json).
+ * Handles spell renames and other character-specific data transformations.
+ */
+export async function migrateCharacterFiles(dataStore: DataStore): Promise<void> {
+  try {
+    // List all files to find character skill files
+    const files = await dataStore.keys();
+    const charFiles = files.filter((f) => f.startsWith('skills-') && f.endsWith('.json'));
+
+    for (const fileName of charFiles) {
+      const version = (await dataStore.get<number>(fileName, CHAR_FILE_VERSION_KEY)) ?? 0;
+      if (version >= CHARACTER_FILE_VERSION) continue;
+
+      // v0 → v1: Rename spells (blackthorn's_cold_cure → poison_purge, influenza_cure → disease_purge)
+      const skills = (await dataStore.get<Record<string, unknown>>(fileName, 'skills')) ?? {};
+      let migrated = false;
+
+      // v0 → v1: Rename spells
+      if (skills["blackthorn's_cold_cure"]) {
+        skills['poison_purge'] = skills["blackthorn's_cold_cure"];
+        delete skills["blackthorn's_cold_cure"];
+        migrated = true;
+      }
+      if (skills['influenza_cure']) {
+        skills['disease_purge'] = skills['influenza_cure'];
+        delete skills['influenza_cure'];
+        migrated = true;
+      }
+
+      if (migrated) {
+        await dataStore.set(fileName, 'skills', skills);
+        await dataStore.set(fileName, CHAR_FILE_VERSION_KEY, CHARACTER_FILE_VERSION);
+        await dataStore.save(fileName);
+      }
+    }
+  } catch (e) {
+    console.error('Failed to migrate character files:', e);
+  }
 }

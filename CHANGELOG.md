@@ -10,6 +10,12 @@ The `[Unreleased]` header controls automatic version bumping on merge:
 - `[Unreleased-minor]` → 0.1.0 → 0.2.0
 - `[Unreleased-major]` → 0.1.0 → 1.0.0
 
+## [Unreleased-patch]
+
+### Changed
+
+- DartMUD spell renames: `blackthorn's_cold_cure` is now `poison_purge` (abbr `pp`), and `influenza_cure` is now `disease_purge` (abbr `dp`). Existing skill levels in saved character files are automatically migrated to the new spell names on first load
+
 ## [1.17.4] - 2026-09-03
 
 ### Removed
