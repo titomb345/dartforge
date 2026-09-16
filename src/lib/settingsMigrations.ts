@@ -400,12 +400,14 @@ export async function migrateCharacterFile(dataStore: DataStore, fileName: strin
     let migrated = false;
 
     if (skills["blackthorn's_cold_cure"]) {
-      skills['poison_purge'] = skills["blackthorn's_cold_cure"];
+      const oldRecord = skills["blackthorn's_cold_cure"] as Record<string, unknown>;
+      skills['poison_purge'] = { ...oldRecord, skill: 'poison_purge' };
       delete skills["blackthorn's_cold_cure"];
       migrated = true;
     }
     if (skills['influenza_cure']) {
-      skills['disease_purge'] = skills['influenza_cure'];
+      const oldRecord = skills['influenza_cure'] as Record<string, unknown>;
+      skills['disease_purge'] = { ...oldRecord, skill: 'disease_purge' };
       delete skills['influenza_cure'];
       migrated = true;
     }
