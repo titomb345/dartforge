@@ -16,7 +16,6 @@ export interface SpellInfo {
  */
 export const SPELL_DATA: Record<string, SpellInfo> = {
   "ambrosius's_encouragement": { abbr: 'ae', castTime: 1, auraCost: 'orange' },
-  poison_purge: { abbr: 'pp', castTime: 10, auraCost: 'yellowish-orange' },
   "blackthorn's_mass_recall": { abbr: 'bmr', castTime: 14, auraCost: 'greenish-blue' },
   blue_armor: { abbr: 'ba', castTime: 7, auraCost: 'green' },
   blue_bolt: { abbr: 'bb', castTime: 2, auraCost: 'blue' },
@@ -34,6 +33,7 @@ export const SPELL_DATA: Record<string, SpellInfo> = {
   detect_magic: { abbr: 'dm', castTime: 5, auraCost: 'reddish-orange' },
   detect_soul: { abbr: 'ds', castTime: 10, auraCost: 'yellowish-orange' },
   detect_spell: { abbr: 'dsp', castTime: 10, auraCost: 'red' },
+  disease_purge: { abbr: 'dp', castTime: 10, auraCost: 'yellowish-orange' },
   dispel_spell: { abbr: 'disp', castTime: 5, auraCost: 'orange' },
   dog_fart: { abbr: 'df', castTime: 2, auraCost: 'dim red' },
   enlarge: { abbr: 'en', castTime: 7, auraCost: 'orange' },
@@ -49,7 +49,6 @@ export const SPELL_DATA: Record<string, SpellInfo> = {
   heal_other: { abbr: 'ho', castTime: 6, auraCost: 'orange' },
   heal_self: { abbr: 'hs', castTime: 3, auraCost: 'reddish-orange' },
   ignite: { abbr: 'ig', castTime: 2, auraCost: 'dim red' },
-  disease_purge: { abbr: 'dp', castTime: 10, auraCost: 'yellowish-orange' },
   "jonathan's_ears": { abbr: 'je', castTime: 4, auraCost: 'reddish-orange' },
   "jonathan's_fareyes": { abbr: 'jfe', castTime: 4, auraCost: 'reddish-orange' },
   "jonathan's_neareyes": { abbr: 'jne', castTime: 4, auraCost: 'reddish-orange' },
@@ -78,6 +77,7 @@ export const SPELL_DATA: Record<string, SpellInfo> = {
   orange_focus: { abbr: 'of', castTime: 15, auraCost: 'reddish-orange' },
   "orella's_deep_storage": { abbr: 'ods', castTime: 14, auraCost: 'greenish-yellow' },
   other_spell_store: { abbr: 'oss', castTime: 20, auraCost: 'yellowish-orange' },
+  poison_purge: { abbr: 'pp', castTime: 10, auraCost: 'yellowish-orange' },
   "pol's_death_curse": { abbr: 'pdc', castTime: 25, auraCost: 'orange' },
   "pol's_gloom": { abbr: 'pg', castTime: 1, auraCost: 'very dim red' },
   "pol's_shadows": { abbr: 'ps', castTime: 4, auraCost: 'orange' },
