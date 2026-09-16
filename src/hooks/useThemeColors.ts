@@ -1,7 +1,7 @@
 import { useState, useCallback, useEffect } from 'react';
 import { useDataStore } from '../contexts/DataStoreContext';
 import { DEFAULT_THEME, type TerminalTheme, type ThemeColorKey } from '../lib/defaultTheme';
-import { migrateSettings, migrateCharacterFiles } from '../lib/settingsMigrations';
+import { migrateSettings } from '../lib/settingsMigrations';
 
 const STORE_FILE = 'settings.json';
 const STORE_KEY = 'theme';
@@ -54,7 +54,6 @@ export function useThemeColors() {
     (async () => {
       try {
         await migrateSettings(dataStore);
-        await migrateCharacterFiles(dataStore);
         if (cancelled) return;
         const savedTheme = await dataStore.get<Partial<TerminalTheme>>(STORE_FILE, STORE_KEY);
         if (cancelled) return;
