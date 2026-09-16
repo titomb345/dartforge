@@ -5,6 +5,7 @@ import type { AnnounceMode } from '../types';
 import { getTierForCount, getTierByName, getImprovesToNextTier } from '../lib/skillTiers';
 import { matchSkillLine } from '../lib/skillPatterns';
 import { smartWrite } from '../lib/terminalUtils';
+import { migrateCharacterFile } from '../lib/settingsMigrations';
 import type { OutputProcessor } from '../lib/outputProcessor';
 import type { DataStore } from '../contexts/DataStoreContext';
 
@@ -83,6 +84,8 @@ export function useSkillTracker(
     try {
       const ds = dataStoreRef.current;
       const filename = skillFileName(lower);
+      // Migrate character file if needed (e.g., spell renames)
+      await migrateCharacterFile(ds, filename);
       const skills = (await ds.get<CharacterSkillFile['skills']>(filename, 'skills')) ?? {};
       const pets = (await ds.get<CharacterSkillFile['pets']>(filename, 'pets')) ?? {};
       setSkillData({ skills, pets });

@@ -381,3 +381,77 @@ export async function migrateSettings(dataStore: DataStore): Promise<void> {
   await dataStore.set(SETTINGS_FILE, '_version', CURRENT_VERSION);
   await dataStore.save(SETTINGS_FILE);
 }
+
+/**
+ * Migrate a single character skill file (skills-*.json).
+ * Handles spell renames and other character-specific data transformations.
+ */
+export async function migrateCharacterFile(dataStore: DataStore, fileName: string): Promise<void> {
+  try {
+    const skills = (await dataStore.get<Record<string, unknown>>(fileName, 'skills')) ?? {};
+    let migrated = false;
+
+    // Rename spells, merging counts if the new name already exists
+    // (for players who continued after DartMUD renamed the spells)
+    if (skills["blackthorn's_cold_cure"]) {
+      const oldRecord = skills["blackthorn's_cold_cure"] as Record<string, unknown> & {
+        count?: number;
+        lastImproveAt?: string;
+      };
+      const existingRecord = skills['poison_purge'] as Record<string, unknown> & {
+        count?: number;
+        lastImproveAt?: string;
+      };
+
+      const newCount = Math.max(oldRecord.count ?? 0, existingRecord?.count ?? 0);
+      const newLastImprove =
+        !existingRecord || !oldRecord.lastImproveAt || !existingRecord.lastImproveAt
+          ? oldRecord.lastImproveAt || existingRecord?.lastImproveAt
+          : oldRecord.lastImproveAt > existingRecord.lastImproveAt
+            ? oldRecord.lastImproveAt
+            : existingRecord.lastImproveAt;
+
+      skills['poison_purge'] = {
+        skill: 'poison_purge',
+        count: newCount,
+        lastImproveAt: newLastImprove,
+      };
+      delete skills["blackthorn's_cold_cure"];
+      migrated = true;
+    }
+
+    if (skills['influenza_cure']) {
+      const oldRecord = skills['influenza_cure'] as Record<string, unknown> & {
+        count?: number;
+        lastImproveAt?: string;
+      };
+      const existingRecord = skills['disease_purge'] as Record<string, unknown> & {
+        count?: number;
+        lastImproveAt?: string;
+      };
+
+      const newCount = Math.max(oldRecord.count ?? 0, existingRecord?.count ?? 0);
+      const newLastImprove =
+        !existingRecord || !oldRecord.lastImproveAt || !existingRecord.lastImproveAt
+          ? oldRecord.lastImproveAt || existingRecord?.lastImproveAt
+          : oldRecord.lastImproveAt > existingRecord.lastImproveAt
+            ? oldRecord.lastImproveAt
+            : existingRecord.lastImproveAt;
+
+      skills['disease_purge'] = {
+        skill: 'disease_purge',
+        count: newCount,
+        lastImproveAt: newLastImprove,
+      };
+      delete skills['influenza_cure'];
+      migrated = true;
+    }
+
+    if (migrated) {
+      await dataStore.set(fileName, 'skills', skills);
+      await dataStore.save(fileName);
+    }
+  } catch (e) {
+    console.error('Failed to migrate character file:', e);
+  }
+}
