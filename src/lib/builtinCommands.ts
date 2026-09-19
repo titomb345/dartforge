@@ -3,6 +3,8 @@ import { buildDoorSequence } from './doorSequence';
 import type { AutoInscriber } from './autoInscriber';
 import type { AutoCaster } from './autoCaster';
 import type { AutoConc } from './autoConc';
+import { MAX_REFRESH_TARGETS, type AutoRefresh } from './autoRefresh';
+import { formatModifier, type AutoPowercast } from './autoPowercast';
 import { parseConvertCommand, formatMultiConversion } from './currency';
 import { getSpellByAbbr, findSpellFuzzy } from './spellData';
 import { getSkillByAbbr, findSkillFuzzy } from './skillData';
@@ -21,6 +23,8 @@ export interface BuiltinContext {
   autoInscriber: AutoInscriber;
   autoCaster: AutoCaster;
   autoConc: AutoConc;
+  autoRefresh: AutoRefresh;
+  autoPowercast: AutoPowercast;
   cycleMovementMode: () => void;
   appSettings: {
     announceMode: AnnounceMode;
@@ -429,6 +433,184 @@ const handleAutoconc: Handler = async (trimmed, ctx) => {
   ctx.appSettings.updateAutoConcAction(args);
   const verb = conc.active ? 'updated' : 'set';
   echo(ctx, `[Autoconc: action ${verb} to "${args}"]`);
+  return true;
+};
+
+const handleAutorefresh: Handler = async (trimmed, ctx) => {
+  if (!/^\/autorefresh\b/i.test(trimmed)) return false;
+  const args = trimmed.slice(12).trim();
+  const argsLower = args.toLowerCase();
+  const refresh = ctx.autoRefresh;
+  const parsePower = (raw: string) => parseInt(raw.replace(/^@/, ''), 10);
+
+  if (argsLower === 'off' || argsLower === 'stop') {
+    refresh.stop(echoFn(ctx));
+    return true;
+  }
+
+  if (argsLower === 'on' || argsLower === 'start') {
+    if (refresh.getState().targets.length === 0) {
+      error(ctx, '[Autorefresh] No targets. Use /autorefresh add <name> first.');
+    } else {
+      const sendViaRef = await ctx.sendCommandViaRef();
+      refresh.start(async (cmd) => await sendViaRef(cmd), echoFn(ctx));
+    }
+    return true;
+  }
+
+  if (argsLower === 'status') {
+    const s = refresh.getState();
+    const list = s.targets.map((t) => `${t.name} @${t.power ?? s.power}`).join(', ') || 'none';
+    echo(ctx, `[Autorefresh: ${s.active ? 'ON' : 'OFF'}]`);
+    echo(ctx, `  Targets: ${list}`);
+    echo(ctx, `  Power:   @${s.power}`);
+    if (s.active) {
+      const doing = s.currentTarget ? `casting on ${s.currentTarget}` : 'waiting for full conc';
+      echo(ctx, `  Now:     ${doing} | Rounds: ${s.cycleCount}`);
+    }
+    return true;
+  }
+
+  if (argsLower === 'clear') {
+    refresh.clearTargets(echoFn(ctx));
+    return true;
+  }
+
+  const parts = args.split(/\s+/);
+  const verb = parts[0]?.toLowerCase();
+
+  if (verb === 'add' && parts[1]) {
+    let power: number | null = null;
+    if (parts[2]) {
+      power = parsePower(parts[2]);
+      if (isNaN(power) || power < 1) {
+        error(ctx, '[Autorefresh] Usage: /autorefresh add <name> [@power]');
+        return true;
+      }
+    }
+    refresh.addTarget(parts[1], power, echoFn(ctx));
+    return true;
+  }
+
+  if ((verb === 'remove' || verb === 'rm') && parts[1]) {
+    refresh.removeTarget(parts[1], echoFn(ctx));
+    return true;
+  }
+
+  if (verb === 'power' && parts[1]) {
+    const power = parsePower(parts[1]);
+    if (isNaN(power) || power < 1) {
+      error(ctx, '[Autorefresh] Power must be a positive number (e.g. @200).');
+    } else {
+      refresh.setPower(power, echoFn(ctx));
+    }
+    return true;
+  }
+
+  error(
+    ctx,
+    '[Autorefresh] Usage:\r\n' +
+      `  /autorefresh add <name> [@power]  Add a target (max ${MAX_REFRESH_TARGETS}); power overrides the shared one\r\n` +
+      '  /autorefresh remove <name>        Remove a target\r\n' +
+      '  /autorefresh clear                Remove all targets\r\n' +
+      '  /autorefresh power @<n>           Set the shared power\r\n' +
+      '  /autorefresh on                   Start the loop\r\n' +
+      '  /autorefresh off                  Stop the loop\r\n' +
+      '  /autorefresh status               Show current state'
+  );
+  return true;
+};
+
+const handleAutopowercast: Handler = async (trimmed, ctx) => {
+  if (!/^\/autopowercast\b/i.test(trimmed)) return false;
+  const args = trimmed.slice(14).trim();
+  const argsLower = args.toLowerCase();
+  const pc = ctx.autoPowercast;
+
+  if (argsLower === 'off' || argsLower === 'stop') {
+    pc.stop(echoFn(ctx));
+    return true;
+  }
+
+  if (argsLower === 'on' || argsLower === 'start') {
+    if (!pc.getConfig().item) {
+      error(ctx, '[Autopowercast] No focus item. Use /autopowercast set item <item> first.');
+    } else if (!ctx.skillData().skills['spell casting']?.count) {
+      error(
+        ctx,
+        '[Autopowercast] No spell casting data tracked. Improve spell casting first so DartForge can track it.'
+      );
+    } else {
+      const sendViaRef = await ctx.sendCommandViaRef();
+      pc.start(
+        async (cmd) => await sendViaRef(cmd),
+        async (action) => await ctx.expandAndExecute(action),
+        echoFn(ctx)
+      );
+    }
+    return true;
+  }
+
+  if (argsLower === 'status') {
+    const s = pc.getState();
+    echo(ctx, `[Autopowercast: ${s.active ? 'ON' : 'OFF'}]`);
+    echo(ctx, `  Item:     ${s.item || '(not set)'}`);
+    echo(ctx, `  Channels: ${s.channelCount} x ${s.channelPower} power, ${s.delaySec}s apart`);
+    echo(ctx, `  Modifier: /powercast ${formatModifier(s.modifier)}`);
+    if (s.active) {
+      const doing =
+        s.phase === 'casting' ? 'powercasting' : `channel ${s.channelsDone}/${s.channelCount}`;
+      echo(ctx, `  Now:      ${doing} | Powercasts: ${s.cycleCount}`);
+    }
+    return true;
+  }
+
+  if (argsLower.startsWith('set ')) {
+    const rest = args.slice(4).trim();
+    const space = rest.indexOf(' ');
+    const key = (space === -1 ? rest : rest.slice(0, space)).toLowerCase();
+    const value = space === -1 ? '' : rest.slice(space + 1).trim();
+    const n = parseInt(value, 10);
+
+    if (key === 'item' && value) {
+      pc.updateConfig({ item: value });
+      echo(ctx, `[Autopowercast: focus item set to "${value}"]`);
+      return true;
+    }
+    if (key === 'modifier' && !isNaN(n)) {
+      pc.updateConfig({ modifier: n });
+      echo(ctx, `[Autopowercast: will /powercast ${formatModifier(n)}]`);
+      return true;
+    }
+    if (key === 'delay' && n >= 0) {
+      pc.updateConfig({ delaySec: n });
+      echo(ctx, `[Autopowercast: ${n}s between channels]`);
+      return true;
+    }
+    if (key === 'power' && n >= 1) {
+      pc.updateConfig({ channelPower: n });
+      echo(ctx, `[Autopowercast: channelling ${n} power each time]`);
+      return true;
+    }
+    if (key === 'channels' && n >= 1) {
+      pc.updateConfig({ channelCount: n });
+      echo(ctx, `[Autopowercast: ${n} channels before each powercast]`);
+      return true;
+    }
+  }
+
+  error(
+    ctx,
+    '[Autopowercast] Usage:\r\n' +
+      '  /autopowercast set item <item>    Focus item to charge and discharge\r\n' +
+      '  /autopowercast set channels <n>   Channels to store before casting\r\n' +
+      '  /autopowercast set power <n>      Power per channel\r\n' +
+      '  /autopowercast set delay <sec>    Seconds between channels\r\n' +
+      '  /autopowercast set modifier <n>   Adjustment passed to /powercast (e.g. -5)\r\n' +
+      '  /autopowercast on                 Start the loop\r\n' +
+      '  /autopowercast off                Stop the loop\r\n' +
+      '  /autopowercast status             Show current state'
+  );
   return true;
 };
 
@@ -867,6 +1049,8 @@ const BUILTIN_HANDLERS: Handler[] = [
   handleAutoinscribe,
   handleAutocast,
   handleAutoconc,
+  handleAutorefresh,
+  handleAutopowercast,
   handleAnnounce,
   handleConvert,
   handleVar,

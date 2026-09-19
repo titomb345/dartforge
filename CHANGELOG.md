@@ -10,6 +10,13 @@ The `[Unreleased]` header controls automatic version bumping on merge:
 - `[Unreleased-minor]` → 0.1.0 → 0.2.0
 - `[Unreleased-major]` → 0.1.0 → 1.0.0
 
+## [Unreleased-minor]
+
+### Added
+
+- `/autorefresh`: casts refresh_other on a list of up to 4 people every time you reach full concentration. The casts go out one at a time, each waiting for the one before it to finish, so they never interrupt each other, and anyone who is not around is skipped. `/autorefresh add <name> [@power]`, `/autorefresh remove <name>`, `/autorefresh clear`, `/autorefresh power @<n>`, `/autorefresh on|off|status`. The list and power are saved per character. A cyan badge shows while it runs
+- `/autopowercast`: charges a focus and spends it on a powercast in a loop. It channels into the focus a set number of times with a pause between each, then discharges it, sets your mind to isolated, runs `/powercast` with your modifier, sets your mind back to open and starts over. `/autopowercast set item|channels|power|delay|modifier <value>`, `/autopowercast on|off|status`. Only channels the MUD confirms are counted, and having no aura just waits and retries. Settings are saved per character. A pink badge shows the channel count while it runs
+
 ## [1.17.5] - 2026-09-16
 
 ### Changed

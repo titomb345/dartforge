@@ -533,6 +533,16 @@ export const HELP_CATEGORIES: HelpCategory[] = [
           'Powercast lirrin\'s glow at your spell casting level. "/powercast" casts at (spell_casting_count * 100). "/powercast -5" subtracts 5 from your count before multiplying. Flows through the normal command pipeline (action blocking, aliases, etc.).',
       },
       {
+        title: '/autopowercast',
+        description:
+          'Charge a focus, then spend it on a powercast, over and over. It channels into your focus item a set number of times with a pause between each, then discharges the item, sets your mind to isolated, runs /powercast, sets your mind back to open and starts channelling again. "/autopowercast set item <item>" picks the focus. "/autopowercast set channels <n>" is how many channels to store before casting. "/autopowercast set power <n>" is the power per channel. "/autopowercast set delay <sec>" is the pause between channels. "/autopowercast set modifier <n>" is the adjustment handed to /powercast (e.g. -5). "/autopowercast on" starts, "/autopowercast off" stops, "/autopowercast status" shows progress. Only channels the MUD confirms are counted; with no aura it waits and tries again. Settings are remembered per character. A pink badge shows the channel count while active.',
+      },
+      {
+        title: '/autorefresh',
+        description:
+          'Cast refresh_other on up to 4 people every time you reach full concentration. The casts go out one at a time, each waiting for the one before it to finish, so they never interrupt each other. Anyone who is not around is skipped. "/autorefresh add <name> [@power]" adds a target (the optional power is just for that person). "/autorefresh remove <name>" and "/autorefresh clear" edit the list. "/autorefresh power @<n>" sets the power for everyone without their own. "/autorefresh on" starts, "/autorefresh off" stops, "/autorefresh status" shows the list. The list and power are remembered per character. A cyan badge appears while active.',
+      },
+      {
         title: '/counter',
         description:
           'Manage improve counters from the command line. "/counter list" shows all counters with status, imps, and elapsed time. "/counter status" shows a quick one-liner for the active counter. "/counter info" shows detailed stats including rates and skills. "/counter start|toggle|pause|stop|clear" controls the active counter. "/counter toggle" smart-toggles between start and pause. "/counter switch <name>" switches the active counter by name (partial match).',
