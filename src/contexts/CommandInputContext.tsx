@@ -65,6 +65,19 @@ export interface CommandInputState {
   concAction: string | null;
   concCycleCount: number;
   onStopConc: () => void;
+  // Auto-refresh
+  refreshActive: boolean;
+  refreshTargets: string[];
+  refreshCurrentTarget: string | null;
+  refreshCycleCount: number;
+  onStopRefresh: () => void;
+  // Auto-powercast
+  powercastActive: boolean;
+  powercastCasting: boolean;
+  powercastChannelsDone: number;
+  powercastChannelCount: number;
+  powercastCycleCount: number;
+  onStopPowercast: () => void;
   // Announce
   announceMode: AnnounceMode;
   onStopAnnounce: () => void;

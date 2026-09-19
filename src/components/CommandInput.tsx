@@ -132,6 +132,17 @@ export const CommandInput = forwardRef<HTMLTextAreaElement, CommandInputProps>(
       concAction,
       concCycleCount,
       onStopConc,
+      refreshActive,
+      refreshTargets,
+      refreshCurrentTarget,
+      refreshCycleCount,
+      onStopRefresh,
+      powercastActive,
+      powercastCasting,
+      powercastChannelsDone,
+      powercastChannelCount,
+      powercastCycleCount,
+      onStopPowercast,
       announceMode,
       onStopAnnounce,
     } = useCommandInputContext();
@@ -494,6 +505,43 @@ export const CommandInput = forwardRef<HTMLTextAreaElement, CommandInputProps>(
           >
             <span>Autoconc</span>
             {concCycleCount > 0 && <span className="opacity-70">x{concCycleCount}</span>}
+          </StatusBadge>
+        )}
+
+        {refreshActive && (
+          <StatusBadge
+            color={CHIP_ACCENT.refresh}
+            title={
+              refreshCurrentTarget
+                ? `Autorefresh: casting on ${refreshCurrentTarget}`
+                : `Autorefresh: ${refreshTargets.join(', ')} (waiting for full conc)`
+            }
+            onStop={onStopRefresh}
+            stopTitle="Stop autorefresh"
+            animate
+          >
+            <span>Autorefresh</span>
+            {refreshCycleCount > 0 && <span className="opacity-70">x{refreshCycleCount}</span>}
+          </StatusBadge>
+        )}
+
+        {powercastActive && (
+          <StatusBadge
+            color={CHIP_ACCENT.powercast}
+            title={
+              powercastCasting
+                ? 'Autopowercast: powercasting'
+                : `Autopowercast: channel ${powercastChannelsDone} of ${powercastChannelCount}`
+            }
+            onStop={onStopPowercast}
+            stopTitle="Stop autopowercast"
+            animate
+          >
+            <span>Autopowercast</span>
+            <span className="opacity-70">
+              {powercastCasting ? 'cast' : `${powercastChannelsDone}/${powercastChannelCount}`}
+            </span>
+            {powercastCycleCount > 0 && <span className="opacity-70">x{powercastCycleCount}</span>}
           </StatusBadge>
         )}
 

@@ -45,6 +45,8 @@ export const CHIP_ACCENT = {
   caster: '#34d399',
   casterWeight: '#fbbf24',
   conc: '#c084fc',
+  refresh: '#22d3ee',
+  powercast: '#f472b6',
   announce: '#fb923c',
   alignment: '#80e080',
   who: PANEL_ACCENT.who,

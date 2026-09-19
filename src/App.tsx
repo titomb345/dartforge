@@ -89,6 +89,9 @@ import { useAutoCasterConfig } from './hooks/useAutoCasterConfig';
 import { panelForKeyEvent } from './lib/panelShortcuts';
 import type { CounterAutoToggle } from './hooks/useImproveCounters';
 import { AutoConc } from './lib/autoConc';
+import { AutoRefresh, sanitizeRefreshConfig } from './lib/autoRefresh';
+import { AutoPowercast, sanitizePowercastConfig } from './lib/autoPowercast';
+import { useEngineConfig } from './hooks/useEngineConfig';
 import { useEngineRef } from './hooks/useEngineRef';
 import {
   type MovementMode,
@@ -630,6 +633,12 @@ function AppMain() {
         // Auto-conc — watch for BEBT to execute action
         autoConcRef.current.processServerLine(stripped);
 
+        // Auto-refresh — watch for BEBT, then cast refresh_other down the list
+        autoRefreshRef.current.processServerLine(stripped);
+
+        // Auto-powercast — count channels, then discharge and powercast
+        autoPowercastRef.current.processServerLine(stripped);
+
         // Feed to loadout tracker (hands/worn state)
         loadoutFeedLineRef.current(stripped);
 
@@ -822,6 +831,12 @@ function AppMain() {
   // Auto-conc — auto-execute on full concentration
   const [autoConcRef, concState] = useEngineRef(() => new AutoConc());
 
+  // Auto-refresh — refresh_other a list of targets on full concentration
+  const [autoRefreshRef, refreshState] = useEngineRef(() => new AutoRefresh());
+
+  // Auto-powercast — charge a focus, discharge, powercast, repeat
+  const [autoPowercastRef, powercastState] = useEngineRef(() => new AutoPowercast());
+
   // Sync persisted action to auto-conc when settings load
   useEffect(() => {
     autoConcRef.current.setAction(appSettings.autoConcAction);
@@ -881,6 +896,20 @@ function AppMain() {
 
   // Auto-caster tuning (power steps, weight item/container/steps) — per character
   useAutoCasterConfig(dataStore, activeCharacter, autoCasterRef.current);
+  useEngineConfig(
+    dataStore,
+    activeCharacter,
+    autoRefreshRef.current,
+    'autorefresh.json',
+    sanitizeRefreshConfig
+  );
+  useEngineConfig(
+    dataStore,
+    activeCharacter,
+    autoPowercastRef.current,
+    'autopowercast.json',
+    sanitizePowercastConfig
+  );
 
   // Command history — also scoped to the active character
   const { commandHistory, handleHistoryChange: rawHistoryChange } = useCommandHistory(
@@ -1487,6 +1516,8 @@ function AppMain() {
     autoInscriber: autoInscriberRef.current,
     autoCaster: autoCasterRef.current,
     autoConc: autoConcRef.current,
+    autoRefresh: autoRefreshRef.current,
+    autoPowercast: autoPowercastRef.current,
     cycleMovementMode,
     appSettings: {
       announceMode: appSettings.announceMode,
@@ -1636,6 +1667,8 @@ function AppMain() {
       autoInscriberRef.current.reset();
       autoCasterRef.current.reset();
       autoConcRef.current.reset();
+      autoRefreshRef.current.reset();
+      autoPowercastRef.current.reset();
       npcGagTrackerRef.current.reset();
       setMovementMode('normal');
       setWhoSnapshot(null);
@@ -2350,6 +2383,19 @@ function AppMain() {
       concAction: concState.action,
       concCycleCount: concState.cycleCount,
       onStopConc: () => autoConcRef.current.stop((msg) => writeToTerm(`\x1b[36m${msg}\x1b[0m\r\n`)),
+      refreshActive: refreshState.active,
+      refreshTargets: refreshState.targets.map((t) => t.name),
+      refreshCurrentTarget: refreshState.currentTarget,
+      refreshCycleCount: refreshState.cycleCount,
+      onStopRefresh: () =>
+        autoRefreshRef.current.stop((msg) => writeToTerm(`\x1b[36m${msg}\x1b[0m\r\n`)),
+      powercastActive: powercastState.active,
+      powercastCasting: powercastState.phase === 'casting',
+      powercastChannelsDone: powercastState.channelsDone,
+      powercastChannelCount: powercastState.channelCount,
+      powercastCycleCount: powercastState.cycleCount,
+      onStopPowercast: () =>
+        autoPowercastRef.current.stop((msg) => writeToTerm(`\x1b[36m${msg}\x1b[0m\r\n`)),
       announceMode: appSettings.announceMode,
       onStopAnnounce: () => {
         appSettings.updateAnnounceMode('off');
@@ -2393,6 +2439,8 @@ function AppMain() {
       inscriberState,
       casterState,
       concState,
+      refreshState,
+      powercastState,
       appSettings.announceMode,
       appSettings.updateAnnounceMode,
       appSettings.updateAnnouncePetMode,
