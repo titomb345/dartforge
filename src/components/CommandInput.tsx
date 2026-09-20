@@ -138,7 +138,9 @@ export const CommandInput = forwardRef<HTMLTextAreaElement, CommandInputProps>(
       refreshCycleCount,
       onStopRefresh,
       powercastActive,
-      powercastCasting,
+      powercastPhase,
+      powercastWaitingFor,
+      powercastAuraLabel,
       powercastChannelsDone,
       powercastChannelCount,
       powercastCycleCount,
@@ -234,6 +236,31 @@ export const CommandInput = forwardRef<HTMLTextAreaElement, CommandInputProps>(
 
     const lineCount = useMemo(() => value.split('\n').length, [value]);
     const isMultiLine = lineCount > 1;
+
+    // Autopowercast chip text — the loop spends most of its time either
+    // channelling or waiting for concentration and aura to come back.
+    const powercastLabel = useMemo(() => {
+      if (powercastPhase === 'waiting') {
+        const back = powercastAuraLabel
+          ? `full concentration and a ${powercastAuraLabel.toLowerCase()} aura`
+          : 'full concentration';
+        const then = powercastWaitingFor === 'cast' ? 'powercasting' : 'channelling';
+        return { short: 'wait', title: `Autopowercast: waiting for ${back} before ${then}` };
+      }
+      if (powercastPhase === 'casting') {
+        return { short: 'cast', title: 'Autopowercast: powercasting' };
+      }
+      return {
+        short: `${powercastChannelsDone}/${powercastChannelCount}`,
+        title: `Autopowercast: channel ${powercastChannelsDone} of ${powercastChannelCount}`,
+      };
+    }, [
+      powercastPhase,
+      powercastWaitingFor,
+      powercastAuraLabel,
+      powercastChannelsDone,
+      powercastChannelCount,
+    ]);
 
     const submit = useCallback(() => {
       const lines = value.split('\n');
@@ -528,19 +555,13 @@ export const CommandInput = forwardRef<HTMLTextAreaElement, CommandInputProps>(
         {powercastActive && (
           <StatusBadge
             color={CHIP_ACCENT.powercast}
-            title={
-              powercastCasting
-                ? 'Autopowercast: powercasting'
-                : `Autopowercast: channel ${powercastChannelsDone} of ${powercastChannelCount}`
-            }
+            title={powercastLabel.title}
             onStop={onStopPowercast}
             stopTitle="Stop autopowercast"
             animate
           >
             <span>Autopowercast</span>
-            <span className="opacity-70">
-              {powercastCasting ? 'cast' : `${powercastChannelsDone}/${powercastChannelCount}`}
-            </span>
+            <span className="opacity-70">{powercastLabel.short}</span>
             {powercastCycleCount > 0 && <span className="opacity-70">x{powercastCycleCount}</span>}
           </StatusBadge>
         )}
