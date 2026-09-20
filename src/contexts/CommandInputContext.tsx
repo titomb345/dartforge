@@ -1,6 +1,7 @@
 import { createContext, useContext } from 'react';
 import type { ActiveTimerBadge } from '../hooks/useTimerEngines';
 import type { MovementMode } from '../lib/movementMode';
+import type { AutoPowercastNext, AutoPowercastPhase } from '../lib/autoPowercast';
 import type { AnnounceMode } from '../types';
 
 export interface CommandInputState {
@@ -73,7 +74,9 @@ export interface CommandInputState {
   onStopRefresh: () => void;
   // Auto-powercast
   powercastActive: boolean;
-  powercastCasting: boolean;
+  powercastPhase: AutoPowercastPhase;
+  powercastWaitingFor: AutoPowercastNext | null;
+  powercastAuraLabel: string | null;
   powercastChannelsDone: number;
   powercastChannelCount: number;
   powercastCycleCount: number;

@@ -310,3 +310,19 @@ export function matchAuraLine(line: string, rawLine?: string): AuraMatch | null 
 
   return null;
 }
+
+/**
+ * Look up an aura level by its descriptor, key, or label — forgiving about
+ * case, hyphens, underscores and extra spaces ("Intense_Violet", "dim red").
+ * Used for the aura level you tell /autopowercast to wait for.
+ */
+export function findAuraLevel(input: string): AuraLevel | null {
+  const norm = (s: string) => s.toLowerCase().replace(/[-_]/g, ' ').replace(/\s+/g, ' ').trim();
+  const wanted = norm(input);
+  if (!wanted) return null;
+  return (
+    AURA_LEVELS.find(
+      (l) => norm(l.descriptor) === wanted || norm(l.key) === wanted || norm(l.label) === wanted
+    ) ?? null
+  );
+}
