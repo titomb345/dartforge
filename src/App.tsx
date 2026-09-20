@@ -545,7 +545,7 @@ function AppMain() {
   const handleChatMessageRef = useRef<((msg: ChatMessage) => void) | null>(null);
 
   // Status trackers
-  const { concentration, updateConcentration } = useConcentration();
+  const { concentration, concentrationRef, updateConcentration } = useConcentration();
   const updateConcentrationRef = useLatestRef(updateConcentration);
 
   const { health, updateHealth } = useHealth();
@@ -555,7 +555,7 @@ function AppMain() {
   const updateHungerRef = useLatestRef(updateHunger);
   const updateThirstRef = useLatestRef(updateThirst);
 
-  const { aura, auraMudColor, auraMudColors, updateAura } = useAura();
+  const { aura, auraRef, auraMudColor, auraMudColors, updateAura } = useAura();
   const updateAuraRef = useLatestRef(updateAura);
 
   const { encumbrance, updateEncumbrance } = useEncumbrance();
@@ -1532,6 +1532,7 @@ function AppMain() {
     setVar: (name, value, scope) => setVarRef.current(name, value, scope),
     deleteVariableByName: (name) => deleteVariableByNameRef.current(name),
     skillData: () => skillDataRef.current,
+    vitals: () => ({ conc: concentrationRef.current, aura: auraRef.current }),
     improveCounters: () => improveCountersRef.current,
     counterValue: () => counterValueRef.current,
     expandAndExecute: async (action) => {
@@ -2390,7 +2391,9 @@ function AppMain() {
       onStopRefresh: () =>
         autoRefreshRef.current.stop((msg) => writeToTerm(`\x1b[36m${msg}\x1b[0m\r\n`)),
       powercastActive: powercastState.active,
-      powercastCasting: powercastState.phase === 'casting',
+      powercastPhase: powercastState.phase,
+      powercastWaitingFor: powercastState.waitingFor,
+      powercastAuraLabel: autoPowercastRef.current.auraLevel?.label ?? null,
       powercastChannelsDone: powercastState.channelsDone,
       powercastChannelCount: powercastState.channelCount,
       powercastCycleCount: powercastState.cycleCount,

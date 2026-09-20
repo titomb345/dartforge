@@ -4,7 +4,8 @@ import type { AutoInscriber } from './autoInscriber';
 import type { AutoCaster } from './autoCaster';
 import type { AutoConc } from './autoConc';
 import { MAX_REFRESH_TARGETS, type AutoRefresh } from './autoRefresh';
-import { formatModifier, type AutoPowercast } from './autoPowercast';
+import { formatModifier, type AutoPowercast, type Vitals } from './autoPowercast';
+import { AURA_LEVELS, findAuraLevel } from './auraPatterns';
 import { parseConvertCommand, formatMultiConversion } from './currency';
 import { getSpellByAbbr, findSpellFuzzy } from './spellData';
 import { getSkillByAbbr, findSkillFuzzy } from './skillData';
@@ -39,6 +40,8 @@ export interface BuiltinContext {
   setVar: (name: string, value: string, scope: 'character' | 'global') => void;
   deleteVariableByName: (name: string) => boolean;
   skillData: () => { skills: Record<string, { count: number }> };
+  /** The status bar's live concentration and aura readings. */
+  vitals: () => Vitals;
   improveCounters: () => {
     counters: ImproveCounter[];
     activeCounterId: string | null;
@@ -521,6 +524,18 @@ const handleAutorefresh: Handler = async (trimmed, ctx) => {
   return true;
 };
 
+/** Words that mean "switch this setting back off" in /autopowercast set. */
+const CLEARING_WORDS = ['off', 'none', 'clear', 'any', 'no'];
+const isClearingWord = (value: string) => !value || CLEARING_WORDS.includes(value.toLowerCase());
+
+/** Aura levels as a few wrapped lines, for the "not an aura level" error. */
+function describeAuraLevels(): string[] {
+  const names = AURA_LEVELS.filter((l) => l.key !== 'none').map((l) => l.descriptor);
+  const lines: string[] = [];
+  for (let i = 0; i < names.length; i += 4) lines.push(names.slice(i, i + 4).join(', '));
+  return lines;
+}
+
 const handleAutopowercast: Handler = async (trimmed, ctx) => {
   if (!/^\/autopowercast\b/i.test(trimmed)) return false;
   const args = trimmed.slice(14).trim();
@@ -545,7 +560,8 @@ const handleAutopowercast: Handler = async (trimmed, ctx) => {
       pc.start(
         async (cmd) => await sendViaRef(cmd),
         async (action) => await ctx.expandAndExecute(action),
-        echoFn(ctx)
+        echoFn(ctx),
+        () => ctx.vitals()
       );
     }
     return true;
@@ -553,14 +569,26 @@ const handleAutopowercast: Handler = async (trimmed, ctx) => {
 
   if (argsLower === 'status') {
     const s = pc.getState();
+    const auraLevel = pc.auraLevel;
     echo(ctx, `[Autopowercast: ${s.active ? 'ON' : 'OFF'}]`);
-    echo(ctx, `  Item:     ${s.item || '(not set)'}`);
-    echo(ctx, `  Channels: ${s.channelCount} x ${s.channelPower} power, ${s.delaySec}s apart`);
-    echo(ctx, `  Modifier: /powercast ${formatModifier(s.modifier)}`);
+    echo(ctx, `  Item:      ${s.item || '(not set)'}`);
+    echo(ctx, `  Container: ${s.container || '(none, you keep it in hand)'}`);
+    echo(ctx, `  Channels:  ${s.channelCount} x ${s.channelPower} power, ${s.delaySec}s apart`);
+    echo(ctx, `  Modifier:  /powercast ${formatModifier(s.modifier)}`);
+    echo(
+      ctx,
+      `  Waits for: full concentration${auraLevel ? ` and a ${auraLevel.label} aura` : ''}`
+    );
     if (s.active) {
-      const doing =
-        s.phase === 'casting' ? 'powercasting' : `channel ${s.channelsDone}/${s.channelCount}`;
-      echo(ctx, `  Now:      ${doing} | Powercasts: ${s.cycleCount}`);
+      let doing: string;
+      if (s.phase === 'waiting') {
+        doing = `waiting to ${s.waitingFor === 'cast' ? 'powercast' : 'channel'}`;
+      } else if (s.phase === 'casting') {
+        doing = 'powercasting';
+      } else {
+        doing = `channel ${s.channelsDone}/${s.channelCount}`;
+      }
+      echo(ctx, `  Now:       ${doing} | Powercasts: ${s.cycleCount}`);
     }
     return true;
   }
@@ -575,6 +603,32 @@ const handleAutopowercast: Handler = async (trimmed, ctx) => {
     if (key === 'item' && value) {
       pc.updateConfig({ item: value });
       echo(ctx, `[Autopowercast: focus item set to "${value}"]`);
+      return true;
+    }
+    if (key === 'container') {
+      if (isClearingWord(value)) {
+        pc.updateConfig({ container: '' });
+        echo(ctx, '[Autopowercast: container cleared, keep the focus in hand yourself]');
+      } else {
+        pc.updateConfig({ container: value });
+        echo(ctx, `[Autopowercast: focus stays in "${value}", taken out only to discharge]`);
+      }
+      return true;
+    }
+    if (key === 'aura') {
+      if (isClearingWord(value)) {
+        pc.updateConfig({ auraTarget: null });
+        echo(ctx, '[Autopowercast: aura check off, only concentration is waited for]');
+        return true;
+      }
+      const level = findAuraLevel(value);
+      if (!level || level.key === 'none') {
+        error(ctx, `[Autopowercast] "${value}" is not an aura level. Pick one of:`);
+        for (const line of describeAuraLevels()) echo(ctx, `  ${line}`);
+        return true;
+      }
+      pc.updateConfig({ auraTarget: level.key });
+      echo(ctx, `[Autopowercast: waits for a ${level.label} aura before channelling]`);
       return true;
     }
     if (key === 'modifier' && !isNaN(n)) {
@@ -602,14 +656,17 @@ const handleAutopowercast: Handler = async (trimmed, ctx) => {
   error(
     ctx,
     '[Autopowercast] Usage:\r\n' +
-      '  /autopowercast set item <item>    Focus item to charge and discharge\r\n' +
-      '  /autopowercast set channels <n>   Channels to store before casting\r\n' +
-      '  /autopowercast set power <n>      Power per channel\r\n' +
-      '  /autopowercast set delay <sec>    Seconds between channels\r\n' +
-      '  /autopowercast set modifier <n>   Adjustment passed to /powercast (e.g. -5)\r\n' +
-      '  /autopowercast on                 Start the loop\r\n' +
-      '  /autopowercast off                Stop the loop\r\n' +
-      '  /autopowercast status             Show current state'
+      '  /autopowercast set item <item>       Focus item to charge and discharge\r\n' +
+      '  /autopowercast set container <name>  Where the focus lives between discharges\r\n' +
+      '  /autopowercast set channels <n>      Channels to store before casting\r\n' +
+      '  /autopowercast set power <n>         Power per channel\r\n' +
+      '  /autopowercast set delay <sec>       Seconds between channels\r\n' +
+      '  /autopowercast set modifier <n>      Adjustment passed to /powercast (e.g. -5)\r\n' +
+      '  /autopowercast set aura <level>      Wait for this aura too, e.g. intense violet\r\n' +
+      '  /autopowercast on                    Start the loop\r\n' +
+      '  /autopowercast off                   Stop the loop\r\n' +
+      '  /autopowercast status                Show current state\r\n' +
+      '  Use "off" as the value for container or aura to switch either back off'
   );
   return true;
 };

@@ -10,6 +10,19 @@ The `[Unreleased]` header controls automatic version bumping on merge:
 - `[Unreleased-minor]` → 0.1.0 → 0.2.0
 - `[Unreleased-major]` → 0.1.0 → 1.0.0
 
+## [Unreleased-patch]
+
+### Added
+
+- `/autopowercast set container <name>`: the focus can live in a pack instead of your hands. Channelling works while it sits in there, so it is only taken out for the discharge and put straight back. `/autopowercast set container off` goes back to holding or wearing it yourself
+- `/autopowercast set aura <level>`: name the aura you have when you are topped up (e.g. `intense violet`) and the loop waits for that as well as your concentration before each round of channels, since channelling is what draws on your aura. `/autopowercast set aura off` turns it off. Both readings come from the same trackers that feed the concentration and aura pills in the status bar, so nothing extra is sent to the game
+
+### Fixed
+
+- `/autopowercast` went straight back to channelling the moment a powercast finished, so your concentration never recovered and every round after the first was weaker than it should have been. It now waits for full concentration after the powercast, and again after the last channel so the powercast has something behind it
+- A powercast that came back without casting (aura too weak, concentration broken, the spell fizzled) left `/autopowercast` sitting there doing nothing with no explanation. It now says what happened, opens your mind, waits for recovery and channels a fresh round. Three failures in a row stop the loop, and a powercast that never answers at all now times out after two minutes instead of stalling forever
+- The `/autopowercast` status chip above the command input now shows `wait` while the loop is waiting on your concentration and aura, and its tooltip says what it is waiting for
+
 ## [1.18.0] - 2026-09-19
 
 ### Added
