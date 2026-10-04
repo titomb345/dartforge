@@ -1,9 +1,10 @@
 /**
  * Regression test: stretch-on-collision placement (Eris ferry/abbey case).
  * When a cardinal move's natural cell is occupied by a different room, the
- * map must STRETCH — the occupant's half-plane shifts one cell along the
- * movement axis — so the new room lands exactly where the move says.
- * Straight streets stay straight; nothing is nudged to an arbitrary cell.
+ * map must STRETCH — the occupant's structure beyond the cut shifts one
+ * cell along the movement axis (test-bounded-stretch pins down which rooms
+ * that is) — so the new room lands exactly where the move says. Straight
+ * streets stay straight; nothing is nudged to an arbitrary cell.
  */
 import { TownMapStore } from '../../src/lib/townMap';
 import { TownLocalizer } from '../../src/lib/townLocalizer';

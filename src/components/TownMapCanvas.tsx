@@ -7,13 +7,30 @@
  * corridors, diagonal shortcuts as thin lines, doors as amber ticks across
  * the link. Right-click a room to auto-walk there (BFS over learned links,
  * one confirmed step at a time — floors included).
+ *
+ * Everything is placed on the DISPLAY layout (townDisplayLayout.ts): the
+ * store's grid with collision-stretch gaps compacted, for presentation
+ * only. Drawing, hit-testing, centering, search focus and the walk overlay
+ * all read that one layout, so what you click is what you see.
  */
 
 import { useRef, useEffect, useCallback, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useMapContext } from '../contexts/MapContext';
 import type { TownRoom } from '../lib/townMap';
-import type { TownDir } from '../lib/townParser';
+import { TOWN_REVERSE, type TownDir } from '../lib/townParser';
+import {
+  createTownDisplayLayoutCache,
+  doorTick,
+  fitLabel,
+  labelBudgets,
+  linkHasDoor,
+  linkPolyline,
+  linkShape,
+  stairJumpTarget,
+  type DisplayCell,
+  type Point,
+} from '../lib/townDisplayLayout';
 import {
   paintMarkerGlyph,
   ROOM_ICON_TYPES,
@@ -43,6 +60,11 @@ const ICON_COLOR = MARKER_COLOR;
 const STAIR_COLOR = 'rgba(200, 185, 160, 0.9)';
 const NAMED_COLOR = 'rgba(160, 120, 200, 0.9)';
 const LABEL_COLOR = 'rgba(200, 185, 160, 0.85)';
+const LABEL_FONT = '8px "Courier New", monospace';
+/** Clear space kept between east-west neighbours' labels */
+const LABEL_GAP = 6;
+/** Widest label for a room with no east/west neighbour */
+const LABEL_MAX_W = 2 * CELL - 6;
 const TOOLTIP_BG = 'rgba(20, 18, 16, 0.95)';
 const TOOLTIP_BORDER = 'rgba(140, 125, 100, 0.5)';
 const TOOLTIP_TEXT = '#c8b9a0';
@@ -73,8 +95,10 @@ interface TownMapCanvasProps {
   onWalkTo?: (roomId: number) => void;
   /** Search focus: pan to and highlight this room (nonce retriggers) */
   focus?: { roomId: number; nonce: number } | null;
-  /** Double-clicking a stair room asks the panel to switch floors */
-  onStairJump?: (fromZ: number, hasUp: boolean, hasDown: boolean) => void;
+  /** Double-clicking a stair room asks the panel to show the floor its
+   *  staircase leads to (the canvas then centers on the arrival room).
+   *  Returns whether the panel switched to that floor. */
+  onStairJump?: (floor: number) => boolean;
 }
 
 export function TownMapCanvas({
@@ -89,9 +113,34 @@ export function TownMapCanvas({
   onStairJump,
 }: TownMapCanvasProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  const { version, town, townWalking, centerVersion, getTownRooms, setRoomIcon } = useMapContext();
+  const { town, townWalking, centerVersion, getTownRooms, setRoomIcon } = useMapContext();
   /** Is the displayed town the one the player is (last) in? */
   const isPlayerTown = town !== null && town.id === townId;
+
+  // Display layout, memoized per town on its layout signature: recomputed
+  // only when a room is added or moved or a link changes — not on every
+  // sync (two per room block, plus every survey). Callbacks and effects
+  // read this render's snapshot through viewRef.
+  const [layoutFor] = useState(() => createTownDisplayLayoutCache());
+  const rooms = getTownRooms(townId);
+  const layout = layoutFor(townId, rooms);
+  const byId = new Map(rooms.map((r) => [r.id, r]));
+  const viewRef = useRef({ rooms, byId, layout });
+  viewRef.current = { rooms, byId, layout };
+
+  // The player as primitives: the `town` summary is a fresh object on every
+  // sync, so effects keyed on it fired on every room block and survey.
+  const pTown = town?.id ?? null;
+  const pRoom = town?.roomId ?? null;
+  const pFloor = town?.floor ?? null;
+  const pCell = pTown === townId && pRoom !== null ? layout.pos(pRoom) : undefined;
+  const pX = pCell?.x ?? null;
+  const pY = pCell?.y ?? null;
+  const playerRef = useRef({ pTown, pRoom, pFloor });
+  playerRef.current = { pTown, pRoom, pFloor };
+  /** Where a stair double-click wants the next floor switch centered */
+  const pendingCenterRef = useRef<{ townId: number; z: number; cell: DisplayCell } | null>(null);
+
   // Shift+click room icon picker (portal popover at viewport coords)
   const [picker, setPicker] = useState<{
     x: number;
@@ -108,6 +157,8 @@ export function TownMapCanvas({
   );
   const [tooltip, setTooltip] = useState<{ x: number; y: number; room: TownRoom } | null>(null);
   const animFrameRef = useRef<number>(0);
+  /** Measured label widths — one fixed font, so reusable across frames */
+  const labelWidthsRef = useRef(new Map<string, number>());
   const hoverRef = useRef<{
     key: number | null;
     shownKey: number | null;
@@ -132,40 +183,66 @@ export function TownMapCanvas({
   const [, setRedraw] = useState(0);
   const requestRedraw = useCallback(() => setRedraw((v) => v + 1), []);
 
-  // Center on the current room (same trigger discipline as the hex canvas)
-  useEffect(() => {
-    if (!town || town.id !== townId) return;
-    const rooms = getTownRooms(townId);
-    const cur = rooms.find((r) => r.id === town.roomId);
-    if (!cur) return;
-    panRef.current = { x: -cur.x * CELL, y: -cur.y * CELL };
-    requestRedraw();
-  }, [town, townId, centerVersion, getTownRooms, requestRedraw]);
+  const centerOn = useCallback(
+    (cell: DisplayCell) => {
+      panRef.current = { x: -cell.x * CELL, y: -cell.y * CELL };
+      requestRedraw();
+    },
+    [requestRedraw]
+  );
 
-  // Search focus: pan straight to the room
+  // Follow the player on REAL changes only: their room, floor or town, the
+  // display cell of their room (a layout change can move it), or the center
+  // button (same trigger discipline as the hex canvas). Depending on the
+  // `town` object snapped the view back — undoing any pan — on every room
+  // block, survey, icon pick and rename. Browsing another floor of the
+  // player's town doesn't follow.
   useEffect(() => {
-    if (!focus) return;
-    const room = getTownRooms(townId).find((r) => r.id === focus.roomId);
-    if (!room) return;
-    panRef.current = { x: -room.x * CELL, y: -room.y * CELL };
-    requestRedraw();
-  }, [focus, townId, getTownRooms, requestRedraw]);
+    if (pTown !== townId || floor !== pFloor || pX === null || pY === null) return;
+    centerOn({ x: pX, y: pY });
+  }, [pTown, pRoom, pFloor, pX, pY, townId, floor, centerVersion, centerOn]);
 
-  // Browsing a floor (or a whole town) the player isn't in: center on the
-  // displayed floor's rooms instead
+  // Showing another floor or town re-centers once: on the room a
+  // double-clicked staircase leads to, else on the player when it's their
+  // floor of their town, else on the displayed floor's centroid.
   useEffect(() => {
-    if (town && town.id === townId && floor === town.floor) return; // player view — handled above
-    const rooms = getTownRooms(townId).filter((r) => r.z === floor);
-    if (rooms.length === 0) return;
+    const { rooms: all, layout: lay } = viewRef.current;
+    const player = playerRef.current;
+    const pending = pendingCenterRef.current;
+    pendingCenterRef.current = null;
+    if (pending && pending.townId === townId && pending.z === floor) {
+      centerOn(pending.cell);
+      return;
+    }
+    const playerCell =
+      player.pTown === townId && player.pFloor === floor && player.pRoom !== null
+        ? lay.pos(player.pRoom)
+        : undefined;
+    if (playerCell) {
+      centerOn(playerCell);
+      return;
+    }
     let sx = 0;
     let sy = 0;
-    for (const r of rooms) {
-      sx += r.x;
-      sy += r.y;
+    let n = 0;
+    for (const r of all) {
+      const cell = r.z === floor ? lay.pos(r.id) : undefined;
+      if (!cell) continue;
+      sx += cell.x;
+      sy += cell.y;
+      n++;
     }
-    panRef.current = { x: (-sx / rooms.length) * CELL, y: (-sy / rooms.length) * CELL };
-    requestRedraw();
-  }, [floor, town, townId, getTownRooms, requestRedraw]);
+    if (n > 0) centerOn({ x: sx / n, y: sy / n });
+  }, [floor, townId, centerOn]);
+
+  // Search focus: pan straight to the room. Declared after the floor
+  // effect on purpose: a match on another floor switches floors in the same
+  // render, and the room must win over that floor's centroid.
+  useEffect(() => {
+    if (!focus) return;
+    const cell = viewRef.current.layout.pos(focus.roomId);
+    if (cell) centerOn(cell);
+  }, [focus, centerOn]);
 
   // Draw
   useEffect(() => {
@@ -192,44 +269,74 @@ export function TownMapCanvas({
     ctx.translate(centerX, centerY);
     ctx.scale(zoom, zoom);
 
-    const rooms = getTownRooms(townId);
-    const byId = new Map<number, TownRoom>();
-    for (const r of rooms) byId.set(r.id, r);
+    /** Display cell of a room (its store cell only if the layout lacks it) */
+    const cellOf = (room: TownRoom): DisplayCell => layout.pos(room.id) ?? room;
+    /** Pixel center of a room on the display grid */
+    const at = (room: TownRoom): Point => {
+      const cell = cellOf(room);
+      return { x: cell.x * CELL, y: cell.y * CELL };
+    };
+    const occupied = (x: number, y: number) => layout.roomAt(x, y, floor) !== undefined;
     const floorRooms = rooms.filter((r) => r.z === floor);
 
     // Links first (under the room boxes). Draw each once (id order).
-    const occupied = new Set<string>();
-    for (const r of floorRooms) occupied.add(`${r.x},${r.y}`);
     for (const room of floorRooms) {
       for (const [dir, destId] of Object.entries(room.links) as [TownDir, number][]) {
         if (dir === 'u' || dir === 'd') continue; // stairs render as glyphs
         const dest = byId.get(destId);
         if (!dest || dest.z !== floor) continue;
-        if (dest.id < room.id && dest.links[reverse(dir)] === room.id) continue; // drawn already
-        drawLink(ctx, room, dest, dir, occupied);
+        if (dest.id < room.id && dest.links[TOWN_REVERSE[dir]] === room.id) continue; // drawn already
+        const shape = linkShape(cellOf(room), cellOf(dest), dir, occupied);
+        drawLink(ctx, at(room), at(dest), dir, shape === 'displaced', linkHasDoor(room, dest, dir));
       }
       for (const destId of Object.values(room.namedLinks)) {
         const dest = byId.get(destId);
         if (!dest || dest.z !== floor) continue;
-        drawNamedLink(ctx, room, dest);
+        drawNamedLink(ctx, at(room), at(dest));
       }
     }
 
     // Room boxes
     for (const room of floorRooms) {
-      drawRoom(ctx, room, isPlayerTown && !!town && room.id === town.roomId);
+      drawRoom(ctx, room, at(room), isPlayerTown && room.id === pRoom);
     }
 
-    // Labels
+    // Labels, trimmed to a measured width wherever an east/west neighbour
+    // would otherwise overlap (the full name stays in the tooltip)
     if (showLabels && zoom >= 0.7) {
-      for (const room of floorRooms) drawRoomLabel(ctx, room);
+      ctx.font = LABEL_FONT;
+      ctx.fillStyle = LABEL_COLOR;
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'top';
+      const widths = labelWidthsRef.current;
+      const measure = (text: string) => {
+        let w = widths.get(text);
+        if (w === undefined) {
+          w = ctx.measureText(text).width;
+          widths.set(text, w);
+        }
+        return w;
+      };
+      const budgets = labelBudgets(
+        floorRooms,
+        layout,
+        (id) => measure(byId.get(id)?.name ?? ''),
+        CELL,
+        LABEL_GAP,
+        LABEL_MAX_W
+      );
+      for (const room of floorRooms) {
+        const label = fitLabel(room.name, budgets.get(room.id) ?? LABEL_MAX_W, measure);
+        const p = at(room);
+        ctx.fillText(label, p.x, p.y + ROOM_HALF + 3);
+      }
     }
 
     // Active walk route preview — dashed gold line through the remaining
     // rooms plus a dot on each (segments only where both ends share the
     // displayed floor; stairs break the line, the dots carry on).
-    if (townWalking && town && isPlayerTown) {
-      const pathRooms = [town.roomId, ...townWalking.path]
+    if (townWalking && isPlayerTown && pRoom !== null) {
+      const pathRooms = [pRoom, ...townWalking.path]
         .map((id) => byId.get(id))
         .filter((r): r is TownRoom => !!r);
       ctx.strokeStyle = CURRENT_ROOM_GLOW;
@@ -237,20 +344,21 @@ export function TownMapCanvas({
       ctx.setLineDash([4, 4]);
       ctx.globalAlpha = 0.6;
       for (let i = 0; i < pathRooms.length - 1; i++) {
-        const a = pathRooms[i];
-        const b = pathRooms[i + 1];
-        if (a.z !== floor || b.z !== floor) continue;
+        if (pathRooms[i].z !== floor || pathRooms[i + 1].z !== floor) continue;
+        const a = at(pathRooms[i]);
+        const b = at(pathRooms[i + 1]);
         ctx.beginPath();
-        ctx.moveTo(a.x * CELL, a.y * CELL);
-        ctx.lineTo(b.x * CELL, b.y * CELL);
+        ctx.moveTo(a.x, a.y);
+        ctx.lineTo(b.x, b.y);
         ctx.stroke();
       }
       ctx.setLineDash([]);
       ctx.fillStyle = CURRENT_ROOM_GLOW;
       for (const r of pathRooms) {
-        if (r.z !== floor || r.id === town.roomId) continue;
+        if (r.z !== floor || r.id === pRoom) continue;
+        const p = at(r);
         ctx.beginPath();
-        ctx.arc(r.x * CELL, r.y * CELL, 2.5, 0, Math.PI * 2);
+        ctx.arc(p.x, p.y, 2.5, 0, Math.PI * 2);
         ctx.fill();
       }
       ctx.globalAlpha = 1;
@@ -260,12 +368,13 @@ export function TownMapCanvas({
     if (focus) {
       const fr = byId.get(focus.roomId);
       if (fr && fr.z === floor) {
+        const p = at(fr);
         ctx.strokeStyle = 'rgb(70, 180, 210)';
         ctx.lineWidth = 1.5;
         ctx.setLineDash([3, 2]);
         ctx.strokeRect(
-          fr.x * CELL - ROOM_HALF - 4,
-          fr.y * CELL - ROOM_HALF - 4,
+          p.x - ROOM_HALF - 4,
+          p.y - ROOM_HALF - 4,
           (ROOM_HALF + 4) * 2,
           (ROOM_HALF + 4) * 2
         );
@@ -274,9 +383,9 @@ export function TownMapCanvas({
     }
 
     // Current room glow (only when displaying the player's town)
-    if (town && isPlayerTown) {
-      const cur = byId.get(town.roomId);
-      if (cur && cur.z === floor) drawCurrentGlow(ctx, cur);
+    if (isPlayerTown && pRoom !== null) {
+      const cur = byId.get(pRoom);
+      if (cur && cur.z === floor) drawCurrentGlow(ctx, at(cur));
     }
 
     ctx.restore();
@@ -285,7 +394,6 @@ export function TownMapCanvas({
       ctx.fillStyle = 'rgba(15, 14, 13, 0.42)';
       ctx.fillRect(0, 0, width, height);
     }
-    void version;
   });
 
   // -------------------------------------------------------------------------
@@ -305,12 +413,11 @@ export function TownMapCanvas({
       const gy = Math.round(worldY / CELL);
       if (Math.abs(worldX - gx * CELL) > ROOM_HALF + 4) return null;
       if (Math.abs(worldY - gy * CELL) > ROOM_HALF + 4) return null;
-      for (const r of getTownRooms(townId)) {
-        if (r.z === floor && r.x === gx && r.y === gy) return r;
-      }
-      return null;
+      const { layout: lay, byId: rooms } = viewRef.current;
+      const id = lay.roomAt(gx, gy, floor);
+      return id === undefined ? null : (rooms.get(id) ?? null);
     },
-    [getTownRooms, townId, floor]
+    [floor]
   );
 
   const handleMouseDown = useCallback(
@@ -413,11 +520,38 @@ export function TownMapCanvas({
       if (!onStairJump) return;
       const room = roomAtMouse(e);
       if (!room) return;
-      const hasUp = room.exits.includes('u');
-      const hasDown = room.exits.includes('d');
-      if (hasUp || hasDown) onStairJump(room.z, hasUp, hasDown);
+      const { rooms: all, byId: rooms, layout: lay } = viewRef.current;
+      const floors = new Set(all.map((r) => r.z));
+      const target = stairJumpTarget(room, (id) => rooms.get(id), floors);
+      if (!target) return;
+      // Land on the room the staircase leads to. A staircase never taken
+      // has no known arrival room: land on the mapped room of that floor
+      // nearest the stairs instead. Floors share one grid, so that is
+      // usually right above or below them, while the stairs' own cell on
+      // the other floor is often empty space (live save: 1 of 2 untaken
+      // stairs, 13 cells from the nearest room).
+      let cell = target.roomId !== null ? lay.pos(target.roomId) : undefined;
+      const from = lay.pos(room.id);
+      if (!cell && from) {
+        let best = Infinity;
+        for (const r of all) {
+          const c = r.z === target.z ? lay.pos(r.id) : undefined;
+          if (!c) continue;
+          const d = Math.abs(c.x - from.x) + Math.abs(c.y - from.y);
+          if (d < best) {
+            best = d;
+            cell = c;
+          }
+        }
+      }
+      cell ??= from;
+      // Set before asking, so it is in place for the floor switch however
+      // the panel renders it; a jump the panel declines must not leave it
+      // behind for some later switch to that floor.
+      pendingCenterRef.current = cell ? { townId, z: target.z, cell } : null;
+      if (!onStairJump(target.z)) pendingCenterRef.current = null;
     },
-    [roomAtMouse, onStairJump]
+    [roomAtMouse, onStairJump, townId]
   );
 
   return (
@@ -465,28 +599,8 @@ export function TownMapCanvas({
 // Drawing helpers
 // ---------------------------------------------------------------------------
 
-function reverse(dir: TownDir): TownDir {
-  const rev: Record<TownDir, TownDir> = {
-    n: 's',
-    s: 'n',
-    e: 'w',
-    w: 'e',
-    u: 'd',
-    d: 'u',
-    ne: 'sw',
-    sw: 'ne',
-    nw: 'se',
-    se: 'nw',
-  };
-  return rev[dir];
-}
-
 function isDiagonal(dir: TownDir): boolean {
   return dir.length === 2;
-}
-
-function px(room: TownRoom): { x: number; y: number } {
-  return { x: room.x * CELL, y: room.y * CELL };
 }
 
 function drawBackgroundGrid(
@@ -515,86 +629,47 @@ function drawBackgroundGrid(
   ctx.stroke();
 }
 
-const CARDINAL_VEC: Partial<Record<TownDir, [number, number]>> = {
-  n: [0, -1],
-  s: [0, 1],
-  e: [1, 0],
-  w: [-1, 0],
-};
-
+/**
+ * A lateral link between two room centers. A `displaced` link (see
+ * linkShape: its endpoints don't sit along the exit's own direction — a
+ * collision, non-Euclidean geometry, or a diagonal whose ends drifted) is
+ * drawn thin and dashed, leaving and arriving through the exit's own sides
+ * (linkPolyline), so it never reads as a straight corridor through
+ * unrelated rooms; a long straight run across empty cells stays a solid
+ * street.
+ */
 function drawLink(
   ctx: CanvasRenderingContext2D,
-  from: TownRoom,
-  to: TownRoom,
+  a: Point,
+  b: Point,
   dir: TownDir,
-  occupied: Set<string>
+  displaced: boolean,
+  door: boolean
 ) {
-  const a = px(from);
-  const b = px(to);
   const diag = isDiagonal(dir);
-  // A cardinal link whose rooms aren't grid-adjacent was displaced by a
-  // collision (non-Euclidean overlap) — draw it thin and dashed so it
-  // doesn't read as a straight corridor through unrelated rooms. Exception:
-  // a collinear link whose intervening cells are all empty is a truthful
-  // long street (a map stretch opened the gap) — that one draws solid.
-  const vec = CARDINAL_VEC[dir];
-  let displaced = !!vec && (to.x !== from.x + vec[0] || to.y !== from.y + vec[1]);
-  if (displaced && vec) {
-    const [vx, vy] = vec;
-    const along = (to.x - from.x) * vx + (to.y - from.y) * vy;
-    const collinear = along > 1 && to.x - from.x === along * vx && to.y - from.y === along * vy;
-    if (collinear) {
-      let clear = true;
-      for (let i = 1; i < along; i++) {
-        if (occupied.has(`${from.x + vx * i},${from.y + vy * i}`)) {
-          clear = false;
-          break;
-        }
-      }
-      if (clear) displaced = false;
-    }
-  }
+  const path = linkPolyline(a, b, dir, displaced, ROOM_HALF);
   ctx.strokeStyle = diag || displaced ? LINK_DIAG_COLOR : LINK_COLOR;
   ctx.lineWidth = diag || displaced ? 1.2 : 3;
   if (displaced) ctx.setLineDash([3, 3]);
   ctx.beginPath();
-  if (displaced && vec) {
-    // The exit still leaves through its own side of the room (a south
-    // exit departs the bottom-middle edge, and arrives at the far room's
-    // opposite edge) — only the middle of the line angles across.
-    const stub = ROOM_HALF + 6;
-    ctx.moveTo(a.x + vec[0] * ROOM_HALF, a.y + vec[1] * ROOM_HALF);
-    ctx.lineTo(a.x + vec[0] * stub, a.y + vec[1] * stub);
-    ctx.lineTo(b.x - vec[0] * stub, b.y - vec[1] * stub);
-    ctx.lineTo(b.x - vec[0] * ROOM_HALF, b.y - vec[1] * ROOM_HALF);
-  } else {
-    ctx.moveTo(a.x, a.y);
-    ctx.lineTo(b.x, b.y);
-  }
+  ctx.moveTo(path[0].x, path[0].y);
+  for (let i = 1; i < path.length; i++) ctx.lineTo(path[i].x, path[i].y);
   ctx.stroke();
   if (displaced) ctx.setLineDash([]);
 
-  // Door tick across the link near the from-side
-  if (from.doorDirs.includes(dir)) {
-    const mx = a.x + (b.x - a.x) * 0.5;
-    const my = a.y + (b.y - a.y) * 0.5;
-    const dx = b.x - a.x;
-    const dy = b.y - a.y;
-    const len = Math.sqrt(dx * dx + dy * dy) || 1;
-    const pxn = -dy / len;
-    const pyn = dx / len;
+  // Door tick across the middle of the link
+  if (door) {
+    const [t0, t1] = doorTick(path, 5);
     ctx.strokeStyle = DOOR_COLOR;
     ctx.lineWidth = 2.5;
     ctx.beginPath();
-    ctx.moveTo(mx - pxn * 5, my - pyn * 5);
-    ctx.lineTo(mx + pxn * 5, my + pyn * 5);
+    ctx.moveTo(t0.x, t0.y);
+    ctx.lineTo(t1.x, t1.y);
     ctx.stroke();
   }
 }
 
-function drawNamedLink(ctx: CanvasRenderingContext2D, from: TownRoom, to: TownRoom) {
-  const a = px(from);
-  const b = px(to);
+function drawNamedLink(ctx: CanvasRenderingContext2D, a: Point, b: Point) {
   ctx.strokeStyle = NAMED_COLOR;
   ctx.lineWidth = 1;
   ctx.setLineDash([3, 3]);
@@ -611,8 +686,8 @@ function roomFill(room: TownRoom): string {
   return room.exits.length >= 4 || room.exits.some(isDiagonal) ? ROOM_FILL_OUTDOOR : ROOM_FILL;
 }
 
-function drawRoom(ctx: CanvasRenderingContext2D, room: TownRoom, isCurrent: boolean) {
-  const { x, y } = px(room);
+function drawRoom(ctx: CanvasRenderingContext2D, room: TownRoom, at: Point, isCurrent: boolean) {
+  const { x, y } = at;
   const r = 4; // corner radius
 
   ctx.beginPath();
@@ -702,18 +777,8 @@ function stubVector(dir: TownDir): { x: number; y: number } {
   return { x, y };
 }
 
-function drawRoomLabel(ctx: CanvasRenderingContext2D, room: TownRoom) {
-  const { x, y } = px(room);
-  ctx.font = '8px "Courier New", monospace';
-  ctx.fillStyle = LABEL_COLOR;
-  ctx.textAlign = 'center';
-  ctx.textBaseline = 'top';
-  const label = room.name.length > 14 ? room.name.slice(0, 13) + '…' : room.name;
-  ctx.fillText(label, x, y + ROOM_HALF + 3);
-}
-
-function drawCurrentGlow(ctx: CanvasRenderingContext2D, room: TownRoom) {
-  const { x, y } = px(room);
+function drawCurrentGlow(ctx: CanvasRenderingContext2D, at: Point) {
+  const { x, y } = at;
   ctx.save();
   ctx.globalAlpha = 0.3;
   ctx.shadowColor = CURRENT_ROOM_GLOW;

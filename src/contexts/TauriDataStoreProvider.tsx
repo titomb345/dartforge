@@ -1,6 +1,7 @@
 import { useRef, useState, useEffect, useCallback, useMemo, type ReactNode } from 'react';
 import { invoke } from '@tauri-apps/api/core';
 import { load } from '@tauri-apps/plugin-store';
+import { DataFileCache } from '../lib/dataFileCache';
 import { DataStoreContext, type DataStore } from './DataStoreContext';
 
 const LOCAL_CONFIG_FILE = 'local-config.json';
@@ -8,17 +9,18 @@ const DATA_DIRS_KEY = 'dataDirs';
 const DEBOUNCE_MS = 200;
 const BACKUP_INTERVAL_MS = 60 * 60 * 1000; // 1 hour
 
-type FileCache = Record<string, unknown>;
+/** A data file of the active data dir (null: no such file) */
+const readDataFile = (filename: string): Promise<Record<string, unknown> | null> =>
+  invoke('read_data_file', { filename });
 
 export function DataStoreProvider({ children }: { children: ReactNode }) {
   const [ready, setReady] = useState(false);
   const [needsSetup, setNeedsSetup] = useState(false);
   const [activeDataDir, setActiveDataDir] = useState<string | null>(null);
 
-  // In-memory cache: filename -> { key: value }
-  const cacheRef = useRef<Map<string, FileCache>>(new Map());
-  // Track which files have been loaded from disk
-  const loadedRef = useRef<Set<string>>(new Set());
+  // In-memory cache: filename -> { key: value }, each file read from disk
+  // once (shared first reads, data-dir changes: lib/dataFileCache.ts)
+  const cacheRef = useRef(new DataFileCache(readDataFile));
   // Track dirty files with pending debounced writes
   const dirtyRef = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map());
 
@@ -89,7 +91,7 @@ export function DataStoreProvider({ children }: { children: ReactNode }) {
     if (!ready) return;
     const interval = setInterval(async () => {
       try {
-        const cache = cacheRef.current.get('settings.json');
+        const cache = cacheRef.current.peek('settings.json');
         if (cache && cache.autoBackupEnabled === false) return;
         await invoke('create_backup', { tag: 'auto' });
       } catch (e) {
@@ -99,19 +101,6 @@ export function DataStoreProvider({ children }: { children: ReactNode }) {
     return () => clearInterval(interval);
   }, [ready]);
 
-  /** Load a file from Rust into cache if not already loaded. */
-  const ensureLoaded = useCallback(async (filename: string): Promise<FileCache> => {
-    if (loadedRef.current.has(filename)) {
-      return cacheRef.current.get(filename) ?? {};
-    }
-
-    const data: Record<string, unknown> | null = await invoke('read_data_file', { filename });
-    const cache = data ?? {};
-    cacheRef.current.set(filename, cache);
-    loadedRef.current.add(filename);
-    return cache;
-  }, []);
-
   /** Schedule a debounced write for a file. */
   const scheduleDebouncedWrite = useCallback((filename: string) => {
     const existing = dirtyRef.current.get(filename);
@@ -119,7 +108,7 @@ export function DataStoreProvider({ children }: { children: ReactNode }) {
 
     const timer = setTimeout(async () => {
       dirtyRef.current.delete(filename);
-      const cache = cacheRef.current.get(filename);
+      const cache = cacheRef.current.peek(filename);
       if (cache) {
         try {
           await invoke('write_data_file', { filename, data: cache });
@@ -131,23 +120,20 @@ export function DataStoreProvider({ children }: { children: ReactNode }) {
     dirtyRef.current.set(filename, timer);
   }, []);
 
-  const get = useCallback(
-    async <T,>(filename: string, key: string): Promise<T | null> => {
-      const cache = await ensureLoaded(filename);
-      const value = cache[key];
-      return value !== undefined ? (value as T) : null;
-    },
-    [ensureLoaded]
-  );
+  const get = useCallback(async <T,>(filename: string, key: string): Promise<T | null> => {
+    const cache = await cacheRef.current.load(filename);
+    const value = cache[key];
+    return value !== undefined ? (value as T) : null;
+  }, []);
 
   const set = useCallback(
     async (filename: string, key: string, value: unknown): Promise<void> => {
-      const cache = await ensureLoaded(filename);
+      const cache = await cacheRef.current.forChange(filename);
       cache[key] = value;
       cacheRef.current.set(filename, cache);
       scheduleDebouncedWrite(filename);
     },
-    [ensureLoaded, scheduleDebouncedWrite]
+    [scheduleDebouncedWrite]
   );
 
   const save = useCallback(async (filename: string): Promise<void> => {
@@ -158,7 +144,7 @@ export function DataStoreProvider({ children }: { children: ReactNode }) {
       dirtyRef.current.delete(filename);
     }
 
-    const cache = cacheRef.current.get(filename);
+    const cache = cacheRef.current.peek(filename);
     if (cache) {
       try {
         await invoke('write_data_file', { filename, data: cache });
@@ -170,21 +156,18 @@ export function DataStoreProvider({ children }: { children: ReactNode }) {
 
   const del = useCallback(
     async (filename: string, key: string): Promise<void> => {
-      const cache = await ensureLoaded(filename);
+      const cache = await cacheRef.current.forChange(filename);
       delete cache[key];
       cacheRef.current.set(filename, cache);
       scheduleDebouncedWrite(filename);
     },
-    [ensureLoaded, scheduleDebouncedWrite]
+    [scheduleDebouncedWrite]
   );
 
-  const keys = useCallback(
-    async (filename: string): Promise<string[]> => {
-      const cache = await ensureLoaded(filename);
-      return Object.keys(cache);
-    },
-    [ensureLoaded]
-  );
+  const keys = useCallback(async (filename: string): Promise<string[]> => {
+    const cache = await cacheRef.current.load(filename);
+    return Object.keys(cache);
+  }, []);
 
   const readText = useCallback(async (filename: string): Promise<string | null> => {
     const result: string | null = await invoke('read_text_file', { filename });
@@ -216,11 +199,11 @@ export function DataStoreProvider({ children }: { children: ReactNode }) {
     dirtyRef.current.clear();
 
     // Also flush any loaded files that might have unsaved changes
-    const allLoaded = [...loadedRef.current];
+    const allLoaded = cacheRef.current.loadedFiles();
     const toFlush = new Set([...filenames, ...allLoaded]);
 
     const promises = [...toFlush].map(async (filename) => {
-      const cache = cacheRef.current.get(filename);
+      const cache = cacheRef.current.peek(filename);
       if (cache) {
         try {
           await invoke('write_data_file', { filename, data: cache });
@@ -237,17 +220,17 @@ export function DataStoreProvider({ children }: { children: ReactNode }) {
       // Flush current state first
       await flushAll();
 
-      // Clear caches
-      cacheRef.current.clear();
-      loadedRef.current.clear();
+      // Clear caches, before the move and again once it lands: anything read
+      // until then came from the old dir (see DataFileCache.moveTo)
+      const resolved = await cacheRef.current.moveTo(async () => {
+        // Save candidates to local config
+        const localStore = await load(LOCAL_CONFIG_FILE);
+        await localStore.set(DATA_DIRS_KEY, candidates);
+        await localStore.save();
 
-      // Save candidates to local config
-      const localStore = await load(LOCAL_CONFIG_FILE);
-      await localStore.set(DATA_DIRS_KEY, candidates);
-      await localStore.save();
-
-      // Re-resolve
-      const resolved: string = await invoke('resolve_data_dir', { candidates });
+        // Re-resolve
+        return invoke<string>('resolve_data_dir', { candidates });
+      });
       setActiveDataDir(resolved);
 
       return resolved;

@@ -53,6 +53,8 @@ export interface CharacterProfile {
 
 export function useAppSettings() {
   const dataStore = useDataStore();
+  const dataStoreRef = useRef(dataStore);
+  dataStoreRef.current = dataStore;
   const loaded = useRef(false);
 
   /* ── Existing settings (moved from App.tsx) ────────────── */
@@ -214,6 +216,7 @@ export function useAppSettings() {
   // Load from settings — batch-load helper avoids repetitive get→set boilerplate
   useEffect(() => {
     if (!dataStore.ready) return;
+    const ds = dataStoreRef.current; // via the ref: a data-dir switch does not reload
     (async () => {
       /** Load a single setting: get from store, apply setter if valid. */
       async function load<T>(
@@ -221,7 +224,7 @@ export function useAppSettings() {
         setter: React.Dispatch<React.SetStateAction<T>>,
         validate?: (v: T) => boolean
       ): Promise<void> {
-        const saved = await dataStore.get<T>(SETTINGS_FILE, key);
+        const saved = await ds.get<T>(SETTINGS_FILE, key);
         if (saved != null && (validate ? validate(saved as T) : true)) setter(saved as T);
       }
 
@@ -230,7 +233,7 @@ export function useAppSettings() {
         key: string,
         setter: React.Dispatch<React.SetStateAction<T>>
       ): Promise<void> {
-        const saved = await dataStore.get<T>(SETTINGS_FILE, key);
+        const saved = await ds.get<T>(SETTINGS_FILE, key);
         if (saved !== undefined) setter(saved as T);
       }
 
@@ -239,7 +242,7 @@ export function useAppSettings() {
         key: string,
         setter: React.Dispatch<React.SetStateAction<T>>
       ): Promise<void> {
-        const saved = await dataStore.get<T>(SETTINGS_FILE, key);
+        const saved = await ds.get<T>(SETTINGS_FILE, key);
         if (saved != null && typeof saved === 'object' && !Array.isArray(saved)) setter(saved);
       }
 
@@ -315,13 +318,13 @@ export function useAppSettings() {
 
       // Auto-login slot (strict enum validation)
       await load('autoLoginActiveSlot', setAutoLoginActiveSlot, (v) => v === 0 || v === 1);
-      const savedLastLoginSlot = await dataStore.get<number | null>(SETTINGS_FILE, 'lastLoginSlot');
+      const savedLastLoginSlot = await ds.get<number | null>(SETTINGS_FILE, 'lastLoginSlot');
       if (savedLastLoginSlot === 0 || savedLastLoginSlot === 1 || savedLastLoginSlot === null) {
         setLastLoginSlot(savedLastLoginSlot as 0 | 1 | null);
       }
 
       // Auto-login characters (names from settings, passwords from OS keyring)
-      const savedNames = await dataStore.get<[string | null, string | null]>(
+      const savedNames = await ds.get<[string | null, string | null]>(
         SETTINGS_FILE,
         'autoLoginNames'
       );

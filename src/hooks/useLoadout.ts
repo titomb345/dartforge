@@ -61,6 +61,9 @@ export function useLoadout(
   useEffect(() => {
     characterRef.current = activeCharacter;
     if (!dataStore.ready) return;
+    // Via the ref: a data-dir switch must not swap the loadout captured from
+    // the game this session for the new dir's older copy
+    const ds = dataStoreRef.current;
     let cancelled = false;
     (async () => {
       if (!activeCharacter) {
@@ -69,7 +72,7 @@ export function useLoadout(
         return;
       }
       try {
-        const data = await dataStore.get<unknown>(loadoutFileName(activeCharacter), 'loadout');
+        const data = await ds.get<unknown>(loadoutFileName(activeCharacter), 'loadout');
         if (cancelled) return;
         trackerRef.current = LoadoutTracker.deserialize(data ?? null);
         setState(structuredClone(trackerRef.current.state));

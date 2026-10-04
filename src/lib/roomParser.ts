@@ -80,20 +80,42 @@ const MOVE_FAIL_HARD_RE =
 /**
  * Movement failed for a TRANSIENT reason (mount, posture, exhaustion, NPC
  * blockers, closed doors) — drop the pending move but don't mark the map.
+ * Also, each unrecognized until Oct 2026 and each a stale-queue cascade:
+ *  - failed swims, "You splash around, but get nowhere." (154 lines in one
+ *    session: every dead `n` stayed queued and the Blue Pearl pool grew a
+ *    column of 12 Pool rooms, 2 real) and the MUSH-era "flail" variant;
+ *  - "You try, but you cannot move in your current condition." (MUSH x4);
+ *  - the skull-trap field, "Sparks flare up from the shimmering field as
+ *    try to push through it." (sic: the server drops the "you") — the dead
+ *    `u` once minted a phantom fourth stairwell floor. Anchored on the
+ *    first-person sic text: "Sparks flare up around <Name> as he tries..."
+ *    is someone else's failure;
+ *  - the OOC hall's guarded rooms, "As you enter this room, a powerful
+ *    force sends shivers of fear through your body.  Trembling, you run
+ *    back..." (8 DF / 51 MUSH lines; the re-printed hall was filed as a new
+ *    "OOC Area" one cell further north on every try);
+ *  - the Ook tree on the Shady Islet, "You examine the tree, but its broad
+ *    base, combined with the lack of branches in its lower reaches prevent
+ *    you from climbing it." (2 DF / 3 MUSH; the only climb refusal in five
+ *    years of logs) — the dead "climb tree" took the Terrace that "climb
+ *    branch" reached next as its own, and a walk would send it.
  */
 const MOVE_FAIL_SOFT_RE =
-  /^(?:> )*(?:The .{1,40} is closed\.|You can't see to move!|You'll have to dismount first\.|You cannot ride (?:indoors|a hitched mount)|Invalid direction to lead to\.|You are not allowed back there|The portcullis is lowered!|[^'"]{1,60} (?:moves to block your (?:way|path)|steps out of the back room and blocks your way)|You have no free hands with which to climb\.|You (?:have to stand|'ll have to get) up first|You are too (?:exhausted|tired)|You're too injured to move\.|You're unconscious!)/;
+  /^(?:> )*(?:The .{1,40} is closed\.|You can't see to move!|You'll have to dismount first\.|You cannot ride (?:indoors|a hitched mount)|Invalid direction to lead to\.|You are not allowed back there|The portcullis is lowered!|[^'"]{1,60} (?:moves to block your (?:way|path)|steps out of the back room and blocks your way)|You have no free hands with which to climb\.|You (?:have to stand|'ll have to get) up first|You are too (?:exhausted|tired)|You're too injured to move\.|You're unconscious!|You \w+ around, but get nowhere\.|You try, but you cannot move in your current condition\.|Sparks flare up from the shimmering field as try to push through it\.|As you enter this room, a powerful force sends shivers of fear through your body\.|You examine the tree, but its broad base)/;
 
 /** Forced movement: a group leader moves the player */
 const FORCED_MOVE_RE = /^(?:> )*\w+ leads you (north(?:east|west)?|south(?:east|west)?)\b/;
 
-/** Exits line — printed by town/dungeon rooms, never by wilderness hexes */
+/** Exits line — printed by town/dungeon rooms, never by wilderness hexes
+ *  ("There are no obvious exits." too: a room without exits — the spirit
+ *  plane's Arena, climbing spots — is still not a hex; townParser.ts
+ *  EXITS_START_RE takes the same three forms) */
 const EXITS_LINE_RE =
-  /^(?:> )*There (?:is one obvious exit|are (?:two|three|four|five|six|seven|eight|nine|ten|many) exits):/;
+  /^(?:> )*There (?:is one obvious exit:|are (?:two|three|four|five|six|seven|eight|nine|ten|many) exits:|are no obvious exits\.)/;
 
 /** Lines that are clearly NOT part of a wilderness description */
 const NON_WILDERNESS_RE =
-  /^(?:> )*(?:There (?:is one obvious exit|are (?:two|three|four|five|six|seven|eight|nine|ten|many) exits):|< .+ >$|Held|Worn|Concentration|Encumbrance|Movement|Aura|Needs|\* |> ?$|\()/;
+  /^(?:> )*(?:There (?:is one obvious exit:|are (?:two|three|four|five|six|seven|eight|nine|ten|many) exits:|are no obvious exits\.)|< .+ >$|Held|Worn|Concentration|Encumbrance|Movement|Aura|Needs|\* |> ?$|\()/;
 
 // ---------------------------------------------------------------------------
 // State machine

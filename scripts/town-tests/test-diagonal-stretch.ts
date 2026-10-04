@@ -2,12 +2,13 @@
  * Regression test: diagonal single-stretch placement.
  * A diagonal arrival (ne/nw/se/sw) whose hint cell is occupied by a
  * DIFFERENT room must stretch the map along ONE component axis — a single
- * half-plane shift already frees the cell — so the new room lands exactly
- * at its diagonal cell and the from-room stays put. The axis is chosen
- * perpendicular to the occupant's own linked run, so the occupant's street
- * moves as one piece. (Previously diagonals stretched BOTH component axes,
- * spreading the map an extra cell in each direction on every collision;
- * before that they nudged to the nearest free cell, scattering them.)
+ * shift of the occupant's structure already frees the cell — so the new
+ * room lands exactly at its diagonal cell and the from-room stays put. The
+ * axis is chosen perpendicular to the occupant's own linked run, so the
+ * occupant's street moves as one piece. (Previously diagonals stretched
+ * BOTH component axes, spreading the map an extra cell in each direction
+ * on every collision; before that they nudged to the nearest free cell,
+ * scattering them.)
  */
 import { TownMapStore } from '../../src/lib/townMap';
 import { TownLocalizer } from '../../src/lib/townLocalizer';

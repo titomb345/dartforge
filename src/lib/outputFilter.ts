@@ -11,6 +11,7 @@ import { isWhoHeaderLine, isWhoFinalLine, buildWhoSnapshot, type WhoSnapshot } f
 import { isEquipHeldLine, isEquipNotHoldingLine } from './loadout';
 import type { ChatMessage } from '../types/chat';
 import { stripAnsi } from './ansiUtils';
+import { isCompletePartial } from './partialLine';
 
 /**
  * Anti-spam repeat window (ms). Identical lines only collapse when each
@@ -899,11 +900,15 @@ export class OutputFilter {
     // The count accumulates across filter() calls and flushes when
     // a different line arrives, ensuring a single accurate total.
 
-    // Flush remaining buffer if it looks like a prompt or is empty.
+    // Flush the remaining buffer when it is a complete tail on its own — a
+    // prompt, or only color codes. Anything else (including indentation
+    // only, or a line ending in a "<tag>") is the start of a line the next
+    // chunk completes: flushed now, it would reach the screen but never
+    // onMapLine, and the rest would arrive as a separate, mutilated line.
     if (this.buffer) {
-      const strippedRemaining = stripAnsi(this.buffer).trim();
-      const isLoginPrompt = /^(Name|Password)\s*:$/i.test(strippedRemaining);
-      if (strippedRemaining === '' || strippedRemaining.endsWith('>') || isLoginPrompt) {
+      const plainRemaining = stripAnsi(this.buffer);
+      const strippedRemaining = plainRemaining.trim();
+      if (isCompletePartial(plainRemaining)) {
         if ((this.stripPrompts || this.syncActive) && strippedRemaining === '>') {
           // Preserve ANSI codes (especially color resets) from the stripped prompt
           const ansiCodes = this.buffer.match(/\x1b\[[0-9;]*m/g);

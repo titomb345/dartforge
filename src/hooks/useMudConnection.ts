@@ -347,7 +347,8 @@ export function useMudConnection(
       cancelled = true;
       unlistenRefs.current.forEach((fn) => fn());
     };
-  }, [terminalRef]);
+    // Every dependency is a ref (stable for the component's life): this still subscribes once
+  }, [terminalRef, debugModeRef, outputFilterRef, autoLoginRef]);
 
   const sendCommand = useCallback(async (command: string) => {
     try {

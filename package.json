@@ -51,6 +51,7 @@
     "eslint": "^9.39.3",
     "eslint-config-prettier": "^10.1.8",
     "eslint-plugin-react-hooks": "^7.0.1",
+    "linkedom": "^0.18.13",
     "prettier": "^3.8.1",
     "sharp": "^0.34.5",
     "tailwindcss": "^4.1.18",

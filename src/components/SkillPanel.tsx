@@ -269,17 +269,20 @@ export function SkillPanel({ mode = 'slideout' }: SkillPanelProps) {
   const [addSkillCount, setAddSkillCount] = useState('');
   const addSkillRef = useRef<HTMLInputElement>(null);
   const loaded = useRef(false);
+  const dataStoreRef = useRef(dataStore);
+  dataStoreRef.current = dataStore;
 
   // Load persisted panel settings on mount
   useEffect(() => {
     if (!dataStore.ready) return;
+    const ds = dataStoreRef.current; // via the ref: a data-dir switch does not reload
     (async () => {
       try {
-        const savedFilter = await dataStore.get<FilterValue>(SETTINGS_FILE, SKILL_FILTER_KEY);
+        const savedFilter = await ds.get<FilterValue>(SETTINGS_FILE, SKILL_FILTER_KEY);
         if (savedFilter) setFilter(savedFilter);
-        const savedSort = await dataStore.get<SortMode>(SETTINGS_FILE, SKILL_SORT_KEY);
+        const savedSort = await ds.get<SortMode>(SETTINGS_FILE, SKILL_SORT_KEY);
         if (savedSort) setSort(savedSort);
-        const savedSubs = await dataStore.get<boolean>(SETTINGS_FILE, SKILL_SUBS_KEY);
+        const savedSubs = await ds.get<boolean>(SETTINGS_FILE, SKILL_SUBS_KEY);
         if (savedSubs != null) setShowSubs(savedSubs);
       } catch (e) {
         console.error('Failed to load skill panel settings:', e);
@@ -288,15 +291,17 @@ export function SkillPanel({ mode = 'slideout' }: SkillPanelProps) {
     })();
   }, [dataStore.ready]);
 
-  // Persist panel settings on change (skip initial load)
+  // Persist panel settings on change (skip initial load). Via the ref: a
+  // data-dir switch alone must not copy these values over the new dir's
   useEffect(() => {
     if (!loaded.current) return;
+    const ds = dataStoreRef.current;
     (async () => {
       try {
-        await dataStore.set(SETTINGS_FILE, SKILL_FILTER_KEY, filter);
-        await dataStore.set(SETTINGS_FILE, SKILL_SORT_KEY, sort);
-        await dataStore.set(SETTINGS_FILE, SKILL_SUBS_KEY, showSubs);
-        await dataStore.save(SETTINGS_FILE);
+        await ds.set(SETTINGS_FILE, SKILL_FILTER_KEY, filter);
+        await ds.set(SETTINGS_FILE, SKILL_SORT_KEY, sort);
+        await ds.set(SETTINGS_FILE, SKILL_SUBS_KEY, showSubs);
+        await ds.save(SETTINGS_FILE);
       } catch (e) {
         console.error('Failed to save skill panel settings:', e);
       }

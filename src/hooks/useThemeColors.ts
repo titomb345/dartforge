@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect } from 'react';
+import { useState, useCallback, useEffect, useRef } from 'react';
 import { useDataStore } from '../contexts/DataStoreContext';
 import { DEFAULT_THEME, type TerminalTheme, type ThemeColorKey } from '../lib/defaultTheme';
 import { migrateSettings } from '../lib/settingsMigrations';
@@ -46,21 +46,24 @@ export function useThemeColors() {
   const [theme, setTheme] = useState<TerminalTheme>({ ...DEFAULT_THEME });
   const [display, setDisplay] = useState<DisplaySettings>({ ...DEFAULT_DISPLAY });
   const [loaded, setLoaded] = useState(false);
+  const dataStoreRef = useRef(dataStore);
+  dataStoreRef.current = dataStore;
 
   // Load saved settings from store on mount
   useEffect(() => {
     if (!dataStore.ready) return;
+    const ds = dataStoreRef.current; // via the ref: a data-dir switch does not reload
     let cancelled = false;
     (async () => {
       try {
-        await migrateSettings(dataStore);
+        await migrateSettings(ds);
         if (cancelled) return;
-        const savedTheme = await dataStore.get<Partial<TerminalTheme>>(STORE_FILE, STORE_KEY);
+        const savedTheme = await ds.get<Partial<TerminalTheme>>(STORE_FILE, STORE_KEY);
         if (cancelled) return;
         if (savedTheme) {
           setTheme({ ...DEFAULT_THEME, ...savedTheme });
         }
-        const savedDisplay = await dataStore.get<Partial<DisplaySettings>>(STORE_FILE, DISPLAY_KEY);
+        const savedDisplay = await ds.get<Partial<DisplaySettings>>(STORE_FILE, DISPLAY_KEY);
         if (cancelled) return;
         if (savedDisplay) {
           // If saved font is no longer available, fall back to default

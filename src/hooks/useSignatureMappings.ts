@@ -29,14 +29,12 @@ export function useSignatureMappings(dataStore: DataStore, activeCharacter: stri
       loadedRef.current = false;
       return;
     }
+    const ds = dataStoreRef.current; // via the ref: a data-dir switch does not reload
     const charKey = activeCharacter.toLowerCase();
     loadedRef.current = false;
     (async () => {
       try {
-        const saved = await dataStore.get<Record<SignatureId, SignatureMapping>>(
-          SIGNATURES_FILE,
-          charKey
-        );
+        const saved = await ds.get<Record<SignatureId, SignatureMapping>>(SIGNATURES_FILE, charKey);
         setMappings(saved ?? {});
       } catch (e) {
         console.error('Failed to load signature mappings:', e);

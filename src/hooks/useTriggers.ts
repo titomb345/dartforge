@@ -31,12 +31,10 @@ export function useTriggers(dataStore: DataStore, activeCharacter: string | null
   // Load global triggers on mount
   useEffect(() => {
     if (!dataStore.ready) return;
+    const ds = dataStoreRef.current; // via the ref: a data-dir switch does not reload
     (async () => {
       try {
-        const savedGlobal = await dataStore.get<Record<TriggerId, Trigger>>(
-          TRIGGERS_FILE,
-          GLOBAL_KEY
-        );
+        const savedGlobal = await ds.get<Record<TriggerId, Trigger>>(TRIGGERS_FILE, GLOBAL_KEY);
         if (savedGlobal) setGlobalTriggers(sanitizeRecordMap<Trigger>(savedGlobal, 'pattern'));
       } catch (e) {
         console.error('Failed to load global triggers:', e);
@@ -52,11 +50,12 @@ export function useTriggers(dataStore: DataStore, activeCharacter: string | null
       charLoadedRef.current = false;
       return;
     }
+    const ds = dataStoreRef.current; // via the ref: a data-dir switch does not reload
     const charKey = activeCharacter.toLowerCase();
     charLoadedRef.current = false;
     (async () => {
       try {
-        const saved = await dataStore.get<Record<TriggerId, Trigger>>(TRIGGERS_FILE, charKey);
+        const saved = await ds.get<Record<TriggerId, Trigger>>(TRIGGERS_FILE, charKey);
         setCharacterTriggers(sanitizeRecordMap<Trigger>(saved, 'pattern'));
       } catch (e) {
         console.error('Failed to load character triggers:', e);

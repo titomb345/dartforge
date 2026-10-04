@@ -19,6 +19,9 @@ export interface BuiltinContext {
   writeToTerm: (text: string) => void;
   sendCommand: (cmd: string) => Promise<void>;
   sendCommandViaRef: () => Promise<(cmd: string) => Promise<void>>;
+  /** Send a command the action blocker held, now released: past the
+   *  blocker, but tracked (mapper, loadout) and logged as sent like any */
+  sendReleased: (cmd: string) => Promise<void>;
   actionBlocker: ActionBlocker;
   actionBlockingEnabled: () => boolean;
   autoInscriber: AutoInscriber;
@@ -100,8 +103,10 @@ const handleUnblock: Handler = async (trimmed, ctx) => {
     // green — intentionally different from echo
     `\x1b[32m[UNBLOCKED — ${queued.length} queued command(s) released]\x1b[0m\r\n`
   );
+  // Released like the automatic unblock's flush: a move typed during the
+  // block used to go out untracked here, a room change the mapper never saw
   for (const cmd of queued) {
-    await ctx.sendCommand(cmd);
+    await ctx.sendReleased(cmd);
   }
   return true;
 };

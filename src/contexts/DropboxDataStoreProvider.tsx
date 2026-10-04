@@ -503,6 +503,7 @@ export function DropboxDataStoreProvider({ children }: { children: ReactNode }) 
       keys,
       readText,
       writeText,
+      deleteText,
       flushAll,
       activeDataDir,
       ready,

@@ -180,9 +180,10 @@ export function useImproveCounters(
   // Period length is a preference, not per-character — load it once
   useEffect(() => {
     if (!dataStore.ready) return;
+    const ds = dataStoreRef.current; // via the ref: a data-dir switch does not reload
     (async () => {
       try {
-        const savedPeriod = await dataStore.get<number>(SETTINGS_FILE, 'counterPeriodLength');
+        const savedPeriod = await ds.get<number>(SETTINGS_FILE, 'counterPeriodLength');
         if (savedPeriod != null) setPeriodLengthMinutesState(savedPeriod);
       } catch (e) {
         console.error('Failed to load counter period length:', e);

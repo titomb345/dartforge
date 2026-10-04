@@ -23,7 +23,11 @@ export default tseslint.config(
       'react-hooks/immutability': 'off',
 
       // TypeScript
-      '@typescript-eslint/no-unused-vars': ['warn', { argsIgnorePattern: '^_' }],
+      // (ignoreRestSiblings: `const { [id]: _, ...rest } = obj` is how a key is dropped)
+      '@typescript-eslint/no-unused-vars': [
+        'warn',
+        { argsIgnorePattern: '^_', ignoreRestSiblings: true },
+      ],
       '@typescript-eslint/no-explicit-any': 'warn',
 
       // Terminal app uses \x1b in regex for ANSI escapes — this is intentional

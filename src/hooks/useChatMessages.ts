@@ -104,17 +104,18 @@ export function useChatMessages(
   // Load persisted chat settings
   useEffect(() => {
     if (!dataStore.ready) return;
+    const ds = dataStoreRef.current; // via the ref: a data-dir switch does not reload
     (async () => {
       try {
-        const savedFilters = await dataStore.get<ChatFilters>(SETTINGS_FILE, 'chatFilters');
+        const savedFilters = await ds.get<ChatFilters>(SETTINGS_FILE, 'chatFilters');
         if (savedFilters) setFilters(savedFilters);
-        const savedMuted = await dataStore.get<string[]>(SETTINGS_FILE, 'chatMutedSenders');
+        const savedMuted = await ds.get<string[]>(SETTINGS_FILE, 'chatMutedSenders');
         if (savedMuted) setMutedSenders(savedMuted);
-        const savedAlerts = await dataStore.get<ChatFilters>(SETTINGS_FILE, 'chatSoundAlerts');
+        const savedAlerts = await ds.get<ChatFilters>(SETTINGS_FILE, 'chatSoundAlerts');
         if (savedAlerts) setSoundAlerts(savedAlerts);
-        const savedNewest = await dataStore.get<boolean>(SETTINGS_FILE, 'chatNewestFirst');
+        const savedNewest = await ds.get<boolean>(SETTINGS_FILE, 'chatNewestFirst');
         if (savedNewest != null) setNewestFirst(savedNewest);
-        const savedHideOwn = await dataStore.get<boolean>(SETTINGS_FILE, 'chatHideOwnMessages');
+        const savedHideOwn = await ds.get<boolean>(SETTINGS_FILE, 'chatHideOwnMessages');
         if (savedHideOwn != null) setHideOwnMessages(savedHideOwn);
       } catch (e) {
         console.error('Failed to load chat settings:', e);
@@ -223,57 +224,66 @@ export function useChatMessages(
       .catch((e) => console.error('Failed to persist outgoing history:', e));
   }, [outgoingMessages]);
 
-  // Persist on change
+  // Persist on change. Via the ref: a data-dir switch alone must not copy
+  // these values over the new dir's
   useEffect(() => {
     if (!loaded.current) return;
-    dataStore.set(SETTINGS_FILE, 'chatFilters', filters).catch(console.error);
+    dataStoreRef.current.set(SETTINGS_FILE, 'chatFilters', filters).catch(console.error);
   }, [filters]);
 
   useEffect(() => {
     if (!loaded.current) return;
-    dataStore.set(SETTINGS_FILE, 'chatMutedSenders', mutedSenders).catch(console.error);
+    dataStoreRef.current.set(SETTINGS_FILE, 'chatMutedSenders', mutedSenders).catch(console.error);
   }, [mutedSenders]);
 
   useEffect(() => {
     if (!loaded.current) return;
-    dataStore.set(SETTINGS_FILE, 'chatSoundAlerts', soundAlerts).catch(console.error);
+    dataStoreRef.current.set(SETTINGS_FILE, 'chatSoundAlerts', soundAlerts).catch(console.error);
   }, [soundAlerts]);
 
   useEffect(() => {
     if (!loaded.current) return;
-    dataStore.set(SETTINGS_FILE, 'chatNewestFirst', newestFirst).catch(console.error);
+    dataStoreRef.current.set(SETTINGS_FILE, 'chatNewestFirst', newestFirst).catch(console.error);
   }, [newestFirst]);
 
   useEffect(() => {
     if (!loaded.current) return;
-    dataStore.set(SETTINGS_FILE, 'chatHideOwnMessages', hideOwnMessages).catch(console.error);
+    dataStoreRef.current
+      .set(SETTINGS_FILE, 'chatHideOwnMessages', hideOwnMessages)
+      .catch(console.error);
   }, [hideOwnMessages]);
 
-  const handleChatMessage = useCallback((msg: ChatMessage) => {
-    const senderLower = msg.sender.toLowerCase();
-    const m = mutedSendersRef.current;
-    const isMuted = m.some((name) => name.toLowerCase() === senderLower);
-    const isGaggedNpc =
-      gaggedNpcsRef?.current?.some((name) => name.toLowerCase() === senderLower) ?? false;
+  const handleChatMessage = useCallback(
+    (msg: ChatMessage) => {
+      const senderLower = msg.sender.toLowerCase();
+      const m = mutedSendersRef.current;
+      const isMuted = m.some((name) => name.toLowerCase() === senderLower);
+      const isGaggedNpc =
+        gaggedNpcsRef?.current?.some((name) => name.toLowerCase() === senderLower) ?? false;
 
-    // Sound alert
-    const s = soundAlertsRef.current;
-    if (!msg.isOwn && s[msg.type] && !isMuted && !isGaggedNpc && soundLibraryRef?.current) {
-      const soundName = msg.type === 'tell' || msg.type === 'sz' ? 'chime2' : 'chime1';
-      soundLibraryRef.current.play(soundName);
-    }
+      // Sound alert
+      const s = soundAlertsRef.current;
+      if (!msg.isOwn && s[msg.type] && !isMuted && !isGaggedNpc && soundLibraryRef?.current) {
+        const soundName = msg.type === 'tell' || msg.type === 'sz' ? 'chime2' : 'chime1';
+        soundLibraryRef.current.play(soundName);
+      }
 
-    // Desktop notification when window is unfocused
-    const n = notificationsRef?.current;
-    if (n && !msg.isOwn && n[msg.type] && !isMuted && !isGaggedNpc && !document.hasFocus()) {
-      alertUser(`${msg.sender} (${msg.type})`, msg.message, `dartforge-chat-${msg.type}`);
-    }
+      // Desktop notification when window is unfocused
+      const n = notificationsRef?.current;
+      if (n && !msg.isOwn && n[msg.type] && !isMuted && !isGaggedNpc && !document.hasFocus()) {
+        alertUser(`${msg.sender} (${msg.type})`, msg.message, `dartforge-chat-${msg.type}`);
+      }
 
-    setMessages((prev) => {
-      const next = [...prev, msg];
-      return next.length > maxMessages ? next.slice(-maxMessages) : next;
-    });
-  }, []);
+      // Cap at the current Chat history setting. This callback is created
+      // once, so it reads the ref: a captured value stays the first render's 500
+      const max = maxMessagesRef.current;
+      setMessages((prev) => {
+        const next = [...prev, msg];
+        return next.length > max ? next.slice(-max) : next;
+      });
+    },
+    [gaggedNpcsRef, notificationsRef, soundLibraryRef]
+  );
 
   const toggleFilter = useCallback((type: ChatType) => {
     setFilters((prev) => ({ ...prev, [type]: !prev[type] }));
@@ -317,9 +327,10 @@ export function useChatMessages(
       command,
       timestamp: new Date(),
     };
+    const max = maxMessagesRef.current; // the current Chat history setting
     setOutgoingMessages((prev) => {
       const next = [...prev, msg];
-      return next.length > maxMessages ? next.slice(-maxMessages) : next;
+      return next.length > max ? next.slice(-max) : next;
     });
   }, []);
 

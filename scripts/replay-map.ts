@@ -14,6 +14,13 @@
  *                Real commands are tracked. Note: these logs fragment lines
  *                at TCP chunk boundaries (logging artifact — the live app
  *                reassembles), so art parse rates here are a lower bound.
+ *                A log written since Oct 2026 records every command as sent
+ *                (">> [sent] lead n": walk steps, movement mode, triggers —
+ *                src/lib/sessionLog.ts) and whole lines: its sent lines are
+ *                tracked as they stand and its typed lines are not.
+ *   Both: the pager's "--- Press <enter> for more. ---" never reaches the
+ *   parsers live (src/lib/partialLine.ts), so it is dropped — a logged line
+ *   of its own, or glued to the next page's first line in a MUSHclient log.
  *
  * Usage:
  *   npx tsx scripts/replay-map.ts --mush [--limit N] [--file pattern]
@@ -28,6 +35,7 @@ import { HexMapStore } from '../src/lib/hexMap';
 import type { ParsedHexArt } from '../src/lib/hexArtParser';
 import type { Direction } from '../src/lib/hexUtils';
 import { getDirectionOffset } from '../src/lib/hexUtils';
+import { isMarkedLog, loggedCommand, parserText } from './lib/replayCorpus';
 
 const MUSH_DIR = 'C:/Users/titom/Dropbox/MUSH/MUSHclient/logs';
 const DF_DIR = 'C:/Users/titom/Dropbox/DM/Dartforge/sessions';
@@ -236,8 +244,13 @@ function handleEvent(event: RoomParserEvent, oracle: boolean): void {
   if (res.kind === 'lost' && lostSamples.length < 20) {
     lostSamples.push(`${curFile}:${curLineNo}`);
   }
-  if (verbose && (res.kind === 'corrected' || res.kind === 'relocalized' || res.kind === 'new-island')) {
-    console.log(`  [${res.kind}] ${curFile}:${curLineNo} → ${res.pos ? `${res.pos.island}:${res.pos.q},${res.pos.r}` : 'lost'}`);
+  if (
+    verbose &&
+    (res.kind === 'corrected' || res.kind === 'relocalized' || res.kind === 'new-island')
+  ) {
+    console.log(
+      `  [${res.kind}] ${curFile}:${curLineNo} → ${res.pos ? `${res.pos.island}:${res.pos.q},${res.pos.r}` : 'lost'}`
+    );
   }
 }
 
@@ -251,6 +264,9 @@ function replayFile(filePath: string, dartforge: boolean): void {
   prevArt = null;
   pendingOracleDir = null;
   void pendingOracleDir;
+  const stripStamp = (l: string) => l.replace(/\r$/, '').replace(/^\[[^\]]{5,40}\] /, '');
+  /** The log records every command as sent (see the header) */
+  const marked = dartforge && isMarkedLog(lines.map(stripStamp));
 
   for (let i = 0; i < lines.length; i++) {
     curLineNo = i + 1;
@@ -262,19 +278,22 @@ function replayFile(filePath: string, dartforge: boolean): void {
       // Strip "[timestamp] " prefix
       const m = line.match(/^\[[^\]]{5,40}\] (.*)$/);
       if (m) line = m[1];
-      // Command echo? Session logs record RAW input, so expand separators
-      // and speedwalk ("3n2ne") the way the live alias engine would.
-      const cmdMatch = line.match(/^>> (.+)$/);
-      if (cmdMatch) {
-        for (const cmd of expandRawInput(cmdMatch[1])) {
-          if (localizer.trackCommand(cmd, clock)) metrics.cmdTracked++;
+      const cmd = loggedCommand(line);
+      if (cmd) {
+        // A marked log: what live tracked, as it went out (typed input is
+        // not tracked). An older log records RAW input: expand separators
+        // and speedwalk ("3n2ne") the way the live alias engine would.
+        const sent = cmd.sent ? [cmd.command] : marked ? [] : expandRawInput(cmd.command);
+        for (const c of sent) {
+          if (localizer.trackCommand(c, clock)) metrics.cmdTracked++;
         }
         continue;
       }
     }
 
     if (line.includes('You gaze at your surroundings')) metrics.gazeLines++;
-    parser.feedLine(line);
+    const text = parserText(line);
+    if (text !== null) parser.feedLine(text);
   }
 
   // Flush any survey still being collected at EOF
@@ -329,7 +348,9 @@ console.log(`Files:            ${metrics.files}`);
 console.log(`Lines:            ${metrics.lines}`);
 console.log(`Gaze lines:       ${metrics.gazeLines}`);
 console.log(`Surveys emitted:  ${metrics.surveys}`);
-console.log(`  art parsed:     ${metrics.artParsed} (${((metrics.artParsed / Math.max(1, metrics.surveys)) * 100).toFixed(2)}%)`);
+console.log(
+  `  art parsed:     ${metrics.artParsed} (${((metrics.artParsed / Math.max(1, metrics.surveys)) * 100).toFixed(2)}%)`
+);
 console.log(`    via template: ${metrics.artTemplate}, via search: ${metrics.artSearch}`);
 console.log(`  blind/no art:   ${metrics.blind}`);
 console.log(`Move failures:    ${metrics.moveFails}`);
@@ -337,9 +358,15 @@ console.log(`Commands tracked: ${metrics.cmdTracked}`);
 
 if (metrics.pairs > 0) {
   console.log(`\nShift inference over consecutive surveys (${metrics.pairs} pairs):`);
-  console.log(`  unique:    ${metrics.pairUnique} (${((metrics.pairUnique / metrics.pairs) * 100).toFixed(1)}%) — ${metrics.pairUniqueMove} moves`);
-  console.log(`  ambiguous: ${metrics.pairAmbiguous} (${((metrics.pairAmbiguous / metrics.pairs) * 100).toFixed(1)}%)`);
-  console.log(`  none:      ${metrics.pairNone} (${((metrics.pairNone / metrics.pairs) * 100).toFixed(1)}%)`);
+  console.log(
+    `  unique:    ${metrics.pairUnique} (${((metrics.pairUnique / metrics.pairs) * 100).toFixed(1)}%) — ${metrics.pairUniqueMove} moves`
+  );
+  console.log(
+    `  ambiguous: ${metrics.pairAmbiguous} (${((metrics.pairAmbiguous / metrics.pairs) * 100).toFixed(1)}%)`
+  );
+  console.log(
+    `  none:      ${metrics.pairNone} (${((metrics.pairNone / metrics.pairs) * 100).toFixed(1)}%)`
+  );
 }
 
 console.log(`\nResolution kinds:`);

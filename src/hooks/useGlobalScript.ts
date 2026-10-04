@@ -16,9 +16,10 @@ export function useGlobalScript(dataStore: DataStore) {
   // Load on mount
   useEffect(() => {
     if (!dataStore.ready) return;
+    const ds = dataStoreRef.current; // via the ref: a data-dir switch does not reload
     (async () => {
       try {
-        const saved = await dataStore.readText(GLOBAL_SCRIPT_FILE);
+        const saved = await ds.readText(GLOBAL_SCRIPT_FILE);
         if (saved != null) setScript(saved);
       } catch (e) {
         console.error('Failed to load global script:', e);

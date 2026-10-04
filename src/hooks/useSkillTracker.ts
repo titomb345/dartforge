@@ -27,10 +27,13 @@ export function useSkillTracker(
   dataStore: DataStore,
   writeToTermRef?: React.RefObject<(text: string) => void>
 ) {
-  const echoLine = (line: string) => {
-    if (writeToTermRef?.current) writeToTermRef.current(line);
-    else if (terminalRef.current) smartWrite(terminalRef.current, line);
-  };
+  const echoLine = useCallback(
+    (line: string) => {
+      if (writeToTermRef?.current) writeToTermRef.current(line);
+      else if (terminalRef.current) smartWrite(terminalRef.current, line);
+    },
+    [writeToTermRef, terminalRef]
+  );
 
   const [activeCharacter, setActiveCharacterState] = useState<string | null>(null);
   const activeCharacterRef = useRef<string | null>(null);
@@ -59,13 +62,16 @@ export function useSkillTracker(
   // Load last active character + inline preference from settings on mount
   useEffect(() => {
     if (!dataStore.ready) return;
+    // Via the ref: re-running on a data-dir switch would make the character
+    // last saved in the new dir the active one, mid-session
+    const ds = dataStoreRef.current;
     (async () => {
       try {
-        const saved = await dataStore.get<string>(SETTINGS_FILE, ACTIVE_CHAR_KEY);
+        const saved = await ds.get<string>(SETTINGS_FILE, ACTIVE_CHAR_KEY);
         if (saved) {
           await loadCharacterSkills(saved);
         }
-        const inlinePref = await dataStore.get<boolean>(SETTINGS_FILE, INLINE_IMPROVES_KEY);
+        const inlinePref = await ds.get<boolean>(SETTINGS_FILE, INLINE_IMPROVES_KEY);
         if (inlinePref != null) {
           showInlineImprovesRef.current = inlinePref;
           setShowInlineImproves(inlinePref);
@@ -298,7 +304,7 @@ export function useSkillTracker(
         });
       }
     },
-    [sendCommandRef, processorRef, terminalRef, announceImprove]
+    [sendCommandRef, processorRef, echoLine, announceImprove]
   );
 
   const addSkill = useCallback((skill: string, count = 0) => {

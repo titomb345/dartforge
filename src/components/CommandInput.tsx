@@ -414,7 +414,7 @@ export const CommandInput = forwardRef<HTMLTextAreaElement, CommandInputProps>(
           }
         }
       },
-      [submit, history, value, connected, onReconnect, skipHistory, recentLinesRef]
+      [submit, onSend, history, value, connected, onReconnect, skipHistory, recentLinesRef]
     );
 
     return (
