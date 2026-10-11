@@ -21,6 +21,7 @@ The `[Unreleased]` header controls automatic version bumping on merge:
 - Town map: walking into a pitch-black room no longer puts the mapper one room behind. It follows the known connection, or waits for the next room it can see
 - Session logs record every command the app actually sends (as `>> [sent] ...` lines, next to what you typed), keep whole lines even when they arrive split across network packets, and keep blank lines. Replays of future logs can then see auto-walks, alias expansions and movement modes exactly as the mapper did
 - Town mapper validation tooling: the replay (`scripts/replay-town.ts`) now replays each character into their own map, rejoins log lines the old logger split, and skips overlapping session files; a ground-truth checker built from five years of logs (`scripts/gt/`) scores a map by the rooms that really exist; `scripts/town-validate.sh` runs both in one go. Over 40 new regression tests
+- `/unblock clear` releases the action blocker and throws away the queued commands without sending them. `/unblock` with any other word after it now shows usage instead of sending the queue
 
 ### Changed
 

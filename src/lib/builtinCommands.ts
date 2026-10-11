@@ -97,8 +97,22 @@ const handleBlock: Handler = async (trimmed, ctx) => {
 
 const handleUnblock: Handler = async (trimmed, ctx) => {
   if (!/^\/unblock\b/i.test(trimmed)) return false;
+  const arg = trimmed.slice('/unblock'.length).trim().toLowerCase();
+  // An unknown argument must not fall through to a release: a typo of
+  // "clear" would send the very queue the user meant to throw away
+  if (arg && arg !== 'clear') {
+    error(ctx, '[Unblock] Usage: /unblock (send queued) | /unblock clear (drop queued)');
+    return true;
+  }
   const blocker = ctx.actionBlocker;
   const queued = blocker.forceUnblock();
+  if (arg === 'clear') {
+    ctx.writeToTerm(
+      // green — intentionally different from echo
+      `\x1b[32m[UNBLOCKED — ${queued.length} queued command(s) cleared, nothing sent]\x1b[0m\r\n`
+    );
+    return true;
+  }
   ctx.writeToTerm(
     // green — intentionally different from echo
     `\x1b[32m[UNBLOCKED — ${queued.length} queued command(s) released]\x1b[0m\r\n`

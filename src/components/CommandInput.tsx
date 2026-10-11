@@ -459,7 +459,7 @@ export const CommandInput = forwardRef<HTMLTextAreaElement, CommandInputProps>(
         {actionBlocked && (
           <StatusBadge
             color={CHIP_ACCENT.blocked}
-            title={`Blocked: ${actionBlockLabel ?? 'action'}. ${actionQueueLength} command(s) queued. /unblock to release`}
+            title={`Blocked: ${actionBlockLabel ?? 'action'}. ${actionQueueLength} command(s) queued. /unblock to send them, /unblock clear to drop them`}
           >
             <span>{actionBlockLabel ?? 'Blocked'}</span>
             {actionQueueLength > 0 && <span className="opacity-70">+{actionQueueLength}</span>}

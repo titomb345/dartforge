@@ -490,7 +490,8 @@ export const HELP_CATEGORIES: HelpCategory[] = [
       },
       {
         title: '/unblock',
-        description: 'Manually release action blocking and send all queued commands immediately.',
+        description:
+          'Manually release action blocking and send all queued commands immediately. "/unblock clear" releases the block and throws the queued commands away without sending them.',
       },
       {
         title: '/movemode',
