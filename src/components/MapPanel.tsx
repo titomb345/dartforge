@@ -2,8 +2,10 @@
  * MapPanel — pinnable panel wrapper for the auto-mapper.
  *
  * Two views: the hex wilderness map and the town room map. "Auto" follows
- * the player — town view while indoors, hex view outside (the view actually
- * being shown gets a cyan tint on its button). In town view a picker
+ * the player — town view while indoors once the town localizer is tracking
+ * (it has read a room since the last login or re-enable; it may still be
+ * LOST), hex view otherwise (the view actually being shown gets a cyan tint
+ * on its button). In town view a picker
  * browses ANY mapped town from anywhere; walking is only offered in the
  * town you're physically in. The toolbar stays compact enough for a pinned
  * sidebar: it holds only the Auto/Hex/Town segmented switcher, the town
@@ -52,6 +54,7 @@ export function MapPanel({ mode = 'slideout' }: PinnablePanelProps) {
     indoors,
     walking,
     town,
+    townActive,
     townCount,
     townLost,
     townWalking,
@@ -97,9 +100,14 @@ export function MapPanel({ mode = 'slideout' }: PinnablePanelProps) {
   }, [fullscreen]);
 
   // Kill switch off → v1.12 behavior: always the hex map, with the
-  // IN TOWN badge overlay while indoors (below).
+  // IN TOWN badge overlay while indoors (below). Auto shows the town map
+  // only while the town localizer is actually tracking a room: right after
+  // the switch is turned back on indoors (or when a room block didn't
+  // parse), the hex side already says "indoors" but `town` is still the
+  // last persisted position — a stale room presented as current.
   const townView =
-    townMapperEnabled && (viewMode === 'town' || (viewMode === 'auto' && indoors && town !== null));
+    townMapperEnabled &&
+    (viewMode === 'town' || (viewMode === 'auto' && indoors && townActive && town !== null));
   const effectiveView: 'hex' | 'town' = townView ? 'town' : 'hex';
 
   const towns = getTowns();
@@ -150,12 +158,24 @@ export function MapPanel({ mode = 'slideout' }: PinnablePanelProps) {
     setMenuOpen(false);
   };
 
-  const handleStairJump = (fromZ: number, hasUp: boolean, hasDown: boolean) => {
-    const up = fromZ + 1;
-    const down = fromZ - 1;
-    const target =
-      hasUp && floors.includes(up) ? up : hasDown && floors.includes(down) ? down : null;
-    if (target !== null) setFloorOverride(target);
+  /** A double-clicked staircase names the floor it leads to (true = shown) */
+  const handleStairJump = (z: number) => {
+    if (!floors.includes(z)) return false;
+    setFloorOverride(z);
+    return true;
+  };
+
+  /** Center on the player — in town view that means back on their own town
+   *  and floor first (browsing elsewhere, there was nothing to center on).
+   *  With no town position at all there is nothing to go back to: the
+   *  browsed town and floor stay (dropping the browse showed whichever town
+   *  the picker lists first). */
+  const handleCenter = () => {
+    if (townView && town) {
+      setBrowseTownId(null);
+      setFloorOverride(null);
+    }
+    centerOnPlayer();
   };
 
   // Resize observer to fill available space. Re-armed on fullscreen toggle —
@@ -227,7 +247,7 @@ export function MapPanel({ mode = 'slideout' }: PinnablePanelProps) {
           <button
             onClick={() => setViewMode('auto')}
             className={`px-1.5 transition-colors cursor-pointer ${segBtnColor('auto')}`}
-            title="Follow the player — town view indoors, hex view outside"
+            title="Follow the player: town map indoors (once the town mapper has read your room), hex map outside"
           >
             Auto
           </button>
@@ -418,7 +438,8 @@ export function MapPanel({ mode = 'slideout' }: PinnablePanelProps) {
                   <div className="h-px bg-border-subtle" />
                   <div className="text-[9px] leading-4 text-text-dim">
                     <span style={{ color: 'rgba(150, 135, 110, 0.9)' }}>━</span> corridor{'  '}
-                    <span style={{ color: 'rgba(150, 135, 110, 0.6)' }}>╌</span> shortcut / squeezed
+                    <span style={{ color: 'rgba(150, 135, 110, 0.6)' }}>╱</span> shortcut{'  '}
+                    <span style={{ color: 'rgba(150, 135, 110, 0.6)' }}>╌</span> squeezed
                     <br />
                     <span style={{ color: 'rgba(160, 120, 200, 0.9)' }}>╌</span> special exit
                     {'  '}
@@ -453,7 +474,7 @@ export function MapPanel({ mode = 'slideout' }: PinnablePanelProps) {
                 townId={displayedTownId}
                 floor={floor}
                 showLabels={mapShowLabels}
-                dimmed={!browsing && !indoors && !fullscreen}
+                dimmed={!browsing && !townActive && !fullscreen}
                 onWalkTo={browsing ? undefined : walkToRoom}
                 focus={focusRoom}
                 onStairJump={handleStairJump}
@@ -501,11 +522,7 @@ export function MapPanel({ mode = 'slideout' }: PinnablePanelProps) {
               </button>
             </div>
           )}
-          <button
-            onClick={centerOnPlayer}
-            className={overlayBtn}
-            title="Center on current position"
-          >
+          <button onClick={handleCenter} className={overlayBtn} title="Center on current position">
             <FocusIcon size={12} />
           </button>
           <button

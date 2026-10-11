@@ -1,6 +1,6 @@
 import { useRef, useCallback, useEffect } from 'react';
-import { stripAnsi } from '../lib/ansiUtils';
 import { getPlatform } from '../lib/platform';
+import { SessionLogWriter } from '../lib/sessionLog';
 import type { TimestampFormat } from './useAppSettings';
 
 let invoke: ((cmd: string, args?: Record<string, unknown>) => Promise<unknown>) | null = null;
@@ -12,120 +12,82 @@ if (getPlatform() === 'tauri') {
     .catch(() => {});
 }
 
-function formatTimestamp(format: TimestampFormat): string {
-  const d = new Date();
-  const y = d.getFullYear();
-  const mo = String(d.getMonth() + 1).padStart(2, '0');
-  const da = String(d.getDate()).padStart(2, '0');
-  const mi = String(d.getMinutes()).padStart(2, '0');
-  const s = String(d.getSeconds()).padStart(2, '0');
-  if (format === '12h') {
-    const hr = d.getHours();
-    const h12 = hr % 12 || 12;
-    const ampm = hr < 12 ? 'AM' : 'PM';
-    return `${y}-${mo}-${da} ${h12}:${mi}:${s} ${ampm}`;
-  }
-  const h = String(d.getHours()).padStart(2, '0');
-  return `${y}-${mo}-${da} ${h}:${mi}:${s}`;
-}
-
 function generateLogFilename(): string {
   const d = new Date();
   const ts = d.toISOString().replace(/[:.]/g, '-').replace('Z', '');
   return `session_${ts}.log`;
 }
 
+/** Writes to <data dir>/sessions/<filename> once the Tauri API has loaded */
+function appendToLog(filename: string, content: string): boolean {
+  if (!invoke) return false;
+  invoke('append_to_log', { subdir: 'sessions', filename, content }).catch(console.error);
+  return true;
+}
+
+/**
+ * Session logger — the log format and why it is cut the way it is are in
+ * lib/sessionLog.ts: output lines exactly as the parsers see them (whole,
+ * blank ones kept), typed input, and every command as actually sent. The
+ * state and its rules live in SessionLogWriter (tested without React);
+ * this hook only drives it. Keep timers out of the hook: React.StrictMode
+ * runs the unmount cleanup once at mount, and a timer handle the hook kept
+ * across it stopped every dev session's log from being written (see
+ * SessionLogWriter).
+ */
 export function useSessionLogger(
   enabled: boolean,
   passwordMode: boolean,
-  timestampFormat: TimestampFormat
+  timestampFormat: TimestampFormat,
+  /** The MUD connection: a line cut off by a disconnect is logged as is */
+  connected = true
 ) {
-  const filenameRef = useRef<string | null>(null);
-  const bufferRef = useRef<string[]>([]);
-  const flushTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const passwordModeRef = useRef(passwordMode);
-  passwordModeRef.current = passwordMode;
-  const formatRef = useRef(timestampFormat);
-  formatRef.current = timestampFormat;
-  // Buffer for partial ANSI escape sequences split across TCP chunks
-  const partialAnsiRef = useRef('');
+  const writerRef = useRef<SessionLogWriter | null>(null);
+  if (!writerRef.current) {
+    writerRef.current = new SessionLogWriter({
+      append: appendToLog,
+      newFilename: generateLogFilename,
+    });
+  }
+  const writer = writerRef.current;
+  writer.passwordMode = passwordMode;
+  writer.stampFormat = timestampFormat;
 
-  const flush = useCallback(() => {
-    if (!invoke || !filenameRef.current || bufferRef.current.length === 0) return;
-    const content = bufferRef.current.join('');
-    bufferRef.current = [];
-    invoke('append_to_log', {
-      subdir: 'sessions',
-      filename: filenameRef.current,
-      content,
-    }).catch(console.error);
-  }, []);
-
-  const scheduleFlush = useCallback(() => {
-    if (flushTimerRef.current) return;
-    flushTimerRef.current = setTimeout(() => {
-      flushTimerRef.current = null;
-      flush();
-    }, 1000);
-  }, [flush]);
-
-  // Create new log file when logging is enabled
+  // Open a new log file when logging is enabled; write and close it when not
   useEffect(() => {
-    if (enabled && !filenameRef.current) {
-      filenameRef.current = generateLogFilename();
-    }
-    if (!enabled) {
-      flush();
-      filenameRef.current = null;
-    }
-  }, [enabled, flush]);
+    writer.setEnabled(enabled);
+  }, [writer, enabled]);
 
-  // Flush on unmount
+  // A dropped connection completes no line: the next session's output must
+  // not be glued onto the last one's unfinished line
   useEffect(() => {
-    return () => {
-      if (flushTimerRef.current) clearTimeout(flushTimerRef.current);
-      flush();
-    };
-  }, [flush]);
+    if (!connected) writer.connectionLost();
+  }, [writer, connected]);
+
+  // Write everything on unmount
+  useEffect(() => () => writer.close(), [writer]);
 
   const logOutput = useCallback(
     (rawData: string) => {
-      if (!enabled || !filenameRef.current) return;
-      // Prepend any leftover partial ANSI sequence from the previous chunk
-      const data = partialAnsiRef.current + rawData;
-      partialAnsiRef.current = '';
-      // Check if this chunk ends with an incomplete ANSI escape sequence
-      // (e.g. \x1b or \x1b[ or \x1b[1;35 — waiting for the final letter)
-      const trailingMatch = data.match(/\x1b(\[[\d;]*)?$/);
-      let toStrip: string;
-      if (trailingMatch) {
-        partialAnsiRef.current = trailingMatch[0];
-        toStrip = data.slice(0, -trailingMatch[0].length);
-      } else {
-        toStrip = data;
-      }
-      const stripped = stripAnsi(toStrip);
-      const lines = stripped.split(/\r?\n/);
-      for (const line of lines) {
-        // Skip empty lines and bare MUD prompts (just "> " with nothing after)
-        const trimmed = line.trim();
-        if (trimmed && trimmed !== '>') {
-          bufferRef.current.push(`[${formatTimestamp(formatRef.current)}] ${line}\n`);
-        }
-      }
-      scheduleFlush();
+      if (enabled) writer.output(rawData);
     },
-    [enabled, scheduleFlush]
+    [writer, enabled]
   );
 
   const logCommand = useCallback(
     (command: string) => {
-      if (!enabled || !filenameRef.current || passwordModeRef.current) return;
-      bufferRef.current.push(`[${formatTimestamp(formatRef.current)}] >> ${command}\n`);
-      scheduleFlush();
+      if (enabled) writer.typed(command);
     },
-    [enabled, scheduleFlush]
+    [writer, enabled]
   );
 
-  return { logOutput, logCommand };
+  /** A command as it actually went out (see lib/sessionLog.ts) */
+  const logSent = useCallback(
+    (command: string) => {
+      if (enabled) writer.sent(command);
+    },
+    [writer, enabled]
+  );
+
+  return { logOutput, logCommand, logSent };
 }

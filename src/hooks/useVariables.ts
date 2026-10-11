@@ -24,12 +24,10 @@ export function useVariables(dataStore: DataStore, activeCharacter: string | nul
   // Load global variables on mount
   useEffect(() => {
     if (!dataStore.ready) return;
+    const ds = dataStoreRef.current; // via the ref: a data-dir switch does not reload
     (async () => {
       try {
-        const savedGlobal = await dataStore.get<Record<VariableId, Variable>>(
-          VARIABLES_FILE,
-          GLOBAL_KEY
-        );
+        const savedGlobal = await ds.get<Record<VariableId, Variable>>(VARIABLES_FILE, GLOBAL_KEY);
         if (savedGlobal) setGlobalVariables(sanitizeRecordMap<Variable>(savedGlobal, 'name'));
       } catch (e) {
         console.error('Failed to load global variables:', e);
@@ -45,11 +43,12 @@ export function useVariables(dataStore: DataStore, activeCharacter: string | nul
       charLoadedRef.current = false;
       return;
     }
+    const ds = dataStoreRef.current; // via the ref: a data-dir switch does not reload
     const charKey = activeCharacter.toLowerCase();
     charLoadedRef.current = false;
     (async () => {
       try {
-        const saved = await dataStore.get<Record<VariableId, Variable>>(VARIABLES_FILE, charKey);
+        const saved = await ds.get<Record<VariableId, Variable>>(VARIABLES_FILE, charKey);
         setCharacterVariables(sanitizeRecordMap<Variable>(saved, 'name'));
       } catch (e) {
         console.error('Failed to load character variables:', e);

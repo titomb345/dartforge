@@ -27,12 +27,13 @@ export function useAliases(dataStore: DataStore, activeCharacter: string | null)
   // Load global aliases + speedwalk setting on mount
   useEffect(() => {
     if (!dataStore.ready) return;
+    const ds = dataStoreRef.current; // via the ref: a data-dir switch does not reload
     (async () => {
       try {
-        const savedGlobal = await dataStore.get<Record<AliasId, Alias>>(ALIASES_FILE, GLOBAL_KEY);
+        const savedGlobal = await ds.get<Record<AliasId, Alias>>(ALIASES_FILE, GLOBAL_KEY);
         if (savedGlobal) setGlobalAliases(sanitizeRecordMap<Alias>(savedGlobal, 'pattern'));
 
-        const savedSpeedwalk = await dataStore.get<boolean>(SETTINGS_FILE, SPEEDWALK_KEY);
+        const savedSpeedwalk = await ds.get<boolean>(SETTINGS_FILE, SPEEDWALK_KEY);
         if (savedSpeedwalk != null) setEnableSpeedwalkState(savedSpeedwalk);
       } catch (e) {
         console.error('Failed to load global aliases:', e);
@@ -48,11 +49,12 @@ export function useAliases(dataStore: DataStore, activeCharacter: string | null)
       charLoadedRef.current = false;
       return;
     }
+    const ds = dataStoreRef.current; // via the ref: a data-dir switch does not reload
     const charKey = activeCharacter.toLowerCase();
     charLoadedRef.current = false;
     (async () => {
       try {
-        const saved = await dataStore.get<Record<AliasId, Alias>>(ALIASES_FILE, charKey);
+        const saved = await ds.get<Record<AliasId, Alias>>(ALIASES_FILE, charKey);
         setCharacterAliases(sanitizeRecordMap<Alias>(saved, 'pattern'));
       } catch (e) {
         console.error('Failed to load character aliases:', e);

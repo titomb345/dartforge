@@ -4,6 +4,7 @@ import { FilterPill } from './FilterPill';
 import { LogIcon, SearchIcon } from './icons';
 import { MudInput } from './shared';
 import { cn } from '../lib/cn';
+import { SENT_PREFIX } from '../lib/sessionLog';
 import { ConfirmDeleteButton } from './ConfirmDeleteButton';
 
 /* ── Types ──────────────────────────────────────────────────── */
@@ -51,6 +52,15 @@ const BARE_PROMPT_RE = /^\[.*?\] >\s*$/;
 
 function isCommandLine(line: string): boolean {
   return CMD_RE.test(line);
+}
+
+/**
+ * "[ts] >> [sent] lead n" — a command as it actually went out (logs since
+ * Oct 2026, lib/sessionLog.ts): data for the map's replay tools. Not shown:
+ * the typed line before it already says what you entered.
+ */
+function isSentLine(line: string): boolean {
+  return line.replace(CONTENT_RE, '').startsWith(SENT_PREFIX);
 }
 
 function isLegacyCommandLine(line: string): boolean {
@@ -178,7 +188,20 @@ export function LogViewerModal({ onClose }: LogViewerModalProps) {
         contextLines: 2,
         maxResults: 200,
       });
-      setResults(r);
+      // Sent-command lines stay out of the results, as out of the session view
+      const visible = (l: string) => !isSentLine(l);
+      const matches = r.matches
+        .filter((m) => visible(m.line))
+        .map((m) => ({
+          ...m,
+          context_before: m.context_before.filter(visible),
+          context_after: m.context_after.filter(visible),
+        }));
+      setResults({
+        ...r,
+        matches,
+        total_matches: r.total_matches - (r.matches.length - matches.length),
+      });
       setSelected(null);
     } catch (e) {
       console.error('Search failed:', e);
@@ -211,9 +234,9 @@ export function LogViewerModal({ onClose }: LogViewerModalProps) {
   const filteredLines = useMemo(
     () =>
       filter === 'all'
-        ? lines.filter((l) => !BARE_PROMPT_RE.test(l))
+        ? lines.filter((l) => !BARE_PROMPT_RE.test(l) && !isSentLine(l))
         : lines.filter((l) => {
-            if (BARE_PROMPT_RE.test(l)) return false;
+            if (BARE_PROMPT_RE.test(l) || isSentLine(l)) return false;
             const isCmd = isCommandLine(l);
             return filter === 'commands' ? isCmd : !isCmd;
           }),
@@ -225,7 +248,10 @@ export function LogViewerModal({ onClose }: LogViewerModalProps) {
     [sessions, selected]
   );
 
-  const commandCount = useMemo(() => lines.filter((l) => isCommandLine(l)).length, [lines]);
+  const commandCount = useMemo(
+    () => lines.filter((l) => isCommandLine(l) && !isSentLine(l)).length,
+    [lines]
+  );
 
   return (
     <div className="fixed inset-0 z-[9000] flex items-center justify-center">

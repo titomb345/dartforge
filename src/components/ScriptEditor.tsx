@@ -71,6 +71,13 @@ function InnerEditor({
   onChangeRef.current = onChange;
   const onSaveRef = useRef(onSave);
   onSaveRef.current = onSave;
+  // Read once, when the view is created: later value changes are synced by
+  // the effect below, and recreating the view per keystroke would lose the
+  // cursor, focus and undo history
+  const valueRef = useRef(value);
+  valueRef.current = value;
+  const placeholderRef = useRef(placeholder);
+  placeholderRef.current = placeholder;
 
   const externalUpdate = useRef(false);
 
@@ -102,8 +109,9 @@ function InnerEditor({
       '.cm-scroller': { overflow: 'auto' },
     });
 
+    const initialPlaceholder = placeholderRef.current;
     const state = EditorState.create({
-      doc: value,
+      doc: valueRef.current,
       extensions: [
         basicSetup,
         keymap.of([indentWithTab]),
@@ -114,7 +122,7 @@ function InnerEditor({
         saveKeymap,
         updateListener,
         EditorView.lineWrapping,
-        ...(placeholder ? [cmPlaceholder(placeholder)] : []),
+        ...(initialPlaceholder ? [cmPlaceholder(initialPlaceholder)] : []),
       ],
     });
 

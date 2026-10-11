@@ -58,23 +58,50 @@ const DOOR_OPPOSITE: Record<string, string> = {
 export const DOOR_DIRECTIONS = Object.keys(DOOR_OPPOSITE);
 
 /**
+ * The word a door command addresses a door by, from the noun its exits line
+ * gives it (TownExits.doorNouns: door, doors, gate, gates, trapdoor,
+ * curtain, hatch, grate, closet). "door" only finds things called a door:
+ * "unlock d door" / "open d door" at an oak trapdoor drew "Unlock what?" /
+ * "What ?" and the move bounced off it, as at the Bailey's cedar gate
+ * (session_2026-07-06T00-03-28-376.log:2913-2924 and :3247-3256; "open
+ * gate", "open u trapdoor" and "unlock w gate with key" work). A plural
+ * noun names a door pair by its singular — "unlock w door with key"
+ * answers "You unlock the pair of oak doors." (session_2026-06-19), while
+ * the plural form was never sent.
+ */
+export function doorCommandNoun(noun: string | undefined): string {
+  if (!noun) return 'door';
+  if (noun === 'doors' || noun === 'gates') return noun.slice(0, -1);
+  return noun;
+}
+
+/**
  * Build the full unlock→open→move→close→lock sequence for passing a door
  * in `dirWord` (any long/short direction, plus in/out), trying `keys`
- * keyring slots ("key", "key 2", … "key N") on both sides.
- * Returns null for unrecognized directions.
+ * keyring slots ("key", "key 2", … "key N") on both sides. `noun` is the
+ * word for the door on this side, `farNoun` the same door's on the far side
+ * (the walker reads both from the exits lines; the /door built-in, which
+ * knows neither, says "door"). Returns null for unrecognized directions.
  */
-export function buildDoorSequence(dirWord: string, keys: number): string[] | null {
+export function buildDoorSequence(
+  dirWord: string,
+  keys: number,
+  noun = 'door',
+  farNoun = noun
+): string[] | null {
+  // (typeof: a plain-object table also answers inherited names — "/door
+  // constructor" would have sent "unlock function Object() {...} door")
   const dir = DOOR_DIR_ALIASES[dirWord.trim().toLowerCase()];
-  if (!dir) return null;
+  if (typeof dir !== 'string') return null;
   const opp = DOOR_OPPOSITE[dir];
   const n = Math.max(1, Math.min(10, Math.floor(keys) || 1));
 
   const keyName = (i: number) => (i === 1 ? 'key' : `key ${i}`);
   const cmds: string[] = [];
-  for (let i = 1; i <= n; i++) cmds.push(`unlock ${dir} door with ${keyName(i)}`);
-  cmds.push(`open ${dir} door`);
+  for (let i = 1; i <= n; i++) cmds.push(`unlock ${dir} ${noun} with ${keyName(i)}`);
+  cmds.push(`open ${dir} ${noun}`);
   cmds.push(dir);
-  cmds.push(`close ${opp} door`);
-  for (let i = 1; i <= n; i++) cmds.push(`lock ${opp} door with ${keyName(i)}`);
+  cmds.push(`close ${opp} ${farNoun}`);
+  for (let i = 1; i <= n; i++) cmds.push(`lock ${opp} ${farNoun} with ${keyName(i)}`);
   return cmds;
 }

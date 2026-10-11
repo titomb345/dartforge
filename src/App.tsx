@@ -375,6 +375,7 @@ function AppMain() {
       panelLayoutLoadedRef.current = true;
       settingsLoadedRef.current = true;
     })().catch(console.error);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- load once at mount: re-running on a new dataStore / CRUD identity would reload saved layout over the session's edits
   }, []);
 
   // Panel docking helpers
@@ -462,6 +463,7 @@ function AppMain() {
     dataStore.set('settings.json', 'pinnedWidths', pinnedWidths).catch(console.error);
     dataStore.set('settings.json', 'panelHeights', panelHeights).catch(console.error);
     dataStore.set('settings.json', 'collapsedSides', collapsedSides).catch(console.error);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- persist on layout changes only: dataStore.set is stable, and re-running on a data-dir switch would copy this session's layout over the new location's
   }, [panelLayout, pinnedWidths, panelHeights, collapsedSides]);
 
   // Clear collapsed flag when a side has no pinned panels
@@ -613,13 +615,10 @@ function AppMain() {
             msg += ']';
             writeToTerm(`\x1b[32m${msg}\x1b[0m\r\n`);
           }
-          // Flush queued commands via raw sendCommand (bypasses blocker)
+          // Flush queued commands past the blocker (tracked and logged as sent)
           (async () => {
             for (const cmd of toSend) {
-              mapTrackCommandRef.current(cmd);
-              loadoutTrackCommandRef.current(cmd);
-              outputFilterRef.current?.noteEquipCommand(cmd);
-              await sendCommand(cmd);
+              await sendReleasedRef.current(cmd);
             }
           })();
         }
@@ -744,6 +743,7 @@ function AppMain() {
     // Don't persist until settings are loaded — prevents defaults from overwriting synced values
     if (!settingsLoadedRef.current) return;
     dataStore.set('settings.json', 'filteredStatuses', filterFlags).catch(console.error);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- persist on setting changes only: dataStore.set is stable, and re-running on a data-dir switch would copy this session's flags over the new location's
   }, [filterFlags, boardDatesEnabled, stripPromptsEnabled, antiSpamEnabled, antiSpamThreshold]);
 
   // Wire anti-spam flush callback so the timer can write to terminal
@@ -757,6 +757,7 @@ function AppMain() {
   useEffect(() => {
     if (!settingsLoadedRef.current) return;
     dataStore.set('settings.json', 'compactReadouts', compactReadouts).catch(console.error);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- persist on changes only: dataStore.set is stable, and re-running on a data-dir switch would copy this session's state over the new location's
   }, [compactReadouts]);
 
   // Clear taskbar flash when window regains focus
@@ -840,7 +841,7 @@ function AppMain() {
   // Sync persisted action to auto-conc when settings load
   useEffect(() => {
     autoConcRef.current.setAction(appSettings.autoConcAction);
-  }, [appSettings.autoConcAction]);
+  }, [autoConcRef, appSettings.autoConcAction]);
 
   // Movement mode — direction command prefixing (lead/row/sneak)
   const [movementMode, setMovementMode] = useState<MovementMode>('normal');
@@ -948,12 +949,15 @@ function AppMain() {
   }, [skillDataRef, movementModeRef, writeToTerm]);
 
   // Improve counter hook
-  const onCounterAutoToggle = useCallback<CounterAutoToggle>((names, action) => {
-    const what = action === 'paused' ? 'paused: disconnected' : 'resumed';
-    for (const name of names) {
-      writeToTermRef.current(`\x1b[36m[Counter "${name}" ${what}]\x1b[0m\r\n`);
-    }
-  }, []);
+  const onCounterAutoToggle = useCallback<CounterAutoToggle>(
+    (names, action) => {
+      const what = action === 'paused' ? 'paused: disconnected' : 'resumed';
+      for (const name of names) {
+        writeToTermRef.current(`\x1b[36m[Counter "${name}" ${what}]\x1b[0m\r\n`);
+      }
+    },
+    [writeToTermRef]
+  );
   const improveCounters = useImproveCounters(activeCharacter, loggedIn, onCounterAutoToggle);
   const { handleCounterMatch } = improveCounters;
 
@@ -1039,9 +1043,10 @@ function AppMain() {
   const aliasStateRef = useLatestRef(aliasState);
 
   // Context menu → trigger panel integration
+  const { setTriggerPrefill, createTrigger } = triggerState;
   const handleAddToTrigger = useCallback(
     (selectedText: string) => {
-      triggerState.setTriggerPrefill({
+      setTriggerPrefill({
         pattern: selectedText,
         matchMode: 'substring',
         gag: false,
@@ -1050,12 +1055,12 @@ function AppMain() {
       });
       setActivePanel('triggers');
     },
-    [triggerState.setTriggerPrefill]
+    [setTriggerPrefill]
   );
 
   const handleGagLine = useCallback(
     (selectedText: string) => {
-      triggerState.createTrigger(
+      createTrigger(
         {
           pattern: selectedText,
           matchMode: 'substring',
@@ -1067,7 +1072,7 @@ function AppMain() {
       );
       writeToTerm(`\x1b[90m[Gag trigger created for: ${selectedText}]\x1b[0m\r\n`);
     },
-    [triggerState.createTrigger, writeToTerm]
+    [createTrigger, writeToTerm]
   );
 
   // Context menu → notes panel integration
@@ -1104,16 +1109,24 @@ function AppMain() {
     },
     [writeToTermRef]
   );
+  // Walks hold their steps while the action blocker holds sends (a cast)
+  const mapSendsHeld = useCallback(
+    () => actionBlockingEnabledRef.current && actionBlockerRef.current.blocked,
+    [actionBlockingEnabledRef, actionBlockerRef]
+  );
   const mapTracker = useMapTracker(
     dataStore,
     activeCharacter,
     mapSendDirection,
     mapEcho,
     appSettings.doorKeys,
-    appSettings.townMapperEnabled
+    appSettings.townMapperEnabled,
+    mapSendsHeld
   );
   const mapFeedLineRef = useLatestRef(mapTracker.feedLine);
   const mapTrackCommandRef = useLatestRef(mapTracker.trackCommand);
+  const mapBeginCharacterRef = useLatestRef(mapTracker.beginCharacter);
+  const mapNoteLoginRef = useLatestRef(mapTracker.noteLogin);
 
   // Loadout tracker — hands/worn state from output + outgoing commands.
   // refreshEquipRef is filled in after useTimerEngines mounts; the tracker
@@ -1143,7 +1156,7 @@ function AppMain() {
     allocParserRef.current?.setFlushCallback((result) => {
       handleAllocParseRef.current(result);
     });
-  }, []);
+  }, [handleAllocParseRef]);
 
   // Keep OutputFilter's activeCharacter in sync for chat own-message detection
   useEffect(() => {
@@ -1157,11 +1170,25 @@ function AppMain() {
     if (outputFilterRef.current) {
       outputFilterRef.current.signatureResolver = (msg) => resolveSignatureRef.current(msg);
     }
-  }, []);
+  }, [resolveSignatureRef]);
 
   // Session logging ref (populated after useMudConnection provides passwordMode)
   const logOutputRef = useRef<((data: string) => void) | null>(null);
   const logCommandRef = useRef<((cmd: string) => void) | null>(null);
+  const logSentRef = useRef<((cmd: string) => void) | null>(null);
+  /**
+   * Where a command goes out to the MUD past the action blocker: the direct
+   * path and every release of commands the blocker held (its automatic
+   * flush, /unblock). The mapper and the loadout tracker track it here
+   * (after the movement mode: "lead n"), and the session log records it as
+   * sent, so a replay tracks the commands the live mapper tracked: walk
+   * steps and door sequences, trigger and timer sends, the login sync —
+   * none of which the typed-input log line shows. (A few built-ins send raw
+   * past all of this — ctx.sendCommand: the auto-inscribe / auto-cast /
+   * auto-conc loops' own commands, /show — none a move: untracked and
+   * unlogged, as before.)
+   */
+  const sendReleasedRef = useRef<(cmd: string) => Promise<void>>(async () => {});
 
   // Process output chunks through the skill detection pipeline + buffer for tab completion
   const onOutputChunk = useCallback(
@@ -1186,30 +1213,42 @@ function AppMain() {
         if (recent.length > MAX_RECENT_LINES) recent.length = MAX_RECENT_LINES;
       }
     },
-    [handleSkillMatch]
+    [handleSkillMatch, handleCounterMatchRef]
   );
 
   const onCharacterName = useCallback(
     (name: string) => {
+      // Synchronous, from the login line, before the rest of the login chunk
+      // is filtered: the map stores switch to this character now. Waiting for
+      // setActiveCharacter (a settings write, then a render, then the map
+      // read) let the login burst's first room block land in the previous
+      // character's map.
+      mapBeginCharacterRef.current(name);
       setActiveCharacter(name);
     },
-    [setActiveCharacter]
+    [mapBeginCharacterRef, setActiveCharacter]
   );
 
   const autoLoginActiveSlotRef = useLatestRef(autoLoginActiveSlot);
-  const onLogin = useCallback((restored: boolean) => {
-    outputFilterRef.current?.startSync();
-    for (const cmd of LOGIN_COMMANDS) {
-      sendCommandRef.current?.(cmd);
-    }
-    setLoggedIn(true);
-    // A reload that picked the live session back up isn't a new login, so
-    // it doesn't move the character switch cooldown.
-    if (restored) return;
-    // Record login timestamp for character switch cooldown
-    appSettings.updateLastLoginTimestamp(Date.now());
-    appSettings.updateLastLoginSlot(autoLoginActiveSlotRef.current);
-  }, []);
+  const onLogin = useCallback(
+    (restored: boolean) => {
+      // A new server session: the town map's localizer starts over (a webview
+      // reload that picked the live session back up is no new session)
+      if (!restored) mapNoteLoginRef.current();
+      outputFilterRef.current?.startSync();
+      for (const cmd of LOGIN_COMMANDS) {
+        sendCommandRef.current?.(cmd);
+      }
+      setLoggedIn(true);
+      // A reload that picked the live session back up isn't a new login, so
+      // it doesn't move the character switch cooldown.
+      if (restored) return;
+      // Record login timestamp for character switch cooldown
+      appSettings.updateLastLoginTimestamp(Date.now());
+      appSettings.updateLastLoginSlot(autoLoginActiveSlotRef.current);
+    },
+    [appSettings, autoLoginActiveSlotRef, mapNoteLoginRef]
+  );
 
   const transport = useTransport();
 
@@ -1232,17 +1271,32 @@ function AppMain() {
     );
 
   // Session logger
-  const { logOutput, logCommand } = useSessionLogger(
+  const { logOutput, logCommand, logSent } = useSessionLogger(
     appSettings.sessionLoggingEnabled,
     passwordMode,
-    appSettings.timestampFormat
+    appSettings.timestampFormat,
+    connected
   );
   logOutputRef.current = logOutput;
   logCommandRef.current = logCommand;
+  logSentRef.current = logSent;
+
+  sendReleasedRef.current = async (command: string) => {
+    // Automapper — track outgoing movement commands (post movement-mode)
+    mapTrackCommandRef.current(command);
+    // Loadout — arm block captures / hold pairing for equipment commands
+    loadoutTrackCommandRef.current(command);
+    // Equip reply attribution — record equip sends in true send order so
+    // the filter can tell background re-sync replies from the player's own
+    outputFilterRef.current?.noteEquipCommand(command);
+    // Session log: the command as sent (the typed line shows only the input)
+    logSentRef.current?.(command);
+    await sendCommand(command);
+  };
 
   // Wrap sendCommand with action blocker — all senders (timers, triggers,
   // skill tracker, allocations, user commands) go through this ref.
-  // Raw sendCommand is used directly only when flushing the queue.
+  // Commands the blocker held go out through sendReleasedRef when released.
   sendCommandRef.current = async (command: string) => {
     const blocker = actionBlockerRef.current;
     if (actionBlockingEnabledRef.current && blocker.blocked) {
@@ -1254,14 +1308,7 @@ function AppMain() {
       const cat = blocker.shouldBlock(command);
       if (cat) blocker.block(cat);
     }
-    // Automapper — track outgoing movement commands (post movement-mode)
-    mapTrackCommandRef.current(command);
-    // Loadout — arm block captures / hold pairing for equipment commands
-    loadoutTrackCommandRef.current(command);
-    // Equip reply attribution — record equip sends in true send order so
-    // the filter can tell background re-sync replies from the player's own
-    outputFilterRef.current?.noteEquipCommand(command);
-    await sendCommand(command);
+    await sendReleasedRef.current(command);
   };
 
   // Keep trigger runner in sync for use in the output filter closure
@@ -1481,6 +1528,8 @@ function AppMain() {
   };
 
   // Post-sync commands — fire user-configured commands after login sync completes
+  const postSyncEnabledRef = useLatestRef(postSyncEnabled);
+  const postSyncCommandsRef = useLatestRef(postSyncCommands);
   useEffect(() => {
     if (!outputFilterRef.current) return;
     outputFilterRef.current.onSyncEnd = () => {
@@ -1498,7 +1547,15 @@ function AppMain() {
     return () => {
       if (outputFilterRef.current) outputFilterRef.current.onSyncEnd = null;
     };
-  }, []);
+  }, [
+    postSyncEnabledRef,
+    postSyncCommandsRef,
+    writeToTerm,
+    mergedAliasesRef,
+    enableSpeedwalkRef,
+    activeCharacterRef,
+    commandSeparatorRef,
+  ]);
 
   // Command echo ref (used in handleSend callback)
   const commandEchoRef = useLatestRef(appSettings.commandEchoEnabled);
@@ -1511,6 +1568,7 @@ function AppMain() {
     writeToTerm,
     sendCommand,
     sendCommandViaRef: async () => sendCommandRef.current!,
+    sendReleased: (cmd) => sendReleasedRef.current(cmd),
     actionBlocker: actionBlockerRef.current,
     actionBlockingEnabled: () => actionBlockingEnabledRef.current,
     autoInscriber: autoInscriberRef.current,
@@ -1656,7 +1714,23 @@ function AppMain() {
         },
       });
     },
-    [sendCommand]
+    [
+      writeToTerm,
+      commandEchoRef,
+      promptCharRef,
+      passwordModeRef,
+      movementModeRef,
+      hasScriptAliasesRef,
+      mergedAliasesRef,
+      enableSpeedwalkRef,
+      activeCharacterRef,
+      commandSeparatorRef,
+      globalScriptRef,
+      liveAllocationsRef,
+      liveMagicAllocRef,
+      handleAllocParseRef,
+      handleMagicParseRef,
+    ]
   );
 
   // Clear logged-in state, reset trigger cooldowns, action blocker, and movement mode on disconnect
@@ -1674,7 +1748,15 @@ function AppMain() {
       setMovementMode('normal');
       setWhoSnapshot(null);
     }
-  }, [connected]);
+  }, [
+    connected,
+    actionBlockerRef,
+    autoInscriberRef,
+    autoCasterRef,
+    autoConcRef,
+    autoRefreshRef,
+    autoPowercastRef,
+  ]);
 
   const toggleDebug = () => {
     const next = !debugMode;
@@ -1749,7 +1831,7 @@ function AppMain() {
         }
       }
     },
-    [handleSend]
+    [handleSend, activeCharacterRef, globalScriptRef, mergedVariablesRef, setVarRef]
   );
 
   // Panel shortcuts: Ctrl+digit for the Panels group, Alt+letter for the rest
@@ -1769,7 +1851,7 @@ function AppMain() {
     };
     window.addEventListener('keydown', handler);
     return () => window.removeEventListener('keydown', handler);
-  }, [togglePanel]);
+  }, [togglePanel, panelLayoutRef]);
 
   // Escape closes the open slide-out from anywhere and hands focus back to
   // the command input. A popover menu that is open takes the Escape instead.
@@ -1784,7 +1866,7 @@ function AppMain() {
     };
     window.addEventListener('keydown', handler);
     return () => window.removeEventListener('keydown', handler);
-  }, [closePanel]);
+  }, [closePanel, activePanelRef]);
 
   // How many phones are on the Mobile Companion right now
   const [companionClients, setCompanionClients] = useState(0);
@@ -1845,7 +1927,7 @@ function AppMain() {
     return () => {
       unlisten?.();
     };
-  }, [handleSendRef]);
+  }, [handleSendRef, commandHistoryRef, companionSkipHistoryRef, handleHistoryChangeRef]);
 
   // Companion reconnect/disconnect listeners
   const reconnectRef = useLatestRef(reconnect);
@@ -1924,11 +2006,7 @@ function AppMain() {
     };
     window.addEventListener('keydown', handler, true);
     return () => window.removeEventListener('keydown', handler, true);
-  }, []);
-
-  // Post-sync commands
-  const postSyncEnabledRef = useLatestRef(postSyncEnabled);
-  const postSyncCommandsRef = useLatestRef(postSyncCommands);
+  }, [macrosRef, fireQuickButtonRef]);
 
   // Timer engines (anti-idle, alignment tracking, who refresh, babel, custom timers)
   const {
@@ -2405,7 +2483,13 @@ function AppMain() {
         appSettings.updateAnnouncePetMode('off');
       },
     }),
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- appSettings' update callbacks are stable (useCallback); only the settings values listed change
     [
+      autoInscriberRef,
+      autoCasterRef,
+      autoConcRef,
+      autoRefreshRef,
+      autoPowercastRef,
       connected,
       passwordMode,
       skipHistory,
@@ -2455,9 +2539,10 @@ function AppMain() {
   // store (counters, timers, skills, notes, map, …) at the new character. The
   // connection is only bounced when one exists — switching while offline just
   // changes who you are, it does not drag you online.
+  const { updateAutoLoginActiveSlot } = appSettings;
   const switchCharacter = useCallback(() => {
     const newSlot = (autoLoginActiveSlot === 0 ? 1 : 0) as 0 | 1;
-    appSettings.updateAutoLoginActiveSlot(newSlot);
+    updateAutoLoginActiveSlot(newSlot);
     const target = autoLoginCharacters[newSlot];
     if (target?.name) void setActiveCharacter(target.name);
     if (connected) {
@@ -2467,7 +2552,7 @@ function AppMain() {
   }, [
     autoLoginActiveSlot,
     autoLoginCharacters,
-    appSettings.updateAutoLoginActiveSlot,
+    updateAutoLoginActiveSlot,
     setActiveCharacter,
     connected,
     disconnect,

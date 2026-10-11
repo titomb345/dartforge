@@ -10,6 +10,46 @@ The `[Unreleased]` header controls automatic version bumping on merge:
 - `[Unreleased-minor]` → 0.1.0 → 0.2.0
 - `[Unreleased-major]` → 0.1.0 → 1.0.0
 
+## [Unreleased-minor]
+
+### Added
+
+- Town map: plane shift and the warriors' temple pools are recognized as teleports. The OOC area now gets its own map instead of being drawn inside whichever town you shifted from, and shifting back puts you on the entrance you left from
+- Town map: being led by a group leader ("Esira leads you up.") is tracked indoors, including up, down, east, west and exits like "enter clearing"
+- Town map: rooms with no exits at all ("There are no obvious exits.", like the Arena) are mapped instead of being skipped
+- Town map: room-specific exits such as `hole`, `path` or `pool` are recognized, so typing one maps the room on the other side and auto-walk can use it
+- Town map: walking into a pitch-black room no longer puts the mapper one room behind. It follows the known connection, or waits for the next room it can see
+- Session logs record every command the app actually sends (as `>> [sent] ...` lines, next to what you typed), keep whole lines even when they arrive split across network packets, and keep blank lines. Replays of future logs can then see auto-walks, alias expansions and movement modes exactly as the mapper did
+- Town mapper validation tooling: the replay (`scripts/replay-town.ts`) now replays each character into their own map, rejoins log lines the old logger split, and skips overlapping session files; a ground-truth checker built from five years of logs (`scripts/gt/`) scores a map by the rooms that really exist; `scripts/town-validate.sh` runs both in one go. Over 40 new regression tests
+- `/unblock clear` releases the action blocker and throws away the queued commands without sending them. `/unblock` with any other word after it now shows usage instead of sending the queue
+
+### Changed
+
+- Town map layout: when a newly walked room needs a spot another room already holds, only the rooms connected to that one shift over, instead of every room beyond that line on every floor. The drawn map also closes the gaps earlier shifts left behind (display only), so long empty corridors shrink. In replay, 90% of connections now draw as one-cell links
+- Town auto-walk: doors are opened and locked by their own name (`gate`, `trapdoor`, `hatch`) instead of always `door`; a door you closed behind you is remembered as closed; steps wait while the action blocker holds your commands; typing `look` during a walk no longer cancels it; a walk won't start while your last move is still on its way ("Still moving..."), and clicking the room you're in says "You are already there."
+- The town map only re-centers when you actually move, change floor or switch towns. It used to snap back on unrelated updates and undo your scrolling
+- Double-clicking a staircase on the town map shows the floor it leads to, centered on the room the stairs arrive in. For stairs you haven't taken yet, it centers on the nearest mapped room on that floor
+- Door marks on the town map are drawn when either room lists the door, room labels are shortened to fit beside their neighbors (hover for the full name), and diagonal exits that don't line up are drawn dashed from the correct corner
+- The Map panel's Auto view switches to the town map only while the town mapper is actually tracking your position
+
+### Fixed
+
+- Town map: when the mapper realized two pieces it had drawn were the same town and joined them, the copied rooms kept their old connection numbers and their exits pointed at unrelated rooms. Joins also copied most rooms as duplicates and could drag a whole town onto other floors. Joins now match rooms by walking their exits from the shared room, and only move the piece that matched
+- Town map: a command the game rejects ("What ?", "Enter what?") was taken as the move that produced the next room. A failed `port`, `out` or `enter ...` created false connections (auto-walk could then try to "enter portal"), self-connections, and left the mapper one room behind. Failed commands are now dropped, and saved maps are cleaned of these connections when they load
+- Town map: move failures the mapper didn't recognize (swimming in place, the skull-trap field, the OOC fear room, being too hurt to move) left a phantom move waiting, which built duplicate rooms
+- Town map: moves typed right after a portal command were thrown away when you stepped through
+- Town map: commands are matched case-sensitively like the game (`OUT` is rejected by DartMUD and is no longer treated as a move), `lead`, `swim`, `leap`, `sneak`, `go` and `climb` moves are tracked, and `leave` (the party command) is no longer treated as a move
+- Town map: exit lists like "a closed pair of oak doors leading west and east" marked the plain exit as a door too and gave every door in the line the same open or closed state. Auto-walk then sent unlock/open/close/lock through plain exits, closed doors it had found open, and walked into closed ones
+- Town map: rooms with blank lines in their description (the OOC Entry Hall) were never mapped, and room names ending in a period or question mark were dropped or replaced by a nearby line of text
+- Town map: weather sentences ("The air is quite chilly.") and the portal fire sentence made a room look like a different room, which created duplicates
+- Town map: walking back out through a door you had just come in by sent a bare move into the now-closed door and stopped the walk
+- Town map: auto-walk could route through boats and failed portal commands, and through exits a room doesn't actually have
+- Town map: logging in as a different character could file that character's first room into the previous character's map. Saves now always go to the file of the character whose map is loaded
+- Town map: a pending move that overflowed the queue during lag shifted every later room onto the wrong move
+- Commands released with `/unblock` now reach the automapper. Before, a move typed while blocked went out without the map seeing it
+- Hex map: when a network packet ended right after a line's leading spaces, that line lost its indentation, so about 6% of surveys dropped a few hexes at the bottom of the view
+- The Chat history setting now limits the chat panel while you play. Live messages were always capped at 500, whatever the setting said
+
 ## [1.18.1] - 2026-09-20
 
 ### Added

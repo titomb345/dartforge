@@ -10,13 +10,17 @@
  *    placement is only a HINT; it never overrides an occupied cell.
  *  - Named exits ("back", "out", "enter <thing>") are non-spatial links.
  *  - When a CARDINAL placement collides (two rooms, one cell), the map is
- *    STRETCHED: every placed room at/beyond the target cell shifts one cell
- *    along the movement axis, vacating the natural cell so the new room
- *    lands exactly where the move says. Straight streets stay straight and
- *    axis order stays monotone. A DIAGONAL arrival into an occupied cell
- *    stretches ONE component axis (a single half-plane shift already frees
- *    the cell) — chosen so the displaced occupant's own street moves as one
- *    piece — and the room still lands at its diagonal hint cell.
+ *    STRETCHED: the occupant's structure — every placed room linked to it
+ *    (stairs included) beyond the cut through the target cell, plus
+ *    whatever that structure would land on — shifts one cell along the
+ *    movement axis, vacating the natural cell so the new room lands
+ *    exactly where the move says. Straight streets stay straight and axis
+ *    order stays monotone along every walked link, while streets that
+ *    merely cross the cut line stay put unless the moved structure would
+ *    land on them (see stretchToVacate). A DIAGONAL arrival into an
+ *    occupied cell stretches ONE component axis (a single shift already
+ *    frees the cell) — chosen so the displaced occupant's own street moves
+ *    as one piece — and the room still lands at its diagonal hint cell.
  *    Placements without a direction at all (u/d, floaters, named exits)
  *    are nudged to the nearest free cell instead. Links — not grid
  *    adjacency — drive pathfinding, so a displaced room stays walkable
@@ -26,7 +30,13 @@
  * can show which town you're in. z is the floor index (0 = entry level).
  */
 
-import { TOWN_DIR_VEC, TOWN_REVERSE, type TownDir, type TownRoomBlock } from './townParser';
+import {
+  LISTED_NAMED_EXITS,
+  TOWN_DIR_VEC,
+  TOWN_REVERSE,
+  type TownDir,
+  type TownRoomBlock,
+} from './townParser';
 import { classifyRoomIcon, type RoomIconType } from './mapMarkers';
 
 // ---------------------------------------------------------------------------
@@ -50,7 +60,12 @@ export interface TownRoom {
   doorDirs: TownDir[];
   /** Doors standing open at the latest sighting (subset of doorDirs) */
   openDoorDirs: TownDir[];
-  /** Non-directional exits ("back", "out", "exit") */
+  /** Each door's noun per direction at the latest sighting ("gate",
+   *  "trapdoor" — see TownExits.doorNouns). Absent when the room has no
+   *  door (and on rooms saved before door nouns were recorded). */
+  doorNouns?: Partial<Record<TownDir, string>>;
+  /** Non-directional exits the exits line lists ("out", "back", "path",
+   *  "hole" — see TownExits.named) */
   namedExits: string[];
   /** A portal transit departed from or arrived at this room */
   portal: boolean;
@@ -99,7 +114,32 @@ export interface TownWalkStep {
   toRoomId: number;
 }
 
+/** What a structural merge did (mergeTowns returns null when it refused) */
+export interface TownMergeResult {
+  /** Rooms in the moved link component */
+  moved: number;
+  /** ... that were rooms the target already had */
+  fused: number;
+  /** ... that were new to the target: copied into it, or (same-town merge)
+   *  moved beside their aligned neighbors */
+  placed: number;
+}
+
 const gridKey = (x: number, y: number, z: number) => `${x},${y},${z}`;
+
+/** Every direction, in the fixed order merges walk links (deterministic) */
+const ALL_DIRS: TownDir[] = ['n', 'e', 's', 'w', 'u', 'd', 'ne', 'nw', 'se', 'sw'];
+
+/** A room's walked directional links as [direction, room id], in ALL_DIRS
+ *  order. Link components and merge placement both follow exactly these. */
+function directionalLinks(r: TownRoom): [TownDir, number][] {
+  const out: [TownDir, number][] = [];
+  for (const dir of ALL_DIRS) {
+    const id = r.links[dir];
+    if (id !== undefined) out.push([dir, id]);
+  }
+  return out;
+}
 
 /** Component cardinal axes of each diagonal, [vertical, horizontal] */
 const DIAG_COMPONENTS: Partial<Record<TownDir, [TownDir, TownDir]>> = {
@@ -109,22 +149,57 @@ const DIAG_COMPONENTS: Partial<Record<TownDir, [TownDir, TownDir]>> = {
   sw: ['s', 'w'],
 };
 
-/**
- * Canonical description for identity comparison. Lighting sentences ("It is
- * painfully bright.") change with the time of day, so every "It is ..."
- * sentence is stripped and whitespace collapsed. What survives is the room's
- * stable prose — which tells same-fingerprint twins apart (the Eris market
- * plaza: identical "Market" name and exits, but "the northern edge" vs "the
- * western side" mid-description). Too-short results are unusable: comparing
- * them proves nothing, so callers must check descUsable() first.
- */
 /** Lighting sentences change with the time of day — one definition shared
- *  by descKey (global strip) and stableSentenceCandidates (per-sentence). */
+ *  by descKey (global strip) and stableSentenceCandidates (per-sentence).
+ *  Deliberately broad: it also strips "It is raining." / "It is snowing."
+ *  (and ~10 rooms' "It is ..." identity prose, which costs nothing) — a
+ *  narrower lighting list would have to move those weather lines into
+ *  AMBIENT_SENTENCE. */
 const LIGHTING_SENTENCE = 'It is [^.]{1,60}\\.';
 
+/**
+ * World-state sentences that come and go on a room whose prose otherwise
+ * never changes — closed vocabularies mined from both corpora (whitespace
+ * collapsed):
+ *  - the weather line, always the description's LAST sentence: "The air is
+ *    quite warm/humid/chilly/dry." (MUSH 29,525 / 19,671 / 15,072 / 4,381;
+ *    no other value exists). Other "The air is ..." sentences ("very moist
+ *    here", "freezing cold, but the view is incredible") are room prose and
+ *    stay.
+ *  - temple portal fire, present only while the portal is active: "A sheet
+ *    of silvery-white fire fills the [north ]portal[ and the west
+ *    portal]." (Forecourt, Cloister Garth, Portal Chamber).
+ * Each is PRESENT or ABSENT, never swapped for another sentence, so the
+ * volatile-prose learner (one swapped sentence) can never learn the portal
+ * line, nor weather appearing or clearing; and at the end of the text the
+ * suffix tolerance doesn't absorb them either. Left in, one room disagreed
+ * with itself across portal activations and seasons (portal fire alone:
+ * 856 of the legacy replay's 1,616 description disagreements) — Market
+ * blocks carrying "The air is quite chilly." against stored descriptions
+ * without it became desc floaters, and Garrison Road / Bailey moves were
+ * swallowed as re-prints of the wrong segment
+ * (session_2026-07-06T02-10-10-259.log:1297-1385). Bill's live map had
+ * learned none of the weather lines.
+ */
+const AMBIENT_SENTENCE =
+  'The air is quite (?:warm|humid|chilly|dry)\\.|A sheet of silvery-white fire fills the (?:[a-z]+ )?portal(?: and the [a-z]+ portal)*\\.';
+const AMBIENT_SENTENCE_ANYWHERE = new RegExp('\\b(?:' + AMBIENT_SENTENCE + ')', 'g');
+const AMBIENT_SENTENCE_WHOLE = new RegExp('^(?:' + AMBIENT_SENTENCE + ')$');
+
+/**
+ * Canonical description for identity comparison: lighting (time of day) and
+ * ambient world-state sentences stripped, whitespace collapsed. What
+ * survives is the room's stable prose — which tells same-fingerprint twins
+ * apart (the Eris market plaza: identical "Market" name and exits, but "the
+ * northern edge" vs "the western side" mid-description). Too-short results
+ * are unusable: comparing them proves nothing, so callers must check
+ * descUsable() first.
+ */
 export function descKey(desc: string): string {
   return desc
     .replace(new RegExp('\\b' + LIGHTING_SENTENCE, 'g'), '')
+    .replace(/\s+/g, ' ')
+    .replace(AMBIENT_SENTENCE_ANYWHERE, '')
     .replace(/\s+/g, ' ')
     .trim();
 }
@@ -146,10 +221,14 @@ function splitSentences(text: string): string[] {
 }
 
 /** Sentences too short to be meaningful volatile-prose evidence, plus the
- *  lighting sentences descKey already handles. */
+ *  lighting and ambient sentences descKey already handles (kept, a
+ *  chilly↔warm weather swap wasted two of the 64 learned-sentence slots
+ *  per pair). */
 const LIGHTING_SENTENCE_START = new RegExp('^' + LIGHTING_SENTENCE);
 function stableSentenceCandidates(text: string): string[] {
-  return splitSentences(text).filter((s) => s.length >= 20 && !LIGHTING_SENTENCE_START.test(s));
+  return splitSentences(text).filter(
+    (s) => s.length >= 20 && !LIGHTING_SENTENCE_START.test(s) && !AMBIENT_SENTENCE_WHOLE.test(s)
+  );
 }
 
 /** Max learned volatile sentences kept (and serialized) */
@@ -159,6 +238,38 @@ const VOLATILE_PENDING_MAX = 200;
 
 export function hexAnchorKey(island: number, q: number, r: number): string {
   return `${island}:${q},${r}`;
+}
+
+/**
+ * A command that steps into a portal ("enter portal", "enter n portal" —
+ * Bill's `port` alias). Never a named exit: a working portal prints its
+ * transit line (TownLocalizer.onPortalTransit) and lands in another town,
+ * so a portal command that a room block "answered" had failed — every
+ * portal named link in the corpus replay was one (Forecourt -[enter
+ * portal]-> a phantom Market in Bill's live save).
+ */
+export function isPortalCommand(cmd: string): boolean {
+  return /\bportal\b/.test(cmd);
+}
+
+/**
+ * Named exits a walk can never take as a plain step: portal commands (see
+ * isPortalCommand; entering also needs an "activate" first, and the transit
+ * cancels the walk) and boats, whose deck is only there while it is docked
+ * ("board galley" fails once it sails; "enter galley" is the same trip).
+ */
+const UNWALKABLE_NAMED_RE =
+  /^(?:board|disembark)\b|^enter (?:\w+ )?(?:galley|ship|boat|ferry|barge|raft|skiff|longship|vessel)$/;
+export function walkableNamed(cmd: string): boolean {
+  return !isPortalCommand(cmd) && !UNWALKABLE_NAMED_RE.test(cmd);
+}
+
+/** A room's door-noun field from a sighting: present only when the exits
+ *  line lists a door, so rooms without one (and saves from before door
+ *  nouns were recorded) carry no field at all. */
+function doorNounsOf(block: TownRoomBlock): Pick<TownRoom, 'doorNouns'> {
+  const nouns = block.exits.doorNouns;
+  return nouns && Object.keys(nouns).length > 0 ? { doorNouns: { ...nouns } } : {};
 }
 
 /**
@@ -205,6 +316,18 @@ export class TownMapStore {
    */
   portalDests = new Map<string, TownPos>();
   /**
+   * Teleport return memory: the room the last messaged teleport (plane
+   * shift, temple pool — see TownLocalizer.onTeleport) departed from.
+   * These teleports are two-way: `plane shift` in the OOC Entry Hall returns
+   * the player to the city entrance they left (every DF pair: Eris -> Eris,
+   * Soriktos -> Soriktos), the Cave of Spirits' pool to the Sanctum it was
+   * entered from — so the next teleport arriving in a room matching this one
+   * lands on it. One slot covers both legs: shifting in remembers the
+   * entrance, shifting back remembers the hall. Persisted, so a login inside
+   * the OOC realm still finds the way back.
+   */
+  teleportReturn: TownPos | null = null;
+  /**
    * Learned VOLATILE prose: sentences that swap with world state (time of
    * day) inside otherwise-identical descriptions — "The market is active
    * with shoppers..." alternating with "...mostly empty except for a few
@@ -230,12 +353,32 @@ export class TownMapStore {
     return this.towns.get(pos.townId)?.rooms.get(pos.roomId);
   }
 
-  findTownByAnchor(anchor: string): { town: Town; roomId: number } | undefined {
+  /**
+   * The town (and room) an anchor key leads into. setAnchor keeps keys
+   * unique, but saves from before it can hold one key in several towns (the
+   * corpus replay ended with 6: "0:7,5" in Eris, Tobermore's Servants
+   * Quarters and a cave; "0:8,10" in three swamp towns) — so with the block
+   * in hand, a holder whose anchor room matches it wins: strictly (name +
+   * exits) first, then by name, else the first holder. The first holder by
+   * id used to win outright, and a mismatch there sent the entry on to the
+   * global match, ambiguous at twin-heavy entrances (a fragment town).
+   */
+  findTownByAnchor(
+    anchor: string,
+    block?: TownRoomBlock
+  ): { town: Town; roomId: number } | undefined {
+    let first: { town: Town; roomId: number } | undefined;
+    let byName: { town: Town; roomId: number } | undefined;
     for (const town of this.towns.values()) {
       const roomId = town.anchors[anchor];
-      if (roomId !== undefined && town.rooms.has(roomId)) return { town, roomId };
+      const room = roomId !== undefined ? town.rooms.get(roomId) : undefined;
+      if (!room) continue;
+      const hit = { town, roomId: room.id };
+      if (!block || this.matchesStrict(room, block)) return hit;
+      if (!byName && this.matches(room, block)) byName = hit;
+      first ??= hit;
     }
-    return undefined;
+    return byName ?? first;
   }
 
   createTown(defaultName: string): Town {
@@ -252,13 +395,25 @@ export class TownMapStore {
     return town;
   }
 
+  /**
+   * Remember "entering from this hex lands in this room". One hex leads into
+   * one place, so the key moves here from any other town holding it (last
+   * writer wins): left in place, a key learned twice — through hex
+   * mislocalization, island churn, or a stale login position — kept
+   * flip-flopping between towns (session_2026-07-04T03-06-07-253.log: Bone
+   * Pit / Cove), and findTownByAnchor read whichever town came first.
+   */
   setAnchor(town: Town, anchor: string, roomId: number): void {
+    for (const other of this.towns.values()) {
+      if (other !== town) delete other.anchors[anchor];
+    }
     town.anchors[anchor] = roomId;
   }
 
   deleteTown(townId: number): void {
     this.towns.delete(townId);
     if (this.pos?.townId === townId) this.pos = null;
+    if (this.teleportReturn?.townId === townId) this.teleportReturn = null;
     for (const [key, dest] of this.portalDests) {
       if (dest.townId === townId || key.startsWith(`${townId}:`)) this.portalDests.delete(key);
     }
@@ -292,6 +447,7 @@ export class TownMapStore {
     this.nudges = 0;
     this.stretches = 0;
     this.portalDests.clear();
+    this.teleportReturn = null;
     this.volatileSentences.clear();
     this.volatilePending.clear();
   }
@@ -324,9 +480,9 @@ export class TownMapStore {
     const diag = via !== undefined ? DIAG_COMPONENTS[via] : undefined;
     const occupied = town.grid.has(gridKey(x, y, z));
     if (occupied && vec && vec[2] === 0) {
-      this.stretchToVacate(town, { x, y }, via!);
+      this.stretchToVacate(town, { x, y, z }, via!);
     } else if (occupied && diag) {
-      // Diagonal arrival: a single half-plane shift already vacates the
+      // Diagonal arrival: a single shift along one axis already vacates the
       // hint cell, so stretch only ONE component axis (stretching both
       // spread the map an extra cell in each direction on every diagonal
       // collision). Pick the axis perpendicular to the occupant's own
@@ -337,7 +493,7 @@ export class TownMapStore {
       const runsEW = occupant?.links.e !== undefined || occupant?.links.w !== undefined;
       const runsNS = occupant?.links.n !== undefined || occupant?.links.s !== undefined;
       const [vertical, horizontal] = diag;
-      this.stretchToVacate(town, { x, y }, runsNS && !runsEW ? horizontal : vertical);
+      this.stretchToVacate(town, { x, y, z }, runsNS && !runsEW ? horizontal : vertical);
     } else {
       spot = this.findFreeCell(town, x, y, z);
       if (spot.x !== x || spot.y !== y) this.nudges++;
@@ -354,6 +510,7 @@ export class TownMapStore {
       exitsEver: [...block.exits.dirs],
       doorDirs: block.exits.doorDirs,
       openDoorDirs: block.exits.openDoorDirs,
+      ...doorNounsOf(block),
       namedExits: block.exits.named,
       portal: false,
       icon: classifyRoomIcon(block.name, block.desc),
@@ -369,34 +526,107 @@ export class TownMapStore {
   }
 
   /**
-   * Vacate `target` for a cardinal arrival by shifting the half-plane of
-   * PLACED rooms at/beyond the target cell one cell along the movement
-   * axis (all floors — cross-floor stair alignment is preserved). The
-   * from-room is strictly on the near side of the cut, so it never moves;
-   * the entire target row/column is vacated, so the cell is guaranteed
-   * free afterward. Only rooms present in town.grid move — during relayout
-   * the not-yet-placed rooms keep their stale coords untouched.
+   * Vacate `target` (a cell on floor target.z) for a lateral arrival by
+   * shifting the occupant's STRUCTURE one cell along `dir`. The cut is the
+   * line through `target` across the movement axis; the structure is every
+   * PLACED room reachable from the occupant over directional links
+   * (cardinal, u/d and diagonal, followed either way: a one-way passage
+   * ties its room on as firmly as a two-way one) without crossing back over
+   * the cut — plus, transitively, the structure of any room a shifted room
+   * would land on (collision closure), so no shifted room ever lands on one
+   * that stays. By construction:
+   *  - every shifted room is at/beyond the cut and the from-room is strictly
+   *    before it, so the from-room never moves, and nothing lands on
+   *    `target` (it would have to start before the cut) while the occupant
+   *    leaves it: the cell is free afterward;
+   *  - a link changes only where it joins a shifted room to one before the
+   *    cut: a subset of the links the half-plane shift distorted;
+   *  - linked stairs move with both their floors and stay aligned, while a
+   *    floor, a street or a link component that is not linked to the
+   *    occupant stays where it is, unless the moved structure would land
+   *    on it (the closure then carries it, with its own structure beyond
+   *    the cut).
+   * The occupant and every landing cell are looked up on their own floor,
+   * so callers pass the arrival's floor in target.z: on an upper floor a
+   * lookup on floor 0 seeds the wrong room or none, and the new room is
+   * then written over the occupant's grid entry (two rooms, one cell).
+   * The half-plane shift this replaced moved every placed room beyond the
+   * cut, on every floor and in every link component, so each collision
+   * opened a gap line through every street it crossed, and nothing ever
+   * closed one (Bill's live Eris: 58 of its 179 n/s/e/w links two cells
+   * long, the market plaza drawn on gap columns). Frozen-corpus replay, 39
+   * collisions under either rule (37 of them the same; the layouts differ,
+   * so a few cells are taken by other rooms): rooms shifted 1,419 -> 1,133,
+   * stretches reaching 2+ floors 23 -> 14, exact links lengthened 148 -> 82
+   * (the Soriktos stables' "Byre", session_2026-07-06T00-03-28-376.log:2933:
+   * 67 rooms on 3 floors and 14 links -> 6 rooms and 2 links); end state
+   * 82.6% -> 90.0% exact cardinal links with localization identical. That
+   * needs graph-lockstep merges (mergeTowns): under the old translated-cell
+   * fusion the changed coordinates fused merge copies onto other twins
+   * (raw-line replay: 18 more wrong-room assignments, 17 of them walks out
+   * of three merge copies wired to the wrong Market and Garrison Road
+   * twins).
+   * Only rooms present in town.grid move — during relayout the not-yet-
+   * placed rooms keep their stale coords untouched.
    */
-  private stretchToVacate(town: Town, target: { x: number; y: number }, dir: TownDir): void {
+  private stretchToVacate(
+    town: Town,
+    target: { x: number; y: number; z: number },
+    dir: TownDir
+  ): void {
     const vec = TOWN_DIR_VEC[dir];
     if (!vec || vec[2] !== 0) return;
     const [dx, dy] = vec;
-    const shifted: TownRoom[] = [];
+    const isPlaced = (r: TownRoom | undefined): r is TownRoom =>
+      r !== undefined && town.grid.get(gridKey(r.x, r.y, r.z)) === r.id;
+    const seed = town.grid.get(gridKey(target.x, target.y, target.z));
+    if (seed === undefined || !isPlaced(town.rooms.get(seed))) return;
+    const beyond = (r: TownRoom) =>
+      dx === 1
+        ? r.x >= target.x
+        : dx === -1
+          ? r.x <= target.x
+          : dy === 1
+            ? r.y >= target.y
+            : r.y <= target.y;
+    // Undirected adjacency over the placed rooms' directional links: an
+    // incoming link ties a room to the structure as firmly as its own
+    const adjacent = new Map<number, number[]>();
+    const join = (a: number, b: number) => {
+      let list = adjacent.get(a);
+      if (!list) adjacent.set(a, (list = []));
+      list.push(b);
+    };
     for (const id of town.grid.values()) {
       const r = town.rooms.get(id);
-      if (!r) continue;
-      const beyond =
-        dx === 1
-          ? r.x >= target.x
-          : dx === -1
-            ? r.x <= target.x
-            : dy === 1
-              ? r.y >= target.y
-              : r.y <= target.y;
-      if (beyond) shifted.push(r);
+      if (!isPlaced(r)) continue;
+      for (const [, n] of directionalLinks(r)) {
+        if (n === r.id || !isPlaced(town.rooms.get(n))) continue;
+        join(r.id, n);
+        join(n, r.id);
+      }
     }
-    for (const r of shifted) town.grid.delete(gridKey(r.x, r.y, r.z));
-    for (const r of shifted) {
+    // One flood computes both closures: a room joins through a link to a
+    // room already in the set (staying beyond the cut), or because a room
+    // in the set would land on it (which is always beyond the cut too)
+    const shifted = new Set<number>([seed]);
+    const stack = [seed];
+    while (stack.length > 0) {
+      const r = town.rooms.get(stack.pop()!)!;
+      const landsOn = town.grid.get(gridKey(r.x + dx, r.y + dy, r.z));
+      if (landsOn !== undefined && !shifted.has(landsOn) && isPlaced(town.rooms.get(landsOn))) {
+        shifted.add(landsOn);
+        stack.push(landsOn);
+      }
+      for (const n of adjacent.get(r.id) ?? []) {
+        if (shifted.has(n) || !beyond(town.rooms.get(n)!)) continue;
+        shifted.add(n);
+        stack.push(n);
+      }
+    }
+    const rooms = [...shifted].map((id) => town.rooms.get(id)!);
+    for (const r of rooms) town.grid.delete(gridKey(r.x, r.y, r.z));
+    for (const r of rooms) {
       r.x += dx;
       r.y += dy;
       town.grid.set(gridKey(r.x, r.y, r.z), r.id);
@@ -430,7 +660,7 @@ export class TownMapStore {
     if (vec) return { x: from.x + vec[0], y: from.y + vec[1], z: from.z + vec[2] };
     // Diagonal — the visual diagonal is a placement hint only. Derived
     // from the same DIAG_COMPONENTS table addRoom's collision stretch uses,
-    // so the hint cell and the vacated row/column can never disagree.
+    // so the hint cell and the cell the stretch vacates can never disagree.
     const [d1, d2] = DIAG_COMPONENTS[dir]!;
     const v1 = TOWN_DIR_VEC[d1]!;
     const v2 = TOWN_DIR_VEC[d2]!;
@@ -438,15 +668,52 @@ export class TownMapStore {
   }
 
   /** Record a confirmed transition. The reverse link is inferred (98%+ of
-   *  town moves are symmetric) but never overwrites a confirmed link. */
+   *  town moves are symmetric) but never overwrites a confirmed link, and
+   *  only runs through an exit the destination's own exits line has
+   *  listed: one-way passages exist (the Segliz nets drop you north into a
+   *  basement whose only exit is up; the Dressing Room's ne into the Eye of
+   *  the Temple), and an inferred way back there was a phantom exit walks
+   *  routed through all session (7 such links, 227 planned routes in the
+   *  corpus replay) until the load cleanse cut it. A destination listing no
+   *  direction at all gets none either — the spirit plane's Arena ("There
+   *  are no obvious exits.", left only by being transported out) gained a
+   *  phantom "s" back to its Armory, which the cleanse cannot see because an
+   *  empty exit union reads as "unknown" there. */
   link(_town: Town, from: TownRoom, dir: TownDir, to: TownRoom): void {
     from.links[dir] = to.id;
     const rev = TOWN_REVERSE[dir];
-    if (to.links[rev] === undefined) to.links[rev] = from.id;
+    if (
+      to.links[rev] === undefined &&
+      to.exitsEver.includes(rev) &&
+      !linkContradicted(to, rev, from)
+    ) {
+      to.links[rev] = from.id;
+    }
   }
 
   linkNamed(from: TownRoom, cmd: string, to: TownRoom): void {
     from.namedLinks[cmd] = to.id;
+  }
+
+  /**
+   * Record the door in `dir` of the room at `pos` as shut — on both sides:
+   * the linked neighbor's door back is the same physical door. Only ever
+   * closes: an exits line printed before a close (see
+   * TownLocalizer.noteDoorClose) shows the door open, and a wrongly-open
+   * door makes the walker send a bare move into it, while a wrongly-closed
+   * one only costs a harmless unlock/open.
+   */
+  markDoorClosed(pos: TownPos, dir: TownDir): void {
+    const town = this.towns.get(pos.townId);
+    const room = town?.rooms.get(pos.roomId);
+    if (!town || !room) return;
+    room.openDoorDirs = room.openDoorDirs.filter((d) => d !== dir);
+    const otherId = room.links[dir];
+    const other = otherId !== undefined ? town.rooms.get(otherId) : undefined;
+    if (other) {
+      const back = TOWN_REVERSE[dir];
+      other.openDoorDirs = other.openDoorDirs.filter((d) => d !== back);
+    }
   }
 
   /**
@@ -497,9 +764,22 @@ export class TownMapStore {
    * `positiveId` only when the identification did NOT lean on heuristics
    * (confirmed link follow, look re-print) — it feeds volatile-prose
    * learning, and learning from a wrong reuse would poison the set.
+   *
+   * A "positive" identification is only name-verified, though (matches()):
+   * a walked link or a look can land on a word-identical twin — a login
+   * resumed on the wrong wing's Bedchamber, and the link to "its" Vestibule
+   * then reached the other wing's (session_2026-07-06T20-19-27-332.log:112,
+   * "north side" stored, "south side" printed). When the block opens with a
+   * different identity headline than the room (see headlinesConflict: no
+   * DF-era room ever changed its first sentence), the sighting is someone
+   * else's: it neither teaches volatile prose nor replaces the stored
+   * description — overwritten, the room disagreed with its own next
+   * sighting (07-07T07-13-20-126.log:2777), and a corrupted description
+   * vetoes the correct reuse of that room later.
    */
   touchRoom(room: TownRoom, block: TownRoomBlock, now: number, positiveId = false): void {
-    if (positiveId && room.desc && block.desc) {
+    const foreign = positiveId && this.headlineTextsConflict(room.desc, block.desc);
+    if (positiveId && !foreign && room.desc && block.desc) {
       this.learnVolatileDesc(room.id, room.desc, block.desc);
     }
     room.exits = block.exits.dirs;
@@ -508,9 +788,14 @@ export class TownMapStore {
     }
     room.doorDirs = block.exits.doorDirs;
     room.openDoorDirs = block.exits.openDoorDirs;
+    const nouns = doorNounsOf(block).doorNouns;
+    if (nouns) room.doorNouns = nouns;
+    else delete room.doorNouns;
     room.namedExits = block.exits.named;
-    room.descFirst = block.descFirst || room.descFirst;
-    room.desc = block.desc || room.desc;
+    if (!foreign) {
+      room.descFirst = block.descFirst || room.descFirst;
+      room.desc = block.desc || room.desc;
+    }
     // A fuller description can newly reveal an icon (bulletin boards live
     // mid-desc); explicit choices (any icon, or 'none') are never touched.
     if (room.icon === null) room.icon = classifyRoomIcon(room.name, room.desc);
@@ -549,14 +834,6 @@ export class TownMapStore {
     return a === b;
   }
 
-  /**
-   * Does the block's description agree with this room's? Only meaningful
-   * when both sides are usable (long enough after canonicalization) — this
-   * is the tiebreaker that separates same-fingerprint twins in uniform
-   * neighborhoods like the Eris market plaza. Never use a desc DISAGREEMENT
-   * to veto an otherwise-unique match: descriptions can embed dynamic
-   * content, so absence of agreement only means "no extra evidence".
-   */
   /** descKey with learned volatile sentences removed first. Stable prose
    *  can never be learned as volatile (it never appears in a revisit diff),
    *  so the stripped key always retains the room's distinguishing text. */
@@ -566,9 +843,27 @@ export class TownMapStore {
     return descKey(kept.join(' '));
   }
 
+  /**
+   * Does the block's description agree with this room's? Only meaningful
+   * when both sides are usable (long enough after canonicalization) — this
+   * is the tiebreaker that separates same-fingerprint twins in uniform
+   * neighborhoods like the Eris market plaza. A DISAGREEMENT is weaker
+   * evidence: descriptions embed dynamic content the volatile learning may
+   * not know yet, so it never overrides a positive identification (a walked
+   * link, a reverse link pointing back, a unique agreement). It does veto a
+   * GUESS when both sides are usable — the lone survivor of the frontier's
+   * reuse guards, a closest-room pick, a lone look-alike for a named exit's
+   * first use: the block itself is saying "not this one", and reusing anyway
+   * is how the plaza snapped onto wrong twins and grew false links.
+   */
   descAgrees(room: TownRoom, block: TownRoomBlock): boolean {
-    const a = this.canonDesc(room.desc);
-    const b = this.canonDesc(block.desc);
+    return this.descTextsAgree(room.desc, block.desc);
+  }
+
+  /** descAgrees for two description texts (merges compare two rooms). */
+  private descTextsAgree(x: string, y: string): boolean {
+    const a = this.canonDesc(x);
+    const b = this.canonDesc(y);
     if (a.length < DESC_KEY_MIN || b.length < DESC_KEY_MIN) return false;
     // Suffix containment, not just equality: session logs (and rarely the
     // live stream) can fragment lines, and the parser then captures a
@@ -687,8 +982,53 @@ export class TownMapStore {
   }
 
   /**
-   * Search other towns for a unique structural match of `room`. Returns
-   * the match or null (none / ambiguous).
+   * The link component of `startId`: every room reachable over walked
+   * DIRECTIONAL links, followed either way. Rooms without such a path share
+   * nothing but a town id — an unexplained arrival plants a floater, and a
+   * floater can grow a whole neighborhood of its own — so merges move
+   * components, never whole towns. Named exits don't join components: they
+   * include portals, boats and teleporting pools between different places
+   * (and, until dead named moves are recognized, scars). A missed portal
+   * transit once left the portal hub and its spokes named-linked to an Eris
+   * fragment, and merging that fragment carried them all into Eris (18
+   * rooms of other places, in the raw-line replays).
+   */
+  componentOf(town: Town, startId: number): Set<number> {
+    const adjacent = new Map<number, number[]>();
+    const join = (a: number, b: number) => {
+      let list = adjacent.get(a);
+      if (!list) adjacent.set(a, (list = []));
+      list.push(b);
+    };
+    for (const r of town.rooms.values()) {
+      for (const [, id] of directionalLinks(r)) {
+        if (!town.rooms.has(id)) continue;
+        join(r.id, id);
+        join(id, r.id);
+      }
+    }
+    const seen = new Set<number>([startId]);
+    const stack = [startId];
+    while (stack.length > 0) {
+      for (const next of adjacent.get(stack.pop()!) ?? []) {
+        if (seen.has(next)) continue;
+        seen.add(next);
+        stack.push(next);
+      }
+    }
+    return seen;
+  }
+
+  /**
+   * Search for a unique structural match of `room`: in the other towns, and
+   * in the OTHER link components of its own town. A floater planted on the
+   * wrong floor grows a permanent parallel copy of the town it is in —
+   * frontier reuse is floor-exact, so the copy never re-joins (Segliz: a
+   * floater one floor up rebuilt Harbor Way, Main Street and the gate there,
+   * and the town's hex anchor moved into the copy). Never inside the room's
+   * own component: look-alikes you can walk between are twins (mirror
+   * wings, word-identical street segments), not duplicates. Returns the
+   * match or null (none / ambiguous).
    */
   findMergeCandidate(
     town: Town,
@@ -699,10 +1039,15 @@ export class TownMapStore {
     for (const v of Object.values(room.links)) if (v !== undefined) linkCount++;
     if (linkCount < minMatches) return null;
     let found: { town: Town; room: TownRoom } | null = null;
+    let ownComponent: Set<number> | null = null;
     for (const other of this.towns.values()) {
-      if (other.id === town.id) continue;
       for (const cand of other.rooms.values()) {
+        if (cand === room) continue;
         if (!this.structuralMatch(town, room, other, cand, minMatches)) continue;
+        if (other === town) {
+          ownComponent ??= this.componentOf(town, room.id);
+          if (ownComponent.has(cand.id)) continue;
+        }
         if (found) return null; // ambiguous
         found = { town: other, room: cand };
       }
@@ -711,77 +1056,390 @@ export class TownMapStore {
   }
 
   /**
-   * Merge town `from` into town `into`, aligning `fromRoom` onto `intoRoom`
-   * (they are the same physical room). Rooms are translated into the target
-   * frame; a translated room landing on a same-named room FUSES with it
-   * (links redirected), otherwise it is copied (nudged if its cell is
-   * taken). Anchors and the current position follow the merge.
+   * A description's identity HEADLINE: its first sentence once lighting,
+   * ambient and learned volatile prose are set aside — or null when the
+   * capture can't be trusted to start at one (a fragment-captured tail
+   * starts mid-sentence) or it is too short to say anything.
    */
-  mergeTowns(from: Town, fromRoomId: number, into: Town, intoRoomId: number): void {
+  private headlineOf(desc: string): string | null {
+    const first = splitSentences(desc).find(
+      (s) =>
+        !LIGHTING_SENTENCE_START.test(s) &&
+        !AMBIENT_SENTENCE_WHOLE.test(s) &&
+        !this.volatileSentences.has(s)
+    );
+    if (!first || first.length < 20 || !/^[A-Z]/.test(first)) return null;
+    return first;
+  }
+
+  /**
+   * Do two rooms open with DIFFERENT headlines? That is not a stale
+   * sighting, it is a different place: mirror-copied floors share every
+   * word except the headline (the keep: "This is a landing on the third /
+   * fourth floor of the keep."; the Blue Pearl Inn's "second / third floor"
+   * hallways). No DF-era room ever changed its first sentence between
+   * sightings (0 of 418 corpus rooms with several texts). A headline that
+   * reappears anywhere inside the other description is a tail capture
+   * starting at a later sentence, not a conflict.
+   */
+  private headlinesConflict(a: TownRoom, b: TownRoom): boolean {
+    return this.headlineTextsConflict(a.desc, b.desc);
+  }
+
+  /** headlinesConflict for two description texts (touchRoom compares a
+   *  room with a block) */
+  private headlineTextsConflict(x: string, y: string): boolean {
+    const hx = this.headlineOf(x);
+    const hy = this.headlineOf(y);
+    if (!hx || !hy || hx === hy) return false;
+    if (splitSentences(y).some((s) => s.endsWith(hx))) return false;
+    return !splitSentences(x).some((s) => s.endsWith(hy));
+  }
+
+  /**
+   * Identity check for a pair the lockstep walk reached (same name, same
+   * exit of the same physical room). Structure is the evidence; the texts
+   * only veto CLEAR differences. Measured with the ground-truth oracle on
+   * every pair the merges of five replay modes reached (previous-room probe
+   * off, so the merges were big): 101 distinct pairs, 99 the same room.
+   *  - exits: the union of every sighting must be the same set. Exit sets
+   *    vary only with world state, and in the replayed maps only 6 of 532
+   *    rooms ever showed two — every one damaged by an earlier wrong fusion
+   *    or link scar (the scrambled OOC corridor, a plaza corner). Refusing
+   *    such a pair keeps the walk out of the scrambled links behind it: 2-3
+   *    fewer true duplicates in the replays whose merges reach that
+   *    corridor than comparing the latest exits or tolerating a subset
+   *    (both let the walk fuse a wrong OOC room).
+   *  - description: vetoed only when it disagrees in full AND in its
+   *    opening. A full-text veto refused 42 of the 99 genuine pairs —
+   *    day/night prose the store had not learned as volatile yet
+   *    ("Daylight/Starlight streams in...", the market's crowd sentence) —
+   *    and every refusal stopped the walk there, so the rest of the
+   *    fragment was copied as duplicates (one replay mode grew 19 merges
+   *    and 30 duplicate Soriktos rooms).
+   * Headlines are checked separately: a conflict refuses the whole merge.
+   */
+  private mergeIdentityAgrees(a: TownRoom, b: TownRoom): boolean {
+    const ea = new Set(a.exitsEver);
+    const eb = new Set(b.exitsEver);
+    if (ea.size > 0 && eb.size > 0 && (ea.size !== eb.size || [...ea].some((d) => !eb.has(d)))) {
+      return false;
+    }
+    if (!descUsable(a.desc) || !descUsable(b.desc) || this.descTextsAgree(a.desc, b.desc)) {
+      return true;
+    }
+    return !(
+      a.descFirst.length >= 20 &&
+      b.descFirst.length >= 20 &&
+      a.descFirst.slice(0, 40) !== b.descFirst.slice(0, 40)
+    );
+  }
+
+  /**
+   * Do two rooms' exit unions EACH list a direction the other never did?
+   * World state only hides exits (a portcullis down, darkness), so one
+   * union inside the other can still be one room seen in two states. Two
+   * unions that each miss an exit the other lists are two rooms: mirror-
+   * image wings (a west-wing hall [e,n,s] and its word-identical east-wing
+   * twin [n,s,w]) share name, prose and neighbors, so nothing else tells
+   * them apart.
+   */
+  private exitsContradict(a: TownRoom, b: TownRoom): boolean {
+    if (a.exitsEver.length === 0 || b.exitsEver.length === 0) return false;
+    return (
+      a.exitsEver.some((d) => !b.exitsEver.includes(d)) &&
+      b.exitsEver.some((d) => !a.exitsEver.includes(d))
+    );
+  }
+
+  /**
+   * Merge the link component of `fromRoomId` (in town `from`) into town
+   * `into`, aligning it onto `intoRoomId` — the same physical room. `from`
+   * may be `into` (a duplicate component of one town). Returns null, having
+   * changed nothing, when the evidence contradicts itself.
+   *
+   * Alignment is a LOCKSTEP walk of both link graphs from the matched pair:
+   * a fragment room reached through the same exit as a target room, with
+   * the same name, on the same relative floor, is that room (one-to-one:
+   * a target room is claimed once). Grid cells are presentation — stretches
+   * and nudges make two independently grown layouts of one area drift apart
+   * within a few rooms — and the old translated-cell fusion copied most
+   * fragment rooms as duplicates (corpus: 72 duplicate copies in 7 merges;
+   * a 19-room login fragment of the keep fused 1 room and copied 15 that
+   * Eris already had, and the copies cascaded into floaters and parallel
+   * garrisons) or fused the wrong twin (the west Garrison Road segment onto
+   * the east one). The same exit of one room leading to differently named
+   * rooms, or a headline conflict anywhere, means the seed was a look-alike
+   * (a mirror floor) or a side is scarred: the merge is refused. Pieces the
+   * walk cannot reach (the target never walked the link between them)
+   * re-anchor on a UNIQUE structural match among the unclaimed target rooms
+   * and walk again.
+   *
+   * The seed pair is held to its own rule. A walk step's only evidence is
+   * one shared exit, so it needs equal exit unions (mergeIdentityAgrees).
+   * The seed was found by name, two or more agreeing neighbors and the
+   * description's opening, so it only has to avoid mirror-image exits
+   * (exitsContradict) and a different headline: a room seen with its gate
+   * shut is still that room (test-merge-links).
+   *
+   * Only the matched room's component moves. Moving whole towns dragged all
+   * 165 Soriktos rooms into Eris, two floors up (the pair's floor offset
+   * applied to the whole town), because a 19-room Eris fragment sat inside
+   * Soriktos as a floater component. That was the shared-store replay,
+   * which mixed characters' maps; the per-character replay's only
+   * multi-component merge carried a 17-room keep component along with the
+   * OOC piece that matched (15 duplicate copies), and the live save's Eris
+   * holds such an OOC component too.
+   *
+   * Rooms new to the target are copied (or, in a same-town merge, moved)
+   * next to an already-placed neighbor along their own link, so floors
+   * follow the u/d links. There is deliberately no coordinate fallback: the
+   * only translated-cell fusion left in the corpus (word-identical OOC
+   * corridor) was a wrong one. Anchors, the current position, portal memory
+   * and entry rooms follow the moved rooms only; the source town survives
+   * until it is empty.
+   */
+  mergeTowns(
+    from: Town,
+    fromRoomId: number,
+    into: Town,
+    intoRoomId: number
+  ): TownMergeResult | null {
     const fromRoom = from.rooms.get(fromRoomId);
     const intoRoom = into.rooms.get(intoRoomId);
-    if (!fromRoom || !intoRoom) return;
-    const dx = intoRoom.x - fromRoom.x;
-    const dy = intoRoom.y - fromRoom.y;
+    if (!fromRoom || !intoRoom) return null;
+    const sameTown = from === into;
+    const moving = this.componentOf(from, fromRoomId);
+    if (sameTown && moving.has(intoRoomId)) return null;
+    if (this.headlinesConflict(fromRoom, intoRoom) || this.exitsContradict(fromRoom, intoRoom)) {
+      return null;
+    }
+    const order = [...moving].sort((a, b) => a - b);
+
+    // --- Alignment: decided in full before anything is changed ---
+    const fused = new Map<number, number>(); // fragment id → target id
+    const claimed = new Set<number>();
+    const available = (t: TownRoom) => !claimed.has(t.id) && !(sameTown && moving.has(t.id));
+    /** Walk both graphs from a seed pair; false (and undone) on a contradiction */
+    const lockstep = (seedA: TownRoom, seedB: TownRoom): boolean => {
+      const walked: number[] = [];
+      const take = (a: TownRoom, b: TownRoom) => {
+        fused.set(a.id, b.id);
+        claimed.add(b.id);
+        walked.push(a.id);
+      };
+      take(seedA, seedB);
+      const queue: [TownRoom, TownRoom][] = [[seedA, seedB]];
+      while (queue.length > 0) {
+        const [a, b] = queue.shift()!;
+        for (const dir of ALL_DIRS) {
+          const aId = a.links[dir];
+          const bId = b.links[dir];
+          if (aId === undefined || bId === undefined || !moving.has(aId)) continue;
+          const a2 = from.rooms.get(aId);
+          const b2 = into.rooms.get(bId);
+          // A link its own rooms' exits lines contradict is a queue-desync
+          // scar, not geometry: it proves nothing either way.
+          if (!a2 || !b2 || linkContradicted(a, dir, a2) || linkContradicted(b, dir, b2)) continue;
+          if (a2.name !== b2.name || this.headlinesConflict(a2, b2)) {
+            for (const id of walked) {
+              claimed.delete(fused.get(id)!);
+              fused.delete(id);
+            }
+            return false;
+          }
+          if (fused.has(a2.id) || !available(b2)) continue;
+          if (a2.z - a.z !== b2.z - b.z || !this.mergeIdentityAgrees(a2, b2)) continue;
+          take(a2, b2);
+          queue.push([a2, b2]);
+        }
+      }
+      return true;
+    };
+    if (!lockstep(fromRoom, intoRoom)) return null;
+
+    // Re-anchor what the walk could not reach: a unique structural match
+    // among the unclaimed target rooms, on the pair's relative floor and
+    // consistent with every fusion so far, seeds another walk. (A walk that
+    // runs into a contradiction undoes itself and the piece is copied — the
+    // seed's evidence still stands.) A claimed room is never a candidate:
+    // it already IS another fragment room, and the fragment's own look-alike
+    // (a second quay behind an alley the target never walked) would
+    // collapse onto it. One pass: a second pass only re-tried rooms left
+    // ambiguous until another piece claimed a look-alike, the weakest
+    // evidence a re-anchor could act on, and it never fused anything in the
+    // corpus or in 18,000 fuzzed merges.
     const dz = intoRoom.z - fromRoom.z;
-
-    // Pass 1: decide fuse-vs-copy for every room and build the id mapping.
-    const idMap = new Map<number, number>();
-    const copied: TownRoom[] = [];
-    for (const r of from.rooms.values()) {
-      const tx = r.x + dx;
-      const ty = r.y + dy;
-      const tz = r.z + dz;
-      const occupantId = into.grid.get(gridKey(tx, ty, tz));
-      const occupant = occupantId !== undefined ? into.rooms.get(occupantId) : undefined;
-      if (occupant && occupant.name === r.name) {
-        idMap.set(r.id, occupant.id); // fuse
-        occupant.visits += r.visits;
-        if (r.lastSeen > occupant.lastSeen) occupant.lastSeen = r.lastSeen;
-        if (!occupant.notes && r.notes) occupant.notes = r.notes;
-      } else {
-        const spot = this.findFreeCell(into, tx, ty, tz);
-        if (spot.x !== tx || spot.y !== ty) this.nudges++;
-        const copy: TownRoom = { ...r, id: into.nextRoomId++, x: spot.x, y: spot.y, z: tz };
-        into.rooms.set(copy.id, copy);
-        into.grid.set(gridKey(copy.x, copy.y, copy.z), copy.id);
-        idMap.set(r.id, copy.id);
-        copied.push(copy);
+    for (const id of order) {
+      if (fused.has(id)) continue;
+      const r = from.rooms.get(id)!;
+      let match: TownRoom | null = null;
+      let ambiguous = false;
+      for (const cand of into.rooms.values()) {
+        if (!available(cand) || cand.z - r.z !== dz) continue;
+        if (!this.structuralMatch(from, r, into, cand, 2)) continue;
+        if (match) {
+          ambiguous = true;
+          break;
+        }
+        match = cand;
+      }
+      if (!match || ambiguous) continue;
+      const anchor = match;
+      const consistent = (Object.entries(r.links) as [TownDir, number][]).every(([dir, n]) => {
+        const mapped = fused.get(n);
+        return (
+          mapped === undefined || anchor.links[dir] === undefined || anchor.links[dir] === mapped
+        );
+      });
+      if (consistent && !this.headlinesConflict(r, anchor) && this.mergeIdentityAgrees(r, anchor)) {
+        lockstep(r, anchor);
       }
     }
 
-    // Pass 2: rewrite links through the id mapping. Fused targets keep
-    // their own links; incoming links only fill gaps.
-    for (const r of from.rooms.values()) {
-      const target = into.rooms.get(idMap.get(r.id)!);
-      if (!target) continue;
-      for (const [dir, destOld] of Object.entries(r.links) as [TownDir, number][]) {
-        const destNew = idMap.get(destOld);
-        if (destNew !== undefined && target.links[dir] === undefined) {
-          target.links[dir] = destNew;
+    // --- Placement: rooms new to the target, beside a placed neighbor ---
+    const placed = new Map<number, number>(fused); // fragment id → target id
+    if (sameTown) {
+      // Every moving room is re-placed or retired: free their cells first
+      for (const id of order) {
+        const r = from.rooms.get(id)!;
+        if (from.grid.get(gridKey(r.x, r.y, r.z)) === id) from.grid.delete(gridKey(r.x, r.y, r.z));
+      }
+    }
+    // [neighbor, the direction it lies in], over the component's own links:
+    // the very links componentOf followed (directionalLinks), so the walk
+    // below, starting from the fused rooms, reaches every moving room.
+    const beside = new Map<number, [number, TownDir][]>();
+    const besideOf = (id: number) => {
+      let list = beside.get(id);
+      if (!list) beside.set(id, (list = []));
+      return list;
+    };
+    for (const id of order) {
+      for (const [dir, n] of directionalLinks(from.rooms.get(id)!)) {
+        if (!moving.has(n)) continue;
+        besideOf(id).push([n, dir]);
+        besideOf(n).push([id, TOWN_REVERSE[dir]]);
+      }
+    }
+    const place = (r: TownRoom, at: { x: number; y: number; z: number }) => {
+      const spot = this.findFreeCell(into, at.x, at.y, at.z);
+      if (spot.x !== at.x || spot.y !== at.y) this.nudges++;
+      if (sameTown) {
+        r.x = spot.x;
+        r.y = spot.y;
+        r.z = at.z;
+        into.grid.set(gridKey(r.x, r.y, r.z), r.id);
+        placed.set(r.id, r.id);
+        return;
+      }
+      // Links start EMPTY and are rebuilt below: the fragment's room ids
+      // mean nothing in the target town (a spread copy once SHARED r.links,
+      // and every merge wired its copies to unrelated target rooms). Arrays
+      // are copied for the same no-aliasing reason.
+      const copy: TownRoom = {
+        ...r,
+        id: into.nextRoomId++,
+        x: spot.x,
+        y: spot.y,
+        z: at.z,
+        exits: [...r.exits],
+        exitsEver: [...r.exitsEver],
+        doorDirs: [...r.doorDirs],
+        openDoorDirs: [...r.openDoorDirs],
+        ...(r.doorNouns ? { doorNouns: { ...r.doorNouns } } : {}),
+        namedExits: [...r.namedExits],
+        links: {},
+        namedLinks: {},
+      };
+      into.rooms.set(copy.id, copy);
+      into.grid.set(gridKey(copy.x, copy.y, copy.z), copy.id);
+      placed.set(r.id, copy.id);
+    };
+    const queue = order.filter((id) => fused.has(id));
+    while (queue.length > 0) {
+      const id = queue.shift()!;
+      const anchor = into.rooms.get(placed.get(id)!)!;
+      for (const [n, dir] of beside.get(id) ?? []) {
+        if (placed.has(n)) continue;
+        place(from.rooms.get(n)!, this.placementTarget(anchor, dir));
+        queue.push(n);
+      }
+    }
+
+    // --- Links: fused rooms keep theirs and fill gaps; the rest take theirs ---
+    const mapId = (id: number) => placed.get(id) ?? (sameTown && !moving.has(id) ? id : undefined);
+    for (const id of order) {
+      const r = from.rooms.get(id)!;
+      const t = into.rooms.get(placed.get(id)!)!;
+      const isFused = fused.has(id);
+      if (isFused) {
+        t.visits += r.visits;
+        if (r.lastSeen > t.lastSeen) t.lastSeen = r.lastSeen;
+        if (!t.notes && r.notes) t.notes = r.notes;
+        if (r.portal) t.portal = true;
+        if (t.icon === null) t.icon = r.icon;
+        // Exits seen only from the fragment's side are still real exits —
+        // without them, the load-time linkContradicted cleanse would sever
+        // the very links merged below.
+        for (const d of r.exitsEver) {
+          if (!t.exitsEver.includes(d)) t.exitsEver.push(d);
         }
       }
-      for (const [cmd, destOld] of Object.entries(r.namedLinks)) {
-        const destNew = idMap.get(destOld);
-        if (destNew !== undefined && target.namedLinks[cmd] === undefined) {
-          target.namedLinks[cmd] = destNew;
+      for (const [dir, old] of Object.entries(r.links) as [TownDir, number][]) {
+        const mapped = mapId(old);
+        if (mapped !== undefined && (!isFused || t.links[dir] === undefined)) t.links[dir] = mapped;
+      }
+      for (const [cmd, old] of Object.entries(r.namedLinks)) {
+        const mapped = mapId(old);
+        if (mapped !== undefined && (!isFused || t.namedLinks[cmd] === undefined)) {
+          t.namedLinks[cmd] = mapped;
         }
       }
     }
-    void copied;
+    // Named exits from rooms left behind into the moved component (a portal
+    // crossing, a dead named move's scar) follow their room within one town
+    // and are dropped across towns — a link never points into another town.
+    for (const r of from.rooms.values()) {
+      if (moving.has(r.id)) continue;
+      for (const [cmd, id] of Object.entries(r.namedLinks)) {
+        if (!moving.has(id)) continue;
+        if (sameTown) r.namedLinks[cmd] = placed.get(id)!;
+        else delete r.namedLinks[cmd];
+      }
+    }
 
-    // Anchors follow
+    // --- Retire the moved rooms from `from` (same town: only the fused) ---
+    for (const id of order) {
+      if (sameTown && !fused.has(id)) continue;
+      const r = from.rooms.get(id)!;
+      if (from.grid.get(gridKey(r.x, r.y, r.z)) === id) from.grid.delete(gridKey(r.x, r.y, r.z));
+      from.rooms.delete(id);
+    }
+
+    // Anchors, entry room and position follow the moved rooms only
     for (const [anchor, roomId] of Object.entries(from.anchors)) {
-      const mapped = idMap.get(roomId);
-      if (mapped !== undefined && into.anchors[anchor] === undefined) {
-        into.anchors[anchor] = mapped;
+      const mapped = moving.has(roomId) ? placed.get(roomId) : undefined;
+      if (mapped === undefined) continue;
+      if (sameTown) {
+        from.anchors[anchor] = mapped;
+        continue;
       }
+      delete from.anchors[anchor];
+      if (into.anchors[anchor] === undefined) into.anchors[anchor] = mapped;
     }
-
-    // Current position follows
-    if (this.pos?.townId === from.id) {
-      const mapped = idMap.get(this.pos.roomId);
+    if (from.entryRoomId !== null && moving.has(from.entryRoomId)) {
+      if (sameTown) from.entryRoomId = placed.get(from.entryRoomId) ?? from.entryRoomId;
+      else from.entryRoomId = from.rooms.size > 0 ? Math.min(...from.rooms.keys()) : null;
+    }
+    if (this.pos?.townId === from.id && moving.has(this.pos.roomId)) {
+      const mapped = placed.get(this.pos.roomId);
       this.pos = mapped !== undefined ? { townId: into.id, roomId: mapped } : null;
+    }
+    const ret = this.teleportReturn;
+    if (ret?.townId === from.id && moving.has(ret.roomId)) {
+      const mapped = placed.get(ret.roomId);
+      this.teleportReturn = mapped !== undefined ? { townId: into.id, roomId: mapped } : null;
     }
 
     // Portal destination memory follows (both sides of each entry) — this is
@@ -792,14 +1450,14 @@ export class TownMapStore {
     for (const [key, dest] of this.portalDests) {
       let newKey = key;
       const [townIdStr, roomIdStr, dirWord] = key.split(':');
-      if (Number(townIdStr) === from.id) {
-        const mapped = idMap.get(Number(roomIdStr));
+      if (Number(townIdStr) === from.id && moving.has(Number(roomIdStr))) {
+        const mapped = placed.get(Number(roomIdStr));
         if (mapped === undefined) continue; // drop — source room vanished
         newKey = `${into.id}:${mapped}:${dirWord}`;
       }
       let newDest = dest;
-      if (dest.townId === from.id) {
-        const mapped = idMap.get(dest.roomId);
+      if (dest.townId === from.id && moving.has(dest.roomId)) {
+        const mapped = placed.get(dest.roomId);
         if (mapped === undefined) continue;
         newDest = { townId: into.id, roomId: mapped };
       }
@@ -813,12 +1471,16 @@ export class TownMapStore {
     // drop them (merges are rare; pending evidence re-accumulates).
     this.volatilePending.clear();
 
-    this.towns.delete(from.id);
+    // An emptied source goes the way every town is deleted, taking any
+    // portal memory still keyed to it along: every moved room's entry was
+    // re-keyed above, so what is left names rooms that no longer exist
+    // (before component-only moves, the full remap dropped those too).
+    if (!sameTown && from.rooms.size === 0) this.deleteTown(from.id);
     // Deliberately NO relayoutTown here: re-deriving the layout mid-session
     // moved same-fingerprint twins (Eris market plaza) relative to each
     // other and broke the proximity heuristics tuned on organically-grown
-    // layouts (corpus replay: +3 duplicate plaza rooms). Merge nudge scars
-    // persist until the one-time v1→v2 load migration heals them.
+    // layouts (corpus replay: +3 duplicate plaza rooms).
+    return { moved: order.length, fused: fused.size, placed: order.length - fused.size };
   }
 
   // -------------------------------------------------------------------------
@@ -829,11 +1491,13 @@ export class TownMapStore {
    * Deterministically re-embed a town from its link graph, discarding the
    * (possibly collision-scarred) stored coordinates. BFS from the entry
    * room over cardinal links in fixed n,e,s,w,u,d order (ties by room id),
-   * stretching on conflict — the same rule live mapping uses — so the
-   * result is idempotent for graph-anchored rooms. Rooms reachable only
+   * stretching on conflict by the same rule live mapping uses (only the
+   * occupant's already re-placed structure moves; see stretchToVacate), so
+   * the result is idempotent for graph-anchored rooms. Rooms reachable only
    * via diagonals/named/one-way links attach at hint cells near a placed
    * neighbor; true floaters keep their old position relative to the root.
-   * Runs on pre-v2 save migration and after town merges.
+   * Runs on pre-v2 save migration only — never after merges (see
+   * mergeTowns).
    */
   relayoutTown(town: Town): void {
     if (town.rooms.size === 0) return;
@@ -972,7 +1636,12 @@ export class TownMapStore {
   /**
    * BFS over confirmed links (directional + named). Returns the command
    * sequence, or null when unreachable. Door edges cost the same — the walk
-   * executor stops cleanly if a door turns out to be closed.
+   * executor stops cleanly if a door turns out to be closed. Edges a walk
+   * cannot take are skipped: portal and boat commands (walkableNamed —
+   * Bill's live save had 372 of 8,961 Eris routes planned through false
+   * "enter portal" links, e.g. Healer's Garden -> Market = nw, nw, e, enter
+   * portal), and a direction the room's own exits line has never listed (a
+   * queue-desync scar the load cleanse would cut; until then it is a wall).
    */
   findPath(town: Town, fromId: number, toId: number): TownWalkStep[] | null {
     if (fromId === toId) return [];
@@ -986,9 +1655,11 @@ export class TownMapStore {
       if (!room) continue;
       const neighbors: TownWalkStep[] = [];
       for (const [dir, dest] of Object.entries(room.links) as [TownDir, number][]) {
+        if (room.exitsEver.length > 0 && !room.exitsEver.includes(dir)) continue;
         neighbors.push({ cmd: dir, toRoomId: dest });
       }
       for (const [cmd, dest] of Object.entries(room.namedLinks)) {
+        if (!walkableNamed(cmd)) continue;
         neighbors.push({ cmd, toRoomId: dest });
       }
       for (const step of neighbors) {
@@ -1044,6 +1715,7 @@ export class TownMapStore {
       nextTownId: this.nextTownId,
       pos: this.pos,
       portalDests: Object.fromEntries(this.portalDests),
+      teleportReturn: this.teleportReturn,
       volatileSentences: [...this.volatileSentences],
       volatilePending: Object.fromEntries(
         [...this.volatilePending].map(([k, ids]) => [k, [...ids]])
@@ -1088,7 +1760,7 @@ export class TownMapStore {
         entryRoomId: t.entryRoomId ?? null,
       };
       for (const r of t.rooms ?? []) {
-        town.rooms.set(r.id, {
+        const room: TownRoom = {
           ...r,
           exitsEver: r.exitsEver ?? [...(r.exits ?? [])],
           openDoorDirs: r.openDoorDirs ?? [],
@@ -1098,21 +1770,30 @@ export class TownMapStore {
           links: r.links ?? {},
           namedLinks: r.namedLinks ?? {},
           notes: r.notes ?? '',
-        });
+        };
+        // Optional field: absent unless a door was seen (see doorNounsOf)
+        if (
+          typeof room.doorNouns !== 'object' ||
+          !room.doorNouns ||
+          Array.isArray(room.doorNouns)
+        ) {
+          delete room.doorNouns;
+        }
+        town.rooms.set(r.id, room);
         town.grid.set(gridKey(r.x, r.y, r.z), r.id);
       }
       store.towns.set(town.id, town);
       if (town.id >= store.nextTownId) store.nextTownId = town.id + 1;
     }
-    const pos = (d as { pos?: TownPos | null }).pos;
-    if (
-      pos &&
-      typeof pos.townId === 'number' &&
-      typeof pos.roomId === 'number' &&
-      store.towns.get(pos.townId)?.rooms.has(pos.roomId)
-    ) {
-      store.pos = pos;
-    }
+    const validPos = (p: TownPos | null | undefined): TownPos | null =>
+      p &&
+      typeof p.townId === 'number' &&
+      typeof p.roomId === 'number' &&
+      store.towns.get(p.townId)?.rooms.has(p.roomId)
+        ? p
+        : null;
+    store.pos = validPos((d as { pos?: TownPos | null }).pos);
+    store.teleportReturn = validPos((d as { teleportReturn?: TownPos | null }).teleportReturn);
     const vol = (d as { volatileSentences?: unknown }).volatileSentences;
     if (Array.isArray(vol)) {
       for (const s of vol.slice(0, VOLATILE_MAX)) {
@@ -1190,6 +1871,30 @@ export class TownMapStore {
           const dest = id !== undefined ? town.rooms.get(id) : undefined;
           if (!dest) continue;
           if (linkContradicted(room, dir, dest)) delete room.links[dir];
+        }
+      }
+    }
+    // Named-link invariants: links a FAILED named move forged before the
+    // localizer could recognize one ("What ?" consumed nothing; the next
+    // block was taken as the move's destination). A portal command is never
+    // a named exit (isPortalCommand); a named exit never leads back into its
+    // own room (a dead move consuming a look's re-print); "out" / "back" /
+    // "exit" lead nowhere from a room whose exits line doesn't list the word
+    // (the Armory -[out]-> Bailey after "What ?"). Bill's live save carried
+    // three "enter portal" links; one was the ONLY way to a phantom Market
+    // component, so a walk there would have sent "enter portal" in the
+    // temple Forecourt — a real portal.
+    for (const town of store.towns.values()) {
+      for (const room of town.rooms.values()) {
+        const listsExits = room.exitsEver.length > 0 || room.namedExits.length > 0;
+        for (const [cmd, id] of Object.entries(room.namedLinks)) {
+          if (
+            id === room.id ||
+            isPortalCommand(cmd) ||
+            (LISTED_NAMED_EXITS.has(cmd) && listsExits && !room.namedExits.includes(cmd))
+          ) {
+            delete room.namedLinks[cmd];
+          }
         }
       }
     }

@@ -28,7 +28,7 @@ function usePollingTimer(active: boolean, intervalMs: number, onTick: () => void
       clearInterval(id);
       setNextAt(null);
     };
-  }, [active, intervalMs]);
+  }, [active, intervalMs, onTickRef]);
   return nextAt;
 }
 
@@ -133,7 +133,7 @@ export function useTimerEngines({
       outputFilterRef.current.startWhoSync();
       sendCommandRef.current('who');
     }
-  }, []);
+  }, [outputFilterRef, sendCommandRef]);
 
   // Who list auto-refresh — sends `who` at interval, gagged via OutputFilter
   const whoNextAt = usePollingTimer(
@@ -150,7 +150,7 @@ export function useTimerEngines({
       outputFilterRef.current.startEquipSync();
       sendCommandRef.current('equip held');
     }
-  }, []);
+  }, [outputFilterRef, sendCommandRef]);
 
   // Held-equipment auto-refresh — keeps the Loadout panel's hands verified
   const equipNextAt = usePollingTimer(
@@ -288,7 +288,21 @@ export function useTimerEngines({
         return next;
       });
     }
-  }, [connected, loggedIn, mergedTimers, clearTimerIntervals]);
+    // The refs listed below never change identity: they don't re-run this
+  }, [
+    connected,
+    loggedIn,
+    mergedTimers,
+    clearTimerIntervals,
+    sendCommandRef,
+    mergedTimersRef,
+    activeCharacterRef,
+    triggerRunnerRef,
+    globalScriptRef,
+    mergedAliasesRef,
+    enableSpeedwalkRef,
+    commandSeparatorRef,
+  ]);
 
   // Tear everything down on unmount (the reconcile effect intentionally has no per-run cleanup).
   useEffect(() => clearTimerIntervals, [clearTimerIntervals]);

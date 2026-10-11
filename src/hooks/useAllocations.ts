@@ -130,13 +130,14 @@ export function useAllocations(
     if (!dataStore.ready || !activeCharacter) return;
     loadedRef.current = false;
     magicLoadedRef.current = false;
+    const ds = dataStoreRef.current; // via the ref: a data-dir switch does not reload
     (async () => {
       try {
         const filename = allocFileName(activeCharacter);
-        const profiles = await dataStore.get<AllocProfile[]>(filename, 'profiles');
-        const currentProfileIndex = await dataStore.get<number>(filename, 'currentProfileIndex');
-        const detectedLimbs = await dataStore.get<string[]>(filename, 'detectedLimbs');
-        const liveAllocations = await dataStore.get<Record<string, LimbAllocation>>(
+        const profiles = await ds.get<AllocProfile[]>(filename, 'profiles');
+        const currentProfileIndex = await ds.get<number>(filename, 'currentProfileIndex');
+        const detectedLimbs = await ds.get<string[]>(filename, 'detectedLimbs');
+        const liveAllocations = await ds.get<Record<string, LimbAllocation>>(
           filename,
           'liveAllocations'
         );
@@ -147,9 +148,9 @@ export function useAllocations(
           liveAllocations: liveAllocations ?? {},
         });
         // Load magic data
-        const magicProfiles = await dataStore.get<MagicProfile[]>(filename, 'magicProfiles');
-        const magicCurrentIndex = await dataStore.get<number>(filename, 'magicCurrentProfileIndex');
-        const magicLive = await dataStore.get<MagicAllocation>(filename, 'magicLiveAllocation');
+        const magicProfiles = await ds.get<MagicProfile[]>(filename, 'magicProfiles');
+        const magicCurrentIndex = await ds.get<number>(filename, 'magicCurrentProfileIndex');
+        const magicLive = await ds.get<MagicAllocation>(filename, 'magicLiveAllocation');
         setMagicData({
           profiles: magicProfiles ?? [],
           currentProfileIndex: magicCurrentIndex ?? 0,
@@ -157,11 +158,11 @@ export function useAllocations(
         });
         // Restore where the panel was left (tab + view), so the client
         // opens showing the same profile that was selected last session.
-        const savedTab = await dataStore.get<AllocTab>(filename, 'panelTab');
+        const savedTab = await ds.get<AllocTab>(filename, 'panelTab');
         if (savedTab === 'combat' || savedTab === 'magic') setAllocTab(savedTab);
-        const savedView = await dataStore.get<AllocView>(filename, 'panelView');
+        const savedView = await ds.get<AllocView>(filename, 'panelView');
         if (savedView === 'live' || savedView === 'profiles') setView(savedView);
-        const savedMagicView = await dataStore.get<AllocView>(filename, 'panelMagicView');
+        const savedMagicView = await ds.get<AllocView>(filename, 'panelMagicView');
         if (savedMagicView === 'live' || savedMagicView === 'profiles')
           setMagicView(savedMagicView);
       } catch (e) {

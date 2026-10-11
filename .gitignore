@@ -33,3 +33,6 @@ Thumbs.db
 
 # Skill data (personal, written by import script)
 skills-*.json
+
+# Town-mapper ground-truth caches / oracle / validation runs (scripts/gt, scripts/town-validate.sh)
+scripts/gt/.cache/

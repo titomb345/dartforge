@@ -3,7 +3,11 @@
  *
  * Feeds `>> cmd` lines to onCommand and everything else to onLine, then
  * reports how many events fired and the final hands/worn state — a sanity
- * harness for regex false positives against real traffic.
+ * harness for regex false positives against real traffic. A log written
+ * since Oct 2026 records every command as sent (`>> [sent] equip held`,
+ * src/lib/sessionLog.ts): live, the tracker sees those, so its typed lines
+ * are skipped. The pager's "--- Press <enter> for more. ---" never reaches
+ * the tracker live (src/lib/partialLine.ts), so its logged line is dropped.
  *
  * Usage:
  *   npx tsx scripts/replay-loadout.ts <log file> [more files...]
@@ -12,6 +16,7 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import { LoadoutTracker, isHandLimb } from '../src/lib/loadout';
+import { isMarkedLog, loggedCommand, parserText } from './lib/replayCorpus';
 
 const SESSIONS_DIR = 'C:/Users/titom/Dropbox/DM/Dartforge/sessions';
 
@@ -36,14 +41,18 @@ for (const file of files) {
   const counts = new Map<string, number>();
   let t = 0;
   const text = fs.readFileSync(file, 'utf8');
-  for (const rawLine of text.split(/\r?\n/)) {
-    const line = rawLine.replace(TS_PREFIX, '');
+  const lines = text.split(/\r?\n/).map((l) => l.replace(TS_PREFIX, ''));
+  const marked = isMarkedLog(lines);
+  for (const line of lines) {
     t += 100;
-    if (line.startsWith('>> ')) {
-      tracker.onCommand(line.slice(3), t);
+    const cmd = loggedCommand(line);
+    if (cmd) {
+      if (cmd.sent || !marked) tracker.onCommand(cmd.command, t);
       continue;
     }
-    const change = tracker.onLine(line, t);
+    const output = parserText(line);
+    if (output === null) continue;
+    const change = tracker.onLine(output, t);
     if (change !== 'none') {
       counts.set(change, (counts.get(change) ?? 0) + 1);
       totals.set(change, (totals.get(change) ?? 0) + 1);

@@ -25,14 +25,12 @@ export function useWhoTitleMappings(dataStore: DataStore, activeCharacter: strin
       loadedRef.current = false;
       return;
     }
+    const ds = dataStoreRef.current; // via the ref: a data-dir switch does not reload
     const charKey = activeCharacter.toLowerCase();
     loadedRef.current = false;
     (async () => {
       try {
-        const saved = await dataStore.get<Record<WhoTitleId, WhoTitleMapping>>(
-          WHO_TITLES_FILE,
-          charKey
-        );
+        const saved = await ds.get<Record<WhoTitleId, WhoTitleMapping>>(WHO_TITLES_FILE, charKey);
         setMappings(sanitizeRecordMap<WhoTitleMapping>(saved, 'whoTitle'));
       } catch (e) {
         console.error('Failed to load who title mappings:', e);

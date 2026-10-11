@@ -1,21 +1,37 @@
 /**
- * useMapTracker — React hook that ties the room parser, hex localizer,
- * and hex map store together for hex-only wilderness mapping.
+ * useMapTracker — React hook that ties the room parsers, the localizers
+ * and the map stores together: hex wilderness mapping and the town mapper.
  *
  * Every survey paints all visible hexes onto a global grid; position is
- * resolved by correlating each view against the already-painted map
- * (see hexLocalizer.ts). Also owns the click-to-walk executor.
+ * resolved by correlating each view against the already-painted map (see
+ * hexLocalizer.ts). Town room blocks resolve through the town localizer
+ * (townLocalizer.ts). Also owns the click-to-walk executors (hexWalk.ts,
+ * townWalk.ts; their pacing: walkPacing.ts).
+ *
+ * Wiring rules this hook must keep in step with the corpus replay engine
+ * (scripts/lib/townReplay.ts) — a difference here is a difference between
+ * what Bill runs and what every measurement measured:
+ *  - each output line goes to dispatchTownLine (the server lines the town
+ *    engine reads directly), then the hex RoomParser, then the TownParser;
+ *  - every sent command goes to both localizers (each gates itself);
+ *  - at every login line the town localizer that resolves the login burst
+ *    starts a new session (onLogin) — after a character switch, the new
+ *    character's: the stores switch at the login line, before the burst
+ *    (mapSession.ts holds the input while the new map loads).
  */
 
 import { useRef, useState, useCallback, useEffect, useMemo } from 'react';
 import { RoomParser } from '../lib/roomParser';
-import { HexLocalizer, type SurveyResolution } from '../lib/hexLocalizer';
+import { HexLocalizer } from '../lib/hexLocalizer';
 import { HexMapStore, type HexCell, type HexPos } from '../lib/hexMap';
-import { parseDirection, getDirectionOffset, type Direction } from '../lib/hexUtils';
-import { TownParser, PORTAL_TRANSIT_RE, TOWN_DIR_ALIASES, type TownDir } from '../lib/townParser';
-import { buildDoorSequence } from '../lib/doorSequence';
-import { TownLocalizer, classifyTownCommand, type TownResolution } from '../lib/townLocalizer';
-import { TownMapStore, hexAnchorKey, type TownRoom, type TownWalkStep } from '../lib/townMap';
+import { getDirectionOffset, type Direction } from '../lib/hexUtils';
+import { HexWalkExecutor } from '../lib/hexWalk';
+import { TownParser } from '../lib/townParser';
+import { TownLocalizer } from '../lib/townLocalizer';
+import { dispatchTownLine } from '../lib/townLineEvents';
+import { TownWalkExecutor } from '../lib/townWalk';
+import { MapStoreSession, type HeldMapInput } from '../lib/mapSession';
+import { TownMapStore, hexAnchorKey, type TownRoom } from '../lib/townMap';
 import type { HexMarkerType, RoomIconType } from '../lib/mapMarkers';
 import { type DataStore } from '../contexts/DataStoreContext';
 
@@ -23,15 +39,14 @@ function mapFilename(character: string): string {
   return `map-${character.toLowerCase()}.json`;
 }
 
-/** Max ms to wait for a survey to confirm a walk step before aborting */
-const WALK_STEP_TIMEOUT = 8_000;
-/**
- * Moves kept in flight ahead of survey confirmation. Two hides a full
- * server round-trip per hex (like a player spamming directions — the
- * localizer's pending-move queue is built for it) while capping the
- * overshoot after a mid-walk block to a single hex.
- */
-const WALK_PIPELINE = 2;
+/** Idle time before a half-read survey / wrapped exits line is flushed (ms) */
+const IDLE_FLUSH_MS = 400;
+
+/** One character's persisted stores (map-<character>.json) */
+interface LoadedStores {
+  hex: HexMapStore;
+  town: TownMapStore;
+}
 
 export interface WalkState {
   target: { q: number; r: number };
@@ -71,6 +86,9 @@ export interface MapTrackerState {
   townCount: number;
   /** Inside a town but the room couldn't be identified */
   townLost: boolean;
+  /** The town localizer is tracking a room (false outdoors, with the town
+   *  mapper off, and after a login or a re-enable until a block resolves) */
+  townActive: boolean;
   /** Active town walk — `path` holds the remaining rooms (route preview) */
   townWalking: { remaining: number; path: number[] } | null;
 }
@@ -83,6 +101,17 @@ export interface MapTrackerActions {
   feedLine: (line: string, raw?: string) => void;
   /** Track an outgoing command (all sends — user, triggers, walk steps) */
   trackCommand: (command: string) => void;
+  /**
+   * A login line named the character — call it synchronously, BEFORE the
+   * rest of the login chunk is filtered: when it is not the character whose
+   * map is loaded, the stores switch now and input is held until the map
+   * has loaded. (The activeCharacter effect does the same for switches that
+   * happen outside a login.)
+   */
+  beginCharacter: (name: string) => void;
+  /** A login line arrived (a new server session) — call it right after
+   *  beginCharacter, before the login chunk is filtered */
+  noteLogin: () => void;
   /** Cells of the island currently being displayed (the player's island) */
   getCells: () => HexCell[];
   /** Cell lookup on the current island */
@@ -121,6 +150,8 @@ export interface MapTrackerActions {
   setRoomIcon: (townId: number, roomId: number, icon: RoomIconType | 'none' | null) => void;
 }
 
+const neverHeld = () => false;
+
 export function useMapTracker(
   dataStore: DataStore,
   activeCharacter: string | null,
@@ -130,7 +161,13 @@ export function useMapTracker(
   /** Keyring slots the auto-door sequence tries (see /door) */
   doorKeys = 5,
   /** Kill switch: false = hex mapping only, town blocks are ignored */
-  townMapperEnabled = true
+  townMapperEnabled = true,
+  /**
+   * True while the client holds outgoing commands (the action blocker,
+   * during a cast): walks wait instead of queueing steps behind it — queued,
+   * they counted as sent, then went out untracked as "manual movement"
+   */
+  sendsHeld: () => boolean = neverHeld
 ): MapTrackerState & MapTrackerActions {
   const mapRef = useRef<HexMapStore>(new HexMapStore());
   const localizerRef = useRef<HexLocalizer>(new HexLocalizer(mapRef.current));
@@ -148,38 +185,23 @@ export function useMapTracker(
     town: null,
     townCount: 0,
     townLost: false,
+    townActive: false,
     townWalking: null,
   });
   const [centerVersion, setCenterVersion] = useState(0);
 
   const parserRef = useRef<RoomParser | null>(null);
   const townParserRef = useRef<TownParser | null>(null);
-  const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const loadedCharRef = useRef<string | null>(null);
+  // The walk executors (driven by parser events and sends, not renders)
+  const hexWalkRef = useRef<HexWalkExecutor | null>(null);
+  const townWalkRef = useRef<TownWalkExecutor | null>(null);
+  const sessionRef = useRef<MapStoreSession<LoadedStores> | null>(null);
+  const flushTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  /** While held input replays: its own time (the localizers' clock) */
+  const clockRef = useRef<number | null>(null);
 
-  // Walk executor state (refs — driven by parser events, not renders)
-  const walkRef = useRef<{
-    path: Direction[];
-    /** Steps confirmed by surveys */
-    confirmed: number;
-    /** Steps sent to the MUD (sent - confirmed = in flight) */
-    sent: number;
-    target: { q: number; r: number };
-    timeout: ReturnType<typeof setTimeout> | null;
-  } | null>(null);
-  const walkSendingRef = useRef(false);
-  // Town walk executor state — same shape, steps carry commands not dirs.
-  // Door-crossing steps are marked at plan time; their commands are built
-  // at send time from the door's freshest known state.
-  const townWalkRef = useRef<{
-    steps: (TownWalkStep & { door?: { dir: TownDir; fromId: number } })[];
-    confirmed: number;
-    sent: number;
-    townId: number;
-    targetRoomId: number;
-    timeout: ReturnType<typeof setTimeout> | null;
-  } | null>(null);
-  const townWalkSendingRef = useRef(false);
+  const dataStoreRef = useRef(dataStore);
+  dataStoreRef.current = dataStore;
   const sendDirectionRef = useRef(sendDirection);
   sendDirectionRef.current = sendDirection;
   const doorKeysRef = useRef(doorKeys);
@@ -188,19 +210,10 @@ export function useMapTracker(
   townEnabledRef.current = townMapperEnabled;
   const echoRef = useRef(echo);
   echoRef.current = echo;
+  const sendsHeldRef = useRef(sendsHeld);
+  sendsHeldRef.current = sendsHeld;
 
-  // Debounced save
-  const scheduleSave = useCallback(() => {
-    if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
-    saveTimerRef.current = setTimeout(() => {
-      const char = loadedCharRef.current;
-      if (!char) return;
-      const data = mapRef.current.serialize();
-      dataStore.set(mapFilename(char), 'mapData', data).catch(console.error);
-      const townData = townMapRef.current.serialize();
-      dataStore.set(mapFilename(char), 'townData', townData).catch(console.error);
-    }, 2000);
-  }, [dataStore]);
+  const now = useCallback(() => clockRef.current ?? Date.now(), []);
 
   // Sync summary state from refs to React state
   const syncState = useCallback(() => {
@@ -209,12 +222,12 @@ export function useMapTracker(
     for (const c of map.allCells()) {
       if (c.visited) visited++;
     }
-    const walk = walkRef.current;
+    const walk = hexWalkRef.current?.progress ?? null;
     let hexWalkPath: { q: number; r: number }[] = [];
     if (walk && map.pos) {
       let q = map.pos.q;
       let r = map.pos.r;
-      hexWalkPath = walk.path.slice(walk.confirmed).map((d) => {
+      hexWalkPath = walk.remaining.map((d) => {
         const o = getDirectionOffset(d);
         q += o.dq;
         r += o.dr;
@@ -238,7 +251,7 @@ export function useMapTracker(
         };
       }
     }
-    const townWalk = townWalkRef.current;
+    const townWalking = townWalkRef.current?.progress ?? null;
     setState((prev) => ({
       version: prev.version + 1,
       currentPos: map.pos,
@@ -250,196 +263,58 @@ export function useMapTracker(
       walking: walk
         ? {
             target: walk.target,
-            remaining: walk.path.length - walk.confirmed,
+            remaining: walk.remaining.length,
             path: hexWalkPath,
           }
         : null,
       town,
       townCount: townMap.towns.size,
       townLost: townLocalizerRef.current.lost,
-      townWalking: townWalk
-        ? {
-            remaining: townWalk.steps.length - townWalk.confirmed,
-            path: townWalk.steps.slice(townWalk.confirmed).map((s) => s.toRoomId),
-          }
-        : null,
+      townActive: townLocalizerRef.current.active,
+      townWalking,
     }));
   }, []);
 
   // ---------------------------------------------------------------------
-  // Walk executor
+  // Store ownership (whose map the refs hold; load / save / held input)
   // ---------------------------------------------------------------------
 
-  const cancelWalk = useCallback(
-    (reason?: string) => {
-      const walk = walkRef.current;
-      if (!walk) return;
-      if (walk.timeout) clearTimeout(walk.timeout);
-      walkRef.current = null;
-      if (reason) echoRef.current(`[Map] Walk stopped — ${reason}`);
-      syncState();
-    },
-    [syncState]
-  );
+  const session = useCallback((): MapStoreSession<LoadedStores> => sessionRef.current!, []);
+  const scheduleSave = useCallback(() => session().scheduleSave(), [session]);
 
-  const armWalkTimeout = useCallback(() => {
-    const walk = walkRef.current;
-    if (!walk) return;
-    if (walk.timeout) clearTimeout(walk.timeout);
-    walk.timeout = setTimeout(() => cancelWalk('no response from the MUD'), WALK_STEP_TIMEOUT);
-  }, [cancelWalk]);
+  // ---------------------------------------------------------------------
+  // Walk executors
+  // ---------------------------------------------------------------------
 
-  /**
-   * Send walk steps until WALK_PIPELINE moves are in flight. Sends are
-   * chained one at a time so commands reach the MUD in path order.
-   */
-  const pumpWalkSends = useCallback(() => {
-    const walk = walkRef.current;
-    if (!walk) return;
-    if (walk.sent >= walk.path.length) return;
-    if (walk.sent - walk.confirmed >= WALK_PIPELINE) return;
-    const dir = walk.path[walk.sent];
-    walk.sent += 1;
-    walkSendingRef.current = true;
-    Promise.resolve(sendDirectionRef.current(dir))
-      .catch(() => cancelWalk('send failed'))
-      .finally(() => {
-        walkSendingRef.current = false;
-        // Top up the pipeline (only refills if this walk is still active)
-        if (walkRef.current) pumpWalkSends();
+  const hexWalk = useCallback((): HexWalkExecutor => {
+    if (!hexWalkRef.current) {
+      hexWalkRef.current = new HexWalkExecutor({
+        send: (dir) => sendDirectionRef.current(dir),
+        sendsHeld: () => sendsHeldRef.current(),
+        echo: (message) => echoRef.current(message),
+        changed: () => syncState(),
       });
-  }, [cancelWalk]);
-
-  /** Called after each survey resolution while a walk is active. */
-  const advanceWalk = useCallback(
-    (res: SurveyResolution) => {
-      const walk = walkRef.current;
-      if (!walk) return;
-      const pos = res.pos;
-      if (!pos || res.kind === 'lost') {
-        cancelWalk('position lost');
-        return;
-      }
-      if (res.moved === null && res.kind === 'stationary') {
-        // A manual survey mid-walk — our step hasn't resolved yet; keep waiting
-        armWalkTimeout();
-        return;
-      }
-      if (res.moved !== walk.path[walk.confirmed]) {
-        cancelWalk('unexpected movement');
-        return;
-      }
-      walk.confirmed += 1;
-      if (walk.confirmed >= walk.path.length) {
-        if (walk.timeout) clearTimeout(walk.timeout);
-        walkRef.current = null;
-        echoRef.current('[Map] Arrived.');
-        syncState();
-        return;
-      }
-      armWalkTimeout();
-      pumpWalkSends();
-      syncState();
-    },
-    [cancelWalk, armWalkTimeout, pumpWalkSends, syncState]
-  );
-
-  // ---------------------------------------------------------------------
-  // Town walk executor (right-click-to-walk through room graphs)
-  // ---------------------------------------------------------------------
-
-  const cancelTownWalk = useCallback(
-    (reason?: string) => {
-      const walk = townWalkRef.current;
-      if (!walk) return;
-      if (walk.timeout) clearTimeout(walk.timeout);
-      townWalkRef.current = null;
-      if (reason) echoRef.current(`[Map] Walk stopped — ${reason}`);
-      syncState();
-    },
-    [syncState]
-  );
-
-  const armTownWalkTimeout = useCallback(() => {
-    const walk = townWalkRef.current;
-    if (!walk) return;
-    if (walk.timeout) clearTimeout(walk.timeout);
-    walk.timeout = setTimeout(() => cancelTownWalk('no response from the MUD'), WALK_STEP_TIMEOUT);
-  }, [cancelTownWalk]);
-
-  const pumpTownWalkSends = useCallback(() => {
-    const walk = townWalkRef.current;
-    if (!walk) return;
-    if (walk.sent >= walk.steps.length) return;
-    if (walk.sent - walk.confirmed >= WALK_PIPELINE) return;
-    const step = walk.steps[walk.sent];
-    let cmds = [step.cmd];
-    if (step.door) {
-      // Door commands are built here (not at plan time) from the from-room's
-      // freshest exits line, so hold the step until arrival there is
-      // confirmed — the arrival block carries the live open/closed state.
-      // The pump re-runs on every confirmation, so a held step self-releases.
-      if (walk.confirmed < walk.sent) return;
-      const fromRoom = townMapRef.current.get(walk.townId)?.rooms.get(step.door.fromId);
-      const wasOpen = fromRoom?.openDoorDirs.includes(step.door.dir) ?? false;
-      // A door found standing open is left as found: walk straight through,
-      // no closing/locking behind. Only doors we opened ourselves (or whose
-      // state is unknown) get the full unlock/open/move/close/lock sequence.
-      if (!wasOpen) cmds = buildDoorSequence(step.cmd, doorKeysRef.current) ?? [step.cmd];
     }
-    walk.sent += 1;
-    townWalkSendingRef.current = true;
-    (async () => {
-      for (const cmd of cmds) {
-        await sendDirectionRef.current(cmd);
-      }
-    })()
-      .catch(() => cancelTownWalk('send failed'))
-      .finally(() => {
-        townWalkSendingRef.current = false;
-        if (townWalkRef.current) pumpTownWalkSends();
-      });
-  }, [cancelTownWalk]);
+    return hexWalkRef.current;
+  }, [syncState]);
 
-  /** Called after each town room resolution while a town walk is active. */
-  const advanceTownWalk = useCallback(
-    (res: TownResolution) => {
-      const walk = townWalkRef.current;
-      if (!walk) return;
-      if (res.merged) {
-        // Room ids were remapped by a town merge — the plan is stale
-        cancelTownWalk('map changed');
-        return;
-      }
-      if (!res.pos || res.kind === 'lost') {
-        cancelTownWalk('position lost');
-        return;
-      }
-      if (res.kind === 'stationary' && res.moved === null) {
-        // A room re-print (look, light change) — our step hasn't resolved
-        // yet; keep waiting instead of aborting the walk.
-        armTownWalkTimeout();
-        return;
-      }
-      const expected = walk.steps[walk.confirmed];
-      if (res.pos.roomId !== expected.toRoomId) {
-        cancelTownWalk('unexpected movement');
-        return;
-      }
-      walk.confirmed += 1;
-      if (walk.confirmed >= walk.steps.length) {
-        if (walk.timeout) clearTimeout(walk.timeout);
-        townWalkRef.current = null;
-        echoRef.current('[Map] Arrived.');
-        syncState();
-        return;
-      }
-      armTownWalkTimeout();
-      pumpTownWalkSends();
-      syncState();
-    },
-    [cancelTownWalk, armTownWalkTimeout, pumpTownWalkSends, syncState]
-  );
+  const townWalk = useCallback((): TownWalkExecutor => {
+    if (!townWalkRef.current) {
+      townWalkRef.current = new TownWalkExecutor({
+        map: () => townMapRef.current,
+        localizer: () => townLocalizerRef.current,
+        send: (cmd) => sendDirectionRef.current(cmd),
+        doorKeys: () => doorKeysRef.current,
+        sendsHeld: () => sendsHeldRef.current(),
+        indoors: () => localizerRef.current.indoors,
+        echo: (message) => echoRef.current(message),
+        changed: () => syncState(),
+        // (Indoors no hex walk is under way: entering stopped it)
+        starting: () => hexWalk().cancel(),
+      });
+    }
+    return townWalkRef.current;
+  }, [syncState, hexWalk]);
 
   // ---------------------------------------------------------------------
   // Parser wiring
@@ -452,163 +327,241 @@ export function useMapTracker(
     return hexAnchorKey(pos.island, pos.q, pos.r);
   }, []);
 
-  if (!townParserRef.current) {
-    townParserRef.current = new TownParser((block) => {
-      const res = townLocalizerRef.current.onRoomBlock(block, currentAnchor(), Date.now());
-      advanceTownWalk(res);
-      syncState();
-      scheduleSave();
-    });
-  }
+  const makeTownParser = useCallback(
+    () =>
+      new TownParser((block) => {
+        const res = townLocalizerRef.current.onRoomBlock(block, currentAnchor(), now());
+        townWalk().onResolution(res);
+        syncState();
+        scheduleSave();
+      }),
+    [currentAnchor, now, townWalk, syncState, scheduleSave]
+  );
 
-  if (!parserRef.current) {
-    parserRef.current = new RoomParser((event) => {
-      const localizer = localizerRef.current;
-      switch (event.type) {
-        case 'survey': {
-          townLocalizerRef.current.onWilderness();
-          if (townWalkRef.current) cancelTownWalk('left the building');
-          const res = localizer.onSurvey({
-            art: event.art,
-            description: event.description,
-            now: Date.now(),
-          });
-          // Learn "leaving room R puts you on hex H" for instant re-entry
-          townLocalizerRef.current.noteOutdoorPosition(currentAnchor());
-          advanceWalk(res);
-          syncState();
-          scheduleSave();
-          break;
-        }
-        case 'move-failed':
-          if (townLocalizerRef.current.active) {
-            // Indoors: the failure belongs to a room move, not a hex move
-            townLocalizerRef.current.onMoveFailed();
-            if (townWalkRef.current) cancelTownWalk('movement blocked');
-          } else {
-            localizer.onMoveFailed(event.hard);
-            if (walkRef.current) cancelWalk('movement blocked');
-            if (event.hard) {
-              syncState();
-              scheduleSave();
-            }
+  const makeHexParser = useCallback(
+    () =>
+      new RoomParser((event) => {
+        const localizer = localizerRef.current;
+        switch (event.type) {
+          case 'survey': {
+            townLocalizerRef.current.onWilderness();
+            townWalk().onWilderness();
+            const res = localizer.onSurvey({
+              art: event.art,
+              description: event.description,
+              now: now(),
+            });
+            // Learn "leaving room R puts you on hex H" for instant re-entry
+            townLocalizerRef.current.noteOutdoorPosition(currentAnchor());
+            hexWalk().onResolution(res);
+            syncState();
+            scheduleSave();
+            break;
           }
-          break;
-        case 'forced-move':
-          localizer.trackForcedMove(event.dir, Date.now());
-          break;
-        case 'town-room':
-          localizer.onTownRoom(Date.now());
-          if (walkRef.current) cancelWalk('entered a building');
-          syncState();
-          scheduleSave();
-          break;
+          case 'move-failed':
+            if (townLocalizerRef.current.active) {
+              // Indoors: the failure belongs to a room move, not a hex move
+              townLocalizerRef.current.onMoveFailed();
+              townWalk().onMoveFailed();
+            } else {
+              localizer.onMoveFailed(event.hard);
+              hexWalk().cancel('movement blocked');
+              if (event.hard) {
+                syncState();
+                scheduleSave();
+              }
+            }
+            break;
+          case 'forced-move':
+            localizer.trackForcedMove(event.dir, now());
+            break;
+          case 'town-room':
+            localizer.onTownRoom(now());
+            hexWalk().cancel('entered a building');
+            syncState();
+            scheduleSave();
+            break;
+        }
+      }),
+    [now, townWalk, currentAnchor, hexWalk, syncState, scheduleSave]
+  );
+
+  if (!townParserRef.current) townParserRef.current = makeTownParser();
+  if (!parserRef.current) parserRef.current = makeHexParser();
+
+  const clearIdleFlush = useCallback(() => {
+    if (flushTimerRef.current) {
+      clearTimeout(flushTimerRef.current);
+      flushTimerRef.current = null;
+    }
+  }, []);
+
+  /**
+   * The MUD's trailing prompt has no newline, so a survey (or wrapped exits
+   * line) without a clean terminator would wait for the NEXT output burst.
+   * Flush once the stream goes idle instead (both flushes are no-ops when
+   * nothing is pending) — never while a map loads (held input replays
+   * first), and the town parser only while the town mapper is on.
+   */
+  const armIdleFlush = useCallback(() => {
+    clearIdleFlush();
+    const townPending = townEnabledRef.current && townParserRef.current?.hasPending();
+    if (!parserRef.current?.hasPendingSurvey() && !townPending) return;
+    flushTimerRef.current = setTimeout(() => {
+      flushTimerRef.current = null;
+      if (sessionRef.current?.holding) return;
+      parserRef.current?.flushPending();
+      if (townEnabledRef.current) townParserRef.current?.flushPending();
+    }, IDLE_FLUSH_MS);
+  }, [clearIdleFlush]);
+
+  /** One output line through the live pipeline — the replay engine's order */
+  const processLine = useCallback(
+    (line: string, raw?: string) => {
+      if (townEnabledRef.current) {
+        const events = dispatchTownLine(line, townLocalizerRef.current, now());
+        if (events.length > 0) {
+          townWalk().onLineEvents(events);
+          // A dark step moves the position, a portal marks its room
+          if (events.some((e) => e.kind === 'dark' || e.kind === 'portal')) {
+            syncState();
+            scheduleSave();
+          }
+        }
       }
+      parserRef.current?.feedLine(line, raw);
+      if (townEnabledRef.current) townParserRef.current?.feedLine(line);
+      armIdleFlush();
+    },
+    [now, townWalk, syncState, scheduleSave, armIdleFlush]
+  );
+
+  /** One sent command through both localizers */
+  const processCommand = useCallback(
+    (command: string) => {
+      const t = now();
+      // A move the walks did not send is the player taking over
+      hexWalk().onCommand(command);
+      if (townEnabledRef.current) townWalk().onCommand(command, t);
+      // Each localizer gates itself (town only queues while indoors, hex
+      // only while outdoors), so both can safely see every command.
+      if (!townEnabledRef.current || !townLocalizerRef.current.trackCommand(command, t)) {
+        localizerRef.current.trackCommand(command, t);
+      }
+    },
+    [now, hexWalk, townWalk]
+  );
+
+  /** A new server session: the town localizer that resolves its burst resets */
+  const applyLogin = useCallback(() => {
+    hexWalk().cancel();
+    townWalk().cancel();
+    townLocalizerRef.current.onLogin();
+    syncState();
+  }, [hexWalk, townWalk, syncState]);
+
+  if (!sessionRef.current) {
+    sessionRef.current = new MapStoreSession<LoadedStores>({
+      load: async (character, stale) => {
+        const store = dataStoreRef.current;
+        const mapData = await store.get<unknown>(mapFilename(character), 'mapData');
+        // (Superseded: skip the second read — the session drops the result)
+        if (stale()) return { hex: new HexMapStore(), town: new TownMapStore() };
+        const townData = await store.get<unknown>(mapFilename(character), 'townData');
+        return { hex: HexMapStore.deserialize(mapData), town: TownMapStore.deserialize(townData) };
+      },
+      install: (stores) => {
+        // A walk planned on the old map, and parser state from its session
+        // (a half-read block), must not carry over
+        hexWalk().cancel();
+        townWalk().cancel();
+        clearIdleFlush();
+        mapRef.current = stores?.hex ?? new HexMapStore();
+        localizerRef.current = new HexLocalizer(mapRef.current);
+        townMapRef.current = stores?.town ?? new TownMapStore();
+        townLocalizerRef.current = new TownLocalizer(townMapRef.current);
+        parserRef.current = makeHexParser();
+        townParserRef.current = makeTownParser();
+        syncState();
+      },
+      save: (character) => {
+        const store = dataStoreRef.current;
+        const file = mapFilename(character);
+        store.set(file, 'mapData', mapRef.current.serialize()).catch(console.error);
+        store.set(file, 'townData', townMapRef.current.serialize()).catch(console.error);
+      },
+      replay: (input: HeldMapInput) => {
+        clockRef.current = input.at;
+        try {
+          if (input.kind === 'line') processLine(input.line, input.raw);
+          else if (input.kind === 'command') processCommand(input.command);
+          else applyLogin();
+        } finally {
+          clockRef.current = null;
+        }
+      },
+      loadFailed: (character, error) => {
+        console.error(`Failed to load ${mapFilename(character)}:`, error);
+        echoRef.current(
+          `[Map] Could not load ${character}'s map. Mapping goes on without saving; the map is read again at your next login.`
+        );
+      },
     });
   }
 
-  // Load/save on character change
+  // Load on character change. A data-dir change (new dataStore identity)
+  // flushes and reloads the same character's map from the new place.
+  const loadedStoreRef = useRef(dataStore);
   useEffect(() => {
-    if (!activeCharacter) return;
-    loadedCharRef.current = activeCharacter;
+    const dirChanged = loadedStoreRef.current !== dataStore;
+    loadedStoreRef.current = dataStore;
+    if (activeCharacter) session().begin(activeCharacter, dirChanged);
+  }, [activeCharacter, dataStore, session]);
 
-    (async () => {
-      const data = await dataStore.get<unknown>(mapFilename(activeCharacter), 'mapData');
-      mapRef.current = HexMapStore.deserialize(data);
-      localizerRef.current = new HexLocalizer(mapRef.current);
-      const townData = await dataStore.get<unknown>(mapFilename(activeCharacter), 'townData');
-      townMapRef.current = TownMapStore.deserialize(townData);
-      townLocalizerRef.current = new TownLocalizer(townMapRef.current);
-      syncState();
-    })().catch(console.error);
+  // Unmount: pending changes go to the owner's file
+  useEffect(() => () => session().flush(), [session]);
 
-    const char = activeCharacter;
-    return () => {
-      // Flush any pending debounced save for this character before switching
-      // away (the map ref still holds this character's data at cleanup time)
-      if (saveTimerRef.current) {
-        clearTimeout(saveTimerRef.current);
-        saveTimerRef.current = null;
-        const data = mapRef.current.serialize();
-        dataStore.set(mapFilename(char), 'mapData', data).catch(console.error);
-        const townData = townMapRef.current.serialize();
-        dataStore.set(mapFilename(char), 'townData', townData).catch(console.error);
-      }
-    };
-  }, [activeCharacter, dataStore, syncState]);
-
-  // Kill switch flip: stop any town walk and clear transient localizer
-  // state (queue, indoors flag). Mapped town data is untouched — turning
-  // the mapper back on resumes exactly where the persisted map left off.
+  // Kill switch flip (either way): stop any town walk, start the town
+  // parser over (a block half-read before the flip must not be emitted
+  // into a reset localizer) and clear the localizer's transient state
+  // (queue, indoors flag). Mapped town data is untouched — turning the
+  // mapper back on resumes from the persisted map at the next room block.
+  const townEnabledSeenRef = useRef(townMapperEnabled);
   useEffect(() => {
-    if (townMapperEnabled) return;
-    cancelTownWalk();
+    if (townEnabledSeenRef.current === townMapperEnabled) return;
+    townEnabledSeenRef.current = townMapperEnabled;
+    townWalk().cancel();
+    townParserRef.current = makeTownParser();
     townLocalizerRef.current.reset();
     syncState();
-  }, [townMapperEnabled, cancelTownWalk, syncState]);
+  }, [townMapperEnabled, townWalk, makeTownParser, syncState]);
 
   // ---------------------------------------------------------------------
   // Actions
   // ---------------------------------------------------------------------
 
-  const flushTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-
   const feedLine = useCallback(
     (line: string, raw?: string) => {
-      parserRef.current?.feedLine(line, raw);
-      if (townEnabledRef.current) {
-        townParserRef.current?.feedLine(line);
-        // Portal transits teleport between towns — the next room block must
-        // start a fresh town entry instead of gluing into the current town.
-        // The named portal ("north") keys the destination memory.
-        const portal = PORTAL_TRANSIT_RE.exec(line);
-        if (portal) {
-          townLocalizerRef.current.onPortalTransit(portal[1] ?? null);
-          if (townWalkRef.current) cancelTownWalk('stepped through a portal');
-        }
-      }
-      // The MUD's trailing prompt has no newline, so a survey (or wrapped
-      // exits line) without a clean terminator would wait for the NEXT output
-      // burst. Flush once the stream goes idle instead. (Both flushes are
-      // no-ops when nothing is pending.)
-      if (flushTimerRef.current) {
-        clearTimeout(flushTimerRef.current);
-        flushTimerRef.current = null;
-      }
-      if (parserRef.current?.hasPendingSurvey() || townParserRef.current?.hasPending()) {
-        flushTimerRef.current = setTimeout(() => {
-          flushTimerRef.current = null;
-          parserRef.current?.flushPending();
-          townParserRef.current?.flushPending();
-        }, 400);
-      }
+      if (session().hold({ kind: 'line', line, raw, at: Date.now() })) return;
+      processLine(line, raw);
     },
-    [cancelTownWalk]
+    [session, processLine]
   );
 
   const trackCommand = useCallback(
     (command: string) => {
-      const now = Date.now();
-      const isDir = parseDirection(command.trim().toLowerCase()) !== null;
-      if (isDir && walkRef.current && !walkSendingRef.current) {
-        // The user moved manually while auto-walking — stop the walk
-        cancelWalk('manual movement');
-      }
-      if (
-        townWalkRef.current &&
-        !townWalkSendingRef.current &&
-        classifyTownCommand(command, now) !== null
-      ) {
-        cancelTownWalk('manual movement');
-      }
-      // Each localizer gates itself (town only queues while indoors, hex
-      // only while outdoors), so both can safely see every command.
-      if (!townEnabledRef.current || !townLocalizerRef.current.trackCommand(command, now)) {
-        localizerRef.current.trackCommand(command, now);
-      }
+      if (session().hold({ kind: 'command', command, at: Date.now() })) return;
+      processCommand(command);
     },
-    [cancelWalk, cancelTownWalk]
+    [session, processCommand]
   );
+
+  const beginCharacter = useCallback((name: string) => void session().begin(name), [session]);
+
+  const noteLogin = useCallback(() => {
+    if (session().hold({ kind: 'login', at: Date.now() })) return;
+    applyLogin();
+  }, [session, applyLogin]);
 
   const getCells = useCallback((): HexCell[] => {
     const map = mapRef.current;
@@ -633,11 +586,11 @@ export function useMapTracker(
       const map = mapRef.current;
       if (!map.pos) return;
       if (localizerRef.current.indoors) {
-        echoRef.current('[Map] You are indoors — step outside to walk.');
+        echoRef.current('[Map] You are indoors. Step outside to walk.');
         return;
       }
       if (localizerRef.current.lost) {
-        echoRef.current('[Map] Cannot walk — position unknown.');
+        echoRef.current('[Map] Cannot walk: position unknown.');
         return;
       }
       const path = map.findPath(map.pos, { island: map.pos.island, q, r });
@@ -645,14 +598,9 @@ export function useMapTracker(
         echoRef.current('[Map] No known route there.');
         return;
       }
-      cancelWalk();
-      walkRef.current = { path, confirmed: 0, sent: 0, target: { q, r }, timeout: null };
-      echoRef.current(`[Map] Walking ${path.length} hex${path.length === 1 ? '' : 'es'}...`);
-      syncState();
-      armWalkTimeout();
-      pumpWalkSends();
+      hexWalk().start(path, { q, r });
     },
-    [cancelWalk, armWalkTimeout, pumpWalkSends, syncState]
+    [hexWalk]
   );
 
   const setCellNotes = useCallback(
@@ -699,18 +647,18 @@ export function useMapTracker(
   );
 
   const clearMap = useCallback(() => {
-    cancelWalk();
+    hexWalk().cancel();
     mapRef.current.clear();
     localizerRef.current = new HexLocalizer(mapRef.current);
     syncState();
     scheduleSave();
-  }, [cancelWalk, syncState, scheduleSave]);
+  }, [hexWalk, syncState, scheduleSave]);
 
   const centerOnPlayer = useCallback(() => {
     setCenterVersion((v) => v + 1);
   }, []);
 
-  const cancelWalkAction = useCallback(() => cancelWalk('cancelled'), [cancelWalk]);
+  const cancelWalkAction = useCallback(() => hexWalk().cancel('cancelled'), [hexWalk]);
 
   // ---------------------------------------------------------------------
   // Town actions
@@ -750,57 +698,10 @@ export function useMapTracker(
         echoRef.current('[Map] Town mapper is disabled (Settings > Map).');
         return;
       }
-      const map = townMapRef.current;
-      const pos = map.pos;
-      if (!pos) return;
-      if (!townLocalizerRef.current.active) {
-        echoRef.current('[Map] You are outdoors — enter the town to walk its rooms.');
-        return;
-      }
-      if (townLocalizerRef.current.lost) {
-        echoRef.current('[Map] Cannot walk — room unknown.');
-        return;
-      }
-      const town = map.get(pos.townId);
-      if (!town) return;
-      const steps = map.findPath(town, pos.roomId, roomId);
-      if (!steps || steps.length === 0) {
-        echoRef.current('[Map] No known route there.');
-        return;
-      }
-      // Mark door crossings — the room being left knows which of its exits
-      // are doors from its own exits line. The commands themselves (full
-      // unlock/open/move/close/lock, or a plain move through a door found
-      // standing open) are built at send time from the freshest door state.
-      let doors = 0;
-      const enriched = steps.map((s, i) => {
-        const fromId = i === 0 ? pos.roomId : steps[i - 1].toRoomId;
-        const fromRoom = town.rooms.get(fromId);
-        const dir = TOWN_DIR_ALIASES[s.cmd] as TownDir | undefined;
-        if (fromRoom && dir && fromRoom.doorDirs.includes(dir)) {
-          doors++;
-          return { ...s, door: { dir, fromId } };
-        }
-        return { ...s };
-      });
-      cancelWalk();
-      cancelTownWalk();
-      townWalkRef.current = {
-        steps: enriched,
-        confirmed: 0,
-        sent: 0,
-        townId: pos.townId,
-        targetRoomId: roomId,
-        timeout: null,
-      };
-      echoRef.current(
-        `[Map] Walking ${steps.length} room${steps.length === 1 ? '' : 's'}${doors > 0 ? ` (${doors} door${doors === 1 ? '' : 's'})` : ''}...`
-      );
-      syncState();
-      armTownWalkTimeout();
-      pumpTownWalkSends();
+      // (A walk that starts stops the hex walk: see `starting`)
+      townWalk().start(roomId);
     },
-    [cancelWalk, cancelTownWalk, armTownWalkTimeout, pumpTownWalkSends, syncState]
+    [townWalk]
   );
 
   const renameTown = useCallback(
@@ -822,23 +723,25 @@ export function useMapTracker(
       if (id === undefined) return;
       // Only disturb live tracking when deleting the town we're standing in
       if (map.pos?.townId === id) {
-        cancelTownWalk();
+        townWalk().cancel();
         townLocalizerRef.current.reset();
       }
       map.deleteTown(id);
       syncState();
       scheduleSave();
     },
-    [cancelTownWalk, syncState, scheduleSave]
+    [townWalk, syncState, scheduleSave]
   );
 
-  const cancelTownWalkAction = useCallback(() => cancelTownWalk('cancelled'), [cancelTownWalk]);
+  const cancelTownWalkAction = useCallback(() => townWalk().cancel('cancelled'), [townWalk]);
 
   return useMemo(
     () => ({
       ...state,
       feedLine,
       trackCommand,
+      beginCharacter,
+      noteLogin,
       getCells,
       getCellAt,
       findPathTo,
@@ -863,6 +766,8 @@ export function useMapTracker(
       state,
       feedLine,
       trackCommand,
+      beginCharacter,
+      noteLogin,
       getCells,
       getCellAt,
       findPathTo,

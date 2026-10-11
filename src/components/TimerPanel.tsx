@@ -205,7 +205,7 @@ function TimerEditor({
     } catch {
       return '[expansion error]';
     }
-  }, [body, bodyMode, activeCharacter]);
+  }, [body, bodyMode, activeCharacter, commandSeparator]);
 
   const canSave = name.trim().length > 0 && intervalSeconds > 0;
 
