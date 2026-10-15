@@ -10,6 +10,20 @@ The `[Unreleased]` header controls automatic version bumping on merge:
 - `[Unreleased-minor]` → 0.1.0 → 0.2.0
 - `[Unreleased-major]` → 0.1.0 → 1.0.0
 
+## [Unreleased-minor]
+
+### Added
+
+- `/autocast adjust batch <casts> <harder> <easier>` sets how autocast judges your casts. For example, `6 5 2` judges every 6 casts: 5 or more successes make it harder, 2 or fewer make it easier, anything else stays put. `1 1 0` goes back to adjusting after every cast. Remembered per character like the other autocast settings
+
+### Changed
+
+- `/autocast` no longer changes power after every single cast. It now judges every 4 casts: 3 or 4 successes make it harder (power down, or more weight), 2 keeps it where it is, and 0 or 1 make it easier (power up, or less weight). Each cast shows how the current batch is going, and `/autocast status` shows the rule and the batch so far. Setting power by hand with `/autocast adjust power @<n>` starts a fresh batch
+
+### Fixed
+
+- Typing the start of a command and pressing Up to find matching history (e.g. `/autoco` to find your last `/autoconc`) did nothing useful if you had already been pressing Up or Down before typing. Changing the text now starts a fresh search from what you typed. Pressing Up straight after sending with "select on send" turned on also searches all history again, instead of only the command you just sent
+
 ## [1.19.0] - 2026-10-11
 
 ### Added

@@ -1,7 +1,7 @@
 import type { ActionBlocker } from './actionBlocker';
 import { buildDoorSequence } from './doorSequence';
 import type { AutoInscriber } from './autoInscriber';
-import type { AutoCaster } from './autoCaster';
+import { describeBatchRule, isValidBatchRule, type AutoCaster } from './autoCaster';
 import type { AutoConc } from './autoConc';
 import { MAX_REFRESH_TARGETS, type AutoRefresh } from './autoRefresh';
 import { formatModifier, type AutoPowercast, type Vitals } from './autoPowercast';
@@ -269,9 +269,30 @@ const handleAutocast: Handler = async (trimmed, ctx) => {
       return true;
     }
 
+    if (adjustRest.startsWith('batch ')) {
+      const [size, harder, easier] = adjustRest
+        .slice(6)
+        .trim()
+        .split(/\s+/)
+        .map((n) => (/^\d+$/.test(n) ? parseInt(n, 10) : NaN));
+      if (!isValidBatchRule(size, harder, easier)) {
+        error(
+          ctx,
+          '[Autocast] Usage: /autocast adjust batch <casts> <harder> <easier>\r\n' +
+            '  Every <casts> casts, <harder> or more successes make it harder,\r\n' +
+            '  <easier> or fewer make it easier, anything else holds.\r\n' +
+            '  <harder> must be at most <casts> and above <easier>.\r\n' +
+            '  Default: 4 3 1. Every cast like before: 1 1 0.'
+        );
+      } else {
+        caster.setBatch(size, harder, easier, echoFn(ctx));
+      }
+      return true;
+    }
+
     error(
       ctx,
-      '[Autocast] Usage:\r\n  /autocast adjust power @<n>\r\n  /autocast adjust power <up> <down>\r\n  /autocast adjust weight <n>\r\n  /autocast adjust weight <up> <down>'
+      '[Autocast] Usage:\r\n  /autocast adjust power @<n>\r\n  /autocast adjust power <up> <down>\r\n  /autocast adjust weight <n>\r\n  /autocast adjust weight <up> <down>\r\n  /autocast adjust batch <casts> <harder> <easier>'
     );
     return true;
   }
@@ -318,16 +339,17 @@ const handleAutocast: Handler = async (trimmed, ctx) => {
 
   if (argsLower === 'status') {
     const s = caster.getState();
+    const rule = `  Judging: ${describeBatchRule(s.batchSize, s.harderAt, s.easierAt)}`;
+    const powerSteps = `  Power adjust: -${s.adjustDown} when harder / +${s.adjustUp} when easier`;
+    const weightSteps = `  Weight adjust: take ${s.weightAdjustUp} when harder, put ${s.weightAdjustDown} when easier`;
     if (!s.active) {
       echo(ctx, '[Autocast: OFF]');
-      echo(ctx, `  Power adjust: +${s.adjustUp} on fail / -${s.adjustDown} on success`);
+      echo(ctx, rule);
+      echo(ctx, powerSteps);
       if (s.weightItem) {
         const loc = s.weightContainer ? ` from ${s.weightContainer}` : '';
         echo(ctx, `  Weight item:  ${s.weightItem}${loc}`);
-        echo(
-          ctx,
-          `  Weight adjust: take ${s.weightAdjustUp} on success, put ${s.weightAdjustDown} on fail`
-        );
+        echo(ctx, weightSteps);
       } else {
         echo(ctx, '  Weight: not configured');
       }
@@ -338,17 +360,21 @@ const handleAutocast: Handler = async (trimmed, ctx) => {
         ctx,
         `  Phase: ${s.phase} | Cycles: ${s.cycleCount} | Success: ${s.successCount} | Fail: ${s.failCount}`
       );
-      echo(ctx, `  Power adjust: +${s.adjustUp} on fail / -${s.adjustDown} on success`);
+      echo(ctx, rule);
+      if (s.batchSize > 1) {
+        echo(
+          ctx,
+          `  This batch: ${s.batchCasts} of ${s.batchSize} cast, ${s.batchSuccesses} succeeded`
+        );
+      }
+      echo(ctx, powerSteps);
       if (s.weightMode) {
         echo(ctx, `  WEIGHT MODE: carrying ${s.carriedWeight} ${s.weightItem}`);
       }
       if (s.weightItem) {
         const loc = s.weightContainer ? ` from ${s.weightContainer}` : '';
         echo(ctx, `  Weight item:  ${s.weightItem}${loc}`);
-        echo(
-          ctx,
-          `  Weight adjust: take ${s.weightAdjustUp} on success, put ${s.weightAdjustDown} on fail`
-        );
+        echo(ctx, weightSteps);
       }
     }
     return true;
@@ -366,6 +392,7 @@ const handleAutocast: Handler = async (trimmed, ctx) => {
         '  /autocast adjust power <up> <down>  Set power adjust steps\r\n' +
         '  /autocast adjust weight <n>         Set carried weight\r\n' +
         '  /autocast adjust weight <up> <down> Set weight adjust steps\r\n' +
+        '  /autocast adjust batch <casts> <harder> <easier>  Set how casts are judged\r\n' +
         '  /autocast set item <item>        Set weight item\r\n' +
         '  /autocast set container <name>      Set weight container\r\n' +
         '  /autocast clear container            Clear container (ground)'

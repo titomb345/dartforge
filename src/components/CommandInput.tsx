@@ -389,9 +389,11 @@ export const CommandInput = forwardRef<HTMLTextAreaElement, CommandInputProps>(
 
           e.preventDefault();
 
-          // On first navigation, save the typed prefix
+          // On first navigation, save the typed prefix. Fully selected text
+          // (left there by "select on send") wasn't typed, so it isn't one.
           if (historyIndexRef.current === -1 && isUp) {
-            searchPrefixRef.current = value;
+            const allSelected = el.selectionStart === 0 && el.selectionEnd === value.length;
+            searchPrefixRef.current = allSelected ? '' : value;
           }
 
           // Filter history by the saved prefix
@@ -438,7 +440,13 @@ export const CommandInput = forwardRef<HTMLTextAreaElement, CommandInputProps>(
         <textarea
           ref={setRefs}
           value={value}
-          onChange={(e) => setValue(e.target.value)}
+          onChange={(e) => {
+            setValue(e.target.value);
+            // Editing ends any history browse, so the next Up searches by
+            // what's typed now instead of continuing the old search.
+            historyIndexRef.current = -1;
+            searchPrefixRef.current = '';
+          }}
           onKeyDown={handleKeyDown}
           readOnly={disabled}
           rows={1}
