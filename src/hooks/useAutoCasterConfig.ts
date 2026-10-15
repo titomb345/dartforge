@@ -1,6 +1,11 @@
 import { useEffect, useRef } from 'react';
 import type { DataStore } from '../contexts/DataStoreContext';
-import { DEFAULT_CASTER_CONFIG, type AutoCaster, type AutoCasterConfig } from '../lib/autoCaster';
+import {
+  DEFAULT_CASTER_CONFIG,
+  isValidBatchRule,
+  type AutoCaster,
+  type AutoCasterConfig,
+} from '../lib/autoCaster';
 
 const CONFIG_FILE = 'autocast.json';
 const SETTINGS_FILE = 'settings.json';
@@ -31,6 +36,11 @@ function sanitize(raw: Partial<AutoCasterConfig> | null | undefined): AutoCaster
       : typeof raw?.weightContainer === 'string'
         ? raw.weightContainer.trim() || null
         : d.weightContainer;
+  // The batch numbers only make sense together, so a bad one resets all three.
+  const batch =
+    raw && isValidBatchRule(raw.batchSize as number, raw.harderAt as number, raw.easierAt as number)
+      ? { batchSize: raw.batchSize!, harderAt: raw.harderAt!, easierAt: raw.easierAt! }
+      : { batchSize: d.batchSize, harderAt: d.harderAt, easierAt: d.easierAt };
   return {
     adjustUp: num(raw?.adjustUp, d.adjustUp),
     adjustDown: num(raw?.adjustDown, d.adjustDown),
@@ -38,12 +48,13 @@ function sanitize(raw: Partial<AutoCasterConfig> | null | undefined): AutoCaster
     weightContainer: container,
     weightAdjustUp: num(raw?.weightAdjustUp, d.weightAdjustUp),
     weightAdjustDown: num(raw?.weightAdjustDown, d.weightAdjustDown),
+    ...batch,
   };
 }
 
 /**
- * Keeps the auto-caster's tuning (power steps, weight item/container/steps)
- * per character. Loads the active character's config into the caster when the
+ * Keeps the auto-caster's tuning (power steps, weight item/container/steps,
+ * batch rule) per character. Loads the active character's config into the caster when the
  * character changes and writes it back whenever a /autocast adjust|set|clear
  * command edits it.
  */
