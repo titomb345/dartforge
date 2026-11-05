@@ -10,6 +10,7 @@ import {
 } from 'react';
 import { cn } from '../lib/cn';
 import { formatCountdown } from '../lib/panelUtils';
+import { auraPhrase } from '../lib/autoPowercast';
 import { TimerIcon, AlignmentIcon, WhoIcon, LoadoutIcon } from './icons';
 import { StatusBadge } from './StatusBadge';
 import { CHIP_ACCENT } from '../lib/accents';
@@ -241,9 +242,17 @@ export const CommandInput = forwardRef<HTMLTextAreaElement, CommandInputProps>(
     // channelling or waiting for concentration and aura to come back.
     const powercastLabel = useMemo(() => {
       if (powercastPhase === 'waiting') {
-        const back = powercastAuraLabel
-          ? `full concentration and a ${powercastAuraLabel.toLowerCase()} aura`
-          : 'full concentration';
+        if (powercastWaitingFor === 'resume') {
+          return {
+            short: 'aura',
+            title: `Autopowercast: out of aura with ${powercastChannelsDone} of ${powercastChannelCount} channels stored, waiting for it to come back`,
+          };
+        }
+        // The aura is only checked before a round of channels, not before the cast
+        const back =
+          powercastAuraLabel && powercastWaitingFor === 'channel'
+            ? `full concentration and ${auraPhrase(powercastAuraLabel)}`
+            : 'full concentration';
         const then = powercastWaitingFor === 'cast' ? 'powercasting' : 'channelling';
         return { short: 'wait', title: `Autopowercast: waiting for ${back} before ${then}` };
       }

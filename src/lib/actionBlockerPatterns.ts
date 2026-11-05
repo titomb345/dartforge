@@ -253,7 +253,9 @@ export const UNBLOCK_PATTERNS: RegExp[] = [
   /You hear a soothing/,
   /You (imploded|knocked|melted|pummeled)/,
   /You internalize the power of the/,
-  /You lay your hands on/,
+  // The game names the caster's own body part, so these can't assume "hands"
+  // (a braman has a trunk, and one trunk takes "is" and "crackles").
+  /You lay your .+ on/,
   /You magically cool down/,
   /You make a few gestures/,
   /You must have mispronounced a lot/,
@@ -267,7 +269,7 @@ export const UNBLOCK_PATTERNS: RegExp[] = [
   /You notice that .* has/,
   /You pass your/,
   /You raise your .* and a /,
-  /You raise your hands and begin to/,
+  /You raise your .+ and begin to/,
   /You regain some feeling/,
   /You retrieve the soul of /,
   /You return to your normal size/,
@@ -298,8 +300,10 @@ export const UNBLOCK_PATTERNS: RegExp[] = [
   /Your concentration is (broken|disrupted)/,
   /Your earthen shield crumbles/,
   /Your eyes adjust/,
-  /Your hands are momentarily/,
-  /Your hands (crackle|glow)/,
+  /Your .+ (is|are) momentarily/,
+  // Names the body parts rather than allowing any word: "Your aura glow fades"
+  // and "Your spatha glows briefly" are not the end of a cast.
+  /Your (hands|trunk) (crackle|glow)/,
   /Your message is borne away/,
   /Your mind is isolated, you cannot send/,
   /Your recuperative powers/,

@@ -4,7 +4,7 @@ import type { AutoInscriber } from './autoInscriber';
 import { describeBatchRule, isValidBatchRule, type AutoCaster } from './autoCaster';
 import type { AutoConc } from './autoConc';
 import { MAX_REFRESH_TARGETS, type AutoRefresh } from './autoRefresh';
-import { formatModifier, type AutoPowercast, type Vitals } from './autoPowercast';
+import { auraPhrase, formatModifier, type AutoPowercast, type Vitals } from './autoPowercast';
 import { AURA_LEVELS, findAuraLevel } from './auraPatterns';
 import { parseConvertCommand, formatMultiConversion } from './currency';
 import { getSpellByAbbr, findSpellFuzzy } from './spellData';
@@ -623,11 +623,13 @@ const handleAutopowercast: Handler = async (trimmed, ctx) => {
     echo(ctx, `  Modifier:  /powercast ${formatModifier(s.modifier)}`);
     echo(
       ctx,
-      `  Waits for: full concentration${auraLevel ? ` and a ${auraLevel.label} aura` : ''}`
+      `  Waits for: full concentration${auraLevel ? ` and ${auraPhrase(auraLevel.label)}` : ''}`
     );
     if (s.active) {
       let doing: string;
-      if (s.phase === 'waiting') {
+      if (s.phase === 'waiting' && s.waitingFor === 'resume') {
+        doing = `out of aura, ${s.channelsDone}/${s.channelCount} channels stored`;
+      } else if (s.phase === 'waiting') {
         doing = `waiting to ${s.waitingFor === 'cast' ? 'powercast' : 'channel'}`;
       } else if (s.phase === 'casting') {
         doing = 'powercasting';
@@ -674,7 +676,7 @@ const handleAutopowercast: Handler = async (trimmed, ctx) => {
         return true;
       }
       pc.updateConfig({ auraTarget: level.key });
-      echo(ctx, `[Autopowercast: waits for a ${level.label} aura before channelling]`);
+      echo(ctx, `[Autopowercast: waits for ${auraPhrase(level.label)} before channelling]`);
       return true;
     }
     if (key === 'modifier' && !isNaN(n)) {
