@@ -10,6 +10,17 @@ The `[Unreleased]` header controls automatic version bumping on merge:
 - `[Unreleased-minor]` → 0.1.0 → 0.2.0
 - `[Unreleased-major]` → 0.1.0 → 1.0.0
 
+## [Unreleased-patch]
+
+### Fixed
+
+- Characters with a trunk instead of hands, like a braman, stayed blocked after casting `refresh_other` until they typed `/unblock`, and `/autorefresh` got stuck the same way. The message "You lay your trunk on..." now ends the block, and three other spell messages that said "hands" now accept a trunk too
+- `/autopowercast` went straight back to channelling after a powercast instead of waiting for concentration and aura to recover. The game reports what a cast cost a couple of seconds after it ends, so the loop was reading the old, full values. Every wait now starts with a 5 second pause before it trusts the readings. The wait before discharging had the same problem and is fixed too
+- `/autopowercast` froze for good when your aura ran out, because it was looking for the wrong message ("You appear to have no aura." is what the game says). It now keeps the channels already stored, waits for some aura to come back and carries on with the round
+- `/autopowercast` froze when a channel stored nothing ("None of the power got outside your head."). It now tries again, and stops with a message after eight in a row. A channel or discharge the game never answers now stops the loop with a message saying so, instead of hanging
+- `/autopowercast` now discharges first and waits for the result before isolating your mind and casting. If the focus turns out to be empty, it skips the powercast and channels again instead of casting with nothing behind it
+- The autopowercast badge's tooltip no longer says it is waiting for your aura before a powercast. The aura is only checked before a round of channels. Autopowercast messages also now say "an intense violet aura" instead of "a intense violet aura"
+
 ## [1.20.0] - 2026-10-15
 
 ### Added
