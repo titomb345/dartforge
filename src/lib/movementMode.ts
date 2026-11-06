@@ -53,13 +53,23 @@ export function getNextMode(current: MovementMode, hasSneaking: boolean): Moveme
 }
 
 /**
- * If `command` is a bare direction and mode is not normal, return the prefixed
- * command (e.g. "lead e"). Otherwise return the original command unchanged.
+ * "enter <thing>" walks a named exit ("enter town", "enter portal"), and
+ * the mode verb leads it like a direction: "lead enter town" took the
+ * party through (session_2026-10-14T14-23-19-637.log:17010), and the
+ * party sees "Arthur leads you enter clearing." Only bare "enter" was
+ * prefixed before, so "enter town" left the party behind.
+ */
+const NAMED_ENTER = /^enter\s+\S/i;
+
+/**
+ * If `command` is a bare direction (or "enter <thing>") and mode is not
+ * normal, return the prefixed command (e.g. "lead e", "lead enter town").
+ * Otherwise return the original command unchanged.
  */
 export function applyMovementMode(command: string, mode: MovementMode): string {
   if (mode === 'normal') return command;
   const trimmed = command.trim().toLowerCase();
-  if (MOVEMENT_DIRECTIONS.has(trimmed)) {
+  if (MOVEMENT_DIRECTIONS.has(trimmed) || NAMED_ENTER.test(trimmed)) {
     return `${MODE_PREFIX[mode]} ${command.trim()}`;
   }
   return command;

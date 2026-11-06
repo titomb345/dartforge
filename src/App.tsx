@@ -1577,6 +1577,7 @@ function AppMain() {
     autoRefresh: autoRefreshRef.current,
     autoPowercast: autoPowercastRef.current,
     cycleMovementMode,
+    movementMode: () => movementModeRef.current,
     appSettings: {
       announceMode: appSettings.announceMode,
       announcePetMode: appSettings.announcePetMode,

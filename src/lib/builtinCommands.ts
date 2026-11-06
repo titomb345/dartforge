@@ -1,5 +1,6 @@
 import type { ActionBlocker } from './actionBlocker';
 import { buildDoorSequence } from './doorSequence';
+import { applyMovementMode, type MovementMode } from './movementMode';
 import type { AutoInscriber } from './autoInscriber';
 import { describeBatchRule, isValidBatchRule, type AutoCaster } from './autoCaster';
 import type { AutoConc } from './autoConc';
@@ -30,6 +31,8 @@ export interface BuiltinContext {
   autoRefresh: AutoRefresh;
   autoPowercast: AutoPowercast;
   cycleMovementMode: () => void;
+  /** The live movement mode (lead / row / sneak prefix for bare moves) */
+  movementMode: () => MovementMode;
   appSettings: {
     announceMode: AnnounceMode;
     announcePetMode: AnnounceMode;
@@ -1125,6 +1128,9 @@ const handleLevels: Handler = async (trimmed, ctx) => {
  * /door <dir> — pass through a (possibly locked) door: unlock with each
  * keyring slot, open, step through, then close and lock behind. The town
  * auto-walker fires the same sequence when a route crosses a known door.
+ * The step through takes the movement mode like a typed move ("lead w"
+ * while leading); the unlock/open/close/lock commands are no bare
+ * directions and go out as they are.
  */
 const handleDoor: Handler = async (trimmed, ctx) => {
   const m = /^\/door(?:\s+(\S+))?\s*$/i.exec(trimmed);
@@ -1139,8 +1145,9 @@ const handleDoor: Handler = async (trimmed, ctx) => {
     return true;
   }
   const send = await ctx.sendCommandViaRef();
+  const mode = ctx.movementMode();
   for (const cmd of cmds) {
-    await send(cmd);
+    await send(applyMovementMode(cmd, mode));
   }
   return true;
 };

@@ -10,6 +10,13 @@ The `[Unreleased]` header controls automatic version bumping on merge:
 - `[Unreleased-minor]` → 0.1.0 → 0.2.0
 - `[Unreleased-major]` → 0.1.0 → 1.0.0
 
+## [Unreleased-patch]
+
+### Fixed
+
+- `/door` now steps through the door the way your movement mode says. While leading it sends `lead w` instead of `w`, so your party follows you through. Rowing and sneaking work the same way
+- While leading, `enter town`, `enter portal` and any other `enter <something>` now go out as `lead enter town` and so on, so your party comes with you. Before, only a plain `enter` got `lead` added. This also covers the town map's auto-walk when its route goes through an `enter` exit
+
 ## [1.20.1] - 2026-11-05
 
 ### Fixed
