@@ -63,6 +63,19 @@ const HEX_MARKER_RULES: [HexMarkerType, RegExp][] = [
   ['boat', /\b(?:rowboat|barge|dhow|ferry|dock|ship|galley|sloop)\b/i],
 ];
 
+/**
+ * A vessel in a survey's legend ("1) a wooden rowboat christened "the
+ * minnow"", "a ferry barge", "a pine rowboat") is no landmark: boats move.
+ * Recorded as one, the rowboat the player sails in marked every hex it
+ * crossed. A landing is a place ("a ferry landing on the shore of the
+ * sea", "a dock"), and stays one.
+ */
+const VESSEL_RE = /\b(?:rowboat|boat|barge|dhow|ship|galley|sloop|canoe|raft|skiff)\b/i;
+const MOORING_RE = /\b(?:landing|dock|pier|wharf|harbou?r|port|shipyard)\b/i;
+export function isVesselLandmark(text: string): boolean {
+  return VESSEL_RE.test(text) && !MOORING_RE.test(text);
+}
+
 /** Classify a landmark description → marker type, or null (generic diamond). */
 export function classifyLandmark(text: string): HexMarkerType | null {
   for (const [type, re] of HEX_MARKER_RULES) {

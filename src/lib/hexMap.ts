@@ -15,7 +15,12 @@
 import type { Direction, HexCoord } from './hexUtils';
 import { applyDirection, oppositeDirection, COMPASS_DIRECTIONS } from './hexUtils';
 import type { HexTerrainType } from './hexTerrainPatterns';
-import { classifyLandmark, classifyLandmarks, type HexMarkerType } from './mapMarkers';
+import {
+  classifyLandmark,
+  classifyLandmarks,
+  isVesselLandmark,
+  type HexMarkerType,
+} from './mapMarkers';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -330,7 +335,7 @@ export class HexMapStore {
 
   addLandmark(island: number, q: number, r: number, text: string, now: number): void {
     const trimmed = text.trim().replace(/\.$/, '');
-    if (!trimmed) return;
+    if (!trimmed || isVesselLandmark(trimmed)) return; // boats move (see isVesselLandmark)
     this.paint(island, q, r, 'unknown', now);
     const cell = this.cells.get(cellKey(island, q, r))!;
     // Auto-classify landmarks (never overrides a user's explicit choice)
@@ -625,6 +630,15 @@ export class HexMapStore {
     if (d.version !== 2 || !d.cells) return store;
     for (const [key, cell] of Object.entries(d.cells)) {
       if (!cell || typeof cell.q !== 'number' || typeof cell.r !== 'number') continue;
+      // Boats saved as landmarks before they were told apart (every hex a
+      // rowboat crossed got a boat icon): drop them, and the boat icon they
+      // gave the hex goes with them (re-classified from what is left)
+      const saved = Array.isArray(cell.landmarks) ? cell.landmarks : [];
+      const landmarks = saved.filter((l) => typeof l === 'string' && !isVesselLandmark(l));
+      const marker =
+        landmarks.length < saved.length && cell.marker === 'boat'
+          ? classifyLandmarks(landmarks)
+          : (cell.marker ?? classifyLandmarks(landmarks));
       const c: HexCell = {
         q: cell.q,
         r: cell.r,
@@ -637,12 +651,11 @@ export class HexMapStore {
         visited: !!cell.visited,
         visitCount: cell.visitCount ?? 0,
         lastSeen: cell.lastSeen ?? 0,
-        landmarks: Array.isArray(cell.landmarks) ? cell.landmarks : [],
+        landmarks,
         // Classify pre-existing saved landmarks on load — unclassified cells
         // pick up the current icon vocabulary; explicit choices (any type,
         // or 'none') are preserved verbatim.
-        marker:
-          cell.marker ?? (Array.isArray(cell.landmarks) ? classifyLandmarks(cell.landmarks) : null),
+        marker,
         notes: cell.notes ?? '',
         blocked: Array.isArray(cell.blocked) ? cell.blocked : [],
         description: cell.description ?? '',

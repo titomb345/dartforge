@@ -20,6 +20,9 @@
  *   TOWN_DARK_RE        → onDarkArrival     ("It is pitch black.")
  *   UNKNOWN_COMMAND_RE  → onUnknownCommand  ("What ?" / "<Verb> what?",
  *                                            which fail dead named moves)
+ *   BOAT_BOARD_RE       → onBoardBoat       ("You board the boat.")
+ *   BOAT_LEAVE_RE       → onLeaveBoat       ("You climb out of the rowboat.",
+ *                                            only while aboard)
  *
  * The returned events tell the caller what the engine did with the line —
  * the live walk executor reacts to them (a transit or a forced move ends a
@@ -28,6 +31,8 @@
 
 import type { DarkArrival, TownLocalizer } from './townLocalizer';
 import {
+  BOAT_BOARD_RE,
+  BOAT_LEAVE_RE,
   PORTAL_TRANSIT_RE,
   TELEPORT_TRANSIT_RE,
   TOWN_DARK_RE,
@@ -50,7 +55,11 @@ export type TownLineEvent =
   | { kind: 'dark'; wasActive: boolean; result: DarkArrival }
   /** "What ?" (`verb` null) or "<Verb> what?"; `failed`: the reply failed a
    *  queued move */
-  | { kind: 'unknown-command'; verb: string | null; failed: boolean };
+  | { kind: 'unknown-command'; verb: string | null; failed: boolean }
+  /** "You board the boat.": the boat's rooms are not mapped until ashore */
+  | { kind: 'board' }
+  /** "You climb out of the rowboat." while aboard */
+  | { kind: 'leave-boat' };
 
 /**
  * Hand one output line to the town engine. Returns the events it produced,
@@ -87,6 +96,14 @@ export function dispatchTownLine(
     const verb = unknown[1] ?? null;
     const failed = localizer.onUnknownCommand(verb);
     events.push({ kind: 'unknown-command', verb, failed });
+  }
+  if (BOAT_BOARD_RE.test(line)) {
+    localizer.onBoardBoat();
+    events.push({ kind: 'board' });
+  }
+  if (localizer.aboard && BOAT_LEAVE_RE.test(line)) {
+    localizer.onLeaveBoat();
+    events.push({ kind: 'leave-boat' });
   }
   return events;
 }

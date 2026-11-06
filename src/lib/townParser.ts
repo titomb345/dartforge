@@ -222,6 +222,35 @@ export const TOWN_FORCED_MOVE_RE =
   /^(?:> )*[A-Z][\w']*(?: [A-Z][\w']*)? leads you (?:off to the )?([a-z][a-z ]*?)\.?\s*$/;
 
 /**
+ * Boarding a boat — "You board the boat." for every vessel in both corpora
+ * (144 MUSH + 4 DF boardings: the Tobermore galley's Oar Deck and the
+ * rowboats). A boat is no room of the town it is moored in: rowboats row
+ * off to other docks and beaches, so a boat room filed into the town glues
+ * whatever shore it puts in at onto that town ("Westmore Dock -[enter
+ * rowboat]-> In a Rowboat" in Bill's live save,
+ * session_2026-11-05T23-54-55-152.log:7748-7756). The owner calls
+ * TownLocalizer.onBoardBoat; the boat's rooms are not mapped.
+ */
+export const BOAT_BOARD_RE = /^(?:> )*You board the [a-z]+\.\s*$/;
+
+/**
+ * Leaving a rowboat — "You climb out of the rowboat." (19 MUSH lines),
+ * followed by the dock's room block or, on a beach, a wilderness survey.
+ * The galley prints nothing: "exit" lands straight on North Pier
+ * (session_2026-11-02T22-15-40-061.log:4198-4200), which the localizer
+ * tells from the exit command instead. Only read while aboard.
+ */
+export const BOAT_LEAVE_RE = /^(?:> )*You climb out of the [a-z]+\.\s*$/;
+
+/**
+ * The boat rooms of both corpora (every room block after a boarding line
+ * before the player left: 742 Oar Deck and 76 In a Rowboat sightings).
+ * Recognized without the boarding line, so a login aboard is no town room
+ * either, and cut from saves made before boats were recognized.
+ */
+export const BOAT_ROOM_NAMES: ReadonlySet<string> = new Set(['Oar Deck', 'In a Rowboat']);
+
+/**
  * Dark arrival — in an unlit room DartMUD prints "It is pitch black."
  * (often followed by the room's night prose: "The odors of the day have
  * faded ...") INSTEAD of the room block. The owner calls

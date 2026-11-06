@@ -1300,6 +1300,9 @@ function AppMain() {
   sendCommandRef.current = async (command: string) => {
     const blocker = actionBlockerRef.current;
     if (actionBlockingEnabledRef.current && blocker.blocked) {
+      // A bare Enter (sent as '') is no command: queued, every press piled
+      // up another blank send to fire when the block ended
+      if (!command.trim()) return;
       blocker.enqueue(command);
       writeToTerm(`\x1b[33mQUEUED: ${command}\x1b[0m\r\n`);
       return;
@@ -1577,6 +1580,7 @@ function AppMain() {
     autoRefresh: autoRefreshRef.current,
     autoPowercast: autoPowercastRef.current,
     cycleMovementMode,
+    movementMode: () => movementModeRef.current,
     appSettings: {
       announceMode: appSettings.announceMode,
       announcePetMode: appSettings.announcePetMode,

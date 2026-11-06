@@ -284,6 +284,8 @@ export class TownReplay {
     portals: 0,
     /** Plane shift / temple pool transit lines */
     teleports: 0,
+    /** "You board the boat." lines */
+    boardings: 0,
     /** Forced moves the town engine queued (indoors) */
     forcedMoves: 0,
     /** "It is pitch black." lines while the town engine was active */
@@ -503,11 +505,17 @@ export class TownReplay {
     let emitted = 0;
     let sawRoomOrSurvey = false;
     let afterLogin = false;
+    // An exits line read aboard a boat, held from the hex engine until the
+    // town engine says whose room it is (useMapTracker's heldTownRoomRef)
+    let heldTownRoom: number | null = null;
     const townParser = new TownParser((block) => {
       emitted++;
       sawRoomOrSurvey = true;
-      this.onBlock(block, afterLogin);
+      const res = this.onBlock(block, afterLogin);
       afterLogin = false;
+      const held = heldTownRoom;
+      heldTownRoom = null;
+      if (held !== null && res.kind !== 'aboard') this.hexLocalizer.onTownRoom(held, false);
     });
     const hexParser = new RoomParser((event) => {
       // Live wiring: hex events drive the hex localizer; wilderness surveys
@@ -516,6 +524,7 @@ export class TownReplay {
         case 'survey':
           sawRoomOrSurvey = true;
           afterLogin = false;
+          heldTownRoom = null;
           this.townLocalizer.onWilderness();
           this.hexLocalizer.onSurvey({
             art: event.art,
@@ -535,7 +544,8 @@ export class TownReplay {
           this.hexLocalizer.trackForcedMove(event.dir, this.clock);
           break;
         case 'town-room':
-          this.hexLocalizer.onTownRoom(this.clock);
+          if (this.townLocalizer.aboard) heldTownRoom = this.clock;
+          else this.hexLocalizer.onTownRoom(this.clock);
           break;
       }
     });
@@ -631,6 +641,10 @@ export class TownReplay {
             if (e.failed) this.stats.replyFails++;
             this.hooks.onUnknownCommand?.(e.verb, e.failed);
             break;
+          case 'board':
+            this.stats.boardings++;
+            this.hexLocalizer.onBoardBoat();
+            break;
         }
       }
       if (NO_EXITS_RE.test(text)) this.stats.noExitsRooms++;
@@ -693,7 +707,7 @@ export class TownReplay {
     return null;
   }
 
-  private onBlock(block: TownRoomBlock, afterLogin: boolean): void {
+  private onBlock(block: TownRoomBlock, afterLogin: boolean): TownResolution {
     this.stats.blocks++;
     this.hooks.beforeBlock?.(block);
     const before = this.townMap.room(this.townMap.pos);
@@ -714,5 +728,6 @@ export class TownReplay {
       wasActive,
       afterLogin,
     });
+    return res;
   }
 }

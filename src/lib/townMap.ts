@@ -31,6 +31,7 @@
  */
 
 import {
+  BOAT_ROOM_NAMES,
   LISTED_NAMED_EXITS,
   TOWN_DIR_VEC,
   TOWN_REVERSE,
@@ -126,6 +127,65 @@ export interface TownMergeResult {
 }
 
 const gridKey = (x: number, y: number, z: number) => `${x},${y},${z}`;
+
+/** The ids a room links to, directional and named */
+function linkedIds(r: TownRoom): number[] {
+  const ids: number[] = [];
+  for (const id of Object.values(r.links)) if (id !== undefined) ids.push(id);
+  for (const id of Object.values(r.namedLinks)) ids.push(id);
+  return ids;
+}
+
+/**
+ * Remove a town's boat rooms (BOAT_ROOM_NAMES) and every room linked with
+ * them that links with no other room, until none is left: a galley's lower
+ * deck goes with its Oar Deck, while the dock (linked with its street)
+ * stays. Links into a removed room, anchors on it and the entry room are
+ * dropped with it. Returns the number of rooms removed.
+ */
+function cutBoatRooms(town: Town): number {
+  const cut = new Set<number>();
+  for (const r of town.rooms.values()) if (BOAT_ROOM_NAMES.has(r.name)) cut.add(r.id);
+  if (cut.size === 0) return 0;
+  for (let grew = true; grew; ) {
+    grew = false;
+    for (const r of town.rooms.values()) {
+      if (cut.has(r.id)) continue;
+      const out = linkedIds(r);
+      const touchesCut = out.some((id) => cut.has(id));
+      let touchesKept = out.some((id) => !cut.has(id) && town.rooms.has(id));
+      let linkedFromCut = false;
+      for (const o of town.rooms.values()) {
+        if (o.id === r.id || !linkedIds(o).includes(r.id)) continue;
+        if (cut.has(o.id)) linkedFromCut = true;
+        else touchesKept = true;
+      }
+      if ((touchesCut || linkedFromCut) && !touchesKept) {
+        cut.add(r.id);
+        grew = true;
+      }
+    }
+  }
+  for (const id of cut) {
+    const r = town.rooms.get(id)!;
+    town.rooms.delete(id);
+    const key = gridKey(r.x, r.y, r.z);
+    if (town.grid.get(key) === id) town.grid.delete(key);
+  }
+  for (const r of town.rooms.values()) {
+    for (const [dir, id] of Object.entries(r.links) as [TownDir, number][]) {
+      if (cut.has(id)) delete r.links[dir];
+    }
+    for (const [cmd, id] of Object.entries(r.namedLinks)) {
+      if (cut.has(id)) delete r.namedLinks[cmd];
+    }
+  }
+  for (const [anchor, id] of Object.entries(town.anchors)) {
+    if (cut.has(id)) delete town.anchors[anchor];
+  }
+  if (town.entryRoomId !== null && cut.has(town.entryRoomId)) town.entryRoomId = null;
+  return cut.size;
+}
 
 /** Every direction, in the fixed order merges walk links (deterministic) */
 const ALL_DIRS: TownDir[] = ['n', 'e', 's', 'w', 'u', 'd', 'ne', 'nw', 'se', 'sw'];
@@ -1784,6 +1844,16 @@ export class TownMapStore {
       }
       store.towns.set(town.id, town);
       if (town.id >= store.nextTownId) store.nextTownId = town.id + 1;
+    }
+    // Boats are no town rooms (see TownLocalizer.onBoardBoat), but saves
+    // made before boats were recognized filed them as ones: Bill's had
+    // "Westmore Dock -[enter rowboat]-> In a Rowboat" and "North Pier
+    // -[enter galley]-> Oar Deck". Cut every boat room, and with it any room
+    // only boat rooms connect to (below a galley's hatch). Before the
+    // position checks below: a position on a boat is no position.
+    for (const town of [...store.towns.values()]) {
+      // (A town that was nothing but a boat: a login aboard used to start one)
+      if (cutBoatRooms(town) > 0 && town.rooms.size === 0) store.towns.delete(town.id);
     }
     const validPos = (p: TownPos | null | undefined): TownPos | null =>
       p &&

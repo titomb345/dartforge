@@ -19,6 +19,7 @@
  */
 
 import {
+  BOAT_ROOM_NAMES,
   LISTED_NAMED_EXITS,
   TOWN_DIR_ALIASES,
   TOWN_DIR_VEC,
@@ -104,6 +105,7 @@ export type TownResolutionKind =
   | 'stationary' // look / re-print of the current room
   | 'corrected' // prediction failed; a neighbor correlation won
   | 'relocalized' // was lost; unique fingerprint match
+  | 'aboard' // a boat's room (see onBoardBoat): not mapped, no position
   | 'lost'; // could not resolve
 
 export interface TownResolution {
@@ -149,6 +151,23 @@ const NAMED_MOVE_WORDS = new Set(['enter', 'board', 'exit', 'out', 'back', 'dise
  * then the boat's own room) — the hex localizer tracks "row <dir>".
  */
 const DIR_MOVE_VERBS = new Set(['go', 'sneak', 'climb', 'lead', 'swim', 'leap']);
+
+/** Named moves that may take the player off a boat, besides the exit words
+ *  its rooms list (see TownLocalizer.noteBoatCommand) */
+const DISEMBARK_WORDS: ReadonlySet<string> = new Set(['exit', 'out', 'disembark']);
+
+/**
+ * Aboard a boat (see TownLocalizer.onBoardBoat). `rooms`: the names of the
+ * boat's rooms seen this trip; `exits`: the exit words they list;
+ * `leaving`: 'maybe' after a command that can take the player ashore (an
+ * exit word: it may fail, and the next block is the boat again), 'sure'
+ * after "You climb out of the rowboat."
+ */
+interface BoatTrip {
+  rooms: Set<string>;
+  exits: Set<string>;
+  leaving: 'no' | 'maybe' | 'sure';
+}
 
 /**
  * Commands the app sends on its own that never draw "What ?" (App.tsx
@@ -304,8 +323,15 @@ export class TownLocalizer {
    * the player again, town entries neither use nor learn anchors.
    */
   private anchorStale = false;
+  /** On a boat (see onBoardBoat), else null */
+  private boat: BoatTrip | null = null;
 
   constructor(private map: TownMapStore) {}
+
+  /** True while the player is on a boat (whose rooms are not mapped) */
+  get aboard(): boolean {
+    return this.boat !== null;
+  }
 
   get pendingMoves(): readonly TownMove[] {
     return this.queue;
@@ -330,6 +356,10 @@ export class TownLocalizer {
 
   /** Track an outgoing command. Only queues while indoors. */
   trackCommand(command: string, now: number): boolean {
+    if (this.boat) {
+      this.noteBoatCommand(command, now);
+      return false;
+    }
     if (!this.active) return false;
     const move = this.classifyCommand(command, now);
     if (!move) {
@@ -464,6 +494,11 @@ export class TownLocalizer {
    * queued.
    */
   onForcedMove(text: string, now: number): boolean {
+    if (this.boat) {
+      // A leader taking the party off the boat ("... leads you exit.")
+      this.noteBoatCommand(text, now);
+      return false;
+    }
     if (!this.active) return false;
     const cmd = text.trim().replace(/\s+/g, ' ');
     // A bare word the leader walked is an exit word ("path", "beach") —
@@ -561,6 +596,7 @@ export class TownLocalizer {
    * neither, nothing queued is attributable.
    */
   onTeleport(): void {
+    this.boat = null; // the teleport took the player off the boat
     this.pendingTeleport = { from: this.where() };
     this.portalJump = false; // the newest transit line wins
     this.pendingPortalFrom = null;
@@ -662,6 +698,7 @@ export class TownLocalizer {
    * seven); departure room + dirWord keys the portal destination memory.
    */
   onPortalTransit(dirWord: string | null = null): void {
+    this.boat = null;
     // The room we're leaving through the portal is a portal room
     const from = this.where();
     const room = this.map.room(from);
@@ -711,6 +748,87 @@ export class TownLocalizer {
     this.clearTransits();
     // A survey places the player again: hex anchors are current from here on
     this.anchorStale = false;
+    // A survey after "You climb out of the rowboat." is the beach the boat
+    // put in at: the player is ashore, outdoors. (Any other survey is the
+    // view from the boat: rowing prints one every stroke, and so does a
+    // "survey" typed aboard.)
+    if (this.boat?.leaving === 'sure') this.boat = null;
+  }
+
+  /**
+   * "You board the boat." (BOAT_BOARD_RE): the player is on a boat, which
+   * is no room of the town it is moored in. Rowboats row off to other docks
+   * and beaches, and a boat room filed into the town would glue every shore
+   * it puts in at onto that town. Until the player is ashore again, room
+   * blocks are the boat's and resolve 'aboard' (not mapped, no position):
+   * like the wilderness, the town engine is off, and map.pos keeps the room
+   * they boarded from. Ashore is the first block that is no boat room after
+   * a command that can leave the boat (noteBoatCommand) or after "You climb
+   * out of the rowboat." (onLeaveBoat); it enters fresh, as after a portal,
+   * since the boat may have put in anywhere. The boarding command is
+   * answered and moves typed after it run aboard: nothing stays queued.
+   */
+  onBoardBoat(): void {
+    this.active = false;
+    this.lost = false;
+    this.queue = [];
+    this.answered = this.sends;
+    this.pendingExit = null;
+    this.clearTransits();
+    this.boat = { rooms: new Set(), exits: new Set(), leaving: 'no' };
+  }
+
+  /** "You climb out of the rowboat." (BOAT_LEAVE_RE): the next block or
+   *  survey is ashore */
+  onLeaveBoat(): void {
+    if (this.boat) this.boat.leaving = 'sure';
+  }
+
+  /**
+   * A command sent (or a leader's move) while aboard: an exit word may take
+   * the player ashore. "exit" from the galley's Oar Deck lands on North
+   * Pier with no line of its own. It may also fail, which the next block
+   * tells (the boat's own room again: see boatBlock).
+   */
+  private noteBoatCommand(command: string, now: number): void {
+    const boat = this.boat;
+    if (!boat || boat.leaving !== 'no') return;
+    const move = classifyTownCommand(command, now);
+    let word: string | null = null;
+    if (move?.kind === 'named') word = move.cmd;
+    else if (!move) {
+      // A bare exit word one of the boat's rooms lists, maybe led ("lead plank")
+      const cmd = command.trim().replace(/\s+/g, ' ');
+      const space = cmd.indexOf(' ');
+      word = space > 0 && DIR_MOVE_VERBS.has(cmd.slice(0, space)) ? cmd.slice(space + 1) : cmd;
+    }
+    if (word && (DISEMBARK_WORDS.has(word) || boat.exits.has(word))) boat.leaving = 'maybe';
+  }
+
+  /**
+   * A room block while aboard, or a known boat room without the boarding
+   * line (a login on the boat): null when it is ashore, else the 'aboard'
+   * resolution. The first block after boarding is the boat; so is a room
+   * seen aboard this trip after an exit word that failed, and a new room
+   * with no exit word sent (the galley's hatch down).
+   */
+  private boatBlock(block: TownRoomBlock): TownResolution | null {
+    if (!this.boat && BOAT_ROOM_NAMES.has(block.name)) this.onBoardBoat();
+    const boat = this.boat;
+    if (!boat) return null;
+    const onBoat =
+      boat.rooms.size === 0 ||
+      BOAT_ROOM_NAMES.has(block.name) ||
+      boat.leaving === 'no' ||
+      (boat.leaving === 'maybe' && boat.rooms.has(block.name));
+    if (!onBoat) {
+      this.boat = null;
+      return null;
+    }
+    boat.rooms.add(block.name);
+    for (const w of block.exits.named) boat.exits.add(w);
+    boat.leaving = 'no';
+    return { kind: 'aboard', pos: null, moved: null };
   }
 
   /** Forget every transient between a line and the block it announces */
@@ -743,6 +861,7 @@ export class TownLocalizer {
   reset(): void {
     this.active = false;
     this.lost = false;
+    this.boat = null;
     this.queue = [];
     this.sends = 0;
     this.answered = 0;
@@ -843,6 +962,18 @@ export class TownLocalizer {
     const darkTransit = this.darkTransit;
     this.darkUnanchored = false;
     this.darkTransit = false;
+
+    // On a boat, or a boat room without the boarding line: not mapped. The
+    // first block ashore enters fresh, as after a portal (no resume:
+    // matches() is name-only, and the boat may have put in at a same-named
+    // dock elsewhere; no anchor: the hex the boat was rowed to says nothing
+    // about the dock's town)
+    if (this.boat || BOAT_ROOM_NAMES.has(block.name)) {
+      const aboard = this.boatBlock(block);
+      if (aboard) return aboard;
+      this.active = false;
+      return this.enterTown(block, null, now, false);
+    }
 
     // Messaged teleport (plane shift, temple pool): land on the room the
     // previous teleport left when the arrival matches it — the way back —

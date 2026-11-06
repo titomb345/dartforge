@@ -298,6 +298,13 @@ export const UNBLOCK_PATTERNS: RegExp[] = [
   /Your aura is too weak/,
   /Your body adjusts to its new abilities/,
   /Your concentration is (broken|disrupted)/,
+  // A stench breaking a cast: "The horrific stench disrupts your concentration."
+  /disrupts your concentration\./,
+  // Searching an object answers at once: "Upon closer examination, you find a
+  // couple of potions stuck inside the gator's mouth." (lowercase "you")
+  /Upon closer examination, you find/,
+  // Knocked out, the game refuses the command: "You're unconscious!  You can't do that!"
+  /You're unconscious! {2}You can't do that!/,
   /Your earthen shield crumbles/,
   /Your eyes adjust/,
   /Your .+ (is|are) momentarily/,
