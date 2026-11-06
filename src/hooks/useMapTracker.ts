@@ -391,6 +391,11 @@ export function useMapTracker(
           case 'forced-move':
             localizer.trackForcedMove(event.dir, now());
             break;
+          case 'unseen-move':
+            hexWalk().onResolution(localizer.onUnseenMove(now()));
+            syncState();
+            scheduleSave();
+            break;
           case 'town-room':
             if (townEnabledRef.current && townLocalizerRef.current.aboard) {
               heldTownRoomRef.current = now(); // see heldTownRoomRef

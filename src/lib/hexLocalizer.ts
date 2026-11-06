@@ -228,6 +228,15 @@ export class HexLocalizer {
     this.indoors = false;
   }
 
+  /**
+   * A move the server answered with a room, not a view (a rowboat pulling
+   * into a harbor): the queued move happened. Advance along it without
+   * painting, like a survey whose art could not be read.
+   */
+  onUnseenMove(now: number): SurveyResolution {
+    return this.onSurvey({ art: null, description: '', now });
+  }
+
   /** Reset transient state (new connection/character). Map data is untouched. */
   reset(): void {
     this.queue = [];

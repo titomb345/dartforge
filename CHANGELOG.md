@@ -10,6 +10,12 @@ The `[Unreleased]` header controls automatic version bumping on merge:
 - `[Unreleased-minor]` → 0.1.0 → 0.2.0
 - `[Unreleased-major]` → 0.1.0 → 1.0.0
 
+## [Unreleased-patch]
+
+### Fixed
+
+- The hex map no longer loses track of you while you row. Only a row that makes "some progress" moves the boat, but the map counted every row, including "a little progress" and "You catch a crab". Out on open water it couldn't tell, so it drifted, and when land came into view it started a new, separate map and hid your real one. Rows that go nowhere now don't count, and rowing into a harbor counts as the move it is even though the game shows you the dock instead of the hexes
+
 ## [1.20.2] - 2026-11-06
 
 ### Fixed
