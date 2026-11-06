@@ -543,6 +543,9 @@ export class TownReplay {
         case 'forced-move':
           this.hexLocalizer.trackForcedMove(event.dir, this.clock);
           break;
+        case 'unseen-move':
+          this.hexLocalizer.onUnseenMove(this.clock);
+          break;
         case 'town-room':
           if (this.townLocalizer.aboard) heldTownRoom = this.clock;
           else this.hexLocalizer.onTownRoom(this.clock);

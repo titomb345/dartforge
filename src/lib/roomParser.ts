@@ -49,6 +49,14 @@ export type RoomParserEvent =
        * wilderness hexes never do). Pending hex moves are stale.
        */
       type: 'town-room';
+    }
+  | {
+      /**
+       * The player moved one hex but the server showed a room, not a view:
+       * a rowboat pulling into a harbor shows the dock. The pending move
+       * happened.
+       */
+      type: 'unseen-move';
     };
 
 // ---------------------------------------------------------------------------
@@ -99,12 +107,42 @@ const MOVE_FAIL_HARD_RE =
  *    you from climbing it." (2 DF / 3 MUSH; the only climb refusal in five
  *    years of logs) — the dead "climb tree" took the Terrace that "climb
  *    branch" reached next as its own, and a walk would send it.
+ *  - rows that leave the boat where it is (Nov 2026, the first session
+ *    rowing since PR #102 counted rows as hex moves): "You made a little
+ *    progress.", "You catch a crab and make no progress.", "You just play
+ *    around near the shore." (a row out of a harbor) and "Try as you might,
+ *    the rowboat doesn't seem to want to be rowed over the ground." Only
+ *    "You made some progress." moves the boat (83 of 83, each followed by
+ *    the next hex's view). A third of the rows stayed queued as moves; on open
+ *    water every candidate fits, so the map followed the dead rows and was
+ *    8 hexes off when land came into view, which started a fresh island.
+ *    Soft, not hard: the ground a rowboat can't cross is ground a walk can.
  */
 const MOVE_FAIL_SOFT_RE =
-  /^(?:> )*(?:The .{1,40} is closed\.|You can't see to move!|You'll have to dismount first\.|You cannot ride (?:indoors|a hitched mount)|Invalid direction to lead to\.|You are not allowed back there|The portcullis is lowered!|[^'"]{1,60} (?:moves to block your (?:way|path)|steps out of the back room and blocks your way)|You have no free hands with which to climb\.|You (?:have to stand|'ll have to get) up first|You are too (?:exhausted|tired)|You're too injured to move\.|You're unconscious!|You \w+ around, but get nowhere\.|You try, but you cannot move in your current condition\.|Sparks flare up from the shimmering field as try to push through it\.|As you enter this room, a powerful force sends shivers of fear through your body\.|You examine the tree, but its broad base)/;
+  /^(?:> )*(?:The .{1,40} is closed\.|You can't see to move!|You'll have to dismount first\.|You cannot ride (?:indoors|a hitched mount)|Invalid direction to lead to\.|You are not allowed back there|The portcullis is lowered!|[^'"]{1,60} (?:moves to block your (?:way|path)|steps out of the back room and blocks your way)|You have no free hands with which to climb\.|You (?:have to stand|'ll have to get) up first|You are too (?:exhausted|tired)|You're too injured to move\.|You're unconscious!|You \w+ around, but get nowhere\.|You try, but you cannot move in your current condition\.|Sparks flare up from the shimmering field as try to push through it\.|As you enter this room, a powerful force sends shivers of fear through your body\.|You examine the tree, but its broad base|You made a little progress\.|You catch a crab and make no progress\.|You just play around near the shore\.|Try as you might, the .{1,40} doesn't seem to want to be rowed)/;
 
 /** Forced movement: a group leader moves the player */
 const FORCED_MOVE_RE = /^(?:> )*\w+ leads you (north(?:east|west)?|south(?:east|west)?)\b/;
+
+/**
+ * A row that reaches a harbor: the boat is on the harbor's hex, and the
+ * server shows the dock ("Outside you see:" + "Westmore Dock: A dock in a
+ * sheltered harbor. < ne >"), no view. Uncounted, the row stayed queued:
+ * the next dead row's reply dropped it instead of itself, the map stayed a
+ * hex short, and the view after rowing back out started a fresh island.
+ * ("You pull the boat up onto the shore." is followed by a view.)
+ */
+const HARBOR_RE = /^(?:> )*You pull into the harbor\./;
+
+/** A reply to a move command: it ends the wait for a view's description */
+function isMoveReply(line: string): boolean {
+  return (
+    MOVE_FAIL_HARD_RE.test(line) ||
+    MOVE_FAIL_SOFT_RE.test(line) ||
+    FORCED_MOVE_RE.test(line) ||
+    HARBOR_RE.test(line)
+  );
+}
 
 /** Exits line — printed by town/dungeon rooms, never by wilderness hexes
  *  ("There are no obvious exits." too: a room without exits — the spirit
@@ -219,6 +257,10 @@ export class RoomParser {
       if (dir) this.onEvent({ type: 'forced-move', dir });
       return;
     }
+    if (HARBOR_RE.test(line)) {
+      this.onEvent({ type: 'unseen-move' });
+      return;
+    }
     if (EXITS_LINE_RE.test(line)) {
       this.onEvent({ type: 'town-room' });
     }
@@ -323,7 +365,14 @@ export class RoomParser {
         return;
       }
       this.postArtWait++;
-      if (this.postArtWait >= MAX_POST_ART_WAIT || NON_WILDERNESS_RE.test(line)) {
+      // A move reply ends the wait: it answers the NEXT command (a boat's
+      // view has no description, and a dead row's reply came one or two
+      // lines after it, inside the wait, and went unread)
+      if (
+        this.postArtWait >= MAX_POST_ART_WAIT ||
+        NON_WILDERNESS_RE.test(line) ||
+        isMoveReply(line)
+      ) {
         this.emitSurvey();
         this.handleIdle(line);
       }

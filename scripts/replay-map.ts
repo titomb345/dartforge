@@ -185,6 +185,10 @@ function handleEvent(event: RoomParserEvent, oracle: boolean): void {
     localizer.onTownRoom(clock);
     return;
   }
+  if (event.type === 'unseen-move') {
+    localizer.onUnseenMove(clock);
+    return;
+  }
 
   metrics.surveys++;
   if (event.art) {
