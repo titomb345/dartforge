@@ -202,9 +202,11 @@ export class HexLocalizer {
    * recorded as a blocked hex edge (that direction enters a building, not
    * the neighboring hex — walks must not route through it), pending moves
    * are dropped, and the localizer goes indoors until the next survey.
+   * `markEntry` false: no hex move led inside (stepping off a boat onto a
+   * dock; the pending moves are the boat's rows).
    */
-  onTownRoom(now: number): void {
-    if (!this.indoors && this.map.pos && !this.lost) {
+  onTownRoom(now: number, markEntry = true): void {
+    if (markEntry && !this.indoors && this.map.pos && !this.lost) {
       const head = this.queue[0];
       if (head && now - head.at < 5_000) {
         this.map.markBlocked(this.map.pos, head.dir);
@@ -212,6 +214,18 @@ export class HexLocalizer {
     }
     this.queue = [];
     this.indoors = true;
+  }
+
+  /**
+   * "You board the boat." The boat sits on the hex the player stood on, and
+   * "row <dir>" moves it across hexes: hex moves count again, from here.
+   * Its rooms are no building (the owner keeps them from onTownRoom while
+   * the town engine says aboard): a look inside the rowboat flipped the map
+   * indoors, and the next survey back out.
+   */
+  onBoardBoat(): void {
+    this.queue = [];
+    this.indoors = false;
   }
 
   /** Reset transient state (new connection/character). Map data is untouched. */

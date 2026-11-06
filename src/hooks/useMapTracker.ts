@@ -327,15 +327,30 @@ export function useMapTracker(
     return hexAnchorKey(pos.island, pos.q, pos.r);
   }, []);
 
+  /**
+   * A room's exits line read while aboard a boat, held from the hex engine
+   * until the town engine says whose room it is (the hex parser sees the
+   * line first): a boat's room is no building (the hex map stays outdoors:
+   * the boat is on it), the dock the player steps off onto is.
+   */
+  const heldTownRoomRef = useRef<number | null>(null);
+
   const makeTownParser = useCallback(
     () =>
       new TownParser((block) => {
         const res = townLocalizerRef.current.onRoomBlock(block, currentAnchor(), now());
+        const held = heldTownRoomRef.current;
+        heldTownRoomRef.current = null;
+        if (held !== null && res.kind !== 'aboard') {
+          // Ashore: indoors, but no hex move led here (the pending ones are rows)
+          localizerRef.current.onTownRoom(held, false);
+          hexWalk().cancel('entered a building');
+        }
         townWalk().onResolution(res);
         syncState();
         scheduleSave();
       }),
-    [currentAnchor, now, townWalk, syncState, scheduleSave]
+    [currentAnchor, now, townWalk, hexWalk, syncState, scheduleSave]
   );
 
   const makeHexParser = useCallback(
@@ -344,6 +359,7 @@ export function useMapTracker(
         const localizer = localizerRef.current;
         switch (event.type) {
           case 'survey': {
+            heldTownRoomRef.current = null;
             townLocalizerRef.current.onWilderness();
             townWalk().onWilderness();
             const res = localizer.onSurvey({
@@ -376,6 +392,10 @@ export function useMapTracker(
             localizer.trackForcedMove(event.dir, now());
             break;
           case 'town-room':
+            if (townEnabledRef.current && townLocalizerRef.current.aboard) {
+              heldTownRoomRef.current = now(); // see heldTownRoomRef
+              break;
+            }
             localizer.onTownRoom(now());
             hexWalk().cancel('entered a building');
             syncState();
@@ -421,9 +441,11 @@ export function useMapTracker(
       if (townEnabledRef.current) {
         const events = dispatchTownLine(line, townLocalizerRef.current, now());
         if (events.length > 0) {
+          // On a boat the hex map counts rows again (see HexLocalizer.onBoardBoat)
+          if (events.some((e) => e.kind === 'board')) localizerRef.current.onBoardBoat();
           townWalk().onLineEvents(events);
           // A dark step moves the position, a portal marks its room
-          if (events.some((e) => e.kind === 'dark' || e.kind === 'portal')) {
+          if (events.some((e) => e.kind === 'dark' || e.kind === 'portal' || e.kind === 'board')) {
             syncState();
             scheduleSave();
           }

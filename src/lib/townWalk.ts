@@ -259,6 +259,9 @@ export class TownWalkExecutor {
         case 'forced-move':
           this.cancel('someone led you away');
           break;
+        case 'board':
+          this.cancel('boarded a boat');
+          break;
         case 'dark':
           this.onDark(e.result);
           break;

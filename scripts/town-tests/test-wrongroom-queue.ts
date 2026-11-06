@@ -24,7 +24,8 @@
  *     25T20-28-24-529.log:5303): "You try to descend into the hold, but an
  *     awful stench repels you." then a look — the re-print used to be filed
  *     as a phantom Oar Deck one floor down (the queue repair skipped every
- *     block with a named exit).
+ *     block with a named exit). Boats are no town rooms now (test-boats.ts),
+ *     so a cellar with the deck's exits line stands in for it.
  * T — queue overflow keeps the oldest moves: in a lag spike the server still
  *     runs every command in order (session_2026-09-28T14-32-22-078.log:7175,
  *     `port n` and a dozen moves typed into 4 s of lag), so dropping the
@@ -225,26 +226,28 @@ const SE_CORNER = block(
     'You are standing on a pier which is part of the main dock.  The shipyard lies to your south, and the land curves around to your north where the lighthouse stands.  It is bright.'
   );
   const DECK = block(
-    'Oar Deck',
+    'Cellar Steps',
     'exit and an open hatch leading down',
-    'You are on the rowing deck of a galley.  There are eight rows of benches, each with an oar on alternate sides of the ship, so that the ship may be rowed by eight or more strong individuals.  It is bright.'
+    'You are at the top of a flight of worn stone steps.  A hatch in the floor opens onto the cellar below, and the way out is behind you.  It is bright.'
   );
   const map = new TownMapStore();
   const loc = new TownLocalizer(map);
   let t = 1000;
   loc.onRoomBlock(PIER, null, (t += 1000));
-  loc.trackCommand('board galley', (t += 1000));
+  loc.trackCommand('enter cellar', (t += 1000));
   loc.onRoomBlock(DECK, null, (t += 300));
   const deckId = map.pos!.roomId;
   loc.trackCommand('d', (t += 2000)); // "...an awful stench repels you."
   loc.trackCommand('l', (t += 2000));
   const res = loc.onRoomBlock(DECK, null, (t += 300));
-  const decks = [...map.get(map.pos!.townId)!.rooms.values()].filter((r) => r.name === 'Oar Deck');
+  const decks = [...map.get(map.pos!.townId)!.rooms.values()].filter(
+    (r) => r.name === 'Cellar Steps'
+  );
   check(
     res.kind === 'stationary' && map.pos!.roomId === deckId,
     `S: re-print resolved ${res.kind}`
   );
-  check(decks.length === 1, `S: ${decks.length} Oar Decks, expected 1`);
+  check(decks.length === 1, `S: ${decks.length} Cellar Steps rooms, expected 1`);
   check(loc.pendingMoves.length === 0, 'S: the dead move and the look are both consumed');
 }
 

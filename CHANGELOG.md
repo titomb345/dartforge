@@ -16,6 +16,8 @@ The `[Unreleased]` header controls automatic version bumping on merge:
 
 - `/door` now steps through the door the way your movement mode says. While leading it sends `lead w` instead of `w`, so your party follows you through. Rowing and sneaking work the same way
 - While leading, `enter town`, `enter portal` and any other `enter <something>` now go out as `lead enter town` and so on, so your party comes with you. Before, only a plain `enter` got `lead` added. This also covers the town map's auto-walk when its route goes through an `enter` exit
+- The town map no longer saves boats as rooms. Getting into a rowboat or the Tobermore galley used to add the boat as a room of the town at the dock, so the map got mixed up once the boat sailed somewhere else. While you're on a boat the map stays on the hex view, even when you look around inside the boat, and boat rooms already saved are removed when the map loads
+- The hex map no longer puts a boat icon on every hex you sail through. Boats in a survey's list of nearby things (your own rowboat, a ferry barge) aren't saved as landmarks anymore, and the ones already saved are removed when the map loads. Ferry landings and docks keep their icon
 
 ## [1.20.1] - 2026-11-05
 
