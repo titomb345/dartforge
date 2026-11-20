@@ -13,7 +13,7 @@ export interface AlignmentLevel {
   alignment: string;
   /** ANSI theme color key — fallback if color is not set */
   themeColor: ThemeColorKey;
-  /** 0 = strongest (fanatic), 6 = weakest (none) */
+  /** 0 = strongest (fanatic), 8 = weakest (none) */
   severity: number;
   /** Direct CSS color for the status bar readout — scaled by conviction */
   color: string;
@@ -35,17 +35,20 @@ interface ConvictionDef {
 }
 
 /**
- * Conviction levels ordered from strongest to weakest.
- * Sourced from DartMudlet's triggers_alignment.lua triggers.
+ * Conviction levels ordered from strongest to weakest. The adverb levels
+ * (firmly, strongly, barely) are ordered from real session logs, where a
+ * character climbed barely -> some -> moderately -> believe -> strongly -> firmly.
  */
 const CONVICTION_DEFS: ConvictionDef[] = [
   { key: 'fanatic', convictionLabel: 'Fanatic', severity: 0, intensity: 1.0 },
-  { key: 'zealot', convictionLabel: 'Zealot', severity: 1, intensity: 0.85 },
-  { key: 'verb-belief', convictionLabel: 'Strong Belief', severity: 2, intensity: 0.7 },
-  { key: 'belief', convictionLabel: 'Belief', severity: 3, intensity: 0.55 },
-  { key: 'moderate', convictionLabel: 'Moderate', severity: 4, intensity: 0.4 },
-  { key: 'some', convictionLabel: 'Some Belief', severity: 5, intensity: 0.25 },
-  { key: 'none', convictionLabel: 'None', severity: 6, intensity: 0.0 },
+  { key: 'zealot', convictionLabel: 'Zealot', severity: 1, intensity: 0.9 },
+  { key: 'firmly', convictionLabel: 'Firm Belief', severity: 2, intensity: 0.8 },
+  { key: 'strongly', convictionLabel: 'Strong Belief', severity: 3, intensity: 0.7 },
+  { key: 'belief', convictionLabel: 'Belief', severity: 4, intensity: 0.6 },
+  { key: 'moderate', convictionLabel: 'Moderate', severity: 5, intensity: 0.45 },
+  { key: 'some', convictionLabel: 'Some Belief', severity: 6, intensity: 0.3 },
+  { key: 'barely', convictionLabel: 'Faint Belief', severity: 7, intensity: 0.15 },
+  { key: 'none', convictionLabel: 'None', severity: 8, intensity: 0.0 },
 ];
 
 /** Lookup map for named convictions */
@@ -154,7 +157,7 @@ function buildLevel(def: ConvictionDef, alignment: string): AlignmentLevel {
  * Handles (from DartMudlet triggers_alignment.lua):
  * - "You are a fanatic in <alignment>."
  * - "You are a zealot in <alignment>."
- * - "You <adverb> believe in <alignment>." (e.g. "strongly")
+ * - "You (firmly|strongly|barely) believe in <alignment>."
  * - "You believe in <alignment>."
  * - "You believe moderately in <alignment>."
  * - "You have some belief in <alignment>."
@@ -201,10 +204,17 @@ export function matchAlignmentLine(line: string): AlignmentMatch | null {
     return { level: buildLevel(def, beliefMatch[1]), raw: cleaned };
   }
 
-  // "You <adverb> believe in <alignment>." — catch-all for verb-modified belief
+  // "You <adverb> believe in <alignment>." — each adverb is its own level.
+  // An adverb we haven't seen yet still shows its own word ("deeply" ->
+  // "Deep Belief") at plain-belief strength rather than borrowing another label.
   const verbMatch = cleaned.match(/^You (\w+) believe in (.+)\.$/);
   if (verbMatch) {
-    const def = CONVICTION_LOOKUP.get('verb-belief')!;
+    const adverb = verbMatch[1].toLowerCase();
+    const def = CONVICTION_LOOKUP.get(adverb) ?? {
+      ...CONVICTION_LOOKUP.get('belief')!,
+      key: adverb,
+      convictionLabel: `${titleCase(adverb.replace(/ly$/, ''))} Belief`,
+    };
     return { level: buildLevel(def, verbMatch[2]), raw: cleaned };
   }
 
