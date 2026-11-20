@@ -10,6 +10,12 @@ The `[Unreleased]` header controls automatic version bumping on merge:
 - `[Unreleased-minor]` → 0.1.0 → 0.2.0
 - `[Unreleased-major]` → 0.1.0 → 1.0.0
 
+## [Unreleased-patch]
+
+### Fixed
+
+- The alignment readout now tells "firmly" and "strongly" apart. "You firmly believe in war" used to show as "Strong Belief: War"; it now shows "Firm Belief: War", one step stronger than "Strong Belief". "You barely believe in ..." now shows as "Faint Belief", the weakest level, instead of also being called "Strong Belief"
+
 ## [1.20.3] - 2026-11-06
 
 ### Fixed
