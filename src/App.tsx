@@ -2826,7 +2826,12 @@ function AppMain() {
                                               <AliasPanel onClose={closePanel} />
                                             </SlideOut>
                                             <SlideOut panel="triggers">
-                                              <TriggerPanel onClose={closePanel} />
+                                              <TriggerPanel
+                                                onClose={closePanel}
+                                                onTestSound={(name) =>
+                                                  soundLibraryRef.current.play(name)
+                                                }
+                                              />
                                             </SlideOut>
                                             <SlideOut panel="timers">
                                               <TimerPanel onClose={closePanel} />

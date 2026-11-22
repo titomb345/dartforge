@@ -101,26 +101,55 @@ function rgbToHex(r: number, g: number, b: number): string {
 }
 
 /**
- * Look up the alignment type from the raw alignment text.
- * Handles compound alignments like "a philosophy somewhere between war and passion"
- * by matching the first recognized keyword.
+ * Split a mixed alignment into its two sides. A belief that sits between two
+ * points on the circle reads "a philosophy somewhere between war and passion".
+ */
+function splitMixedAlignment(alignment: string): [string, string] | null {
+  const m = alignment.match(/^(?:an? [\w-]+ )?somewhere between (.+?) and (.+)$/i);
+  return m ? [m[1].trim(), m[2].trim()] : null;
+}
+
+/**
+ * Look up the alignment type from the raw alignment text. For a mixed
+ * alignment this is the first side named; otherwise the first recognized
+ * keyword in the text.
  */
 function resolveAlignmentType(alignment: string): AlignmentTypeDef | null {
   const lower = alignment.toLowerCase();
-  // Try exact match first
   if (ALIGNMENT_TYPES[lower]) return ALIGNMENT_TYPES[lower];
-  // Search for first recognized keyword in compound text
+  const mixed = splitMixedAlignment(lower);
+  if (mixed) {
+    const def = ALIGNMENT_TYPES[mixed[0]] ?? ALIGNMENT_TYPES[mixed[1]];
+    if (def) return def;
+  }
   for (const [name, def] of Object.entries(ALIGNMENT_TYPES)) {
     if (lower.includes(name)) return def;
   }
   return null;
 }
 
+/** Full-intensity color for an alignment. A mixed one sits halfway between its two sides. */
+function resolveBaseColor(alignment: string): [number, number, number] | null {
+  const mixed = splitMixedAlignment(alignment.toLowerCase());
+  if (mixed) {
+    const a = ALIGNMENT_TYPES[mixed[0]];
+    const b = ALIGNMENT_TYPES[mixed[1]];
+    if (a && b) {
+      return [
+        lerp(a.baseColor[0], b.baseColor[0], 0.5),
+        lerp(a.baseColor[1], b.baseColor[1], 0.5),
+        lerp(a.baseColor[2], b.baseColor[2], 0.5),
+      ];
+    }
+  }
+  return resolveAlignmentType(alignment)?.baseColor ?? null;
+}
+
 /** Compute the display color for an alignment + conviction combination */
 function computeColor(alignment: string, intensity: number): string {
-  const typeDef = resolveAlignmentType(alignment);
-  if (!typeDef) return rgbToHex(...GRAY);
-  const [br, bg, bb] = typeDef.baseColor;
+  const base = resolveBaseColor(alignment);
+  if (!base) return rgbToHex(...GRAY);
+  const [br, bg, bb] = base;
   return rgbToHex(
     lerp(GRAY[0], br, intensity),
     lerp(GRAY[1], bg, intensity),
@@ -138,11 +167,19 @@ function titleCase(s: string): string {
   return s.replace(/\b\w/g, (c) => c.toUpperCase());
 }
 
+/** Short display name: "a philosophy somewhere between war and passion" -> "War/Passion" */
+function displayAlignment(alignment: string): string {
+  const mixed = splitMixedAlignment(alignment);
+  return mixed ? `${titleCase(mixed[0])}/${titleCase(mixed[1])}` : titleCase(alignment);
+}
+
 /** Build an AlignmentLevel from a conviction def and alignment value */
 function buildLevel(def: ConvictionDef, alignment: string): AlignmentLevel {
   return {
     key: def.key,
-    label: alignment ? `${def.convictionLabel}: ${titleCase(alignment)}` : def.convictionLabel,
+    label: alignment
+      ? `${def.convictionLabel}: ${displayAlignment(alignment)}`
+      : def.convictionLabel,
     conviction: def.convictionLabel,
     alignment,
     themeColor: resolveThemeColor(alignment),
@@ -162,6 +199,9 @@ function buildLevel(def: ConvictionDef, alignment: string): AlignmentLevel {
  * - "You believe moderately in <alignment>."
  * - "You have some belief in <alignment>."
  * - "You don't feel strongly about anything."
+ *
+ * <alignment> can be mixed ("a philosophy somewhere between war and passion"),
+ * which the label shortens to "War/Passion".
  *
  * Specific patterns are tried before the catch-all verb pattern.
  */

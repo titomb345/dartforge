@@ -10,6 +10,16 @@ The `[Unreleased]` header controls automatic version bumping on merge:
 - `[Unreleased-minor]` → 0.1.0 → 0.2.0
 - `[Unreleased-major]` → 0.1.0 → 1.0.0
 
+## [Unreleased-patch]
+
+### Added
+
+- The trigger editor has a Test button next to the sound picker, so you can hear a sound before saving the trigger. The picker is now labeled "Sound"
+
+### Fixed
+
+- The alignment readout now shortens a mixed belief. "You strongly believe in a philosophy somewhere between war and passion" used to show the whole phrase and get cut off; it now shows "Strong Belief: War/Passion", colored halfway between the two
+
 ## [1.20.4] - 2026-11-20
 
 ### Fixed
