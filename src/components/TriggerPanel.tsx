@@ -14,7 +14,7 @@ import type {
   TriggerPrefill,
   TriggerScope,
 } from '../types/trigger';
-import { PlusIcon, ChevronDownIcon, ChevronUpIcon, TriggerIcon } from './icons';
+import { PlusIcon, ChevronDownIcon, ChevronUpIcon, PlayIcon, TriggerIcon } from './icons';
 import { PanelHeader } from './PanelHeader';
 import { ConfirmDeleteButton } from './ConfirmDeleteButton';
 import { FilterPill } from './FilterPill';
@@ -27,6 +27,8 @@ import type { GagGroupId } from '../lib/gagPatterns';
 
 interface TriggerPanelProps {
   onClose: () => void;
+  /** Play a sound by name through the same library a firing trigger uses. */
+  onTestSound: (soundName: string) => void;
 }
 
 const MATCH_MODE_LABELS: Record<TriggerMatchMode, string> = {
@@ -275,6 +277,7 @@ function TriggerEditor({
   activeCharacter,
   onSave,
   onCancel,
+  onTestSound,
 }: {
   trigger: Trigger | null; // null = creating new
   prefill?: TriggerPrefill | null;
@@ -300,6 +303,7 @@ function TriggerEditor({
     existingId?: TriggerId
   ) => void;
   onCancel: () => void;
+  onTestSound: (soundName: string) => void;
 }) {
   const [name, setName] = useState(trigger?.name ?? '');
   const [pattern, setPattern] = useState(trigger?.pattern ?? prefill?.pattern ?? '');
@@ -660,23 +664,40 @@ function TriggerEditor({
             >
               Gag
             </button>
-            <select
-              value={soundName ?? ''}
-              onChange={(e) => setSoundName(e.target.value || null)}
-              title="Sound to play when trigger fires"
-              className={`text-[9px] font-mono px-2 py-1 rounded border cursor-pointer transition-colors duration-150 bg-transparent ${
-                soundName
-                  ? 'text-[#8be9fd] border-[#8be9fd]/40 bg-[#8be9fd]/10'
-                  : 'text-text-dim border-border-dim'
-              }`}
-            >
-              <option value="">No Sound</option>
-              {soundNames.map((name) => (
-                <option key={name} value={name}>
-                  {name}
-                </option>
-              ))}
-            </select>
+            <div>
+              <label className="text-[10px] text-text-dim mb-0.5 block">Sound</label>
+              <div className="flex items-stretch gap-1">
+                <select
+                  value={soundName ?? ''}
+                  onChange={(e) => setSoundName(e.target.value || null)}
+                  title="Sound to play when trigger fires"
+                  className={`text-[9px] font-mono px-2 py-1 rounded border cursor-pointer transition-colors duration-150 bg-transparent ${
+                    soundName
+                      ? 'text-[#8be9fd] border-[#8be9fd]/40 bg-[#8be9fd]/10'
+                      : 'text-text-dim border-border-dim'
+                  }`}
+                >
+                  <option value="">None</option>
+                  {soundNames.map((name) => (
+                    <option key={name} value={name}>
+                      {name}
+                    </option>
+                  ))}
+                </select>
+                <MudButton
+                  type="button"
+                  accent="cyan"
+                  size="sm"
+                  onClick={() => soundName && onTestSound(soundName)}
+                  disabled={!soundName}
+                  title={soundName ? `Play ${soundName}` : 'Pick a sound to test it'}
+                  className="flex items-center gap-1"
+                >
+                  <PlayIcon size={8} />
+                  Test
+                </MudButton>
+              </div>
+            </div>
           </div>
         </div>
 
@@ -887,7 +908,7 @@ function TriggerEditor({
 
 // --- Main Panel ---
 
-export function TriggerPanel({ onClose }: TriggerPanelProps) {
+export function TriggerPanel({ onClose, onTestSound }: TriggerPanelProps) {
   const {
     characterTriggers,
     globalTriggers,
@@ -1221,6 +1242,7 @@ export function TriggerPanel({ onClose }: TriggerPanelProps) {
             setEditingId(null);
             setTriggerPrefill(null);
           }}
+          onTestSound={onTestSound}
         />
       )}
 
